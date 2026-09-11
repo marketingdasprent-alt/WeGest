@@ -31,7 +31,7 @@
 //   'pdf'    — devolve o PDF (base64). Body: { provider_doctype, provider_docnum, serie?, signed? }
 // ============================================================
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { keyInvoiceProvider } from './providers/keyinvoice.ts';
 import { primaveraProvider } from './providers/primavera.ts';
 import type { Cliente, EmitInput, FaturacaoProvider, Item, ProviderConfig } from './types.ts';

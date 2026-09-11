@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { ContratoEntregaStep } from './ContratoEntregaStep';
 import { RecolhaCheckinStep } from './RecolhaCheckinStep';
 import { TrocaCheckinStep } from './TrocaCheckinStep';
@@ -26,6 +27,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useOrgId } from '@/contexts/TenantContext';
 export { SearchableDropdown, formatMatricula } from './calendarioUtils';
+
+type CalendarioEventoInsert = Database['public']['Tables']['calendario_eventos']['Insert'];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -425,7 +428,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
           ? new Date(`${data}T00:00:00`).toISOString()
           : new Date(`${data}T${hora}:00`).toISOString();
         const mm = marcaModeloByKey.get(reservaMarcaModelo.trim());
-        const payload: Record<string, any> = {
+        const payload: CalendarioEventoInsert = {
           titulo: reservaMarcaModelo.trim(),
           tipo: 'lista_espera',
           data_inicio: dataISO,
@@ -472,7 +475,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
         : new Date(`${data}T${hora}:00`).toISOString();
 
       // The event titulo = main vehicle plate
-      const eventoPayload: Record<string, any> = {
+      const eventoPayload: CalendarioEventoInsert = {
         titulo: mainViatura.matricula.replace(/[-\s]/g, '').toUpperCase(),
         tipo,
         data_inicio: dataISO,

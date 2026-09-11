@@ -1,14 +1,19 @@
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
+import { Capacitor } from '@capacitor/core';
+
+import { removeLegacyAuthenticatedCache } from '@/lib/pwaCacheCleanup';
+
 import App from './App.tsx';
 import './index.css';
 import { setupNativeApp } from './lib/native-bootstrap';
-import { Capacitor } from '@capacitor/core';
 
 void setupNativeApp();
 
 // Service Worker só na web — na app nativa causa tela branca e reloads em loop
 if (!Capacitor.isNativePlatform()) {
+  void removeLegacyAuthenticatedCache();
+
   const updateSW = registerSW({
     onNeedRefresh() {
       // Guardar a função de atualização globalmente para o App.tsx usar

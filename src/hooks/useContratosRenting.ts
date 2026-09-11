@@ -1044,7 +1044,9 @@ export function useCriarVersaoContrato() {
         p_contrato_id: args.contratoId,
         p_motivo: args.motivo,
         p_data_troca: args.dataTroca ?? new Date().toISOString(),
-        p_viatura_id: args.viaturaId ?? null,
+        // A RPC distingue NULL (manter a viatura atual) de um UUID novo.
+        // O gerador de tipos não representa a nulabilidade deste argumento.
+        p_viatura_id: args.viaturaId ?? (null as unknown as string),
       });
       if (error) throw error;
       return data as string;

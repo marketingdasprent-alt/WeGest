@@ -1,4 +1,6 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+
+type UntypedSupabaseClient = ReturnType<typeof createClient<any>>;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 
@@ -72,7 +74,7 @@ function getPagination(url: URL): { page: number; perPage: number; from: number;
 
 async function authenticate(
   req: Request,
-  supabase: ReturnType<typeof createClient>
+  supabase: UntypedSupabaseClient
 ): Promise<ApiContext | Response> {
   // Extract API key from headers
   const apiKey =
@@ -148,7 +150,7 @@ function handleHealth(): Response {
 async function handleClientes(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -268,7 +270,7 @@ async function handleClientes(
 async function handleContratos(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -325,7 +327,7 @@ async function handleContratos(
 async function handleFaturas(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -414,7 +416,7 @@ async function handleFaturas(
 async function handleRecibos(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -501,7 +503,7 @@ async function handleRecibos(
 async function handleContasCorrentes(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -617,7 +619,7 @@ async function handleContasCorrentes(
 // ─── Request Logger ──────────────────────────────────────────────────────────
 
 async function logRequest(
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   ctx: ApiContext | null,
   req: Request,
   endpoint: string,

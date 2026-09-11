@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Loader2, Search, Link2, ChevronsUpDown, Car, Printer } from 'lucide-react';
 import { matchesSearch } from '@/lib/utils';
 import { DialogFooter } from '@/components/ui/dialog';
+import { escapeHtml } from '@/lib/safeHtml';
 
 interface ViaturaPortagem {
   matricula: string;
@@ -180,10 +181,12 @@ export const PortagensNaoAssociadas: React.FC<Props> = ({ open, onOpenChange, on
       .map(
         (v) =>
           `<tr>
-            <td>${v.matricula}</td>
+            <td>${escapeHtml(v.matricula)}</td>
             <td>${v.total_portagens}</td>
             <td>${fmtEur(v.total_valor)}</td>
-            <td>${fmtDate(v.data_min)}${v.data_max !== v.data_min ? ' – ' + fmtDate(v.data_max) : ''}</td>
+            <td>${escapeHtml(fmtDate(v.data_min))}${
+              v.data_max !== v.data_min ? ' – ' + escapeHtml(fmtDate(v.data_max)) : ''
+            }</td>
           </tr>`
       )
       .join('');
@@ -316,7 +319,10 @@ const LinhaViatura: React.FC<{
         </div>
       </div>
 
-      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      {/* `modal`: Popover dentro de um Dialog — sem isto a roda do rato não
+          roda a lista, porque o Dialog tranca o scroll e o conteúdo do
+          Popover está fora da árvore dele. Ver CartoesNaoReconhecidos.tsx. */}
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={associando}>
             {associando ? (

@@ -1,4 +1,5 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,8 +82,18 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  try {
+    requireInternalRequest(req, supabaseServiceKey);
+  } catch (error) {
+    const status = error instanceof AuthorizationError ? error.status : 401;
+    return new Response(JSON.stringify({ success: false, error: 'Chamada interna não autorizada' }), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -308,27 +319,36 @@ Deno.serve(async (req) => {
             .select("id")
             .single();
 
-          if (insertError) {
-            result.errors.push(`Erro ao criar viatura ${formattedPlate}: ${insertError.message}`);
+          if (insertError || !newViatura?.id) {
+            result.errors.push(
+              `Erro ao criar viatura ${formattedPlate}: ${insertError?.message ?? 'resposta sem id'}`,
+            );
             console.error(`[bolt-auto-map-driver-vehicles] Erro ao criar viatura:`, insertError);
             continue;
           }
 
-          viaturaId = newViatura.id;
-          viaturasByPlate.set(normalizedPlate, viaturaId);
+          const newViaturaId = newViatura.id;
+          viaturaId = newViaturaId;
+          viaturasByPlate.set(normalizedPlate, newViaturaId);
           result.viaturas_created++;
           console.log(`[bolt-auto-map-driver-vehicles] Nova viatura criada: ${formattedPlate} (${marca} ${modelo}) → ${viaturaId}`);
         } else {
           result.viaturas_mapped++;
         }
 
+        const resolvedViaturaId = viaturaId;
+        if (!resolvedViaturaId) {
+          result.errors.push(`Não foi possível resolver a viatura ${formattedPlate}`);
+          continue;
+        }
+
         // ── 5c. Ensure association exists ──
         const existingAssoc = activeAssocByMotorista.get(motoristaId);
 
         if (existingAssoc) {
-          if (existingAssoc.viatura_id === viaturaId) {
+          if (existingAssoc.viatura_id === resolvedViaturaId) {
             // Already correct
-            viaturasToMarkEmUso.add(viaturaId);
+            viaturasToMarkEmUso.add(resolvedViaturaId);
             result.associations_skipped++;
             continue;
           }
@@ -371,7 +391,7 @@ Deno.serve(async (req) => {
           .from("motorista_viaturas")
           .insert({
             motorista_id: motoristaId,
-            viatura_id: viaturaId,
+            viatura_id: resolvedViaturaId,
             data_inicio: today,
             status: "ativo",
             org_id: orgId,
@@ -387,8 +407,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        viaturasToMarkEmUso.add(viaturaId);
-        activeAssocByMotorista.set(motoristaId, { id: 'new', viatura_id: viaturaId });
+        viaturasToMarkEmUso.add(resolvedViaturaId);
+        activeAssocByMotorista.set(motoristaId, { id: 'new', viatura_id: resolvedViaturaId });
         result.associations_created++;
         console.log(`[bolt-auto-map-driver-vehicles] Associação criada: ${driverName} → ${formattedPlate}`);
 

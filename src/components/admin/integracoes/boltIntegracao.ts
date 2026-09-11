@@ -291,13 +291,6 @@ function credenciaisLimpas(entrada: CredenciaisApiBolt) {
 
 export interface EntradaCriacaoBolt extends CredenciaisApiBolt {
   nome: string;
-  /**
-   * Token Apify de outra integração Bolt, se existir. Best-effort: a linha
-   * nasce em oauth e o robô não corre, portanto a falta do token não impede
-   * criar a integração (ao contrário das plataformas que só têm robô). Guarda-se
-   * na mesma para não ficar por preencher se um dia se voltar ao robô.
-   */
-  apifyApiToken?: string | null;
 }
 
 /**
@@ -324,7 +317,8 @@ export function payloadCriacaoBolt(entrada: EntradaCriacaoBolt): Record<string, 
     company_id: cred.companyId,
     company_name: cred.companyName,
     apify_actor_id: BOLT_DEFAULTS.apify_actor_id,
-    apify_api_token: entrada.apifyApiToken ?? null,
+    // Segredo global de infraestrutura: nunca entra numa linha multi-tenant.
+    apify_api_token: null,
     webhook_url: BOLT_DEFAULTS.site_url,
     cookies_json: null,
     ativo: true,

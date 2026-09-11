@@ -8,19 +8,26 @@
 // pedido fica criado e reenvia-se — devolve-se a lista de quem não recebeu.
 // Desfazer o trabalho de quem carregou no botão por causa de um email é o
 // oposto do que se quer.
-import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { EmailService } from '../_shared/email/services/EmailService.ts';
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { EmailService } from "../_shared/email/services/EmailService.ts";
+import {
+  authenticateUser,
+  AuthorizationError,
+  requireOrgAdmin,
+} from "../_shared/auth/edgeAuthorization.ts";
+import { validateSignatureRequestLimits } from "../_shared/documents/requestSecurity.ts";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
-const BUCKET = 'documentos';
+const BUCKET = "documentos";
 const VALIDADE_DIAS_OMISSAO = 30;
 
-type Papel = 'cliente' | 'condutor' | 'motorista';
+type Papel = "cliente" | "condutor" | "motorista";
 
 interface SignatarioPedido {
   papel: Papel;
@@ -47,7 +54,7 @@ interface PedirAssinaturaRequest {
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
@@ -59,35 +66,128 @@ function base64ParaBytes(base64: string): Uint8Array {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const authClient = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+    );
+    const user = await authenticateUser(req, {
+      getUser: async (token) => {
+        const { data, error } = await authClient.auth.getUser(token);
+        return { user: error || !data.user ? null : { id: data.user.id } };
+      },
+    });
+
     const corpo: PedirAssinaturaRequest = await req.json();
     const { orgId, documentoNome, pdfBase64, snapshot, signatarios } = corpo;
 
     if (!orgId || !documentoNome || !pdfBase64 || !snapshot) {
-      return json({ error: 'orgId, documentoNome, pdfBase64 e snapshot são obrigatórios' }, 400);
+      return json({
+        error: "orgId, documentoNome, pdfBase64 e snapshot são obrigatórios",
+      }, 400);
     }
 
     // A mesma regra do ecrã, repetida aqui por defesa. A versão testada vive em
     // src/lib/assinaturas.ts — o vitest.config.ts exclui supabase/**, por isso
     // um teste colocado aqui nunca correria.
     if (!Array.isArray(signatarios) || signatarios.length === 0) {
-      return json({ error: 'Indique pelo menos uma pessoa para assinar' }, 400);
+      return json({ error: "Indique pelo menos uma pessoa para assinar" }, 400);
     }
     const semEmail = signatarios
-      .filter((s) => !s.email || s.email.trim() === '')
+      .filter((s) => !s.email || s.email.trim() === "")
       .map((s) => s.nome);
     if (semEmail.length > 0) {
-      return json({ error: 'Há pessoas sem email na ficha', semEmail }, 400);
+      return json({ error: "Há pessoas sem email na ficha", semEmail }, 400);
     }
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      supabaseUrl,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    await requireOrgAdmin(user.id, orgId, async (userId, requestedOrgId) => {
+      const { data, error } = await supabase
+        .from("user_organizacoes")
+        .select("is_admin")
+        .eq("user_id", userId)
+        .eq("org_id", requestedOrgId)
+        .maybeSingle();
+      return error ? null : data;
+    });
 
     const validadeDias = corpo.validadeDias ?? VALIDADE_DIAS_OMISSAO;
+    try {
+      validateSignatureRequestLimits({
+        pdfBase64,
+        snapshot,
+        signatarios,
+        validadeDias,
+      });
+    } catch (error) {
+      return json({ error: (error as Error).message }, 400);
+    }
+
+    const referencias: Array<
+      PromiseLike<{ data: unknown; error: { message: string } | null }>
+    > = [];
+    if (corpo.contratoId) {
+      referencias.push(
+        supabase
+          .from("contratos_renting")
+          .select("id")
+          .eq("id", corpo.contratoId)
+          .eq("org_id", orgId)
+          .single(),
+      );
+    }
+    if (corpo.templateId) {
+      referencias.push(
+        supabase
+          .from("document_templates")
+          .select("id")
+          .eq("id", corpo.templateId)
+          .or(`org_id.eq.${orgId},org_id.is.null`)
+          .single(),
+      );
+    }
+    for (const signatario of signatarios) {
+      if (signatario.clienteId) {
+        referencias.push(
+          supabase
+            .from("clientes")
+            .select("id")
+            .eq("id", signatario.clienteId)
+            .eq("org_id", orgId)
+            .single(),
+        );
+      }
+      if (signatario.motoristaId) {
+        referencias.push(
+          supabase
+            .from("motoristas")
+            .select("id")
+            .eq("id", signatario.motoristaId)
+            .eq("org_id", orgId)
+            .single(),
+        );
+      }
+    }
+    const resultadosReferencias = await Promise.all(referencias);
+    if (
+      resultadosReferencias.some((resultado) =>
+        resultado.error || !resultado.data
+      )
+    ) {
+      return json(
+        { error: "Referência inexistente ou de outra organização" },
+        403,
+      );
+    }
+
     const expiresAt = new Date(Date.now() + validadeDias * 86_400_000);
     const carimbo = `${orgId}/${Date.now()}`;
 
@@ -96,23 +196,31 @@ serve(async (req) => {
     const { error: erroPdf } = await supabase.storage
       .from(BUCKET)
       .upload(documentoPath, base64ParaBytes(pdfBase64), {
-        contentType: 'application/pdf',
+        contentType: "application/pdf",
         upsert: false,
       });
-    if (erroPdf) throw new Error(`Falha ao guardar o documento: ${erroPdf.message}`);
+    if (erroPdf) {
+      throw new Error(`Falha ao guardar o documento: ${erroPdf.message}`);
+    }
 
     const snapshotPath = `assinaturas/${carimbo}/fotografia.json`;
     const { error: erroSnap } = await supabase.storage
       .from(BUCKET)
-      .upload(snapshotPath, new TextEncoder().encode(JSON.stringify(snapshot)), {
-        contentType: 'application/json',
-        upsert: false,
-      });
-    if (erroSnap) throw new Error(`Falha ao guardar a fotografia: ${erroSnap.message}`);
+      .upload(
+        snapshotPath,
+        new TextEncoder().encode(JSON.stringify(snapshot)),
+        {
+          contentType: "application/json",
+          upsert: false,
+        },
+      );
+    if (erroSnap) {
+      throw new Error(`Falha ao guardar a fotografia: ${erroSnap.message}`);
+    }
 
     // 2. Um pedido por pessoa. Sem estado agregado: cada um vive por si.
     const { data: pedidos, error: erroInsert } = await supabase
-      .from('documento_assinatura_pedidos')
+      .from("documento_assinatura_pedidos")
       .insert(
         signatarios.map((s) => ({
           org_id: orgId,
@@ -127,12 +235,14 @@ serve(async (req) => {
           documento_path: documentoPath,
           snapshot_path: snapshotPath,
           expires_at: expiresAt.toISOString(),
-          created_by: corpo.criadoPor ?? null,
-        }))
+          created_by: user.id,
+        })),
       )
-      .select('id, signatario_nome, signatario_email');
+      .select("id, signatario_nome, signatario_email");
 
-    if (erroInsert) throw new Error(`Falha ao criar os pedidos: ${erroInsert.message}`);
+    if (erroInsert) {
+      throw new Error(`Falha ao criar os pedidos: ${erroInsert.message}`);
+    }
 
     // 3. Os emails. A partir daqui nada desfaz o que já está criado.
     const emailService = new EmailService(supabase);
@@ -150,18 +260,25 @@ serve(async (req) => {
         });
         if (!resultado.success) falharam.push(pedido.signatario_nome);
       } catch (erro) {
-        console.error('Falha ao enviar pedido de assinatura:', erro);
+        console.error("Falha ao enviar pedido de assinatura:", erro);
         falharam.push(pedido.signatario_nome);
       }
     }
 
     return json({
       success: true,
-      pedidos: (pedidos ?? []).map((p) => ({ id: p.id, nome: p.signatario_nome })),
+      pedidos: (pedidos ?? []).map((p) => ({
+        id: p.id,
+        nome: p.signatario_nome,
+      })),
       falharam,
     });
   } catch (erro) {
-    console.error('Erro assinatura-pedir:', erro);
-    return json({ success: false, error: (erro as Error).message || 'Erro interno' }, 500);
+    console.error("Erro assinatura-pedir:", erro);
+    const status = erro instanceof AuthorizationError ? erro.status : 500;
+    return json({
+      success: false,
+      error: (erro as Error).message || "Erro interno",
+    }, status);
   }
 });

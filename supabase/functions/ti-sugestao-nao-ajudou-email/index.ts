@@ -6,7 +6,7 @@
 // Exige JWT. Quem chama é o ti-sugestao-responder com a chave service_role,
 // que já é um JWT assinado pelo projecto. O autor anónimo não fala com esta
 // função directamente.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

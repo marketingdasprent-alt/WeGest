@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import {
+  authenticateUser,
+  AuthorizationError,
+  requireOrgMember,
+} from '../_shared/auth/edgeAuthorization.ts';
+import { assertCartrackTarget } from '../_shared/cartrack/authorization.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,7 +42,13 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const authClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
+    const user = await authenticateUser(req, {
+      getUser: async (token) => {
+        const { data, error } = await authClient.auth.getUser(token);
+        return { user: error || !data.user ? null : { id: data.user.id } };
+      },
+    });
 
     const { integracao_id, registration } = await req.json();
     if (!integracao_id) {
@@ -46,9 +58,11 @@ serve(async (req) => {
       );
     }
 
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
     const { data: config } = await supabase
       .from("plataformas_configuracao")
-      .select("client_id, client_secret")
+      .select("client_id, client_secret, org_id")
       .eq("id", integracao_id)
       .eq("plataforma", "cartrack")
       .single();
@@ -58,6 +72,34 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: "Credenciais Cartrack não configuradas" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    await requireOrgMember(user.id, config.org_id, async (userId, orgId) => {
+      const { data, error } = await supabase
+        .from('user_organizacoes')
+        .select('is_admin')
+        .eq('user_id', userId)
+        .eq('org_id', orgId)
+        .maybeSingle();
+      return error ? null : data;
+    });
+
+    if (registration) {
+      const { data: vehicle } = await supabase
+        .from('cartrack_vehicles')
+        .select('registration, viatura_id')
+        .eq('integracao_id', integracao_id)
+        .eq('org_id', config.org_id)
+        .eq('registration', String(registration))
+        .maybeSingle();
+      try {
+        assertCartrackTarget(vehicle, String(registration));
+      } catch {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Viatura fora da organização' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
     }
 
     const auth = "Basic " + btoa(`${config.client_id}:${config.client_secret}`);
@@ -110,9 +152,10 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("Erro cartrack-live-position:", error);
+    const status = error instanceof AuthorizationError ? error.status : 500;
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

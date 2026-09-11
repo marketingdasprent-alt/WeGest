@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
 
 const corsHeaders = {
@@ -66,6 +66,7 @@ serve(async (req: Request) => {
     }
 
     console.log(`Enviando notificações para ${emails.length} gestores...`);
+    const ticketViatura = Array.isArray(ticket.viatura) ? ticket.viatura[0] : ticket.viatura;
 
     // 3. Enviar Email
     if (tipo === 'falta_fatura') {
@@ -75,7 +76,7 @@ serve(async (req: Request) => {
             to: email,
             ticketId: ticket_id,
             ticketNumero: ticket.numero,
-            viaturaMatricula: ticket.viatura?.matricula,
+            viaturaMatricula: ticketViatura?.matricula,
             ticketTitulo: ticket.titulo,
             appUrl,
           })
@@ -91,7 +92,7 @@ serve(async (req: Request) => {
           dados: {
             ticket_id,
             numero: ticket.numero,
-            matricula: ticket.viatura?.matricula,
+            matricula: ticketViatura?.matricula,
             alerta: `Assistência #${ticket.numero} concluída sem fatura anexada.`
           }
         }

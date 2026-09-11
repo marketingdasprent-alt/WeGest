@@ -1,4 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+
+type UntypedSupabaseClient = ReturnType<typeof createClient<any>>;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -353,7 +355,7 @@ const firstPhone = (sources: unknown[], paths: readonly string[]) => {
   return null;
 };
 
-const amountToNumber = (value: unknown) => {
+const amountToNumber = (value: unknown): number | null => {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
     const parsed = Number(value);
@@ -457,7 +459,7 @@ const requireUserId = async (req: Request, supabaseUrl: string, anonKey: string)
 };
 
 const loadLookups = async (
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   integracaoId: string,
   orgId: string,
 ): Promise<Lookups> => {
@@ -522,7 +524,7 @@ const upsertRows = async ({
   onConflict,
   rows,
 }: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: UntypedSupabaseClient;
   table: string;
   integracaoId: string;
   idColumn: string;
@@ -545,7 +547,8 @@ const upsertRows = async ({
 
     if (error) throw new Error(`Não foi possível verificar registos existentes em ${table}.`);
     for (const row of data ?? []) {
-      const value = row?.[idColumn];
+      if (!isRecord(row)) continue;
+      const value = row[idColumn];
       if (typeof value === "string") existing.add(value);
     }
   }
@@ -726,7 +729,7 @@ const processDriverEvent = async ({
   lookups,
   syncedAt,
 }: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: UntypedSupabaseClient;
   integracaoId: string;
   eventType: string;
   payload: JsonRecord;
@@ -815,9 +818,10 @@ const processDriverEvent = async ({
   ]);
   const normalizedPhone = normalizePhone(rawPhone);
   const motoristaId =
-    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) ?? null : null)
-    ?? (email ? lookups.motoristasByEmail.get(email.toLowerCase()) ?? null : null)
-    ?? (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) ?? null : null);
+    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined)
+    ?? (email ? lookups.motoristasByEmail.get(email.toLowerCase()) : undefined)
+    ?? (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) : undefined)
+    ?? null;
   const diagnostics = buildPayloadDiagnostics(payload, sources, {
     domain: "driver",
     email: email?.toLowerCase() ?? null,
@@ -916,7 +920,7 @@ const processVehicleEvent = async ({
   lookups,
   syncedAt,
 }: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: UntypedSupabaseClient;
   integracaoId: string;
   eventType: string;
   payload: JsonRecord;
@@ -1056,7 +1060,7 @@ const processTransactionEvent = async ({
   lookups,
   syncedAt,
 }: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: UntypedSupabaseClient;
   integracaoId: string;
   eventId: string | null;
   eventType: string;
@@ -1216,12 +1220,14 @@ const processTransactionEvent = async ({
     ?? firstString(sources, ["uuid", "id"])
     ?? fallbackTransactionId;
   const motoristaId =
-    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) ?? null : null)
-    ?? (email ? lookups.motoristasByEmail.get(email.toLowerCase()) ?? null : null)
-    ?? (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) ?? null : null);
+    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined)
+    ?? (email ? lookups.motoristasByEmail.get(email.toLowerCase()) : undefined)
+    ?? (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) : undefined)
+    ?? null;
   const viaturaId =
-    (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) ?? null : null)
-    ?? (normalizedLicensePlate ? lookups.viaturasByPlate.get(normalizedLicensePlate) ?? null : null);
+    (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) : undefined)
+    ?? (normalizedLicensePlate ? lookups.viaturasByPlate.get(normalizedLicensePlate) : undefined)
+    ?? null;
   const diagnostics = buildPayloadDiagnostics(payload, sources, {
     domain: "transaction",
     motorista_id: motoristaId,
@@ -1324,7 +1330,7 @@ const logWebhookResult = async ({
   executadoPor,
   replay,
 }: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: UntypedSupabaseClient;
   integracaoId: string;
   eventId: string | null;
   eventType: string;
@@ -1360,7 +1366,7 @@ const processStoredEvent = async ({
   executadoPor,
   replay,
 }: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: UntypedSupabaseClient;
   event: StoredWebhookEvent;
   lookups: Lookups;
   executadoPor: string | null;
@@ -1560,7 +1566,7 @@ const processCsvImport = async ({
   periodoInicio,
   periodoFim,
 }: {
-  supabase: ReturnType<typeof createClient>;
+  supabase: UntypedSupabaseClient;
   integracaoId: string;
   orgId: string;
   csvText: string;
@@ -1686,12 +1692,14 @@ const processCsvImport = async ({
       : (mapped.driver_first_name || null);
 
     const motoristaId =
-      (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) ?? null : null)
-      ?? (driverFullName ? lookups.motoristasByName.get(normalizeName(driverFullName)) ?? null : null);
+      (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined)
+      ?? (driverFullName ? lookups.motoristasByName.get(normalizeName(driverFullName)) : undefined)
+      ?? null;
 
     const viaturaId =
-      (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) ?? null : null)
-      ?? (normalizedPlate ? lookups.viaturasByPlate.get(normalizedPlate) ?? null : null);
+      (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) : undefined)
+      ?? (normalizedPlate ? lookups.viaturasByPlate.get(normalizedPlate) : undefined)
+      ?? null;
 
     // === Validation: skip summary/totals rows ===
     const grossAmount = parseAmountValue(mapped.gross_amount || "");
@@ -2048,7 +2056,7 @@ Deno.serve(async (req) => {
     const isRobotCall = bearerToken === serviceRoleKey;
     let csvCallerUserId: string | null = null;
 
-    if (!isRobotCall && bearerToken) {
+    if (!isRobotCall && bearerToken && anonKey) {
       try {
         const authClient = createClient(supabaseUrl, anonKey, {
           global: { headers: { Authorization: authHeader } },

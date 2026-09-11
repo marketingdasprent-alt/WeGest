@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { sanitizeRichHtml } from '@/lib/safeHtml';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,7 +34,7 @@ const AssinaturaDialog = ({ open, onOpenChange, assinatura }: Props) => {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const payload = { nome, conteudo_html: conteudoHtml };
+      const payload = { nome, conteudo_html: sanitizeRichHtml(conteudoHtml) };
 
       if (assinatura?.id) {
         const { error } = await supabase

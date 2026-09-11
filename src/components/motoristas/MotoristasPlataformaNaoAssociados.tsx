@@ -459,7 +459,10 @@ const LinhaNaoAssociado: React.FC<{
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
-        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+        {/* `modal`: Popover dentro de um Dialog — sem isto a roda do rato não
+            roda a lista, porque o Dialog tranca o scroll e o conteúdo do
+            Popover está fora da árvore dele. Ver CartoesNaoReconhecidos.tsx. */}
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="gap-1.5" disabled={associando}>
               {associando ? (

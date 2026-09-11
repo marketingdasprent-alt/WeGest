@@ -214,7 +214,6 @@ describe('payloadCriacaoBolt', () => {
     const payload = payloadCriacaoBolt({
       nome: ' Bolt Distância ',
       ...credenciaisValidas,
-      apifyApiToken: 'apify_tok',
     });
 
     expect(payload).toMatchObject({
@@ -226,7 +225,7 @@ describe('payloadCriacaoBolt', () => {
       client_secret: 'sec_456',
       company_id: 77,
       company_name: 'Distância Lda',
-      apify_api_token: 'apify_tok',
+      apify_api_token: null,
       ativo: true,
       sync_automatico: false,
     });
@@ -254,7 +253,7 @@ describe('payloadCriacaoBolt', () => {
     ).toThrow(/empresa Bolt/);
   });
 
-  it('sem token Apify a criação continua a ser possível (a linha nasce em oauth)', () => {
+  it('o payload nunca transporta o token Apify global', () => {
     expect(payloadCriacaoBolt({ nome: 'Bolt', ...credenciaisValidas }).apify_api_token).toBeNull();
   });
 });

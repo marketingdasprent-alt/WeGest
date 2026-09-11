@@ -75,19 +75,10 @@ export interface IntegracaoConfig {
   sync_hora?: number | null;
 }
 
-// NOTA DE SEGURANÇA — os tokens Apify NÃO vivem aqui.
-// Este ficheiro é código de frontend: tudo o que estiver nestas constantes vai
-// literalmente dentro do bundle JavaScript público de wegest.pt, legível por
-// qualquer visitante. O token é lido em runtime, por esta ordem: (1) de
-// `plataformas_configuracao` de uma integração já existente do mesmo
-// robot_target_platform NESTA org (protegida por RLS); (2) se a org ainda
-// não tiver nenhuma, da credencial partilhada em
-// apify_credenciais_partilhadas — a conta Apify é do WeGest, não de cada
-// org, servida pela edge function apify-credenciais-partilhadas (só acessível
-// com service-role, nunca do browser). Ver IntegracaoDialog.handleSave. Nunca
-// voltar a colar um `apify_api_token` neste ficheiro — o `apify_actor_id`
-// abaixo não é secreto, mas pode ficar desatualizado; a credencial
-// partilhada é a fonte preferida também para o actor_id.
+// NOTA DE SEGURANÇA — os tokens Apify NÃO vivem aqui nem são lidos pelo
+// frontend. A Edge Function `integracao-robot-criar` resolve e associa a
+// credencial partilhada exclusivamente no servidor. O `apify_actor_id` abaixo
+// não é secreto e serve apenas de referência visual/default não autoritativo.
 
 // Pre-configured defaults for Uber integrations (stored as robot internally)
 export const UBER_DEFAULTS = {

@@ -1,6 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.9';
-import { Client as FtpClient } from 'npm:basic-ftp@5.0.5';
+import { Client as FtpClient } from 'npm:basic-ftp@5.2.1';
 import SftpClient from 'npm:ssh2-sftp-client@12.0.1';
 
 const corsHeaders = {
@@ -202,7 +202,7 @@ const testFtpConnection = async (payload: Payload): Promise<TestResult> => {
         readyTimeout: 10000,
       });
 
-      await client.list('.');
+      await client.list('.', () => true);
 
       return {
         success: true,

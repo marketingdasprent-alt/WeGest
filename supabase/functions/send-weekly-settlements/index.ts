@@ -6,7 +6,7 @@
 // Corre depois de fechar-semana-financeiro (mesmo dia, cron separado com
 // alguns minutos de intervalo) — não altera esse função, só lê o
 // resultado dela.
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { buildSettlements, type ResumoSemanalRow, type MotoristaInfo } from '../_shared/weekly-settlements/buildSettlements.ts';
 
 const corsHeaders = {

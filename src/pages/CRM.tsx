@@ -6,6 +6,7 @@ import { useCampaignTags } from '@/hooks/useCampaignTags';
 import { useRealTimeLeads } from '@/hooks/useRealTimeLeads';
 import { useFormularioTags } from '@/hooks/useFormularioTags';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { escapeHtml, serializeForInlineScript } from '@/lib/safeHtml';
 import { matchesSearch } from '@/lib/utils';
 
 import { LeadCard } from '@/components/crm/LeadCard';
@@ -359,7 +360,7 @@ const CRM = () => {
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Relatório - ${userId}</title>
+            <title>Relatório - ${escapeHtml(userId)}</title>
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -677,7 +678,7 @@ const CRM = () => {
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <div>
                     <h1 class="title">Relatório de Desempenho</h1>
-                    <p class="subtitle">${userId}</p>
+                    <p class="subtitle">${escapeHtml(userId)}</p>
                   </div>
                   <div class="date-info">
                     <div>📅 ${new Date().toLocaleDateString('pt-BR')}</div>
@@ -823,8 +824,8 @@ const CRM = () => {
 
                 // Campaign Chart
                 const campaignCtx = document.getElementById('campaignChart');
-                const campaignLabels = ${JSON.stringify(Object.keys(campaignTags).slice(0, 5))};
-                const campaignData = ${JSON.stringify(Object.values(campaignTags).slice(0, 5))};
+                const campaignLabels = ${serializeForInlineScript(Object.keys(campaignTags).slice(0, 5))};
+                const campaignData = ${serializeForInlineScript(Object.values(campaignTags).slice(0, 5))};
                 
                 if (campaignCtx && window.Chart && campaignLabels.length > 0) {
                   new Chart(campaignCtx, {

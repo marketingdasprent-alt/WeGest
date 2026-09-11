@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,9 +13,19 @@ serve(async (req: Request) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  try {
+    requireInternalRequest(req, serviceRoleKey);
+  } catch (error) {
+    const status = error instanceof AuthorizationError ? error.status : 401;
+    return new Response(JSON.stringify({ success: false, error: 'Chamada interna não autorizada' }), {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const emailService = new EmailService(supabase);
 

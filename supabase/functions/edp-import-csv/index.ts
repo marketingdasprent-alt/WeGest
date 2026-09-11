@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -163,7 +163,10 @@ Deno.serve(async (req) => {
       const normalName = normalizeName(m.nome);
       if (normalName) nameMap.set(normalName, m.id);
       if (m.cartao_edp) {
-        const parts = m.cartao_edp.split('/').map(p => sanitizeCard(p.trim())).filter(p => p.length >= 3);
+        const parts = m.cartao_edp
+          .split('/')
+          .map((part: string) => sanitizeCard(part.trim()))
+          .filter((part: string) => part.length >= 3);
         for (const p of parts) {
           cardMap.set(p, m.id);
           if (p.length >= 4) cardMap.set(p.slice(-4), m.id);
@@ -228,6 +231,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ success: true, imported, matched, skipped, total: rows.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const message = err instanceof Error ? err.message : 'Erro interno';
+    return new Response(JSON.stringify({ success: false, error: message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

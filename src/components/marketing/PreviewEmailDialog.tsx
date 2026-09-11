@@ -1,4 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { sanitizeRichHtml } from '@/lib/safeHtml';
 
 interface Props {
   open: boolean;
@@ -23,7 +24,9 @@ export const PreviewEmailDialog = ({ open, onOpenChange, campanha }: Props) => {
           <div className="border rounded-lg p-6 bg-white">
             <div
               className="prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: campanha.conteudo_html || '<p>Sem conteúdo</p>' }}
+              dangerouslySetInnerHTML={{
+                __html: sanitizeRichHtml(campanha.conteudo_html || '<p>Sem conteúdo</p>'),
+              }}
             />
           </div>
         </div>

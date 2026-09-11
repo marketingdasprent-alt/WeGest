@@ -4,7 +4,7 @@
 // net.http_post (mesmo padrão de send-recibo-anulado-email) — o
 // destinatário é o cliente/motorista devedor, que pode não ter conta
 // auth.users, por isso não passa por notifications/notification_queue.
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { EmailService } from '../_shared/email/services/EmailService.ts';
 
 const corsHeaders = {

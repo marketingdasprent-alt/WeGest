@@ -409,7 +409,7 @@ export const BoltIntegrationPanel: React.FC = () => {
       setFetchingDrivers(true);
 
       const { data, error } = await supabase.functions.invoke('bolt-api', {
-        body: { operation: 'getDrivers' },
+        body: { operation: 'getDrivers', integracao_id: config.id },
       });
 
       if (error) throw error;
@@ -494,7 +494,7 @@ export const BoltIntegrationPanel: React.FC = () => {
       setFetchingVehicles(true);
 
       const { data, error } = await supabase.functions.invoke('bolt-api', {
-        body: { operation: 'getVehicles' },
+        body: { operation: 'getVehicles', integracao_id: config.id },
       });
 
       if (error) throw error;

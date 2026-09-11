@@ -222,4 +222,23 @@ describe('generateResumoPrintHTML', () => {
     });
     expect(html).toContain('—');
   });
+
+  it('escapa campos de negócio antes de os inserir no documento imprimível', () => {
+    const html = generateResumoPrintHTML({
+      ...baseParams,
+      driverName: '</title><script>alert(1)</script>',
+      infoFields: [
+        { key: 'nome', label: '<img src=x onerror=alert(1)>', value: '<svg onload=alert(1)>' },
+      ],
+      slotPeriodos: [
+        {
+          ...baseParams.slotPeriodos[0],
+          matricula: '<script>alert(1)</script>',
+        },
+      ],
+    });
+
+    expect(html).not.toMatch(/<script>alert\(1\)<\/script>|<img src=x|<svg onload/i);
+    expect(html).toContain('&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+  });
 });

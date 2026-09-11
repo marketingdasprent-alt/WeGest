@@ -39,7 +39,6 @@ import {
   Bot,
   Car,
   Clock,
-  Copy,
   Eye,
   EyeOff,
   ImagePlus,
@@ -207,7 +206,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     intervalo_sync_horas: integracao.intervalo_sync_horas ?? 24,
     site_url: integracao.webhook_url ?? '',
     apify_actor_id: integracao.apify_actor_id ?? '',
-    apify_api_token: integracao.apify_api_token ?? '',
     auth_mode: (integracao.auth_mode ?? 'password') as 'password' | 'cookies',
     cookies_json: integracao.cookies_json ?? '',
     cron_schedule: 'disabled' as string,
@@ -268,7 +266,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       intervalo_sync_horas: integracao.intervalo_sync_horas ?? 24,
       site_url: integracao.plataforma === 'robot' ? (integracao.webhook_url ?? '') : '',
       apify_actor_id: integracao.apify_actor_id ?? '',
-      apify_api_token: integracao.apify_api_token ?? '',
       auth_mode: (integracao.auth_mode ?? 'password') as 'password' | 'cookies',
       cookies_json: integracao.cookies_json ?? '',
       cron_schedule: 'disabled',
@@ -598,7 +595,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
           formData.auth_mode === 'password' ? formData.client_secret || null : null;
         updatePayload.webhook_url = formData.site_url || null;
         updatePayload.apify_actor_id = formData.apify_actor_id || null;
-        updatePayload.apify_api_token = formData.apify_api_token || null;
         updatePayload.auth_mode = formData.auth_mode;
         updatePayload.cookies_json =
           formData.auth_mode === 'cookies' ? formData.cookies_json || null : null;
@@ -1325,29 +1321,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                 )}
 
                 <div className="space-y-2">
-                  <Label>API Token (Apify)</Label>
-                  <div className="relative">
-                    <Input
-                      type={showSecret ? 'text' : 'password'}
-                      value={formData.apify_api_token}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, apify_api_token: e.target.value }))
-                      }
-                      placeholder="apify_api_..."
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
-                      onClick={() => setShowSecret(!showSecret)}
-                    >
-                      {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
                   <Label>Actor ID (Apify)</Label>
                   <Input
                     value={formData.apify_actor_id}
@@ -1359,35 +1332,9 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                 </div>
 
                 <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Callback URL (para o actor)</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        const callbackUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robot-webhook?integracao_id=${integracao.id}`;
-                        try {
-                          await navigator.clipboard.writeText(callbackUrl);
-                          toast({ title: 'URL copiada' });
-                        } catch {
-                          toast({
-                            title: 'Erro',
-                            description: 'Não foi possível copiar.',
-                            variant: 'destructive',
-                          });
-                        }
-                      }}
-                    >
-                      <Copy className="mr-2 h-4 w-4" /> Copiar URL
-                    </Button>
-                  </div>
-                  <Input
-                    value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robot-webhook?integracao_id=${integracao.id}`}
-                    readOnly
-                  />
+                  <Label>Callback do actor</Label>
                   <p className="text-sm text-muted-foreground">
-                    Configure este URL no actor Apify para receber os resultados automaticamente.
+                    O callback assinado é configurado automaticamente quando o robot arranca.
                   </p>
                 </div>
               </>

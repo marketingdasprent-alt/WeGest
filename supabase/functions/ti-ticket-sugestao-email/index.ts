@@ -1,6 +1,6 @@
 // Envia ao autor do ticket o link para ver a sugestão. Exige JWT: é sempre a
 // app autenticada (o admin) que dispara, nunca o público.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

@@ -43,7 +43,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.bolt-auth]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-sync]
 verify_jwt = false
@@ -56,10 +56,16 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.bolt-api]
-verify_jwt = false
+verify_jwt = true
+
+[functions.bolt-rescue-apify]
+verify_jwt = true
+
+[functions.uber-rescue-apify]
+verify_jwt = true
 
 [functions.bolt-auto-map-drivers]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-full-sync]
 verify_jwt = false
@@ -83,7 +89,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.send-marketing-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.brevo-email-stats]
 verify_jwt = false
@@ -131,6 +137,8 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.robot-webhook]
+# Callback externo com HMAC por integração; pedidos manuais continuam a
+# validar o JWT e o papel admin dentro da função.
 verify_jwt = false
 
 [functions.robot-manual-import]
@@ -140,10 +148,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.robot-schedule]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-schedule]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-import-csv]
 verify_jwt = false
@@ -191,19 +199,14 @@ verify_jwt = true
 [functions.quadro-live]
 verify_jwt = false
 
-# Worker do outbox de emissão fiscal. Chamado só pelo pg_cron via net.http_post
-# com a anon key — que já é um JWT validamente assinado, por isso
-# verify_jwt=true não impede o cron (não precisa da chave service_role para
-# isso). true fecha o disparo público não-autenticado: repetir esta chamada
-# de fora queima a escada de backoff da outbox mais depressa do que
-# desenhado.
+# Worker do outbox de emissão fiscal. O pg_cron chama cron_invocar_edge, que
+# usa exclusivamente cron_service_role_jwt do Vault. A função também confirma
+# internamente que o bearer coincide exatamente com SUPABASE_SERVICE_ROLE_KEY.
 [functions.faturacao-outbox-drain]
 verify_jwt = true
 
-# Worker diário do ciclo de vida das parcelas de acordos de pagamento. Mesma
-# razão do faturacao-outbox-drain acima — a anon key do cron já satisfaz
-# verify_jwt=true; deixar false expunha um gatilho público que podia queimar
-# o orçamento de 3 tentativas de aviso por parcela.
+# Worker diário do ciclo de vida das parcelas de acordos de pagamento. Usa a
+# mesma autenticação interna por service role do worker de faturação acima.
 [functions.acordos-parcelas-diario]
 verify_jwt = true
 
@@ -264,4 +267,9 @@ verify_jwt = false
 # Devolve o token/actor_id Apify partilhado por plataforma (conta Apify é do
 # WeGest, não da org) — só a utilizadores autenticados.
 [functions.apify-credenciais-partilhadas]
+verify_jwt = true
+
+# Cria integrações robot com a credencial Apify partilhada exclusivamente no
+# servidor. A função valida utilizador real e admin da organização ativa.
+[functions.integracao-robot-criar]
 verify_jwt = true

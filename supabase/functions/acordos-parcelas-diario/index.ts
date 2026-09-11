@@ -33,9 +33,10 @@
 // operacional que todos os outros tipos de email já têm.
 // ============================================================
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { EmailProviderFactory } from '../_shared/email/factories/EmailProviderFactory.ts';
 import type { EmailSendResult } from '../_shared/email/types/index.ts';
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -75,7 +76,18 @@ serve(async (req) => {
   try {
     if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
-    const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    try {
+      requireInternalRequest(req, serviceRoleKey);
+    } catch (error) {
+      const status = error instanceof AuthorizationError ? error.status : 401;
+      return new Response(JSON.stringify({ success: false, error: 'Chamada interna não autorizada' }), {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const service = createClient(env('SUPABASE_URL') ?? '', serviceRoleKey);
     const appUrl = env('APP_URL') ?? '';
     const hoje = hojeEmLisboa();
 
