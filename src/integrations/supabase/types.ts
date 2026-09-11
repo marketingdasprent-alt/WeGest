@@ -8837,6 +8837,8 @@ export type Database = {
           plataforma: string
           privacy_policy_url: string | null
           redirect_uri: string | null
+          robot_portal_email: string | null
+          robot_portal_password: string | null
           robot_target_platform: string | null
           sync_automatico: boolean | null
           sync_dia_semana: number
@@ -8886,6 +8888,8 @@ export type Database = {
           plataforma?: string
           privacy_policy_url?: string | null
           redirect_uri?: string | null
+          robot_portal_email?: string | null
+          robot_portal_password?: string | null
           robot_target_platform?: string | null
           sync_automatico?: boolean | null
           sync_dia_semana?: number
@@ -8935,6 +8939,8 @@ export type Database = {
           plataforma?: string
           privacy_policy_url?: string | null
           redirect_uri?: string | null
+          robot_portal_email?: string | null
+          robot_portal_password?: string | null
           robot_target_platform?: string | null
           sync_automatico?: boolean | null
           sync_dia_semana?: number

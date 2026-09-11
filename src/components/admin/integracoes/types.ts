@@ -59,6 +59,11 @@ export interface IntegracaoConfig {
   cookies_json?: string | null;
   logo_url?: string | null;
   robot_target_platform?: string | null;
+  // Login do portal da plataforma (fleets.bolt.eu, etc.) usado pelo robô Apify.
+  // Colunas próprias, separadas de client_id/client_secret — que em auth_mode
+  // 'oauth' guardam a chave da API oficial. Ver boltIntegracao.ts.
+  robot_portal_email?: string | null;
+  robot_portal_password?: string | null;
   webhook_signing_key?: string | null;
   email_provider?: string | null;
   email_sender_name?: string | null;

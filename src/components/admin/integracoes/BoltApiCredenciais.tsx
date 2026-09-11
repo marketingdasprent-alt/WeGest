@@ -241,12 +241,12 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
               continua ligado a ela.
             </li>
             <li>
-              O <strong>robô deixa de correr</strong> nesta conta — as credenciais da API ocupam o
-              lugar do login do portal, e o agendamento semanal é desligado.
+              O <strong>robô continua a correr</strong>: o login do portal passou a ter campos
+              próprios (em baixo) e deixou de ser substituído pelas credenciais da API. É dele que
+              vem o CSV com as <strong>campanhas</strong>, que a API não devolve.
             </li>
             <li>
-              A <strong>importação manual do CSV mantém-se</strong>: continua a corrigir campanhas e
-              reembolsos, que a API não tem.
+              A <strong>importação manual do CSV mantém-se</strong> também, em qualquer dos modos.
             </li>
           </ul>
         </div>
