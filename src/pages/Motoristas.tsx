@@ -29,6 +29,7 @@ import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAsso
 import { BpNaoAssociadas } from '@/components/motoristas/BpNaoAssociadas';
 import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { MotoristaCard } from '@/components/motoristas/MotoristaCard';
+import { AdicionarMotoristaButton } from '@/components/motoristas/AdicionarMotoristaButton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
@@ -453,10 +454,7 @@ export default function Motoristas() {
             )}
             Exportar
           </Button>
-          <Button onClick={handleAddMotorista} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar Motorista
-          </Button>
+          <AdicionarMotoristaButton onAdicionar={handleAddMotorista} />
         </div>
       </div>
 
