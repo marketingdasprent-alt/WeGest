@@ -43,13 +43,16 @@ describe('AdicionarMotoristaButton', () => {
     expect(onAdicionar).not.toHaveBeenCalled();
   });
 
-  it('abre a ficha a partir do menu', async () => {
+  it('o menu não repete a ficha — para isso já serve o corpo do botão', async () => {
     const onAdicionar = vi.fn();
     render(<AdicionarMotoristaButton onAdicionar={onAdicionar} />);
 
     abrirMenu();
-    fireEvent.click(await screen.findByText(/preencher ficha/i));
+    // Esperar por uma entrada que EXISTE antes de afirmar que a outra não está
+    // lá: sem isto, a asserção passava só porque o menu ainda não tinha aberto.
+    await screen.findByText(/convidar por link/i);
 
-    await waitFor(() => expect(onAdicionar).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/preencher ficha/i)).toBeNull();
+    expect(onAdicionar).not.toHaveBeenCalled();
   });
 });
