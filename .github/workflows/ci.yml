@@ -303,7 +303,8 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Ingestão de plataformas" \
             uber_conta_frota_fora_do_resumo \
-            semana_plataforma_em_falta
+            semana_plataforma_em_falta \
+            bolt_liquido_a_pagar
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova

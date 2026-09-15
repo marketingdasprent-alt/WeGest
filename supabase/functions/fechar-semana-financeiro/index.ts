@@ -329,19 +329,20 @@ Deno.serve(async (req) => {
                   data: [] as { tipo: string; categoria: string | null; valor: number }[],
                 }),
             // Bolt: o MESMO campo que o ecrã de resumos e a ficha do motorista
-            // mostram — ganhos_liquidos, escrito tanto pela API oficial como
-            // pelo CSV. Lia-se aqui ganhos_brutos_total, o BRUTO: o painel do
-            // motorista mostrava um número e os outros dois ecrãs mostravam
-            // outro. Em 178 semanas fechadas, 178 não batiam — 65.087,40 EUR no
-            // painel contra 47.730,63 EUR nos restantes.
+            // mostram — liquido_a_pagar, coluna gerada pela base que soma
+            // ganhos_liquidos + campanhas + reembolsos (ver src/config/bolt.ts).
+            // Lia-se aqui ganhos_brutos_total, o BRUTO: em 178 semanas
+            // fechadas, 178 não batiam com os outros ecrãs. Depois leu
+            // ganhos_liquidos, que nas integrações em oauth vem da API sem as
+            // campanhas — 984,28 EUR por pagar numa só semana (2026-09-07).
             motoristaId
               ? supabase
                   .from('bolt_resumos_semanais')
-                  .select('ganhos_liquidos, periodo_inicio, periodo_fim')
+                  .select('liquido_a_pagar, periodo_inicio, periodo_fim')
                   .eq('motorista_id', motoristaId)
                   .lte('periodo_inicio', semanaFim)
                   .gte('periodo_fim', semanaInicio)
-              : Promise.resolve({ data: [] as { ganhos_liquidos: number | null }[] }),
+              : Promise.resolve({ data: [] as { liquido_a_pagar: number | null }[] }),
             // Uber: o resumo semanal, igual à Bolt. Somava-se aqui
             // uber_transactions em bruto, o que duplicava a receita no dia em
             // que a API oficial ligasse (uma linha por VIAGEM da API mais a
@@ -368,7 +369,7 @@ Deno.serve(async (req) => {
             })
             .reduce((acc, r: { custo: number | null }) => acc + (Number(r.custo) || 0), 0);
           const boltTotal = (boltRes.data ?? []).reduce(
-            (acc, r: { ganhos_liquidos: number | null }) => acc + (Number(r.ganhos_liquidos) || 0),
+            (acc, r: { liquido_a_pagar: number | null }) => acc + (Number(r.liquido_a_pagar) || 0),
             0
           );
           const uberTotal = (uberRes.data ?? []).reduce(

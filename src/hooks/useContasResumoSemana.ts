@@ -144,7 +144,7 @@ export function useContasResumoSemana(
       }
 
       // 3. Bolt: NÃO se consulta bolt_viagens. O dinheiro Bolt está todo em
-      // bolt_resumos_semanais.ganhos_liquidos (ver src/config/bolt.ts), escrito
+      // bolt_resumos_semanais.liquido_a_pagar (ver src/config/bolt.ts), gerado
       // tanto pela API como pelo CSV. bolt_viagens tem uma linha por TENTATIVA
       // de despacho e somá-la conta a mesma corrida várias vezes.
       const boltQuery: PromiseLike<{ data: any[] | null; error: any }> = Promise.resolve({
@@ -286,7 +286,7 @@ export function useContasResumoSemana(
       const boltResumosQuery = supabase
         .from('bolt_resumos_semanais')
         .select(
-          'motorista_id, motorista_nome, ganhos_liquidos, gorjetas, viagens_terminadas, integracao_id, identificador_motorista'
+          'motorista_id, motorista_nome, liquido_a_pagar, gorjetas, viagens_terminadas, integracao_id, identificador_motorista'
         )
         .lte('periodo_inicio', weekEndStr)
         .gte('periodo_fim', weekStartStr);
@@ -653,7 +653,12 @@ export function useContasResumoSemana(
         }
 
         // Não há precedência entre origens: bolt_resumos_semanais é a fonte
-        // única e ganhos_liquidos já traz o valor certo, venha da API ou do CSV.
+        // única. O campo é liquido_a_pagar — gerado pela base como
+        // ganhos_liquidos + campanhas + reembolsos. Ler ganhos_liquidos
+        // directamente perdia as campanhas nas integrações em oauth, porque aí
+        // é a API que o escreve e a API não as conhece (984,28 EUR numa só
+        // semana). A gorjeta NÃO entra nessa soma: já está dentro de
+        // ganhos_liquidos, e é por isso que se extrai à parte logo acima.
 
         if (!agrupado[key]) {
           agrupado[key] = {
@@ -666,7 +671,7 @@ export function useContasResumoSemana(
             viagens_uber: 0,
           };
         }
-        agrupado[key].faturado_bolt += Number(r.ganhos_liquidos) || 0;
+        agrupado[key].faturado_bolt += Number(r.liquido_a_pagar) || 0;
         agrupado[key].viagens_bolt += Number(r.viagens_terminadas) || 0;
         if (identificadorBolt && !agrupado[key].identificador_bolt) {
           agrupado[key].identificador_bolt = identificadorBolt;

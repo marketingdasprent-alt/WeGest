@@ -191,7 +191,7 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
       // --- BOLT: resumos sem motorista_id, agrupar por identificador ---
       const { data: boltRows } = await supabase
         .from('bolt_resumos_semanais')
-        .select('identificador_motorista, motorista_nome, ganhos_liquidos')
+        .select('identificador_motorista, motorista_nome, liquido_a_pagar')
         .is('motorista_id', null)
         .gte('periodo_inicio', desdeDate)
         .not('identificador_motorista', 'is', null);
@@ -206,7 +206,9 @@ export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
           faturado: 0,
           transacoes: 0,
         };
-        cur.faturado += Number(r.ganhos_liquidos) || 0;
+        // liquido_a_pagar, não ganhos_liquidos: o mesmo campo dos outros ecrãs
+        // (ver src/config/bolt.ts) — inclui as campanhas que só o CSV traz.
+        cur.faturado += Number(r.liquido_a_pagar) || 0;
         cur.transacoes += 1;
         fontesBolt.set(id, cur);
       });
