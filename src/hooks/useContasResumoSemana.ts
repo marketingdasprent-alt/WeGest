@@ -176,10 +176,12 @@ export function useContasResumoSemana(
         .select('uber_driver_id, viagens_concluidas')
         .eq('periodo', periodoStr);
 
-      // 4c. Buscar uber_drivers para mapeamento uber_driver_id → motorista_id
+      // 4c. Buscar uber_drivers para mapeamento uber_driver_id → motorista_id.
+      // `is_conta_frota` vem junto para se poder pôr de lado a conta da própria
+      // empresa (ver abaixo, onde se constrói o mapa).
       const uberDriversQuery = supabase
         .from('uber_drivers')
-        .select('uber_driver_id, motorista_id, full_name');
+        .select('uber_driver_id, motorista_id, full_name, is_conta_frota');
 
       // Fronteira de semana por DATA UTC. Antes usava-se weekStart.toISOString()
       // (meia-noite local → 23:00 UTC do dia anterior), o que puxava transações
@@ -530,10 +532,26 @@ export function useContasResumoSemana(
         }
       });
 
+      // A conta da própria frota na Uber não é um motorista: é a linha que
+      // recebe as transferências semanais da Uber para o banco da empresa, e o
+      // resumo soma-lhe esse valor como ganho NEGATIVO. Sempre que alguém lhe
+      // deu ficha (o ecrã de não-associados oferecia "Criar ficha" ao lado
+      // dela até 09/2026), esta lista gravava-lhe o líquido e a empresa
+      // aparecia nas Dívidas como um motorista a dever milhares de euros —
+      // caso real: "Premium Ride", -35 780,31 €. A lista já a escondia pelo
+      // nome de empresa; a gravação não. Sai daqui, antes de qualquer
+      // agregação, para não chegar nem ao ecrã nem à conta corrente de ninguém.
+      // A marca é da BD (migração 20260911140000).
+      const contasFrota = new Set<string>(
+        (uberDriversResult.data || [])
+          .filter((d) => d.is_conta_frota && d.uber_driver_id)
+          .map((d) => d.uber_driver_id as string)
+      );
+
       // Mapa de viagens reais da atividade Uber (por uber_driver_id)
       const uberViagensByDriver: Record<string, number> = {};
       (atividadeResult.data || []).forEach((a) => {
-        if (a.uber_driver_id) {
+        if (a.uber_driver_id && !contasFrota.has(a.uber_driver_id)) {
           uberViagensByDriver[a.uber_driver_id] =
             (uberViagensByDriver[a.uber_driver_id] || 0) + (a.viagens_concluidas || 0);
         }
@@ -543,7 +561,7 @@ export function useContasResumoSemana(
       const uberDriverToMotoristaMap: Record<string, string> = {};
       const uberDriverNameMap: Record<string, string> = {};
       (uberDriversResult.data || []).forEach((d) => {
-        if (d.uber_driver_id) {
+        if (d.uber_driver_id && !contasFrota.has(d.uber_driver_id)) {
           if (d.motorista_id) uberDriverToMotoristaMap[d.uber_driver_id] = d.motorista_id;
           if (d.full_name) uberDriverNameMap[d.uber_driver_id] = d.full_name;
         }
@@ -682,6 +700,7 @@ export function useContasResumoSemana(
       // resumo, extraídos pelo gatilho. Não é preciso abrir o raw_transaction.
       (uberResult.data || []).forEach((t) => {
         const driverId = t.uber_driver_id || 'unknown';
+        if (contasFrota.has(driverId)) return;
         const nome = (t.motorista_nome || '').trim();
         const espaco = nome.indexOf(' ');
         if (!uberByDriver[driverId]) {
