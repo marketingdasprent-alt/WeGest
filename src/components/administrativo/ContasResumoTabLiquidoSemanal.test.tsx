@@ -105,7 +105,8 @@ const dadosBase = {
     {
       motorista_id: 'm1',
       motorista_nome: 'João Silva',
-      ganhos_liquidos: 300,
+      // liquido_a_pagar: o campo que o hook lê (coluna gerada, ver src/config/bolt.ts).
+      liquido_a_pagar: 300,
       gorjetas: 0,
       viagens_terminadas: 40,
       identificador_motorista: 'B1',
