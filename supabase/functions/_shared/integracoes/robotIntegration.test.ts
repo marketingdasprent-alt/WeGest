@@ -4,6 +4,7 @@ import {
   buildPublicApifyStatus,
   buildRobotIntegrationInsert,
   parseRobotIntegrationRequest,
+  plataformaPodeCorrerRobo,
 } from "./robotIntegration.ts";
 
 Deno.test("estado público da Apify nunca inclui o token partilhado", () => {
@@ -101,4 +102,34 @@ Deno.test("configuração da organização nunca recebe o token Apify partilhado
 
   assertEquals(insert.apify_actor_id, "actor-partilhado");
   assertEquals(insert.apify_api_token, null);
+});
+
+// ---------------------------------------------------------------------------
+// Que plataformas é que podem correr o robô
+// ---------------------------------------------------------------------------
+
+Deno.test("a Uber passa a poder correr o robô", () => {
+  // O actor da Uber existe e já correu 52 vezes. O que estava errado era o
+  // apify_actor_id gravado na BD, não a plataforma — mas o robot-execute
+  // bloqueava a Uber à cabeça, por isso nem chegava a tentar.
+  assertEquals(plataformaPodeCorrerRobo("uber"), true);
+});
+
+Deno.test("Via Verde e Bolt continuam a poder correr", () => {
+  assertEquals(plataformaPodeCorrerRobo("viaverde"), true);
+  assertEquals(plataformaPodeCorrerRobo("bolt"), true);
+});
+
+Deno.test("BP, Repsol e EDP continuam bloqueados", () => {
+  // Zero execuções de sempre nos três actors (medido a 2026-09-14 na API do
+  // Apify). Abrir a porta a robôs que nunca correram é convidar falhas
+  // silenciosas — ficam de fora até alguém os validar.
+  assertEquals(plataformaPodeCorrerRobo("bp"), false);
+  assertEquals(plataformaPodeCorrerRobo("repsol"), false);
+  assertEquals(plataformaPodeCorrerRobo("edp"), false);
+});
+
+Deno.test("uma plataforma desconhecida fica bloqueada", () => {
+  assertEquals(plataformaPodeCorrerRobo("qualquer-coisa"), false);
+  assertEquals(plataformaPodeCorrerRobo(null), false);
 });

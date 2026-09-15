@@ -643,6 +643,57 @@ export async function paginar<T>(
     return acumulado;
   }
 
+  // ── Uma página curta a meio é anomalia, não é o fim ──
+  //
+  // Com o total declarado sabemos quantos registos cada offset tem de trazer.
+  // A Bolt responde HTTP 200 com `orders` vazio a seguir a uma falha de rede
+  // ou a um estrangulamento, e nesse caso a página curta não significa nada
+  // sobre o fim dos dados. Aceitá-la em silêncio custa a semana inteira: o
+  // `verificarTotal` lá no fim recusa gravar um acerto incompleto e aborta
+  // tudo — foi assim que a Urbango perdeu 3839 viagens na semana de
+  // 2026-09-07, porque uma das três páginas paralelas voltou vazia.
+  //
+  // Sem total declarado (ou com offset inicial > 0, em que o total não bate
+  // certo com o que pedimos) não há expectativa nenhuma a verificar, e uma
+  // página curta continua a valer por última, como sempre valeu.
+  const esperadoEm = (posicao: number): number =>
+    totalDeclarado === undefined || offsetInicial !== 0
+      ? 0
+      : Math.max(0, Math.min(limite, totalDeclarado - posicao));
+
+  // Devolve o total lido em vez de lhe mexer: no ramo paralelo há vários
+  // trabalhadores a correr ao mesmo tempo e os offsets já foram calculados a
+  // partir do total da primeira página — mudá-lo a meio era uma corrida. Quem
+  // chama decide o que fazer com ele.
+  const lerPagina = async (
+    posicao: number,
+  ): Promise<{ itens: T[]; total: number | undefined }> => {
+    let itens: T[] = [];
+    let total: number | undefined;
+
+    for (let tentativa = 0; tentativa < MAX_TENTATIVAS; tentativa++) {
+      const corpo = await callBolt<unknown>(cred, operacao, {
+        ...params,
+        limit: limite,
+        offset: posicao,
+      });
+      itens = extrair(corpo);
+      total = lerTotal(corpo);
+
+      if (itens.length >= esperadoEm(posicao)) return { itens, total };
+      if (tentativa === MAX_TENTATIVAS - 1) break;
+
+      const espera = backoffMs(tentativa);
+      console.warn(
+        `[bolt] ${operacao}: offset ${posicao} trouxe ${itens.length} de ${esperadoEm(posicao)} ` +
+          `registos — nova tentativa ${tentativa + 2}/${MAX_TENTATIVAS} daqui a ${espera}ms`,
+      );
+      await dormir(espera);
+    }
+
+    return { itens, total };
+  };
+
   // ── Resto em PARALELO, quando sabemos quantas páginas faltam ──
   //
   // O custo de uma semana grande é dominado pelas idas à API, não pelo
@@ -672,12 +723,7 @@ export async function paginar<T>(
       for (;;) {
         const indice = proxima++;
         if (indice >= offsets.length) return;
-        const corpo = await callBolt<unknown>(cred, operacao, {
-          ...params,
-          limit: limite,
-          offset: offsets[indice],
-        });
-        paginas[indice] = extrair(corpo);
+        paginas[indice] = (await lerPagina(offsets[indice])).itens;
       }
     };
     await Promise.all(
@@ -699,10 +745,7 @@ export async function paginar<T>(
   // ── Sem total declarado: fila indiana, como sempre ──
   offset += primeiros.length;
   for (let pagina = 1; pagina < maxPaginas; pagina++) {
-    const corpo = await callBolt<unknown>(cred, operacao, { ...params, limit: limite, offset });
-    const itens = extrair(corpo);
-
-    const total = lerTotal(corpo);
+    const { itens, total } = await lerPagina(offset);
     if (typeof total === "number") totalDeclarado = total;
 
     for (const item of itens) acumulado.push(item);
