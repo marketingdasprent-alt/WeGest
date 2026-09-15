@@ -464,6 +464,61 @@ html[data-native-app='true'] .native-bottom {
   }
 }
 
+@layer components {
+  /* Relatório de pagamento — coluna do nome fixa durante o scroll horizontal.
+     O fundo desta célula tem de ser 100% opaco: as células que passam por
+     baixo pintam por cima do fundo da <tr>, por isso um tom translúcido
+     (zebra, linha paga, linha sem ficha) deixava-as transparecer. A base opaca
+     vai no background-color e o tom da linha num gradiente de cor única por
+     cima, reproduzindo exactamente a cor composta da linha. */
+  .rp-coluna-fixa {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: hsl(var(--background));
+    box-shadow: inset -1px 0 0 0 hsl(var(--border));
+  }
+
+  .rp-linha-zebra .rp-coluna-fixa {
+    background-image: linear-gradient(hsl(var(--muted) / 0.2), hsl(var(--muted) / 0.2));
+  }
+
+  .rp-linha-total .rp-coluna-fixa {
+    background-image: linear-gradient(hsl(var(--muted) / 0.4), hsl(var(--muted) / 0.4));
+  }
+
+  .rp-linha-sem-ficha .rp-coluna-fixa {
+    background-image: linear-gradient(theme(colors.amber.50 / 70%), theme(colors.amber.50 / 70%));
+  }
+
+  .rp-linha-paga .rp-coluna-fixa {
+    background-image: linear-gradient(theme(colors.emerald.100), theme(colors.emerald.100));
+  }
+
+  .dark .rp-linha-sem-ficha .rp-coluna-fixa {
+    background-image: linear-gradient(
+      theme(colors.amber.950 / 25%),
+      theme(colors.amber.950 / 25%)
+    );
+  }
+
+  .dark .rp-linha-paga .rp-coluna-fixa {
+    background-image: linear-gradient(
+      theme(colors.emerald.950 / 50%),
+      theme(colors.emerald.950 / 50%)
+    );
+  }
+
+  /* Canto do cabeçalho: fixo nos dois eixos e acima das células fixas do corpo. */
+  .rp-coluna-fixa-cabecalho {
+    position: sticky;
+    left: 0;
+    z-index: 20;
+    background-color: hsl(var(--primary));
+  }
+}
+
+
 /* Estilos de Impressão Globais */
 @media print {
   @page {

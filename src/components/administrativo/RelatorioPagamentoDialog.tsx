@@ -56,13 +56,10 @@ interface LinhaRelatorio {
   viatura: number;
   combustivel: number;
   portagens: number;
-  rnvat: number;
   seguros: number;
   acordos: number;
   danos: number;
   caucao: number;
-  negativoAnterior: number;
-  devCaucao: number;
   bonificacao: number;
   ajudaCusto: number;
   outrasDevolucoes: number;
@@ -79,13 +76,10 @@ type SortKey =
   | 'viatura'
   | 'combustivel'
   | 'portagens'
-  | 'rnvat'
   | 'seguros'
   | 'acordos'
   | 'danos'
   | 'caucao'
-  | 'negativoAnterior'
-  | 'devCaucao'
   | 'bonificacao'
   | 'ajudaCusto'
   | 'outrasDevolucoes'
@@ -299,13 +293,10 @@ export function RelatorioPagamentoDialog({
           viatura: r.aluguer,
           combustivel: r.combustivel,
           portagens: r.portagens,
-          rnvat: fin.rnvat || 0,
           seguros: fin.seguros || 0,
           acordos: fin.acordos || 0,
           danos: r.reparacoes,
           caucao: fin.caucao || 0,
-          negativoAnterior: fin.negativoAnterior || 0,
-          devCaucao: fin.devCaucao || 0,
           bonificacao: fin.bonificacao || 0,
           ajudaCusto: fin.ajudaCusto || 0,
           outrasDevolucoes: fin.outrasDevolucoes || 0,
@@ -365,13 +356,10 @@ export function RelatorioPagamentoDialog({
       viatura: 0,
       combustivel: 0,
       portagens: 0,
-      rnvat: 0,
       seguros: 0,
       acordos: 0,
       danos: 0,
       caucao: 0,
-      negativoAnterior: 0,
-      devCaucao: 0,
       bonificacao: 0,
       ajudaCusto: 0,
       outrasDevolucoes: 0,
@@ -382,13 +370,10 @@ export function RelatorioPagamentoDialog({
       t.viatura += l.viatura;
       t.combustivel += l.combustivel;
       t.portagens += l.portagens;
-      t.rnvat += l.rnvat;
       t.seguros += l.seguros;
       t.acordos += l.acordos;
       t.danos += l.danos;
       t.caucao += l.caucao;
-      t.negativoAnterior += l.negativoAnterior;
-      t.devCaucao += l.devCaucao;
       t.bonificacao += l.bonificacao;
       t.ajudaCusto += l.ajudaCusto;
       t.outrasDevolucoes += l.outrasDevolucoes;
@@ -408,13 +393,10 @@ export function RelatorioPagamentoDialog({
       'Viatura (€)': l.viatura,
       'Combustível (€)': l.combustivel,
       'Portagens (€)': l.portagens,
-      'RNVAT (€)': l.rnvat,
       'Seguros (€)': l.seguros,
       'Acordos (€)': l.acordos,
       'Danos (€)': l.danos,
       'Caução (€)': l.caucao,
-      'Negativo Anterior (€)': l.negativoAnterior,
-      'Dev. Caução (€)': l.devCaucao,
       'Bonificação Motorista (€)': l.bonificacao,
       'Ajuda Custo (€)': l.ajudaCusto,
       'Outras Devoluções (€)': l.outrasDevolucoes,
@@ -543,7 +525,7 @@ export function RelatorioPagamentoDialog({
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-primary text-primary-foreground">
-                  <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap sticky left-0 bg-primary z-20">
+                  <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap rp-coluna-fixa-cabecalho">
                     <span className="inline-flex items-center gap-1.5">
                       <span title="Marcar como pago">Pago</span>
                       <span className="opacity-60">·</span>
@@ -571,14 +553,11 @@ export function RelatorioPagamentoDialog({
                   <Th col="viatura" label="Viatura" />
                   <Th col="combustivel" label="Combustível" />
                   <Th col="portagens" label="Portagens" />
-                  <Th col="rnvat" label="RNVAT" />
                   <Th col="seguros" label="Seguros" />
                   <Th col="acordos" label="Acordos" />
                   <Th col="danos" label="Danos" />
                   <Th col="caucao" label="Caução" />
-                  <Th col="negativoAnterior" label="Neg. Anterior" />
                   <Th col="outrosDebitos" label="Outros Débitos" />
-                  <Th col="devCaucao" label="Dev. Caução" />
                   <Th col="bonificacao" label="Bonificação" />
                   <Th col="ajudaCusto" label="Ajuda Custo" />
                   <Th col="outrasDevolucoes" label="Outras Devol." />
@@ -589,13 +568,15 @@ export function RelatorioPagamentoDialog({
                   const negativo = l.liquido < 0;
                   const semFichaCrm = !l.motorista_id;
                   const pago = !!l.motorista_id && pagos.has(l.motorista_id);
+                  // O tom da linha vai na <tr>; a classe rp-linha-* repõe o mesmo
+                  // tom, já opaco, na célula fixa do nome (ver index.css).
                   const rowBg = pago
-                    ? 'bg-emerald-100 dark:bg-emerald-950/50'
+                    ? 'bg-emerald-100 dark:bg-emerald-950/50 rp-linha-paga'
                     : semFichaCrm
-                      ? 'bg-amber-50/70 dark:bg-amber-950/25'
+                      ? 'bg-amber-50/70 dark:bg-amber-950/25 rp-linha-sem-ficha'
                       : idx % 2 === 0
                         ? 'bg-background'
-                        : 'bg-muted/20';
+                        : 'bg-muted/20 rp-linha-zebra';
                   return (
                     <tr
                       key={l.key}
@@ -605,7 +586,7 @@ export function RelatorioPagamentoDialog({
                         negativo && !pago ? 'ring-1 ring-inset ring-red-300 dark:ring-red-900' : ''
                       } ${dragId === l.key ? 'opacity-50' : ''}`}
                     >
-                      <td className="px-3 py-2 text-xs font-medium whitespace-nowrap sticky left-0 bg-inherit">
+                      <td className="px-3 py-2 text-xs font-medium whitespace-nowrap rp-coluna-fixa">
                         <div className="flex items-center gap-2">
                           {/* Só o grip inicia o arrasto — não interfere com o clique
                               na checkbox nem na seleção do nome. */}
@@ -682,14 +663,11 @@ export function RelatorioPagamentoDialog({
                       <Cell value={l.viatura} cls={custoCls} pago={pago} />
                       <Cell value={l.combustivel} cls={custoCls} pago={pago} />
                       <Cell value={l.portagens} cls={custoCls} pago={pago} />
-                      <Cell value={l.rnvat} cls={custoCls} pago={pago} />
                       <Cell value={l.seguros} cls={custoCls} pago={pago} />
                       <Cell value={l.acordos} cls={custoCls} pago={pago} />
                       <Cell value={l.danos} cls={custoCls} pago={pago} />
                       <Cell value={l.caucao} cls={custoCls} pago={pago} />
-                      <Cell value={l.negativoAnterior} cls={custoCls} pago={pago} />
                       <Cell value={l.outrosDebitos} cls={custoCls} pago={pago} />
-                      <Cell value={l.devCaucao} cls={creditoCls} pago={pago} />
                       <Cell value={l.bonificacao} cls={creditoCls} pago={pago} />
                       <Cell value={l.ajudaCusto} cls={creditoCls} pago={pago} />
                       <Cell value={l.outrasDevolucoes} cls={creditoCls} pago={pago} />
@@ -698,8 +676,8 @@ export function RelatorioPagamentoDialog({
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-primary/40 bg-muted/40 font-semibold">
-                  <td className="px-3 py-2 text-xs bg-muted/40">Total</td>
+                <tr className="border-t-2 border-primary/40 bg-muted/40 font-semibold rp-linha-total">
+                  <td className="px-3 py-2 text-xs rp-coluna-fixa">Total</td>
                   <td className="px-3 py-2" />
                   <td className="px-3 py-2" />
                   <td
@@ -715,14 +693,11 @@ export function RelatorioPagamentoDialog({
                   <Cell value={totais.viatura} />
                   <Cell value={totais.combustivel} />
                   <Cell value={totais.portagens} />
-                  <Cell value={totais.rnvat} />
                   <Cell value={totais.seguros} />
                   <Cell value={totais.acordos} />
                   <Cell value={totais.danos} />
                   <Cell value={totais.caucao} />
-                  <Cell value={totais.negativoAnterior} />
                   <Cell value={totais.outrosDebitos} />
-                  <Cell value={totais.devCaucao} />
                   <Cell value={totais.bonificacao} />
                   <Cell value={totais.ajudaCusto} />
                   <Cell value={totais.outrasDevolucoes} />
