@@ -9,6 +9,34 @@ export const ROBOT_TARGET_PLATFORMS = [
 
 export type RobotTargetPlatform = (typeof ROBOT_TARGET_PLATFORMS)[number];
 
+/**
+ * Plataformas cujo robô Apify está validado e pode correr.
+ *
+ * A sincronização automática está desligada à cabeça desde a migração
+ * 20260603130000 — só o import manual por CSV devia funcionar. Esta lista é a
+ * excepção: robôs que já se sabe que correm e trazem dados.
+ *
+ * A Uber entrou a 2026-09-14. O actor dela existe e correu 52 vezes; o que
+ * estava partido era o `apify_actor_id` gravado em apify_credenciais_partilhadas,
+ * que apontava para um ID inexistente (a API respondia "Actor was not found").
+ *
+ * BP, Repsol e EDP ficam de fora: medido na API do Apify a 2026-09-14, os três
+ * actors têm ZERO execuções de sempre. Abrir a porta a um robô que nunca correu
+ * é convidar mais uma falha silenciosa — entram quando alguém os validar.
+ */
+export const PLATAFORMAS_COM_ROBO_VALIDADO: readonly string[] = [
+  "viaverde",
+  "bolt",
+  "uber",
+];
+
+export function plataformaPodeCorrerRobo(
+  plataforma: string | null | undefined,
+): boolean {
+  return typeof plataforma === "string" &&
+    PLATAFORMAS_COM_ROBO_VALIDADO.includes(plataforma);
+}
+
 export interface RobotIntegrationRequest {
   nome: string;
   login: string;

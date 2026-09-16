@@ -109,7 +109,9 @@ function dadosDoMotorista(reciboVerde: boolean) {
       {
         motorista_id: 'm1',
         motorista_nome: 'João Silva',
-        ganhos_liquidos: 300,
+        // O hook lê liquido_a_pagar — coluna gerada pela base (ver
+        // src/config/bolt.ts). Numa linha vinda do CSV é igual ao líquido.
+        liquido_a_pagar: 300,
         gorjetas: 25,
         viagens_terminadas: 40,
         identificador_motorista: 'B1',

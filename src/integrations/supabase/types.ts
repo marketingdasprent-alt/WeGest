@@ -1249,6 +1249,7 @@ export type Database = {
           iva_ganhos_dinheiro: number | null
           iva_taxas_cancelamento: number | null
           iva_taxas_reserva: number | null
+          liquido_a_pagar: number | null
           motorista_id: string | null
           motorista_nome: string | null
           nivel: string | null

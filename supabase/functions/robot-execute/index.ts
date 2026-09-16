@@ -6,6 +6,7 @@ import {
   requireOrgAdmin,
 } from "../_shared/auth/edgeAuthorization.ts";
 import { createRobotWebhookSignature } from "../_shared/integracoes/robotWebhookSecurity.ts";
+import { plataformaPodeCorrerRobo } from "../_shared/integracoes/robotIntegration.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,10 +15,10 @@ const corsHeaders = {
 };
 
 // Sincronização automática/Apify DESATIVADA — só import manual por CSV.
-// Exceções (PLATAFORMAS_PERMITIDAS): robôs já validados e autorizados a
-// correr apesar do interruptor geral estar desligado.
+// Excepção: as plataformas de PLATAFORMAS_COM_ROBO_VALIDADO, cujos robôs já se
+// sabe que correm, passam através do interruptor geral. A lista e o porquê de
+// cada entrada vivem em _shared/integracoes/robotIntegration.ts.
 const SYNC_AUTOMATICO_DESATIVADO = true;
-const PLATAFORMAS_PERMITIDAS = ["viaverde", "bolt"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -97,12 +98,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // SYNC_AUTOMATICO_DESATIVADO bloqueia Uber/BP/Repsol/EDP. Via Verde e
-    // Bolt (PLATAFORMAS_PERMITIDAS) têm robôs Apify já validados e passam
-    // através do bloqueio.
+    // SYNC_AUTOMATICO_DESATIVADO bloqueia BP, Repsol e EDP. Via Verde, Bolt e
+    // Uber têm robôs Apify validados e passam através do bloqueio.
     if (
       SYNC_AUTOMATICO_DESATIVADO &&
-      !PLATAFORMAS_PERMITIDAS.includes(config.robot_target_platform)
+      !plataformaPodeCorrerRobo(config.robot_target_platform)
     ) {
       return new Response(
         JSON.stringify({

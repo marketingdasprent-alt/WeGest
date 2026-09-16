@@ -38,6 +38,7 @@ export const TIPOS_NOTIFICACAO = [
   'motorista_recibo_por_validar',
   'motorista_reparacao_cobranca',
   'pedido_troca_kms',
+  'plataforma_semana_em_falta',
   'recibo_anulado',
   'seguranca_login_suspeito',
   'sistema_job_falhou',
@@ -127,6 +128,11 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
   // ── Assistência e calendário ────────────────────────────────────────────
   assistencia_ticket_aberto_demasiado_tempo: { label: 'Ver ticket', rota: '/assistencia' },
   escalonamento: { label: 'Ver evento', rota: '/calendario' },
+
+  // ── Plataformas ─────────────────────────────────────────────────────────
+  // Emitido pelo cron de semanas em falta (Uber/Bolt); o `link` vem sempre
+  // preenchido pelo motor com o id da integração.
+  plataforma_semana_em_falta: { label: 'Ver integrações', rota: '/admin/settings' },
 
   // ── Sistema e segurança ─────────────────────────────────────────────────
   seguranca_login_suspeito: { label: 'Ver utilizadores', rota: '/admin/settings' },

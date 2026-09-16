@@ -280,19 +280,20 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         0
       );
 
-      // 3. Bolt: um sítio só — bolt_resumos_semanais.ganhos_liquidos, escrito
-      // tanto pela API oficial como pelo CSV (ver src/config/bolt.ts). Já não
-      // se consulta bolt_viagens: tem uma linha por TENTATIVA de despacho e
-      // somá-la conta a mesma corrida várias vezes.
+      // 3. Bolt: um sítio só — bolt_resumos_semanais.liquido_a_pagar, coluna
+      // gerada pela base que soma ganhos_liquidos + campanhas + reembolsos
+      // (ver src/config/bolt.ts). Ler ganhos_liquidos perdia as campanhas nas
+      // integrações em oauth. Já não se consulta bolt_viagens: tem uma linha
+      // por TENTATIVA de despacho e somá-la conta a mesma corrida várias vezes.
       const { data: boltResumos } = await supabase
         .from('bolt_resumos_semanais')
-        .select('ganhos_liquidos')
+        .select('liquido_a_pagar')
         .eq('motorista_id', motoristaId)
         .lte('periodo_inicio', weekEndStr)
         .gte('periodo_fim', weekStartStr);
 
       const boltResumosTotal = (boltResumos || []).reduce(
-        (acc, curr) => acc + (Number(curr.ganhos_liquidos) || 0),
+        (acc, curr) => acc + (Number(curr.liquido_a_pagar) || 0),
         0
       );
 
@@ -431,7 +432,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
       const passesReciboVerde = motorista.recibo_verde ?? true;
 
-      // Fonte única: bolt_resumos_semanais.ganhos_liquidos — o mesmo campo que
+      // Fonte única: bolt_resumos_semanais.liquido_a_pagar — o mesmo campo que
       // o ecrã de resumos e o painel do motorista mostram.
       const boltTotal = boltResumosTotal;
       const faturadoPlataformas = uberTotal + boltTotal;
