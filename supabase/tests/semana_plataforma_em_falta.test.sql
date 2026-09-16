@@ -34,8 +34,11 @@ insert into public.plataformas_configuracao (id, org_id, plataforma, nome, robot
   ('00000000-0000-0000-0000-000000170b01', '00000000-0000-0000-0000-000000170000',
    'robot', 'Uber Semana Falta', 'uber', true);
 
--- Quatro semanas seguidas, já fora da tolerância de 3 dias: a primeira e a
--- última têm dados, as duas do meio (−28 e −21) ficam vazias.
+-- Cinco semanas seguidas: −35, −14 e −7 têm dados, −28 e −21 ficam vazias.
+-- A semana −7 leva dados de propósito: a tolerância de 3 dias só a exclui à
+-- segunda e à terça; a partir de quarta já conta como em falta, e o conjunto
+-- esperado mudava com o dia em que o CI corresse (foi assim que este ficheiro
+-- falhou a 2026-09-16, uma quarta-feira).
 -- uber_resumos_semanais exige chave_motorista e fonte; motorista_id fica nulo
 -- porque o trigger resolver_motorista o reescreve a partir do uber_driver_id.
 insert into public.uber_resumos_semanais
@@ -46,7 +49,10 @@ values
    'sf-motorista', 'csv', 900),
   ('00000000-0000-0000-0000-000000170000', '00000000-0000-0000-0000-000000170b01',
    'sem-4', (date_trunc('week', now())::date - 14), (date_trunc('week', now())::date - 8),
-   'sf-motorista', 'csv', 950);
+   'sf-motorista', 'csv', 950),
+  ('00000000-0000-0000-0000-000000170000', '00000000-0000-0000-0000-000000170b01',
+   'sem-5', (date_trunc('week', now())::date - 7), (date_trunc('week', now())::date - 1),
+   'sf-motorista', 'csv', 980);
 
 select public.emit_semanas_plataforma_em_falta_events();
 
@@ -102,14 +108,18 @@ select is(
   'correr o cron de novo não emite o mesmo aviso outra vez'
 );
 
--- 6. Uma semana recente ainda não conta. A que acabou de fechar está dentro
---    dos 3 dias de tolerância — o relatório da Uber pode nem existir.
+-- 6. Tolerância de 3 dias: nenhuma semana avisada acabou há menos de 3 dias —
+--    o relatório da Uber pode nem existir. Escrito como propriedade sobre o
+--    que foi emitido, e não como exemplo de uma semana concreta, porque a
+--    semana concreta que cai na tolerância muda com o dia em que o teste corre.
 select is(
-  (select count(*)::int from public.domain_events
-    where event_type = 'plataforma.semana_em_falta'
-      and payload->'semanas' ? (date_trunc('week', now())::date - 7)::text),
+  (select count(*)::int
+     from public.domain_events d
+     cross join lateral jsonb_array_elements_text(d.payload->'semanas') s(semana)
+    where d.event_type = 'plataforma.semana_em_falta'
+      and s.semana::date + 6 > current_date - 3),
   0,
-  'a semana que acabou agora ainda não é dada como em falta'
+  'nenhuma semana avisada acabou há menos de 3 dias'
 );
 
 -- ── A cadeia até ao sino ─────────────────────────────────────────────────
