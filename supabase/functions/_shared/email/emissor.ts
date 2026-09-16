@@ -47,7 +47,7 @@ async function lerUm(
   cols: string,
   id: string
 ): Promise<Record<string, unknown> | null> {
-  const { data } = await supabase.from(tabela).select(cols).eq("id", id).maybeSingle();
+  const { data } = await supabase.from(tabela).select(cols).eq('id', id).maybeSingle();
   return data ?? null;
 }
 
@@ -59,33 +59,33 @@ export async function resolverEmissorDoEmail(
   let reservaId = args.reservaId ?? null;
 
   if (!contratoId && !reservaId && args.cobrancaId) {
-    const cob = await lerUm(supabase, "contrato_cobrancas", "contrato_id, reserva_id", args.cobrancaId);
+    const cob = await lerUm(supabase, 'contrato_cobrancas', 'contrato_id, reserva_id', args.cobrancaId);
     contratoId = (cob?.contrato_id as string | null) ?? null;
     reservaId = (cob?.reserva_id as string | null) ?? null;
   }
 
   let emissorId: string | null = null;
   if (contratoId) {
-    const ctr = await lerUm(supabase, "contratos_renting", "emissor_id", contratoId);
+    const ctr = await lerUm(supabase, 'contratos_renting', 'emissor_id', contratoId);
     emissorId = (ctr?.emissor_id as string | null) ?? null;
   } else if (reservaId) {
-    const res = await lerUm(supabase, "reservas", "emissor_id", reservaId);
+    const res = await lerUm(supabase, 'reservas', 'emissor_id', reservaId);
     emissorId = (res?.emissor_id as string | null) ?? null;
   }
 
   if (emissorId) {
-    const emp = await lerUm(supabase, "clientes", "nome, nome_comercial, logo_url", emissorId);
+    const emp = await lerUm(supabase, 'clientes', 'nome, nome_comercial, logo_url', emissorId);
     // Mesma preferência que contexto_folha_por_token: nome comercial, senão o fiscal.
     const nome =
-      ((emp?.nome_comercial as string | null) ?? "").trim() ||
-      ((emp?.nome as string | null) ?? "").trim();
+      ((emp?.nome_comercial as string | null) ?? '').trim() ||
+      ((emp?.nome as string | null) ?? '').trim();
     if (nome) {
       return { emissorNome: nome, emissorLogoUrl: (emp?.logo_url as string | null) ?? null };
     }
   }
 
   // Contrato sem emissora (ou cobrança avulsa sem contrato/reserva): a org.
-  const org = await lerUm(supabase, "organizacoes", "nome, logo_url", args.orgId);
+  const org = await lerUm(supabase, 'organizacoes', 'nome, logo_url', args.orgId);
   return {
     emissorNome: (org?.nome as string | undefined) ?? undefined,
     emissorLogoUrl: org ? ((org.logo_url as string | null) ?? null) : undefined,
