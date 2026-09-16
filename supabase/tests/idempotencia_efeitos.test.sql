@@ -49,7 +49,8 @@
 -- ── PORQUE `event_type` NÃO É INVENTADO ─────────────────────────────────────
 --
 -- O executor só escreve em `notificacoes` quando o `event_type` da regra tem
--- correspondência no CASE de `v_tipo_legado` — 18 valores fixos. Com um
+-- correspondência em `notificacao_tipo_map` (até 20260916100000 era um CASE
+-- de 18 valores fixos; a migração semeia esses 18 no mapa). Com um
 -- `teste.evento` qualquer, `v_tipo_legado` é NULL e o dual-write não acontece:
 -- metade deste ficheiro passaria a testar nada.
 --

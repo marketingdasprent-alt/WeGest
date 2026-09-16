@@ -66,6 +66,34 @@ $function$;
 --    link partilhado com o process_domain_events
 -- ============================================================================
 
+-- Antes de a função passar a depender do mapa, o mapa tem de ter tudo o que o
+-- CASE tinha. Em produção estas 18 linhas já existem (o mapa foi criado a
+-- partir delas) e este INSERT não faz nada. Numa base construída do zero — o
+-- CI — o baseline cria a tabela VAZIA e só as migrações posteriores semeiam 4
+-- entradas: sem isto, `viatura.seguro_expirando` e as outras 17 perdiam o
+-- dual-write em `notificacoes`, que foi exactamente o que o pgTAP
+-- (idempotencia_efeitos) apanhou na primeira corrida.
+INSERT INTO public.notificacao_tipo_map (event_type, tipo_legado) VALUES
+  ('viatura.seguro_expirando',                 'viatura_seguro_expirando'),
+  ('viatura.inspecao_expirando',               'viatura_inspecao_expirando'),
+  ('motorista.carta_expirando',                'motorista_carta_expirando'),
+  ('motorista.licenca_tvde_expirando',         'motorista_licenca_tvde_expirando'),
+  ('cobranca.gerada',                          'cobranca_gerada'),
+  ('utilizador.criado',                        'utilizador_criado'),
+  ('contrato_renting.renovacao_proxima',       'contrato_renting_renovacao_proxima'),
+  ('contrato_renting.criado',                  'contrato_renting_criado'),
+  ('motorista.candidatura_parada',             'motorista_candidatura_parada'),
+  ('contrato_renting.sem_checkin',             'contrato_renting_sem_checkin'),
+  ('viatura.extintor_expirando',               'viatura_extintor_expirando'),
+  ('viatura.iuc_a_pagar',                      'viatura_iuc_a_pagar'),
+  ('viatura.manutencao_preventiva_expirando',  'viatura_manutencao_preventiva_expirando'),
+  ('motorista.reparacao_cobranca',             'motorista_reparacao_cobranca'),
+  ('assistencia_ticket.aberto_demasiado_tempo','assistencia_ticket_aberto_demasiado_tempo'),
+  ('motorista.ficha_incompleta',               'motorista_ficha_incompleta'),
+  ('invoice.nao_enviada_ao_cliente',           'invoice_nao_enviada_ao_cliente'),
+  ('seguranca.login_suspeito',                 'seguranca_login_suspeito')
+ON CONFLICT (event_type) DO NOTHING;
+
 DO $mig$
 DECLARE
   v_def text;
