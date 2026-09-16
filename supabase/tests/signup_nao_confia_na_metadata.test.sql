@@ -20,9 +20,11 @@ insert into public.organizacoes (id, nome, codigo, ativa) values
   ('00000000-0000-0000-0000-0000005c0000', 'Org Signup Inactiva', 'signup-c', false);
 
 -- Cargos privilegiados (sem "admin" no nome — era exactamente o buraco).
+-- Nome próprio: ensure_base_cargos já cria "Gestor TVDE" ao inserir a org, e
+-- (nome, org_id) é único.
 insert into public.cargos (id, nome, org_id) values
-  ('00000000-0000-0000-0000-00000c5a0001', 'Gestor TVDE', '00000000-0000-0000-0000-0000005a0000'),
-  ('00000000-0000-0000-0000-00000c5b0001', 'Gestor TVDE', '00000000-0000-0000-0000-0000005b0000');
+  ('00000000-0000-0000-0000-00000c5a0001', 'Gestor Frota Signup', '00000000-0000-0000-0000-0000005a0000'),
+  ('00000000-0000-0000-0000-00000c5b0001', 'Gestor Frota Signup', '00000000-0000-0000-0000-0000005b0000');
 
 -- Cargo Motorista global (uma linha só, partilhada por todas as orgs).
 insert into public.cargos (id, nome, org_id) values
@@ -44,7 +46,7 @@ insert into auth.users (id, email, raw_user_meta_data) values
      'tipo_utilizador', 'colaborador',
      'org_id', '00000000-0000-0000-0000-0000005a0000',
      'cargo_id', '00000000-0000-0000-0000-00000c5a0001',
-     'cargo_nome', 'Gestor TVDE'
+     'cargo_nome', 'Gestor Frota Signup'
    ));
 
 select is(
