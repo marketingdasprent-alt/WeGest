@@ -2,6 +2,15 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
 import { passwordRecoveryTemplate, magicLinkTemplate, motoristaOnboardingTemplate } from "../_shared/email/templates/authEmail.ts";
+import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
+
+// Emails de autenticação (recovery / magic link / onboarding de motorista).
+// Gera o link com auth.admin.generateLink — isto é, cria um token de entrada
+// válido para QUALQUER email que lhe passem. Só pode ser chamada de dentro:
+// motorista-onboarding (com a service role key). Aberta, era um gerador
+// anónimo de links de recuperação de conta e de enumeração de utilizadores
+// (auditoria 2026-09-16). Não é o alvo do Auth Hook do Supabase — esse tem
+// outro formato de corpo (user + email_data) que esta função nunca aceitou.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,8 +20,6 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const siteUrlEnv = (Deno.env.get("SUPABASE_SITE_URL") || '').replace(/\/$/, '');
-const supabaseAdmin = supabaseUrl && serviceRoleKey ? createClient(supabaseUrl, serviceRoleKey) : null;
-const emailService = supabaseAdmin ? new EmailService(supabaseAdmin) : null;
 
 interface EmailRequest {
   to: string;
@@ -32,9 +39,15 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    if (!supabaseAdmin) {
+    if (!supabaseUrl || !serviceRoleKey) {
       throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured");
     }
+
+    // Guarda ANTES de criar o cliente privilegiado.
+    requireInternalRequest(req, serviceRoleKey);
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const emailService = new EmailService(supabaseAdmin);
 
     const { to, type, redirect_to }: EmailRequest = await req.json();
 
@@ -79,12 +92,16 @@ const handler = async (req: Request): Promise<Response> => {
       }
       // @ts-ignore - properties shape provided by Supabase
       actionLink = (linkData.properties as any).action_link as string;
+    } else {
+      return new Response(JSON.stringify({ success: false, error: 'type inválido' }), {
+        status: 400,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
     }
 
     // Resolve a org do destinatário (profiles.email → org_id, NOT NULL) para
-    // usar a integração de email dessa org. Auth Hook não tem sessão nem
-    // subdomínio fiável — best-effort; sem resolução, mantém o envio directo
-    // com a key global (comportamento anterior, zero regressão no login).
+    // usar a integração de email dessa org. Best-effort; sem resolução,
+    // mantém o envio directo com a key global (zero regressão no login).
     let orgId: string | null = null;
     const { data: profile } = await supabaseAdmin
       .from('profiles')
@@ -153,6 +170,12 @@ const handler = async (req: Request): Promise<Response> => {
     );
 
   } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: error.status,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
     console.error("Erro ao enviar email via Brevo:", error);
     return new Response(
       JSON.stringify({

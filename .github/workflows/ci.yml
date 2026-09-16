@@ -314,7 +314,8 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
-            rls_anon_exposure
+            rls_anon_exposure \
+            signup_nao_confia_na_metadata
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

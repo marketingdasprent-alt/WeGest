@@ -1,5 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
+
+// Callback de eventos de entrega da Brevo (delivered/opened/click/bounce/…).
+// A Brevo autentica os webhooks com um Bearer token configurado no próprio
+// webhook (auth.type = "bearer"); aqui exige-se que coincida com
+// BREVO_WEBHOOK_SECRET antes de ler o corpo. Sem isto, quem conhecesse um
+// message-id fabricava aberturas, cliques, spam ou hard bounces e alterava
+// email_sends, notification_delivery e os contadores das campanhas
+// (auditoria 2026-09-16). Sem o segredo configurado a função recusa tudo:
+// falha fechada, não aberta.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +24,16 @@ serve(async (req) => {
   }
 
   try {
+    const webhookSecret = Deno.env.get("BREVO_WEBHOOK_SECRET") ?? "";
+    if (!webhookSecret) {
+      console.error("brevo-webhook: BREVO_WEBHOOK_SECRET não configurado — pedido recusado");
+      return new Response(JSON.stringify({ error: "Webhook não configurado" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    requireInternalRequest(req, webhookSecret);
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -159,6 +179,12 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
+    if (error instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Brevo webhook error:", message);
     return new Response(JSON.stringify({ error: message }), {

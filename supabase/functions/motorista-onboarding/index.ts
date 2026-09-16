@@ -114,16 +114,23 @@ serve(async (req) => {
 
     // Criar a conta auth. O trigger handle_new_user_org liga o user_id ao
     // perfil por email (escopado à org) neste INSERT.
+    // org/cargo em app_metadata (fonte de verdade do trigger, só o servidor a
+    // escreve); user_metadata mantém os campos informativos e o marcador de
+    // motorista que o trigger usa para ligar o perfil por email/telefone.
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: emailNorm,
       email_confirm: true,
       user_metadata: {
         nome: perfil.nome ?? emailNorm.split("@")[0],
         telefone: perfil.telefone ?? null,
-        cargo_id: CARGO_MOTORISTA_ID,
         cargo_nome: "Motorista",
         tipo_utilizador: "motorista",
         org_id: orgId,
+      },
+      app_metadata: {
+        org_id: orgId,
+        cargo_id: CARGO_MOTORISTA_ID,
+        tipo_utilizador: "motorista",
       },
     });
 

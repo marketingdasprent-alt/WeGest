@@ -130,9 +130,11 @@ const Register = () => {
         email,
         password,
         options: {
+          // Org e cargo vêm do convite, resolvido no servidor pelo email
+          // (handle_new_user_org). O que vai aqui é só informativo — o
+          // trigger ignora cargo_id/org_id de propósito (auditoria 2026-09-16).
           data: {
             nome,
-            cargo_id: cargoId,
             cargo_nome: cargoNome,
             is_first_user: isFirstUser,
           },

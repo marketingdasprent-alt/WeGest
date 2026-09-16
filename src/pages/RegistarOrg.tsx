@@ -29,7 +29,7 @@ const RegistarOrg = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [codigoDisponivel, setCodigoDisponivel] = useState<boolean | null>(null);
   const [checkingCodigo, setCheckingCodigo] = useState(false);
-  const [resultData, setResultData] = useState<{ codigo: string } | null>(null);
+  const [resultData, setResultData] = useState<{ codigo: string; email: string } | null>(null);
 
   // Campos empresa
   const [nomeEmpresa, setNomeEmpresa] = useState('');
@@ -116,27 +116,15 @@ const RegistarOrg = () => {
         return;
       }
 
-      // Login direto: o subdomínio novo ({codigo}.wegest.pt) pode ainda não
-      // estar provisionado (DNS/Vercel) no momento, por isso autenticamos já
-      // com as credenciais introduzidas e entramos na app no domínio atual —
-      // a org é resolvida pelo profile.org_id / user_org_ativa (que o
-      // register-org já preencheu), não pelo subdomínio.
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: adminEmail.trim(),
-        password: adminPassword,
-      });
-
-      if (signInError) {
-        // Fallback: mostrar ecrã de sucesso com o código da empresa.
-        setResultData({ codigo: data.org.codigo });
-        setStep('success');
-        setLoading(false);
-        return;
-      }
-
-      // Sessão criada → entrar na app (reload completo para inicializar a
-      // sessão/contexto de org).
-      window.location.href = '/dashboard';
+      // A conta nasce por confirmar: o register-org envia um link de
+      // confirmação para o email indicado e só depois de clicar é que a
+      // sessão abre. Não há login automático — era isso que dava acesso de
+      // administrador a quem escrevesse o email de outra pessoa. A resposta
+      // é a mesma quer o email fosse novo quer já existisse (não enumerável),
+      // por isso `data.org` pode não vir.
+      setResultData({ codigo: data?.org?.codigo ?? codigo, email: adminEmail.trim() });
+      setStep('success');
+      setLoading(false);
       return;
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -175,9 +163,11 @@ const RegistarOrg = () => {
             <CardContent className="pt-8 pb-8 text-center space-y-6">
               <CheckCircle2 className="mx-auto h-16 w-16 text-green-500" />
               <div>
-                <h2 className="text-2xl font-bold text-card-foreground">Registo concluído!</h2>
+                <h2 className="text-2xl font-bold text-card-foreground">Falta confirmar o email</h2>
                 <p className="mt-2 text-muted-foreground">
-                  A sua organização foi criada com sucesso.
+                  Enviámos um link de confirmação para{' '}
+                  <span className="font-medium text-card-foreground">{resultData?.email}</span>. A
+                  conta fica ativa depois de clicar nesse link.
                 </p>
               </div>
 
@@ -186,14 +176,16 @@ const RegistarOrg = () => {
                   <p className="text-sm text-muted-foreground mb-1">Código da empresa:</p>
                   <p className="text-lg font-semibold text-primary">{resultData.codigo}</p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Use este código no ecrã de login, junto com o seu email e palavra-passe.
+                    Depois de confirmar o email, use este código no ecrã de login, junto com o seu
+                    email e palavra-passe. Não recebeu? Verifique o spam ou peça um novo link no
+                    ecrã de login.
                   </p>
                 </div>
               )}
 
               <div className="space-y-3">
-                <Button onClick={() => navigate('/equipa')} className="w-full">
-                  Aceder ao sistema
+                <Button onClick={() => navigate('/login')} className="w-full">
+                  Ir para o login
                 </Button>
                 <Button variant="outline" onClick={() => navigate('/')} className="w-full">
                   Voltar à página inicial

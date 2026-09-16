@@ -1,10 +1,31 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import {
+  authenticateUser,
+  AuthorizationError,
+  isInternalRequest,
+  requireOrgMember,
+} from "../_shared/auth/edgeAuthorization.ts";
+
+// Sincroniza o estado de entrega de uma campanha (Brevo → email_sends +
+// contadores em marketing_campanhas). Chamada pelo botão "Sincronizar" da
+// EstatisticasTab. A campanha resolve a organização; o chamador tem de ser
+// membro dela — ou trazer a service role key (execução agendada). Antes
+// bastava conhecer um campanha_id para iniciar escritas com a chave global
+// da Brevo (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -16,11 +37,41 @@ serve(async (req) => {
     if (!BREVO_API_KEY) throw new Error("BREVO_API_KEY não configurada");
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const { campanha_id } = await req.json();
-    if (!campanha_id) throw new Error("campanha_id é obrigatório");
+    if (!campanha_id || !UUID_RE.test(String(campanha_id))) {
+      return json({ error: "campanha_id (uuid) é obrigatório" }, 400);
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const { data: campanha } = await supabase
+      .from("marketing_campanhas")
+      .select("org_id")
+      .eq("id", campanha_id)
+      .maybeSingle();
+    if (!campanha?.org_id) return json({ error: "Campanha não encontrada" }, 404);
+
+    if (!isInternalRequest(req, SUPABASE_SERVICE_ROLE_KEY)) {
+      const authClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      const user = await authenticateUser(req, {
+        getUser: async (token) => {
+          const { data, error } = await authClient.auth.getUser(token);
+          return { user: error || !data.user ? null : { id: data.user.id } };
+        },
+      });
+      await requireOrgMember(user.id, campanha.org_id, async (userId, orgId) => {
+        const { data, error } = await supabase
+          .from("user_organizacoes")
+          .select("is_admin")
+          .eq("user_id", userId)
+          .eq("org_id", orgId)
+          .maybeSingle();
+        return error ? null : data;
+      });
+    }
 
     // Get campaign tag
     const tag = "campanha_" + campanha_id.substring(0, 8);
@@ -213,16 +264,13 @@ serve(async (req) => {
 
     await supabase.from("marketing_campanhas").update(totals).eq("id", campanha_id);
 
-    return new Response(
-      JSON.stringify({ success: true, total_events: allEvents.length, upserted }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ success: true, total_events: allEvents.length, upserted });
   } catch (error: unknown) {
+    if (error instanceof AuthorizationError) {
+      return json({ error: error.message }, error.status);
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Sync campaign sends error:", message);
-    return new Response(
-      JSON.stringify({ error: message }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ error: message }, 400);
   }
 });

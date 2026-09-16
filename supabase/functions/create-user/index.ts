@@ -103,16 +103,25 @@ serve(async (req) => {
       isCargoAdmin = cargoNome?.toLowerCase().includes('admin') || false;
     }
 
-    // Criar utilizador com API Admin
+    // Criar utilizador com API Admin.
+    // org_id/cargo_id vão em app_metadata — é o único sítio que o trigger
+    // handle_new_user_org aceita como fonte de verdade, porque só o servidor
+    // o escreve (signUp() não lhe toca). Em user_metadata fica só o que é
+    // informativo. Antes o trigger metia este utilizador na "primeira org
+    // activa" e ficava uma membership a mais num tenant ao acaso.
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
       email_confirm: true,
-      user_metadata: { 
+      user_metadata: {
         nome: nome,
-        cargo_id: cargo_id,
         cargo_nome: cargoNome
-      }
+      },
+      app_metadata: {
+        org_id: targetOrgId,
+        cargo_id: cargo_id || null,
+        tipo_utilizador: "colaborador",
+      },
     });
 
     if (createError) {

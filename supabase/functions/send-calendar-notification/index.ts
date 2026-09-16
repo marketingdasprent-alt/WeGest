@@ -1,11 +1,26 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
+import {
+  authenticateUser,
+  AuthorizationError,
+  isInternalRequest,
+  requireOrgMember,
+} from "../_shared/auth/edgeAuthorization.ts";
+
+// Aviso por email aos gestores de uma organização de que entrou um evento
+// novo no calendário. Chamada pela UI autenticada (NovoEventoPage e os passos
+// de check-in/entrega/troca). Quem chama tem de ser membro da organização
+// indicada — ou trazer a service role key (chamada interna). Aberta, qualquer
+// pessoa enumerava os gestores de qualquer org e disparava emails em massa
+// em nome do WeGest (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -16,11 +31,32 @@ serve(async (req: Request) => {
     const { matricula, cidade, tipo, data_inicio, dia_todo, org_id: orgId } = await req.json();
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    if (!orgId) throw new Error("org_id é obrigatório");
+    if (!orgId || !UUID_RE.test(String(orgId))) throw new Error("org_id é obrigatório");
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    if (!isInternalRequest(req, serviceRoleKey)) {
+      const authClient = createClient(supabaseUrl, anonKey);
+      const user = await authenticateUser(req, {
+        getUser: async (token) => {
+          const { data, error } = await authClient.auth.getUser(token);
+          return { user: error || !data.user ? null : { id: data.user.id } };
+        },
+      });
+      await requireOrgMember(user.id, orgId, async (userId, org) => {
+        const { data, error } = await supabase
+          .from("user_organizacoes")
+          .select("is_admin")
+          .eq("user_id", userId)
+          .eq("org_id", org)
+          .maybeSingle();
+        return error ? null : data;
+      });
+    }
+
     const emailService = new EmailService(supabase);
 
     // 1. Membros (não-motoristas) DESTA org — recipientes scoped por user_organizacoes.
@@ -86,10 +122,7 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log(
-      `A enviar notificacao para ${allEmails.length} gestor(es):`,
-      allEmails
-    );
+    console.log(`A enviar notificacao para ${allEmails.length} gestor(es)`);
 
     let totalSent = 0;
     for (const email of allEmails) {
@@ -103,10 +136,9 @@ serve(async (req: Request) => {
       });
 
       if (result.success) {
-        console.log(`Notificacao enviada para ${email}`);
         totalSent++;
       } else {
-        console.error(`Erro ao enviar notificacao para ${email}:`, result.error);
+        console.error(`Erro ao enviar notificacao:`, result.error);
       }
     }
 
@@ -114,6 +146,12 @@ serve(async (req: Request) => {
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: error.status,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    }
     console.error("Erro na notificacao:", error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
