@@ -30,8 +30,6 @@ export { SearchableDropdown, formatMatricula } from './calendarioUtils';
 
 type CalendarioEventoInsert = Database['public']['Tables']['calendario_eventos']['Insert'];
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 export interface Viatura {
   id: string;
   matricula: string;
@@ -74,7 +72,6 @@ export interface PendingTrocaData {
   fazerDepois?: boolean;
 }
 
-// Data passed to step components so THEY create the event (atomic with contract/media)
 export interface PendingEventoData {
   tipo: 'entrega' | 'recolha' | 'devolucao';
   motoristaId: string;
@@ -97,31 +94,12 @@ interface Props {
   onClose: () => void;
 }
 
-// ── Event types ────────────────────────────────────────────────────────────────
-//
-// entrega   → motorista recebe viatura. Cria associação motorista_viaturas.
-//             viatura → em_uso
-//
-// recolha   → motorista entrega a viatura (ex: posto de entrega, não parque ainda).
-//             Fecha associação motorista_viaturas na data do evento.
-//             viatura → em_recolha (pendente de confirmação de chegada ao parque)
-//             A confirmação de chegada é feita por um gestor na lista de pendentes.
-//
-// devolucao → viatura já está no parque. Fecha associação + viatura → disponivel
-//
-// troca     → motorista troca de viatura. Sistema deteta a viatura atual pelo motorista.
-//             Fecha associação antiga + cria nova. Histórico mantido em ambos.
-//             viatura antiga → disponivel, nova → em_uso
-//
-// upgrade   → igual à troca, mas o tipo fica gravado para o dashboard calcular
-//             variação de renda (valor_aluguer).
-
 type TipoEvento = {
   value: string;
   label: string;
   color: string;
   desc: string;
-  /** Em transição: vai ser substituído pelo fluxo Reserva → Contrato. */
+
   legacy?: boolean;
 };
 
@@ -168,8 +146,6 @@ const TIPOS: TipoEvento[] = [
     desc: 'Reservar viatura — fica registada como reservada no calendário',
   },
 ];
-
-// ── Accent-insensitive search ─────────────────────────────────────────────────
 
 function norm(s: string): string {
   return s

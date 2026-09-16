@@ -2,14 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
 
-// Callback de eventos de entrega da Brevo (delivered/opened/click/bounce/…).
-// A Brevo autentica os webhooks com um Bearer token configurado no próprio
-// webhook (auth.type = "bearer"); aqui exige-se que coincida com
-// BREVO_WEBHOOK_SECRET antes de ler o corpo. Sem isto, quem conhecesse um
-// message-id fabricava aberturas, cliques, spam ou hard bounces e alterava
-// email_sends, notification_delivery e os contadores das campanhas
-// (auditoria 2026-09-16). Sem o segredo configurado a função recusa tudo:
-// falha fechada, não aberta.
+// Callback de eventos de entrega da Brevo. Exige o Bearer configurado no
+// webhook (BREVO_WEBHOOK_SECRET) antes de ler o corpo — sem isso era falso
+// em massa via message-id (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

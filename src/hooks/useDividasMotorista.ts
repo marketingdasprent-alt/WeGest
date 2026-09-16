@@ -1,24 +1,3 @@
-// src/hooks/useDividasMotorista.ts
-//
-// A dívida de um motorista não é um registo que alguém cria: é o líquido da
-// SEMANA quando dá negativo. Por isso a lista "por cobrar" sai de
-// `motorista_liquido_semanal` — a mesma linha que o resumo grava — e não de
-// uma tabela de dívidas: não há nada para inserir, nada que fique
-// desactualizado, e o mesmo motorista nunca aparece duas vezes na semana.
-//
-// POR SEMANA, E NÃO ACUMULADO
-//
-// Antes vinha da vista `dividas_motorista_abertas`, que soma TODOS os
-// movimentos pendentes do motorista. Numa lista onde se escolhe a semana isso
-// lia-se mal: com duas semanas gravadas, quem devia 200 € numa e 300 € noutra
-// aparecia a dever 500 € em ambas. A vista continua a existir para o saldo
-// global, que é o que a ficha do motorista mostra.
-//
-// A tabela `dividas_motorista` guarda LIQUIDAÇÕES: uma linha por cada vez que
-// alguém marcou a dívida como paga. Marcar paga liquida mesmo os movimentos
-// (passam a 'pago'), e por isso o motorista sai da lista de abertas — não é a
-// linha a desaparecer, é a dívida a deixar de existir. Essa liquidação também
-// é por semana: ver divida_marcar_paga(p_motorista_id, p_data_inicio, p_data_fim).
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -26,24 +5,21 @@ import { toast } from 'sonner';
 export type EstadoDivida = 'por_cobrar' | 'paga';
 
 export interface Divida {
-  /** Chave de linha na tabela do ecrã. Numa dívida em aberto não existe registo
-   *  em BD, por isso usa-se o id do motorista; numa paga é o id da liquidação. */
   id: string;
   motorista_id: string;
   motorista_nome: string;
   periodo_inicio: string;
   periodo_fim: string;
-  /** O saldo pendente do motorista. Negativo — é o que ele deve. */
+
   valor_periodo: number;
   valor_danos: number;
   valor_caucao: number;
-  /** O mesmo saldo em positivo, que é como se lê uma dívida. */
+
   valor_total: number;
   estado: EstadoDivida;
   pago_em: string | null;
 }
 
-/** Uma linha de `motorista_liquido_semanal` com o líquido negativo. */
 interface LinhaAberta {
   motorista_id: string;
   motorista_nome: string;
@@ -71,8 +47,7 @@ const CHAVE_LISTA = 'dividas-motorista';
 export function useDividasMotorista(filtros: {
   pesquisa?: string;
   estado?: 'por_cobrar' | 'paga' | 'todas';
-  /** Semana a mostrar (yyyy-MM-dd). Sem ela não se carrega nada: uma lista
-   *  semanal sem semana escolhida não tem o que mostrar. */
+
   semanaInicio?: string;
   semanaFim?: string;
 }) {
@@ -94,10 +69,9 @@ export function useDividasMotorista(filtros: {
                 .from('motorista_liquido_semanal')
                 .select('motorista_id, motorista_nome, liquido, semana_inicio, semana_fim')
                 .eq('semana_inicio', semanaInicio as string)
-                // Só o líquido negativo é dívida. Um positivo é dinheiro a
-                // receber e vive no saldo, não aqui.
+
                 .lt('liquido', 0)
-                // Mais a dever primeiro: o líquido é negativo, logo ascendente.
+
                 .order('liquido', { ascending: true });
               if (pesquisa) q = q.ilike('motorista_nome', `%${pesquisa}%`);
               return q;

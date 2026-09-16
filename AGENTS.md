@@ -530,6 +530,7 @@ if (admins.find(a => a.id === user.id)) { /* ... */ }
 | Hardcoded routes em strings                | Constantes (criar `lib/routes.ts` quando crescer) |
 | Default export para componentes não-página | Named export                                      |
 | Tipo duplicado à mão                       | `z.infer<typeof schema>` ou `Pick`/`Omit`         |
+| Bloco de comentário gigante/tipo relatório  | 1-3 linhas, só o "porquê"                         |
 
 ---
 
@@ -687,6 +688,12 @@ Antes de criar código novo:
 Evitar duplicação de lógica.
 
 Se existir uma implementação compatível, reutilizá-la.
+
+---
+
+### Comentários
+
+Comentário é curto e explica o "porquê", não o "o quê". 1-3 linhas. Nunca blocos de texto tipo relatório, nem repetir o que o código já diz.
 
 ---
 

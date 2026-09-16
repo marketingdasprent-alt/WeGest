@@ -1,13 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
 
-// Reparação de mapeamentos motorista ↔ identificador Bolt por correspondência
-// de nome/telefone/email. Não tem chamador na aplicação — é uma ferramenta
-// operacional. Por isso:
-//   · exclusivamente interna (service role key no bearer), e
-//   · sempre limitada a UMA organização (org_id obrigatório): as
-//     correspondências fuzzy por nome entre tenants diferentes associavam IDs
-//     Bolt de uma frota a motoristas de outra (auditoria 2026-09-16).
+// Reparação de mapeamentos motorista ↔ Bolt. Ferramenta operacional interna,
+// sempre limitada a uma org (fuzzy match entre tenants era um risco real —
+// auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

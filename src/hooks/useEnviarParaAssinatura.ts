@@ -16,18 +16,6 @@ export interface EnviarParaAssinaturaArgs {
   validadeDias?: number;
 }
 
-/**
- * Envia documentos para assinatura.
- *
- * O trabalho que interessa acontece aqui: para cada documento congela-se uma
- * fotografia — o desenho do template e os dados que o produziram — e é dela que
- * o documento assinado vai nascer mais tarde, no browser de quem assina. Sem
- * isso, uma alteração ao contrato ou ao template entre o envio e a assinatura
- * poria a pessoa a assinar coisa diferente da que recebeu.
- *
- * O acesso à base de dados vive neste hook, e não no componente, por regra do
- * projecto.
- */
 export function useEnviarParaAssinatura() {
   return useMutation({
     mutationFn: async ({
@@ -49,9 +37,8 @@ export function useEnviarParaAssinatura() {
 
       if (anexos.length === 0) throw new Error('Não há documentos para enviar.');
 
-      // O desenho dos templates não vem no anexo — só o identificador. Vai-se
-      // buscá-lo uma vez, para entrar na fotografia e ficar imune a edições
-      // posteriores.
+      // A fotografia usa o template actual para impedir que edições posteriores
+      // alterem o documento que a pessoa recebeu para assinar.
       const ids = [...new Set(anexos.map((a) => a.templateId))];
       const { data: templates, error } = await supabase
         .from('document_templates')
@@ -101,8 +88,7 @@ export function useEnviarParaAssinatura() {
         if (Array.isArray(data?.falharam)) falharam.push(...data.falharam);
       }
 
-      // Os pedidos ficam criados mesmo quando um email falha — devolve-se quem
-      // não recebeu para poder ser reenviado, em vez de fingir que correu tudo.
+      // Pedidos criados não são revertidos por falhas de email, para permitir reenvio.
       return { falharam: [...new Set(falharam)] };
     },
   });

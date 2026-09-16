@@ -7,18 +7,9 @@ import {
   requireOrgMember,
 } from '../_shared/auth/edgeAuthorization.ts';
 
-// Envia por email a cópia da Folha de Danos acabada de gerar.
-//
-// Autorização (verify_jwt = false porque o check-in/out no terreno corre sem
-// sessão), decidida aqui dentro por uma de duas vias — o mesmo desenho de
-// guardar-folha-danos:
-//   1) token de realização válido: fixa a organização (realizacao_tokens.org_id)
-//      e, se vier viaturaId, a viatura tem de ser dessa organização;
-//   2) sessão do chamador: tem de ser membro da organização (a indicada em
-//      org_id, ou a da viatura).
-// O assunto é composto aqui a partir de matrícula + momento; o cliente já não
-// o escolhe. Antes disto era um relay anónimo de PDFs para qualquer
-// destinatário com o assunto que o atacante quisesse (auditoria 2026-09-16).
+// Envia a cópia da Folha de Danos por email. Autoriza por token de
+// realização ou por sessão membro da org; assunto fixado no servidor
+// (auditoria 2026-09-16).
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

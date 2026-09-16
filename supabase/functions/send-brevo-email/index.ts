@@ -4,13 +4,9 @@ import { EmailService } from "../_shared/email/services/EmailService.ts";
 import { passwordRecoveryTemplate, magicLinkTemplate, motoristaOnboardingTemplate } from "../_shared/email/templates/authEmail.ts";
 import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
 
-// Emails de autenticação (recovery / magic link / onboarding de motorista).
-// Gera o link com auth.admin.generateLink — isto é, cria um token de entrada
-// válido para QUALQUER email que lhe passem. Só pode ser chamada de dentro:
-// motorista-onboarding (com a service role key). Aberta, era um gerador
-// anónimo de links de recuperação de conta e de enumeração de utilizadores
-// (auditoria 2026-09-16). Não é o alvo do Auth Hook do Supabase — esse tem
-// outro formato de corpo (user + email_data) que esta função nunca aceitou.
+// Emails de autenticação (recovery/magic link/onboarding). Gera um token de
+// entrada válido para qualquer email — só pode ser chamada internamente
+// (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

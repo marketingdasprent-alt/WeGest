@@ -6,16 +6,9 @@ import {
   requireOrgMember,
 } from '../_shared/auth/edgeAuthorization.ts';
 
-// Dispara os webhooks de integração configurados para um evento de negócio.
-//
-// Dois chamadores, dois modos de autorização, ambos decididos aqui dentro:
-//   · interno (service role key no bearer — send-assistance-notification):
-//     tem de dizer a que organização pertence o evento (org_id);
-//   · utilizador da app (sessão): tem de ser membro da organização — a
-//     indicada em org_id ou, por omissão, a sua org activa.
-// Os webhooks são sempre filtrados por essa organização. Antes disto a
-// função era anónima e disparava os webhooks de TODAS as organizações com um
-// payload inventado pelo chamador (auditoria 2026-09-16).
+// Dispara webhooks de um evento de negócio. Exige membro da org (sessão) ou
+// service role (interno) + org_id — antes era anónimo e disparava tudo
+// (auditoria 2026-09-16).
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

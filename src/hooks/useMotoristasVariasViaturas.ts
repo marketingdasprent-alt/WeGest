@@ -7,21 +7,7 @@ export interface MotoristaComVariasViaturas {
   matriculas: string[];
 }
 
-/**
- * Motoristas com mais do que uma viatura DISTINTA atribuída ao mesmo tempo.
- *
- * Um motorista conduz um carro de cada vez. Duas atribuições activas para
- * veículos diferentes querem sempre dizer que algo ficou por fechar — uma
- * substituição temporária que nunca foi encerrada, ou uma troca feita fora do
- * fluxo de troca. Caso real: a Lucia Duceac ficou com a AC-41-ES e a BM-60-FC
- * abertas no mesmo dia, criadas pela mesma pessoa, uma delas com o motivo
- * "Substituição temporária".
- *
- * Conta viaturas distintas, não linhas: várias linhas para o MESMO veículo são
- * duplicação de registo (acontece, e o cálculo semanal já une os dias — ver
- * buildSlotPeriodos), não um motorista com dois carros. O Marco Reis tem três
- * linhas activas, todas da BL-22-IP: não é caso para este aviso.
- */
+/** Deteta atribuições ativas a viaturas distintas, ignorando linhas duplicadas. */
 export function useMotoristasVariasViaturas() {
   return useQuery({
     queryKey: ['motoristas-varias-viaturas'],
@@ -41,7 +27,7 @@ export function useMotoristasVariasViaturas() {
           nome: linha.motoristas_ativos?.nome ?? '—',
           matriculas: new Map<string, string>(),
         };
-        // Chave pelo id da viatura: é o que distingue veículos, não a matrícula.
+        // A matrícula pode mudar; o ID identifica a viatura.
         actual.matriculas.set(linha.viatura_id, linha.viaturas?.matricula ?? '—');
         porMotorista.set(id, actual);
       });

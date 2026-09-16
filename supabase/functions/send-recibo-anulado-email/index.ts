@@ -9,15 +9,8 @@ const corsHeaders = {
 };
 
 /**
- * Avisa por email o motorista (e o gestor responsável) de que um recibo foi
- * anulado. Chamada pelo trigger SQL `trg_recibo_anulado_avisos` via pg_net —
- * o corpo traz já os emails e nomes resolvidos (a função não faz DB lookups
- * de negócio, só resolve a integração de email da org via EmailService).
- *
- * Exclusivamente interna: o único chamador legítimo é o pg_net com a service
- * role key. Sem esta guarda era um relay anónimo de email — qualquer pessoa
- * podia mandar emails "WeGest" para o destinatário que quisesse
- * (auditoria 2026-09-16).
+ * Aviso de recibo anulado (motorista + gestor). Chamada só pelo pg_net do
+ * trigger SQL — exclusivamente interna (auditoria 2026-09-16).
  */
 interface ReciboAnuladoRequest {
   orgId: string;

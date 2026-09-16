@@ -13,11 +13,6 @@ import type {
 
 const QUERY_KEY_BASE = ['renting', 'contratos'] as const;
 
-// Ocupação de viaturas (badge de Frota + seletor de viaturas por período).
-// Um contrato ocupa a viatura, por isso qualquer mutação de contrato tem de
-// invalidar estas queries — senão o seletor continua a mostrar a viatura como
-// ocupada depois de o contrato ser fechado/cancelado (a query fica em cache
-// com a data pedida como chave e só refrescava ao mudar a data). Ver Erro 4.
 function invalidarOcupacaoViaturas(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['viaturas-ocupadas-periodo'] });
   qc.invalidateQueries({ queryKey: ['viaturas-ocupacao-atual'] });
@@ -102,9 +97,6 @@ export function useContratosRenting(options: UseContratosRentingOptions = {}) {
       const contratos = (data ?? []) as unknown as ContratoRenting[];
       if (contratos.length === 0) return contratos;
 
-      // Merge do total calculado (view contrato_renting_totais) para que a
-      // listagem mostre tarifa + extras + coberturas + taxas + IVA em tempo
-      // real, e não apenas o valor_total_manual (base sem extras/IVA).
       const ids = contratos.map((c) => c.id);
       const { data: totais, error: errTotais } = await supabase
         .from('contrato_renting_totais')
@@ -129,12 +121,6 @@ export interface ContratoRefResumo {
   codigo: number | null;
 }
 
-/**
- * Contrato ACTUAL (não substituído, não eliminado) de uma reserva, ou null.
- * Suporta a regra 1 reserva = 1 contrato no UI: se já existe, oferecemos
- * "Ver Contrato" em vez de deixar tentar criar um segundo (que a BD rejeita
- * pelo índice único parcial uq_contratos_renting_reserva_id_active).
- */
 export function useContratoIdByReserva(reservaId: string | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'by-reserva', reservaId ?? null],
@@ -155,8 +141,6 @@ export function useContratoIdByReserva(reservaId: string | null | undefined) {
   });
 }
 
-/** Contrato anterior/seguinte por código — para as setas de navegação no
- *  topo da página do contrato. Ignora versões substituídas (histórico). */
 export function useContratoVizinhos(codigoAtual: number | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'vizinhos', codigoAtual ?? null],
@@ -196,10 +180,6 @@ export function useContratoVizinhos(codigoAtual: number | null | undefined) {
     staleTime: 10_000,
   });
 }
-
-// ────────────────────────────────────────────────────────────
-// Totais (view contrato_renting_totais)
-// ────────────────────────────────────────────────────────────
 
 export interface ContratoTotais {
   contrato_id: string;
@@ -248,14 +228,6 @@ export function useContratoRenting(id: string | null | undefined) {
   });
 }
 
-// ────────────────────────────────────────────────────────────
-// Tratamento de erros (overbooking + conflito com reserva)
-// ────────────────────────────────────────────────────────────
-
-/** Extrai a mensagem de erro tanto de Error quanto de PostgrestError — este
- *  último é um objecto plain (tem .message, mas NÃO é instanceof Error),
- *  por isso um check `error instanceof Error` sozinho falha sempre para
- *  erros do Supabase e mascara a causa real atrás de "Erro inesperado". */
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (error && typeof error === 'object' && 'message' in error) {
@@ -268,7 +240,7 @@ export function errorMessage(error: unknown): string {
 export function isConflictError(error: unknown): boolean {
   if (!error) return false;
   const code = (error as { code?: string }).code;
-  if (code === '23P01') return true; // exclusion_violation
+  if (code === '23P01') return true;
   const message = errorMessage(error);
   return (
     message.includes('contratos_no_overbooking') ||
@@ -295,17 +267,6 @@ export function contratoErrorMessage(error: unknown): { title: string; descripti
   return { title: 'Erro', description: message };
 }
 
-// ────────────────────────────────────────────────────────────
-// Mutations
-// ────────────────────────────────────────────────────────────
-
-/**
- * Grava a cidade de assinatura vigente do contrato — em silêncio, sem toast
- * nem invalidação de queries. Chamada depois de gerar documentos com sucesso
- * (ContratoDocumentosDialog); a acção que importa ao utilizador (o PDF) já
- * teve sucesso, isto é só housekeeping para a próxima geração não voltar a
- * perguntar. Falhar aqui não pode incomodar quem só queria o documento.
- */
 export async function gravarCidadeAssinaturaVigente(
   contratoId: string,
   cidade: string
@@ -345,10 +306,6 @@ export function useCreateContratoRenting() {
   });
 }
 
-/**
- * Texto do aviso de gravação. Diz o valor que FICOU gravado, não o que estava no
- * ecrã — é a diferença entre "guardei" e "guardei isto".
- */
 export function descricaoGuardado(valorGuardado: number | null | undefined): string {
   if (valorGuardado == null) {
     return 'As alterações foram guardadas.';

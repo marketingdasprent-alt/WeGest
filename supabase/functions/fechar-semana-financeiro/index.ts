@@ -1,4 +1,3 @@
-// supabase/functions/fechar-semana-financeiro/index.ts
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { buildWeeklyContractSummary } from '../_shared/resumo-semanal-viatura/calc.ts';
 import { repartirDiasPorMotorista } from '../_shared/resumo-semanal-viatura/diasPorMotorista.ts';
@@ -12,9 +11,6 @@ function toIsoDate(d: Date): string {
   return d.toISOString().split('T')[0];
 }
 
-// Inclusivo (mesma convenção de diffDiasInclusive em calc.ts) — um contrato
-// de 30 dias corridos toca 31 datas de calendário; usar Math.ceil sem +1
-// sub-rateava o valor_total_manual do rent-a-car por ~3% a mais por semana.
 function diasEntre(inicio: Date, fim: Date): number {
   return Math.max(1, Math.round((fim.getTime() - inicio.getTime()) / 86_400_000) + 1);
 }
@@ -50,15 +46,6 @@ Deno.serve(async (req) => {
 
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
 
-    // ─── A que organização pertence este fecho ───────────────────────────
-    // Até 2026-08-19 esta função não filtrava por organização nenhuma:
-    // percorria `contratos_renting` inteira e escrevia resumos para toda a
-    // gente. Quem carregasse em "Fechar Período" numa organização fechava o
-    // período de TODAS — foi assim que a Década Ousada ficou com um fecho de
-    // 10–16/08 que ninguém lá pediu (mesmo carimbo da Premium: 17/08 10:00:46).
-    //
-    // A função corre com service role, portanto ignora o RLS: o org_id tem de
-    // ser resolvido e validado aqui à mão, a partir do JWT de quem chama.
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       throw new Error('Pedido sem autenticação.');
@@ -72,9 +59,7 @@ Deno.serve(async (req) => {
       throw new Error('Não foi possível identificar quem está a fechar o período.');
     }
 
-    // org do corpo do pedido, ou a organização activa do utilizador
-    let orgId: string | null =
-      typeof body?.orgId === 'string' && body.orgId ? body.orgId : null;
+    let orgId: string | null = typeof body?.orgId === 'string' && body.orgId ? body.orgId : null;
     if (!orgId) {
       const { data: ativa } = await supabase
         .from('user_org_ativa')
@@ -87,7 +72,6 @@ Deno.serve(async (req) => {
       throw new Error('Sem organização activa para fechar o período.');
     }
 
-    // Pertence mesmo a esta organização? (o orgId pode vir do corpo do pedido)
     const { data: membro } = await supabase
       .from('user_organizacoes')
       .select('org_id')
@@ -98,8 +82,6 @@ Deno.serve(async (req) => {
       throw new Error('Sem acesso a esta organização.');
     }
     if (body?.semanaInicio && body?.semanaFim) {
-      // Período explícito (UI "Fechar Semana" com range custom) — usado tal
-      // como veio, sem forçar semana civil de 7 dias.
       const inicio = new Date(`${body.semanaInicio}T00:00:00Z`);
       const fim = new Date(`${body.semanaFim}T00:00:00Z`);
       if (fim < inicio) {
@@ -108,7 +90,6 @@ Deno.serve(async (req) => {
       semanaInicio = toIsoDate(inicio);
       semanaFim = toIsoDate(fim);
     } else if (body?.semanaInicio) {
-      // Legado: só início → assume semana civil completa (7 dias).
       const inicio = new Date(`${body.semanaInicio}T00:00:00Z`);
       const fim = new Date(inicio);
       fim.setUTCDate(fim.getUTCDate() + 6);
@@ -123,10 +104,6 @@ Deno.serve(async (req) => {
       semanaInicio = toIsoDate(semanaInicioDate);
       semanaFim = toIsoDate(semanaFimDate);
     }
-    // Não dá pra fechar um período que ainda não aconteceu (contrato/multas/
-    // reparações desse futuro simplesmente não existem ainda) — clamp a
-    // hoje ANTES de derivar weekStart/weekEnd, para que toda a query e o
-    // cálculo já usem a data clampada.
     const hojeStr = toIsoDate(new Date());
     if (semanaInicio > hojeStr) {
       throw new Error('Não é possível fechar um período que ainda não começou.');
@@ -136,38 +113,17 @@ Deno.serve(async (req) => {
     }
     const weekStart = new Date(`${semanaInicio}T00:00:00Z`);
     const weekEnd = new Date(`${semanaFim}T00:00:00Z`);
-    // Limite EXCLUSIVO (dia seguinte) para as colunas `timestamptz`.
-    //
-    // `contratos_renting.data_inicio` e `contrato_condutores.data_inicio` são
-    // timestamptz, e metade das linhas em produção tem hora (50,7% e 58,9%).
-    // Um `.lte('data_inicio', '2026-08-16')` é coagido para
-    // `2026-08-16 00:00:00+00`, portanto um contrato que começa às 14:00 do
-    // último dia do período fica de fora do fecho, em silêncio.
-    //
-    // As restantes colunas de data usadas aqui — viatura_multas.data_infracao,
-    // motorista_financeiro.data_movimento e os periodo_inicio/fim dos resumos
-    // Bolt e Uber — são `date` e continuam com `.lte()` inclusivo, que é o
-    // correcto para elas.
     const semanaFimExclusivo = new Date(weekEnd);
     semanaFimExclusivo.setUTCDate(semanaFimExclusivo.getUTCDate() + 1);
     const semanaFimExclusivoStr = toIsoDate(semanaFimExclusivo);
 
-    // Exclui: linhas apagadas (deleted_at) e contratos genuinamente
-    // cancelados sem nunca terem sido substituídos por uma versão nova
-    // (substituido_em IS NULL) — esses nunca chegaram a acontecer. Um
-    // contrato cancelado QUE FOI substituído (substituido_em setado) fica
-    // incluído: pode ter dias reais antes da renovação/edição que o
-    // substituiu, resolvidos por reivindicarDiasPorContrato() abaixo.
     const { data: contratosSemana, error: contratosError } = await supabase
       .from('contratos_renting')
       .select(
         'id, org_id, viatura_id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, estado_operacional, versao, substituido_em'
       )
-      // Sem isto o fecho atravessa organizações — ver a resolução do orgId acima.
       .eq('org_id', orgId)
       .is('deleted_at', null)
-      // timestamptz → limite exclusivo, senão perde-se quem começa com hora
-      // no último dia do período (ver o comentário acima).
       .lt('data_inicio', semanaFimExclusivoStr)
       .or(`data_fim.is.null,data_fim.gte.${semanaInicio}`)
       .or('estado_operacional.neq.cancelado,substituido_em.not.is.null');
@@ -183,16 +139,12 @@ Deno.serve(async (req) => {
       { orgId: string; receitaAluguer: number; despesaDanos: number; despesaOutros: number }
     >();
 
-    // Motoristas que já ficaram com bolt/uber/motorista_financeiro
-    // contabilizados nesta corrida — ver comentário junto de
-    // primeiraVezEsteMotoristaNaSemana, abaixo.
     const motoristasComTotaisSemana = new Set<string>();
 
-    // ─── Quem conduz cada contrato, tudo de uma vez ──────────────────────
-    // Era uma query por contrato dentro do ciclo. Passa para aqui porque o
-    // livro de dias (a seguir) precisa de saber o motorista ANTES de repartir
-    // os dias, e de caminho poupa uma ida à base por contrato.
-    const condutorPorContrato = new Map<string, { motorista_id: string | null; cliente_id: string | null }>();
+    const condutorPorContrato = new Map<
+      string,
+      { motorista_id: string | null; cliente_id: string | null }
+    >();
     if (todosContratos.length > 0) {
       const { data: condutores } = await supabase
         .from('contrato_condutores')
@@ -202,14 +154,9 @@ Deno.serve(async (req) => {
           todosContratos.map((c) => c.id)
         )
         .eq('is_principal', true)
-        // timestamptz — mesmo motivo do contrato: limite exclusivo.
         .lt('data_inicio', semanaFimExclusivoStr)
         .or(`data_fim.is.null,data_fim.gte.${semanaInicio}`)
         .order('data_inicio', { ascending: false });
-      // Havendo mais do que um condutor principal a cobrir a semana (dados
-      // ambíguos), fica o que começou mais tarde. Antes disto a query usava
-      // .maybeSingle() e, nesse caso, devolvia erro e o contrato perdia o
-      // motorista por completo.
       for (const cc of (condutores ?? []) as Array<{
         contrato_id: string;
         motorista_id: string | null;
@@ -224,11 +171,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ─── Um dia, um dono — e o dono é a PESSOA, não a viatura ────────────
-    // O livro de dias era por viatura: um motorista com duas viaturas
-    // atribuídas em simultâneo era cobrado 7 + 7 dias numa semana de 7.
-    // A regra e os casos estão em _shared/resumo-semanal-viatura/diasPorMotorista.ts,
-    // com testes — é a contraparte do buildSlotPeriodos do ecrã.
     const claims = repartirDiasPorMotorista(
       todosContratos,
       (contratoId) => condutorPorContrato.get(contratoId)?.motorista_id ?? null,
@@ -241,7 +183,7 @@ Deno.serve(async (req) => {
 
       for (const contrato of candidatos) {
         const claim = claims.get(contrato.id);
-        if (!claim) continue; // 100% dos dias já reivindicados por versão mais recente com as mesmas datas.
+        if (!claim) continue;
 
         try {
           const { data: viatura } = await supabase
@@ -250,9 +192,6 @@ Deno.serve(async (req) => {
             .eq('id', viaturaId)
             .maybeSingle();
           if (!viatura) continue;
-          // Cinto e suspensórios: os contratos já vêm filtrados por org, mas a
-          // viatura é lida por id e é dela que sai o org_id que se GRAVA nos
-          // resumos. Se divergir, não se escreve nada na organização errada.
           if (viatura.org_id !== orgId) continue;
 
           const condutorRow = condutorPorContrato.get(contrato.id) ?? null;
@@ -279,10 +218,6 @@ Deno.serve(async (req) => {
             }
           }
 
-          // diasTotaisContrato usa as datas ORIGINAIS do contrato (não os
-          // dias reivindicados desta semana) — serve só para ratear o
-          // valor_total_manual do rent-a-car pela duração inteira do
-          // contrato, não pela fatia desta semana.
           const dataInicioContratoOriginal = new Date(
             `${contrato.data_inicio.split('T')[0]}T00:00:00Z`
           );
@@ -292,17 +227,6 @@ Deno.serve(async (req) => {
           const diasTotaisContrato = diasEntre(dataInicioContratoOriginal, dataFimContratoOriginal);
 
           const motoristaId = condutorRow?.motorista_id ?? null;
-          // bolt/uber/motorista_financeiro são consultados por motorista_id +
-          // semana inteira (não por contrato) — se o mesmo motorista aparece
-          // em 2+ segmentos nesta semana (renovação/troca a meio), cada
-          // segmento veria o MESMO total da semana. custo_aluguer deve
-          // continuar por segmento (é isso que se está a corrigir), mas os
-          // restantes campos só podem ser atribuídos a um segmento, senão
-          // duplicam quando useMotoristaResumoSemanal.ts soma os segmentos.
-          // Só marca como "já contabilizado" depois de o upsert deste
-          // segmento ter sucesso (abaixo) — se este segmento falhar antes
-          // disso, o próximo segmento do mesmo motorista ainda pode levar
-          // os totais da semana, em vez de ficarem perdidos.
           const primeiraVezEsteMotoristaNaSemana =
             !motoristaId || !motoristasComTotaisSemana.has(motoristaId);
 
@@ -328,13 +252,6 @@ Deno.serve(async (req) => {
               : Promise.resolve({
                   data: [] as { tipo: string; categoria: string | null; valor: number }[],
                 }),
-            // Bolt: o MESMO campo que o ecrã de resumos e a ficha do motorista
-            // mostram — liquido_a_pagar, coluna gerada pela base que soma
-            // ganhos_liquidos + campanhas + reembolsos (ver src/config/bolt.ts).
-            // Lia-se aqui ganhos_brutos_total, o BRUTO: em 178 semanas
-            // fechadas, 178 não batiam com os outros ecrãs. Depois leu
-            // ganhos_liquidos, que nas integrações em oauth vem da API sem as
-            // campanhas — 984,28 EUR por pagar numa só semana (2026-09-07).
             motoristaId
               ? supabase
                   .from('bolt_resumos_semanais')
@@ -343,11 +260,6 @@ Deno.serve(async (req) => {
                   .lte('periodo_inicio', semanaFim)
                   .gte('periodo_fim', semanaInicio)
               : Promise.resolve({ data: [] as { liquido_a_pagar: number | null }[] }),
-            // Uber: o resumo semanal, igual à Bolt. Somava-se aqui
-            // uber_transactions em bruto, o que duplicava a receita no dia em
-            // que a API oficial ligasse (uma linha por VIAGEM da API mais a
-            // linha SEMANAL do CSV, na mesma soma). O resumo é mantido por
-            // gatilho e já resolve a precedência. Ver 20260814170000.
             motoristaId
               ? supabase
                   .from('uber_resumos_semanais')
@@ -377,10 +289,6 @@ Deno.serve(async (req) => {
             0
           );
 
-          // Passa ao cálculo puro só o intervalo de dias REIVINDICADO por
-          // este contrato nesta semana (claim.inicio/claim.fim), não as
-          // datas originais do contrato — é isto que impede a duplicação
-          // quando duas versões do mesmo contrato se sobrepõem.
           const summary = buildWeeklyContractSummary({
             semanaInicio,
             semanaFim,
@@ -395,12 +303,6 @@ Deno.serve(async (req) => {
               diasTotaisContrato,
             },
             condutor: { motoristaId, clienteId: condutorRow?.cliente_id ?? null },
-            // Só o primeiro segmento do motorista nesta semana leva os
-            // valores semana-inteira (bolt/uber/financeiro) — os restantes
-            // ficam a 0 nestes campos para não duplicar quando o hook de
-            // leitura soma os segmentos. custo_aluguer (abaixo, via
-            // summary.custoMotorista.custoAluguer) continua correto por
-            // segmento, porque vem só de claim.inicio/claim.fim.
             motoristaFinanceiro: primeiraVezEsteMotoristaNaSemana
               ? (financeiroRes.data ?? []).map((f) => ({
                   tipo: f.tipo as 'credito' | 'debito',
@@ -423,10 +325,6 @@ Deno.serve(async (req) => {
             despesaOutros: 0,
           };
           acumulado.receitaAluguer += summary.receitaViatura.receitaAluguer;
-          // despesaDanos e despesaOutros (multas) são atribuídos, não
-          // somados: totalDanos/totalMultas vêm de queries filtradas só por
-          // viatura_id + semana (não por contrato), logo repetem o mesmo
-          // total em cada iteração da mesma viatura — somar duplicaria.
           acumulado.despesaDanos = summary.receitaViatura.despesaDanos;
           acumulado.despesaOutros = summary.receitaViatura.despesaMultas;
           receitaPorViatura.set(viaturaId, acumulado);

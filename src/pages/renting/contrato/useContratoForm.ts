@@ -65,30 +65,12 @@ import {
   type ContratoFormValues,
 } from '@/components/renting/contratos/contratoForm.schema';
 
-// Mapeia o 1º campo do schema com erro para o separador onde ele vive —
-// os restantes campos ficam todos no separador "Geral" (ContratoFormSecoes).
-//
-// `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` caem neste
-// grupo. Desde que o SectionGeral foi apagado (tinha os únicos <FormMessage />
-// destes três campos), um erro de validação neles deixa de ter superfície
-// ACIONÁVEL: o `onInvalid` (mais abaixo) continua a abrir o separador "Geral" e
-// a mostrar o toast, mas lá não há nenhum destes campos para corrigir — e o
-// cartão lateral (ResumoContrato) não lê form.formState.errors.
-// Decisão deliberada, não um esquecimento: os três só entram no formulário
-// por hidratação de um contrato/reserva já gravado, e só se grava um
-// contrato passando por este mesmo schema (ou pela função SQL
-// renovar_contrato_renting, que copia uma linha já validada) — não há forma
-// de os tornar inválidos pela aplicação. `valor_total_manual` tem ainda o
-// CHECK chk_contratos_valor_total_manual_valido (>= 0) na BD como garantia
-// extra.
 const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
   coberturas: 'coberturas',
   extras: 'extras',
   taxas: 'taxas',
 };
 
-/** Campos do formulário que são listas (useFieldArray) — ver o porquê no efeito
- *  de hidratação: só se tocam com `form.reset`, e reset faz piscar. */
 const LISTAS_DO_FORM = new Set(['condutores', 'coberturas', 'extras', 'taxas']);
 
 const TAB_LABELS: Record<string, string> = {
@@ -99,11 +81,9 @@ const TAB_LABELS: Record<string, string> = {
 };
 
 export interface UseContratoFormReturn {
-  // Routing
   isEdit: boolean;
   id?: string;
 
-  // Server data
   clientes: ReturnType<typeof useClientes>['data'];
   motoristas: ReturnType<typeof useMotoristas>['data'];
   empresas: ReturnType<typeof useClientesEmpresas>['empresas'];
@@ -118,34 +98,28 @@ export interface UseContratoFormReturn {
   modelosElegiveisTvde: ReturnType<typeof useModelosElegiveisTvde>['data'];
   orgDefinicoes: ReturnType<typeof useOrgDefinicoes>['data'];
 
-  // Contrato
   contrato: ReturnType<typeof useContratoRenting>['data'];
   loadingContrato: boolean;
   vizinhos: ReturnType<typeof useContratoVizinhos>['data'];
 
-  // Reserva associada
   reservaAssociada: ReturnType<typeof useReserva>['data'];
   viaturaLocked: boolean;
 
-  // Database relations
   condutoresDb: ReturnType<typeof useContratoCondutores>['data'];
   coberturasDb: ReturnType<typeof useContratoCoberturas>['data'];
   extrasDb: ReturnType<typeof useContratoExtras>['data'];
   taxasDb: ReturnType<typeof useContratoTaxas>['data'];
 
-  // Form
   form: ReturnType<typeof useForm<ContratoFormValues>>;
   isPending: boolean;
 
-  // UI state
   activeTab: string;
   setActiveTab: (tab: string) => void;
   confirmDeleteOpen: boolean;
   setConfirmDeleteOpen: (open: boolean) => void;
   confirmCancelOpen: boolean;
   setConfirmCancelOpen: (open: boolean) => void;
-  /** Cancelar está disponível em qualquer estado; só não se cancela uma
-   *  versão já substituída (essa é história). Ver useCancelarContratoRenting. */
+
   podeCancelar: boolean;
   clienteDialogOpen: boolean;
   setClienteDialogOpen: (open: boolean) => void;
@@ -160,7 +134,6 @@ export interface UseContratoFormReturn {
   docsDialogOpen: boolean;
   setDocsDialogOpen: (open: boolean) => void;
 
-  // Computed
   viaturasParaSelecao: ReturnType<typeof useViaturas>['data'];
   realizacaoPendente: { id: string; tipo: 'entrega' | 'recolha' } | null;
   condutoresRascunho: {
@@ -183,7 +156,6 @@ export interface UseContratoFormReturn {
   taxasForm: TaxaFormItem[];
   grupoIdAtual: string | undefined | null;
 
-  // Handlers
   aplicarDadosViatura: (viaturaId: string) => void;
   handleSubmit: () => void;
   handleDelete: () => void;
@@ -202,13 +174,8 @@ export function useContratoForm(): UseContratoFormReturn {
   const { toast } = useToast();
   const isEdit = !!id;
 
-  // ── Server state ──────────────────────────────────────────────
   const { data: clientes = [] } = useClientes();
-  // Não filtra por activo: um contrato existente pode ter condutores que
-  // entretanto ficaram inactivos (ex. ao fechar o contrato) — filtrar aqui
-  // fazia-os desaparecer da lista e o CondutoresFields mostrava-os como
-  // "Motorista removido" mesmo continuando corretamente associados. A
-  // dropdown de "Adicionar Motorista" filtra por activo internamente.
+
   const { data: motoristas = [] } = useMotoristas();
   const { empresas } = useClientesEmpresas();
   const { data: viaturas = [] } = useViaturas();
@@ -224,19 +191,16 @@ export function useContratoForm(): UseContratoFormReturn {
   const { data: contrato, isLoading: loadingContrato } = useContratoRenting(id ?? null);
   const { data: vizinhos } = useContratoVizinhos(contrato?.codigo ?? null);
 
-  // ── Reserva associada ──────────────────────────────────────────
   const reservaIdFromQuery = searchParams.get('reserva_id');
   const reservaIdActiva = isEdit ? (contrato?.reserva_id ?? null) : reservaIdFromQuery;
   const { data: reservaFromQuery } = useReserva(!isEdit ? reservaIdFromQuery : null);
   const { data: reservaDoContrato } = useReserva(isEdit ? (contrato?.reserva_id ?? null) : null);
   const reservaAssociada = reservaFromQuery ?? reservaDoContrato;
   const { data: condutoresDaReserva } = useReservaCondutores(!isEdit ? reservaIdFromQuery : null);
-  // Os extras da reserva entram no contrato pré-preenchidos e editáveis. Só na
-  // criação: em edição mandam os extras já gravados no contrato.
+
   const { data: extrasDaReserva } = useReservaExtras(!isEdit ? reservaIdFromQuery : null);
   const viaturaLocked = !isEdit && !!reservaIdActiva;
 
-  // ── Mutations ──────────────────────────────────────────────────
   const createMutation = useCreateContratoRenting();
   const updateMutation = useUpdateContratoRenting();
   const deleteMutation = useDeleteContratoRenting();
@@ -259,7 +223,6 @@ export function useContratoForm(): UseContratoFormReturn {
     syncExtrasMutation.isPending ||
     syncTaxasMutation.isPending;
 
-  // ── UI state ──────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('geral');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
@@ -275,7 +238,6 @@ export function useContratoForm(): UseContratoFormReturn {
   } | null>(null);
   const [docsDialogOpen, setDocsDialogOpen] = useState(false);
 
-  // ── Handlers ──────────────────────────────────────────────────
   const handleClienteCriado = (clienteId: string) => {
     const existentes = (form.getValues('condutores') ?? []) as Array<{
       cliente_id: string | null;
@@ -324,8 +286,6 @@ export function useContratoForm(): UseContratoFormReturn {
     setConfirmCancelOpen(true);
   };
 
-  // Ao contrário do eliminar, cancelar NÃO navega para fora: o contrato
-  // continua a existir e o gestor deve ficar a vê-lo já como "Cancelado".
   const confirmCancelar = () => {
     if (!contrato) return;
     cancelarMutation.mutate(contrato.id, {
@@ -333,15 +293,6 @@ export function useContratoForm(): UseContratoFormReturn {
     });
   };
 
-  // ── Form ──────────────────────────────────────────────────────
-  // Instantâneo do servidor a partir do qual o formulário já foi hidratado —
-  // guardado por IDENTIDADE de objecto (o react-query, com structural sharing,
-  // só devolve uma referência nova quando os dados mudam mesmo). Faz dois
-  // trabalhos: re-hidratar quando os dados mudam, e não voltar a fazer reset
-  // quando não mudaram (o efeito também corre por causa de listas auxiliares —
-  // `viaturas`/`grupos` são `= []` por omissão, ou seja, referência nova a cada
-  // render enquanto a query não resolve; sem esta guarda, reset → render →
-  // reset, em ciclo). Nulo = ainda não houve hidratação nenhuma.
   const hidratadoDeRef = useRef<{
     fonte: unknown;
     condutores: unknown;
@@ -353,44 +304,15 @@ export function useContratoForm(): UseContratoFormReturn {
     defaultValues: DEFAULT_CONTRATO_VALUES,
   });
 
-  // Instância-pai de useFieldArray só para os handlers "criar cliente/motorista"
-  // (usam `append`, que sincroniza a cópia interna do useFieldArray-filho que
-  // desenha a tabela). A HIDRATAÇÃO das listas é feita com `form.reset` (mais
-  // abaixo) — um `replace()`/`setValue` de instância-pai NÃO chega ao filho.
   const { append: appendCondutor } = useFieldArray({ control: form.control, name: 'condutores' });
 
-  // Guard: criar contrato sem reserva_id na URL → redirecionar
   useEffect(() => {
     if (!isEdit && !reservaIdFromQuery) {
       navigate('/renting/contratos', { replace: true });
     }
   }, [isEdit, reservaIdFromQuery, navigate]);
 
-  // Hydration: contrato existente OU pré-preenchimento via reserva_id.
-  //
-  // Volta a correr sempre que os dados do servidor mudam. Antes corria UMA só
-  // vez e era isso que fazia o contrato nascer com o preço/tarifa/emissora
-  // ANTERIORES ao último "Guardar" da reserva: `useReserva` tem staleTime de
-  // 30 s e a reserva navega para cá logo a seguir a invalidar a query, por isso
-  // o react-query serve primeiro a cópia em cache e só depois entrega o
-  // refetch — que chegava tarde demais para um formulário já hidratado.
-  //
-  // `keepDirtyValues: true` é o que substitui a guarda antiga (e faz melhor o
-  // trabalho dela): os campos que o utilizador tocou ficam, os outros
-  // acompanham o servidor.
-  //
-  // Vale TAMBÉM para a primeira hidratação, e é preciso que valha. A primeira
-  // chega tarde de propósito: o efeito desiste e volta a tentar enquanto os
-  // condutores da reserva ou a lista de grupos não chegarem, e nessa espera o
-  // formulário já está no ecrã a ser preenchido. Um reset integral nesse
-  // momento apaga o preço que a pessoa acabou de escrever e põe lá o
-  // `valor_total` da reserva — era a queixa "guardo um preço e ele não fica".
-  // Como o formulário arranca dos DEFAULT_CONTRATO_VALUES sem nada sujo,
-  // preservar aqui os campos sujos só pode preservar o que foi mesmo escrito.
   useEffect(() => {
-    // Instantâneo do servidor desta corrida. Em edição manda o contrato; a
-    // criar, a reserva de origem mais os seus condutores (que chegam numa query
-    // à parte e entram neste mesmo reset).
     const fonte = isEdit ? contrato : reservaFromQuery;
     const condutoresFonte = isEdit ? null : condutoresDaReserva;
     const extrasFonte = isEdit ? null : extrasDaReserva;
@@ -440,9 +362,7 @@ export function useContratoForm(): UseContratoFormReturn {
           voucher_codigo: contrato.voucher_codigo ?? '',
           observacoes: contrato.observacoes ?? '',
           observacoes_internas: contrato.observacoes_internas ?? '',
-          // As listas m:n vivem nos efeitos próprios logo abaixo (só voltam a
-          // correr quando a SUA query muda): repetem-se aqui as que já estão no
-          // formulário para uma re-hidratação não as apagar.
+
           condutores: form.getValues('condutores'),
           coberturas: form.getValues('coberturas'),
           extras: form.getValues('extras'),

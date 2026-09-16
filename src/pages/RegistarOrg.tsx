@@ -116,12 +116,8 @@ const RegistarOrg = () => {
         return;
       }
 
-      // A conta nasce por confirmar: o register-org envia um link de
-      // confirmação para o email indicado e só depois de clicar é que a
-      // sessão abre. Não há login automático — era isso que dava acesso de
-      // administrador a quem escrevesse o email de outra pessoa. A resposta
-      // é a mesma quer o email fosse novo quer já existisse (não enumerável),
-      // por isso `data.org` pode não vir.
+      // Conta nasce por confirmar (sem login automático); resposta não
+      // enumerável, por isso `data.org` pode não vir (auditoria 2026-09-16).
       setResultData({ codigo: data?.org?.codigo ?? codigo, email: adminEmail.trim() });
       setStep('success');
       setLoading(false);

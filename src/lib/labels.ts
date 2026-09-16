@@ -1,39 +1,17 @@
-// ============================================================
-// Dicionário de labels — vocabulário neutro / contextual
-// ============================================================
-// Permite que a mesma chave semântica ("cliente.singular") apareça com
-// palavras diferentes consoante os módulos activos. Ex.: numa org só-TVDE
-// "cliente" passa a "motorista parceiro"; numa só-aluguer mantém-se "cliente".
-//
-// Convenção da chave: `<dominio>.<forma>` → ex. `cliente.singular`,
-// `cliente.plural`, `contrato.singular`. Sempre PT-PT.
-//
-// Esta tabela é a fonte. O hook `useLabel(key)` resolve a variante correcta
-// com base nos módulos activos da organização.
-
 import type { Modulo } from '@/types/modulo';
 
 export interface LabelEntry {
-  /** Texto por defeito quando nenhuma variante aplica. */
   default: string;
-  /**
-   * Variantes condicionais. A primeira regra que case com os módulos
-   * activos da org é a aplicada. Avaliação top-down — declarar do mais
-   * restritivo para o menos restritivo.
-   */
   variants?: LabelVariant[];
 }
 
 export interface LabelVariant {
-  /** Módulos que TÊM de estar activos para esta variante aplicar. */
   modules: Modulo[];
-  /** Módulos que NÃO podem estar activos (módulo único). */
   excludeModules?: Modulo[];
   text: string;
 }
 
 export const LABELS: Record<string, LabelEntry> = {
-  // -------- Cliente / Motorista --------
   'cliente.singular': {
     default: 'Cliente',
     variants: [{ modules: ['tvde'], excludeModules: ['aluguer'], text: 'Motorista parceiro' }],
@@ -43,7 +21,6 @@ export const LABELS: Record<string, LabelEntry> = {
     variants: [{ modules: ['tvde'], excludeModules: ['aluguer'], text: 'Motoristas parceiros' }],
   },
 
-  // -------- Contrato --------
   'contrato.singular': {
     default: 'Contrato',
   },
@@ -58,7 +35,6 @@ export const LABELS: Record<string, LabelEntry> = {
     ],
   },
 
-  // -------- Reserva --------
   'reserva.singular': {
     default: 'Reserva',
   },
@@ -66,7 +42,6 @@ export const LABELS: Record<string, LabelEntry> = {
     default: 'Reservas',
   },
 
-  // -------- Viatura --------
   'viatura.singular': {
     default: 'Viatura',
   },
@@ -75,14 +50,9 @@ export const LABELS: Record<string, LabelEntry> = {
   },
 };
 
-/**
- * Resolve a label dada a configuração de módulos da org.
- * Função pura — testável sem React. O hook `useLabel` envolve isto com
- * acesso ao estado de módulos via React Query.
- */
 export function resolveLabel(key: string, activeModules: Set<Modulo>): string {
   const entry = LABELS[key];
-  if (!entry) return key; // fallback visível para detectar chaves em falta
+  if (!entry) return key;
 
   if (entry.variants) {
     for (const variant of entry.variants) {

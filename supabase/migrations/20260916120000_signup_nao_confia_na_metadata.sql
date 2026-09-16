@@ -1,39 +1,7 @@
--- ============================================================================
--- Registo de utilizadores: a organização e o cargo deixam de vir do cliente
--- ============================================================================
--- Achado CRITICAL da auditoria de segurança de 2026-09-16.
---
--- handle_new_user_org() aceitava `org_id` e `cargo_id` directamente de
--- raw_user_meta_data — o campo `data` do supabase.auth.signUp(), que qualquer
--- pessoa controla a partir do browser. A única defesa era recusar cargos cujo
--- nome contivesse "admin"; "Gestor TVDE" ou "Supervisor de Gestor TVDE"
--- passavam. Bastava resolver o UUID de uma organização pelo código público,
--- registar-se como motorista, listar os cargos dessa org (SELECT aberto a
--- membros) e registar uma segunda conta a apontar para um cargo privilegiado.
---
--- Fontes de verdade, por ordem, a partir de agora:
---
---   1. raw_app_meta_data — só o servidor a escreve (auth.admin.createUser com
---      `app_metadata`); signUp() não lhe toca. create-user, register-org e
---      motorista-onboarding passam aqui org_id/cargo_id. O cargo tem de
---      pertencer à organização indicada (ou ser o cargo Motorista global).
---   2. Convite por usar e por expirar para este email — o admin criou-o.
---   3. Auto-registo de motorista — a organização continua a vir do cliente
---      (é a que o candidato escolheu pelo código público), mas tem de existir
---      e estar activa, e o cargo é SEMPRE o cargo Motorista fixo, resolvido
---      aqui. Nunca um cargo escolhido pelo cliente.
---   4. Primeiro utilizador da instalação — arranque, fica admin da org activa
---      mais antiga (comportamento anterior, mantido).
---   5. Tudo o resto: sem organização e sem cargo. Não há mais "cai na primeira
---      org activa" para colaboradores sem convite — era isso que deixava
---      contas soltas com acesso a um tenant ao acaso.
---
--- O cargo Motorista é uma linha única, global (a0000000-…-0001), partilhada
--- por todas as organizações — é o que PermissionsContext usa para decidir que
--- um utilizador é motorista. Fica o mesmo id; se a linha não existir (CI com
--- tabelas de referência vazias), o motorista fica sem cargo em vez de
--- herdar um cargo qualquer.
--- ============================================================================
+-- Auditoria 2026-09-16 (CRITICAL): org/cargo do registo vinham de
+-- raw_user_meta_data, controlado pelo cliente — dava para escolher a org e um
+-- cargo privilegiado ao criar conta. Agora só de: app_metadata (servidor),
+-- convite válido, ou (motoristas) org escolhida + cargo Motorista fixo.
 
 create or replace function public.handle_new_user_org() returns trigger
     language plpgsql security definer
@@ -60,13 +28,12 @@ begin
   _user_phone := new.raw_user_meta_data->>'telefone';
   _normalized_phone := public.normalize_phone(_user_phone);
 
-  -- Um auto-registo de motorista identifica-se por cargo_nome ou tipo_utilizador.
-  -- Estes dois campos só decidem "é motorista?"; nunca escolhem um cargo.
+  -- Só decide "é motorista?"; nunca escolhe um cargo.
   _is_motorista_signup :=
        coalesce(new.raw_user_meta_data->>'cargo_nome', '') = 'Motorista'
     or coalesce(new.raw_user_meta_data->>'tipo_utilizador', '') = 'motorista';
 
-  -- UUIDs vindos do cliente podem ser lixo: converter sem rebentar o INSERT.
+  -- UUID pode ser lixo vindo do cliente; não rebentar o insert.
   begin
     _meta_org_id := nullif(new.raw_user_meta_data->>'org_id', '')::uuid;
   exception when others then

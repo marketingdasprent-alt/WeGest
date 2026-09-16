@@ -1,21 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-/**
- * Extrato do motorista num período, para o painel dele.
- *
- * Chama `motorista_extrato_periodo`, que calcula no servidor e verifica lá
- * dentro que quem pede é mesmo aquele motorista — o id que vai no pedido é o
- * alvo, nunca a autorização.
- *
- * Recebe início e fim (não "a semana") porque a função também os recebe:
- * acrescentar semana anterior, mês ou período personalizado passa a ser
- * trabalho de interface, sem tocar no servidor.
- *
- * Não confundir com `useMotoristaResumoSemanal`, que lê a tabela do fecho de
- * semana — essa é a base dos acertos enviados ao motorista. As duas contas
- * podem divergir, e o cartão mostra ambas quando isso acontece.
- */
+/** A autorização é validada pela RPC; o ID no pedido identifica apenas o alvo. */
 export interface ExtratoMotorista {
   periodoInicio: string;
   periodoFim: string;
@@ -32,43 +18,36 @@ export interface ExtratoMotorista {
   outros: number;
   totalCustos: number;
   liquido: number;
-  /** Falso = período ainda não importado. Não é o mesmo que ter ganho zero. */
+  /** Distingue período não importado de receita zero. */
   temDadosReceita: boolean;
-  /** Falso = não há custos lançados. Não é o mesmo que não ter custos. */
+  /** Distingue custos não lançados de custos nulos. */
   temCustosLancados: boolean;
-  /** Líquido segundo o fecho de semana, quando existe para este período. */
   acertoLiquido: number | null;
   temAcerto: boolean;
   mediaPorDia: number;
   diasDecorridos: number;
 }
 
-/** Segunda-feira da semana de `d`, em hora local. */
 export function inicioDaSemana(d = new Date()): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
   return x;
 }
 
-/** Domingo da semana de `d`. */
 export function fimDaSemana(d = new Date()): Date {
   const x = inicioDaSemana(d);
   x.setDate(x.getDate() + 6);
   return x;
 }
 
-/** `YYYY-MM-DD` em hora local — `toISOString` daria o dia anterior a leste de Greenwich. */
+/** Evita que `toISOString` devolva o dia anterior a leste de Greenwich. */
 export function paraDataSql(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-/**
- * A função devolve `numeric`, que o cliente entrega como string. Sem esta
- * conversão defensiva um nulo virava `NaN` e chegava ao motorista escrito no
- * ecrã como "NaN €".
- */
+/** A RPC devolve `numeric` como string; valores inválidos não podem chegar à UI como `NaN`. */
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -98,8 +77,7 @@ export function useMotoristaExtratoPeriodo(
       if (!r) return null;
 
       const receita = num(r.receita);
-      // Dias DECORRIDOS, não os sete da semana: a meio da semana, dividir por
-      // sete dá uma média que o motorista não reconhece como sua.
+      // A média usa apenas os dias já decorridos no período.
       const agora = new Date();
       const fimEfetivo = agora < fim ? agora : fim;
       const decorridos = Math.max(

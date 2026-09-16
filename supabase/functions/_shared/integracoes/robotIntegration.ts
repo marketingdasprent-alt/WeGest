@@ -1,40 +1,12 @@
-export const ROBOT_TARGET_PLATFORMS = [
-  "uber",
-  "bolt",
-  "bp",
-  "repsol",
-  "edp",
-  "viaverde",
-] as const;
+export const ROBOT_TARGET_PLATFORMS = ['uber', 'bolt', 'bp', 'repsol', 'edp', 'viaverde'] as const;
 
 export type RobotTargetPlatform = (typeof ROBOT_TARGET_PLATFORMS)[number];
 
-/**
- * Plataformas cujo robô Apify está validado e pode correr.
- *
- * A sincronização automática está desligada à cabeça desde a migração
- * 20260603130000 — só o import manual por CSV devia funcionar. Esta lista é a
- * excepção: robôs que já se sabe que correm e trazem dados.
- *
- * A Uber entrou a 2026-09-14. O actor dela existe e correu 52 vezes; o que
- * estava partido era o `apify_actor_id` gravado em apify_credenciais_partilhadas,
- * que apontava para um ID inexistente (a API respondia "Actor was not found").
- *
- * BP, Repsol e EDP ficam de fora: medido na API do Apify a 2026-09-14, os três
- * actors têm ZERO execuções de sempre. Abrir a porta a um robô que nunca correu
- * é convidar mais uma falha silenciosa — entram quando alguém os validar.
- */
-export const PLATAFORMAS_COM_ROBO_VALIDADO: readonly string[] = [
-  "viaverde",
-  "bolt",
-  "uber",
-];
+/** Lista de permissão: apenas robôs Apify validados podem executar. */
+export const PLATAFORMAS_COM_ROBO_VALIDADO: readonly string[] = ['viaverde', 'bolt', 'uber'];
 
-export function plataformaPodeCorrerRobo(
-  plataforma: string | null | undefined,
-): boolean {
-  return typeof plataforma === "string" &&
-    PLATAFORMAS_COM_ROBO_VALIDADO.includes(plataforma);
+export function plataformaPodeCorrerRobo(plataforma: string | null | undefined): boolean {
+  return typeof plataforma === 'string' && PLATAFORMAS_COM_ROBO_VALIDADO.includes(plataforma);
 }
 
 export interface RobotIntegrationRequest {
@@ -55,54 +27,45 @@ export interface PublicApifyStatus {
 }
 
 const SITE_URLS: Record<RobotTargetPlatform, string | null> = {
-  uber: "https://supplier.uber.com/",
-  bolt: "https://fleets.bolt.eu/",
-  bp: "https://www.bpplus.com/",
-  repsol: "https://misolred.repsol.com/movimientos",
-  edp: "https://empresas.edpcharge.edp.pt/home/consumption",
+  uber: 'https://supplier.uber.com/',
+  bolt: 'https://fleets.bolt.eu/',
+  bp: 'https://www.bpplus.com/',
+  repsol: 'https://misolred.repsol.com/movimientos',
+  edp: 'https://empresas.edpcharge.edp.pt/home/consumption',
   viaverde: null,
 };
 
 function requiredString(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.trim()) {
+  if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`${field} é obrigatório`);
   }
   return value.trim();
 }
 
-export function parseRobotIntegrationRequest(
-  value: unknown,
-): RobotIntegrationRequest {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Pedido inválido");
+export function parseRobotIntegrationRequest(value: unknown): RobotIntegrationRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Pedido inválido');
   }
 
   const input = value as Record<string, unknown>;
-  const robotTargetPlatform = requiredString(
-    input.robot_target_platform,
-    "robot_target_platform",
-  );
-  if (
-    !ROBOT_TARGET_PLATFORMS.includes(robotTargetPlatform as RobotTargetPlatform)
-  ) {
-    throw new Error("Plataforma inválida");
+  const robotTargetPlatform = requiredString(input.robot_target_platform, 'robot_target_platform');
+  if (!ROBOT_TARGET_PLATFORMS.includes(robotTargetPlatform as RobotTargetPlatform)) {
+    throw new Error('Plataforma inválida');
   }
 
   return {
-    nome: requiredString(input.nome, "nome"),
-    login: requiredString(input.login, "login"),
-    password: requiredString(input.password, "password"),
+    nome: requiredString(input.nome, 'nome'),
+    login: requiredString(input.login, 'login'),
+    password: requiredString(input.password, 'password'),
     robot_target_platform: robotTargetPlatform as RobotTargetPlatform,
   };
 }
 
 export function buildPublicApifyStatus(
-  credential: SharedApifyCredential | null,
+  credential: SharedApifyCredential | null
 ): PublicApifyStatus {
   return {
-    configurado: Boolean(
-      credential?.apify_actor_id && credential?.apify_api_token,
-    ),
+    configurado: Boolean(credential?.apify_actor_id && credential?.apify_api_token),
     apify_actor_id: credential?.apify_actor_id ?? null,
   };
 }
@@ -111,23 +74,19 @@ export function buildRobotIntegrationInsert(
   request: RobotIntegrationRequest,
   credential: SharedApifyCredential,
   orgId: string,
-  userId: string,
+  userId: string
 ): Record<string, unknown> {
   if (!credential.apify_actor_id || !credential.apify_api_token) {
-    throw new Error(
-      `Sem credenciais Apify partilhadas para "${request.robot_target_platform}"`,
-    );
+    throw new Error(`Sem credenciais Apify partilhadas para "${request.robot_target_platform}"`);
   }
 
   return {
     nome: request.nome,
-    plataforma: request.robot_target_platform === "viaverde"
-      ? "via_verde"
-      : "robot",
+    plataforma: request.robot_target_platform === 'viaverde' ? 'via_verde' : 'robot',
     ativo: true,
     apify_actor_id: credential.apify_actor_id,
     apify_api_token: null,
-    auth_mode: "password",
+    auth_mode: 'password',
     robot_target_platform: request.robot_target_platform,
     webhook_url: SITE_URLS[request.robot_target_platform],
     client_id: request.login,

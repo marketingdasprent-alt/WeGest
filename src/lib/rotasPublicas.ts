@@ -1,19 +1,5 @@
-/**
- * Rotas servidas sem sessão — a landing, as páginas institucionais e os acessos
- * por token (galeria de danos, quadro de TV, formulários públicos).
- *
- * PORQUE ISTO EXISTE
- * O `NotificacoesPopup` está montado ao nível da App, fora das rotas, e o único
- * critério para aparecer era "o utilizador não é motorista". Resultado: avisos
- * operacionais internos — matrículas, contratos a expirar, cartas de condução
- * caducadas — apareciam sobre a landing pública e sobre o quadro de TV, que é
- * precisamente um ecrã pensado para estar à vista de quem passa.
- *
- * Manter a lista aqui, e não espalhada por componentes, é o que permite ao teste
- * compará-la com as rotas declaradas em WebAppRoutes.
- */
+/** Centraliza rotas sem sessão para impedir UI interna em superfícies públicas. */
 
-/** Caminhos públicos com correspondência exacta. */
 const EXATAS = new Set([
   '/',
   '/entrar',
@@ -32,19 +18,10 @@ const EXATAS = new Set([
   '/eliminar-conta',
 ]);
 
-/**
- * Prefixos públicos: o acesso é por token no próprio URL, não por sessão.
- * Estes são os mais sensíveis da lista — o quadro de TV fica projetado numa
- * parede, e a galeria de danos é enviada por QR a clientes.
- */
+/** Estes prefixos são autorizados pelo token no URL, não pela sessão. */
 const PREFIXOS = ['/formulario/', '/danos/', '/quadro/'];
 
-/**
- * `true` quando o caminho é servido sem sessão autenticada.
- *
- * Normaliza a barra final para que `/termos` e `/termos/` sejam o mesmo — sem
- * isto, uma barra a mais reintroduzia o problema em silêncio.
- */
+/** Normaliza a barra final para evitar contornar a lista de rotas públicas. */
 export function isRotaPublica(pathname: string): boolean {
   const normalizado =
     pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;

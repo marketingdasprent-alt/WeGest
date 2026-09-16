@@ -1,18 +1,3 @@
-// A cor da marca tirada do próprio logótipo.
-//
-// Pedir a alguém que escreva um hexadecimal é pedir-lhe uma coisa que ninguém
-// tem à mão. O logótipo, esse, já está carregado — e é ele que define a cor da
-// empresa. Isto lê-o e propõe a cor, deixando sempre a última palavra a quem
-// está a configurar.
-//
-// O QUE CONTA COMO "A COR DA MARCA"
-// Não é a cor mais frequente: quase todos os logótipos são maioritariamente
-// transparentes, brancos ou pretos, e a cor mais repetida seria o fundo ou o
-// contorno do texto. É a cor CROMÁTICA dominante — descartam-se os pixéis
-// transparentes, os cinzentos e os extremos de claro/escuro, e entre o que
-// resta pesa-se cada cor pela área que ocupa E pela sua saturação, para um
-// azul vivo em pouca área ganhar a um bege lavado em muita.
-
 /** Um pixel só entra na contagem acima desta opacidade. */
 const ALFA_MINIMO = 128;
 
@@ -78,10 +63,7 @@ export function corDominanteDePixeis(dados: Uint8ClampedArray): string | null {
     balde.soma[1] += g;
     balde.soma[2] += b;
     balde.n += 1;
-    // A saturação entra como peso AO QUADRADO. Linear não chegava: um bege
-    // lavado a cobrir metade do logótipo batia um vermelho vivo do símbolo,
-    // e o bege não é a cor que ninguém associa àquela marca. Ao quadrado, a
-    // vivacidade pesa mais do que a área — que é como o olho decide.
+    // O peso quadrático favorece a cor viva sobre grandes áreas lavadas.
     balde.peso += s * s;
     baldes.set(chave, balde);
   }
@@ -94,8 +76,7 @@ export function corDominanteDePixeis(dados: Uint8ClampedArray): string | null {
   }
   if (!melhor) return null;
 
-  // Média real dos pixéis do balde vencedor — o balde é grosseiro de
-  // propósito (agrupa tons vizinhos), mas a cor devolvida é precisa.
+  // O balde agrupa tons; a média devolve a cor precisa.
   return paraHex(melhor.soma[0] / melhor.n, melhor.soma[1] / melhor.n, melhor.soma[2] / melhor.n);
 }
 
@@ -113,15 +94,14 @@ export async function corDominanteDaImagem(url: string): Promise<string | null> 
   try {
     const imagem = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
-      // Sem isto o canvas fica contaminado e getImageData atira.
+      // Sem CORS, `getImageData` falha num canvas contaminado.
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('imagem não carregou'));
       img.src = url;
     });
 
-    // Reduzir antes de ler: um logótipo grande são milhões de pixéis para uma
-    // resposta que não muda. 64×64 chega e é instantâneo.
+    // A amostragem limita o custo de ler logótipos grandes.
     const LADO = 64;
     const canvas = document.createElement('canvas');
     canvas.width = LADO;

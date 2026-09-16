@@ -7,12 +7,8 @@ import {
   requireOrgMember,
 } from "../_shared/auth/edgeAuthorization.ts";
 
-// Sincroniza o estado de entrega de uma campanha (Brevo → email_sends +
-// contadores em marketing_campanhas). Chamada pelo botão "Sincronizar" da
-// EstatisticasTab. A campanha resolve a organização; o chamador tem de ser
-// membro dela — ou trazer a service role key (execução agendada). Antes
-// bastava conhecer um campanha_id para iniciar escritas com a chave global
-// da Brevo (auditoria 2026-09-16).
+// Sincroniza entregas de campanha (Brevo → email_sends). Exige membro da org
+// da campanha, ou service role (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

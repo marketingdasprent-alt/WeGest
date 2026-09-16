@@ -7,18 +7,11 @@ interface EmailFolhaDanosParams {
   toNome?: string | null;
   matricula: string;
   momento: 'ENTREGA' | 'RECOLHA';
-  /**
-   * Pode ser null no fluxo de check-in/out por token (motorista sem sessão)
-   * — nesse caso a Edge Function deriva a org a partir de viaturaId.
-   */
+  /** Null no fluxo por token (sem sessão) — a Edge Function deriva de viaturaId. */
   orgId: string | null | undefined;
-  /** Viatura do check-in/check-out — usada para derivar org_id quando orgId é null. */
+  /** Viatura do check-in/check-out — deriva org_id quando orgId é null. */
   viaturaId?: string | null;
-  /**
-   * Token de realização, quando o handover corre pela página pública de
-   * check-in/out. Sem ele, a Edge Function autoriza pela sessão do chamador
-   * (tem de ser membro da organização).
-   */
+  /** Token de realização (fluxo público). Sem ele, autoriza pela sessão do chamador. */
   token?: string | null;
 }
 

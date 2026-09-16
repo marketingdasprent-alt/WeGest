@@ -1,16 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { authenticateUser, AuthorizationError } from '../_shared/auth/edgeAuthorization.ts';
 
-// Extrai a data de validade de um documento de motorista com o Gemini.
-//
-// O ficheiro sai do bucket privado motorista-documentos e vai inteiro para um
-// fornecedor externo, por isso a função só o faz para quem PODE ver esse
-// documento. A prova é dada pela RLS: com a sessão do chamador, o caminho tem
-// de aparecer em motorista_documentos.ficheiro_url ou num dos campos oficiais
-// de motoristas_ativos — ou ter sido carregado pelo próprio (o caminho começa
-// pelo seu user_id, como o DocumentUploader escreve). Antes disto bastava
-// adivinhar um caminho para ler o documento de qualquer motorista de qualquer
-// org (auditoria 2026-09-16).
+// Extrai a validade de um documento com o Gemini. Só descarrega se a sessão
+// do chamador puder ver esse documento via RLS (auditoria 2026-09-16).
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

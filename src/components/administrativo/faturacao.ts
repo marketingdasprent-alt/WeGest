@@ -1,9 +1,4 @@
-// ============================================================
-// Faturação — tipos, constantes e mapeamento partilhados
-// (usado pela aba Faturação do Administrativo)
-// ============================================================
-
-/** Métodos de pagamento (espelha o CHECK da tabela recibos). */
+/** Métodos de pagamento; mantidos alinhados com o CHECK de `recibos`. */
 export const METODO_LABEL: Record<string, string> = {
   numerario: 'Numerário',
   transferencia: 'Transferência Bancária',
@@ -23,7 +18,6 @@ export function metodoLabel(m: string | null | undefined): string {
   return METODO_LABEL[m] ?? m;
 }
 
-/** Origem do movimento de conta-corrente. */
 export const ORIGEM_LABEL: Record<string, string> = {
   cobranca: 'Cobrança',
   recibo: 'Recibo',
@@ -40,11 +34,7 @@ export const ORIGEM_CLASS: Record<string, string> = {
   ajuste: 'bg-muted text-muted-foreground',
 };
 
-/**
- * Tipo de documento (o que se mostra ao utilizador no descritivo).
- * Uma Fatura-Recibo é um único documento, mesmo gerando 2 movimentos
- * (débito da cobrança + crédito do recibo) — ver `mergeMovimentosToRows`.
- */
+// A Fatura-Recibo é um documento, embora origine movimentos de débito e crédito.
 export type DocTipo =
   | 'fatura'
   | 'fatura_recibo'
@@ -74,14 +64,12 @@ export const DOC_TIPO_CLASS: Record<DocTipo, string> = {
   estorno: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
 };
 
-/** Uma cobrança gerada como "Factura-Recibo" (pelo descritivo). */
 function isFaturaReciboDesc(desc: string | null | undefined): boolean {
   if (!desc) return false;
   const d = desc.toLowerCase();
   return d.startsWith('factura-recibo') || d.startsWith('fatura-recibo');
 }
 
-/** Tipo de documento de um único movimento (sem emparelhar). */
 function singleDocTipo(m: MovimentoRaw): DocTipo {
   if (m.origem === 'nota_credito') return 'nota_credito'; // crédito = NC; débito = estorno da NC
   if (m.origem === 'cobranca') {
@@ -95,19 +83,13 @@ function singleDocTipo(m: MovimentoRaw): DocTipo {
   return 'ajuste';
 }
 
-/**
- * Nº "NC-{codigo}" extraído do descritivo do movimento de nota de crédito.
- * Só usado como ÚLTIMO recurso — quando a NC não chegou a ser emitida no
- * provider (ou a emissão falhou), `notaCredito.documento_externo_ref` fica
- * null e cai-se aqui. Ver `numeroDoc` em `mapMovimentoToRow`.
- */
+/** Fallback para NC não emitida pelo provider, sem `documento_externo_ref`. */
 function ncNumeroFromDesc(m: MovimentoRaw): string {
   if (m.origem !== 'nota_credito') return '';
   const match = (m.descricao ?? '').match(/Nº\s*(\d+)/);
   return match ? `NC-${match[1]}` : '';
 }
 
-// ── Formas embebidas (Supabase) ──────────────────────────────
 interface EmbedEntidade {
   id: string;
   nome: string;
@@ -139,7 +121,6 @@ interface EmbedNotaCredito {
   documento_externo_ref: string | null;
 }
 
-/** Linha crua de conta_movimentos com embeds. */
 export interface MovimentoRaw {
   id: string;
   data_movimento: string | null;
@@ -163,30 +144,19 @@ export interface MovimentoRaw {
   notaCredito: EmbedNotaCredito | null;
 }
 
-/** Linha pronta a apresentar. */
 export interface FaturacaoRow {
   id: string;
-  /** cobrança de origem — liga ao documento fiscal em `invoices`. */
   cobrancaId: string | null;
-  /** contrato de origem — p/ navegar para o detalhe do contrato. */
   contratoId: string | null;
-  /** recibo de origem (quando o movimento é um recibo) — p/ anular. */
   reciboId: string | null;
-  /** nota de crédito de origem (quando o movimento é uma NC) — p/ anular. */
   notaCreditoId: string | null;
-  /** data contabilística (ISO date) */
   dataMovimento: string | null;
-  /** timestamp do registo (com hora) */
   createdAt: string;
-  /** nº do documento (referência do programa externo / recibo) */
   numeroDoc: string;
-  /** ex: "#0123" ou "—" */
   contratoLabel: string;
   estacaoEntregaId: string | null;
   clienteNome: string;
-  /** valor a crédito (recebido) — null quando é um débito */
   credito: number | null;
-  /** valor a débito (faturado) — null quando é um crédito */
   debito: number | null;
   descritivo: string;
   metodoRaw: string | null;
@@ -194,7 +164,6 @@ export interface FaturacaoRow {
   estacaoNome: string;
   utilizador: string;
   origem: string;
-  /** tipo de documento apresentado (Fatura / Fatura-Recibo / Recibo / …) */
   docTipo: DocTipo;
   tipo: string;
   valor: number;
@@ -211,11 +180,7 @@ export function mapMovimentoToRow(
   const isCredito = m.tipo === 'credito';
   const valor = Number(m.valor) || 0;
   const numeroDoc =
-    // a NC tem numeração própria — não pode herdar a ref. da fatura original (mesmo
-    // cobranca_id). Prioriza o nº real emitido no provider (documento_externo_ref);
-    // só cai para o código interno "NC-{codigo}" quando a NC nunca chegou a ser
-    // emitida fiscalmente (ou a emissão falhou) — mesma prioridade que já existia
-    // para o Recibo logo abaixo.
+    // A NC tem numeração própria; só usa o código interno se o provider não a emitiu.
     (m.origem === 'nota_credito'
       ? m.notaCredito?.documento_externo_ref || ncNumeroFromDesc(m)
       : '') ||
@@ -260,36 +225,17 @@ export function mapMovimentoToRow(
 
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
-/**
- * Consolida os movimentos em documentos apresentáveis.
- *
- * Uma **Fatura-Recibo** gera 2 movimentos na conta-corrente — o débito da
- * cobrança e o crédito do recibo (necessários para o saldo) — mas é UM só
- * documento. Aqui emparelhamos esses dois movimentos numa única linha
- * (com crédito E débito), para não aparecer a dobrar na listagem.
- *
- * Emparelhamento (do mais fiável para o menos):
- *   1) `recibo.referencia === cobranca_id` (ligação explícita, criada ao faturar);
- *   2) mesmo contrato + mesmo valor (fallback p/ dados antigos sem `referencia`).
- *
- * A consolidação tem de correr sobre a janela COMPLETA (antes de paginar),
- * senão o par poderia ficar partido entre páginas.
- */
+/** Junta os dois movimentos de uma Fatura-Recibo antes de paginar. */
 export function mergeMovimentosToRows(
   raw: MovimentoRaw[],
   estacoesMap: Record<string, string>,
   profilesMap: Record<string, string>
 ): FaturacaoRow[] {
-  // recibos a crédito (candidatos a liquidação de uma Fatura-Recibo)
   const reciboCreditos = raw
     .map((m, i) => ({ m, i }))
     .filter(({ m }) => m.origem === 'recibo' && m.tipo === 'credito');
 
-  // Pré-indexação dos recibos para emparelhar em O(1)/O(k) em vez de O(n²):
-  //   byRef           → por recibo.referencia (match primário = cobranca_id)
-  //   byContratoValor → por contrato_id + valor arredondado (fallback)
-  // Ambos preservam a ordem de reciboCreditos → o "primeiro não-usado" fica
-  // idêntico ao .find() original (ver faturacao.merge.test.ts).
+  // Os índices preservam a ordem para manter o primeiro recibo não usado.
   type ReciboEntry = { m: MovimentoRaw; i: number };
   const byRef = new Map<string, ReciboEntry[]>();
   const byContratoValor = new Map<string, ReciboEntry[]>();
@@ -311,19 +257,15 @@ export function mergeMovimentosToRows(
   const rows: FaturacaoRow[] = [];
 
   raw.forEach((m) => {
-    // recibos a crédito são tratados no fim (ou absorvidos por uma Fatura-Recibo)
     if (m.origem === 'recibo' && m.tipo === 'credito') return;
 
     const base = mapMovimentoToRow(m, estacoesMap, profilesMap);
 
-    // Cobrança "Factura-Recibo" → tentar absorver o recibo correspondente
     if (m.origem === 'cobranca' && m.tipo === 'debito' && isFaturaReciboDesc(m.descricao)) {
       const valor = round2(m.valor);
-      // 1) match primário por referência (cobranca_id === recibo.referencia)
       let par = m.cobranca_id
         ? byRef.get(m.cobranca_id)?.find(({ i }) => !usados.has(i))
         : undefined;
-      // 2) fallback por contrato + valor
       if (!par) {
         par = byContratoValor.get(`${m.contrato_id}|${valor}`)?.find(({ i }) => !usados.has(i));
       }
@@ -333,8 +275,7 @@ export function mergeMovimentosToRows(
         rows.push({
           ...base,
           docTipo: 'fatura_recibo',
-          // Fatura-Recibo é liquidação imediata → mostra-se como crédito (recebido),
-          // NÃO como débito (não há dívida em aberto). `valor` mantém o valor faturado.
+          // Liquidação imediata: não há dívida em aberto.
           credito: recRow.credito,
           debito: null,
           metodoRaw: recRow.metodoRaw,
@@ -349,13 +290,11 @@ export function mergeMovimentosToRows(
     rows.push(base);
   });
 
-  // recibos a crédito que não pertencem a nenhuma Fatura-Recibo → recibos avulsos
   reciboCreditos.forEach(({ m, i }) => {
     if (usados.has(i)) return;
     rows.push(mapMovimentoToRow(m, estacoesMap, profilesMap));
   });
 
-  // ordenar por data contabilística desc, depois registo desc
   rows.sort((a, b) => {
     const da = a.dataMovimento ?? '';
     const db = b.dataMovimento ?? '';
@@ -366,12 +305,7 @@ export function mergeMovimentosToRows(
   return rows;
 }
 
-/**
- * Constrói o `select` completo de conta_movimentos com embeds.
- * - `contratoInner`: usa `!inner` no contrato (filtro por estação).
- * - `reciboInner`: usa `!inner` no recibo (filtro por método de pagamento).
- * Os hints de FK são explícitos porque contrato_id partilha a FK com a view de totais.
- */
+/** Hints de FK explícitos evitam ambiguidade com a view de totais. */
 export function movimentoSelect(
   opts: { contratoInner?: boolean; reciboInner?: boolean } = {}
 ): string {

@@ -7,24 +7,9 @@ gsap.registerPlugin(ScrollTrigger);
 const REDUCED = '(prefers-reduced-motion: reduce)';
 const FULL = '(prefers-reduced-motion: no-preference)';
 
-/**
- * Revela `[data-reveal]` dentro do container quando a secção entra no
- * viewport.
- *
- * Os elementos partem de `opacity: 0` aplicado por JS (não por CSS), de modo
- * que sem JS — ou se o GSAP falhar a carregar — o conteúdo continua legível.
- * Com `prefers-reduced-motion: reduce` nada é escondido: os elementos ficam
- * simplesmente no estado final.
- *
- * `stagger` irregular é intencional em algumas secções (ver
- * ReconhecimentoSection): a desordem faz parte do argumento.
- */
 export function useRevealOnScroll<T extends HTMLElement>(options?: {
-  /** Segundos entre cada elemento. */
   stagger?: number;
-  /** Deslocamento vertical inicial, em px. */
   distancia?: number;
-  /** Ordem aleatória mas estável — encena dispersão. */
   desordenado?: boolean;
 }): RefObject<T> {
   const ref = useRef<T>(null);
@@ -56,7 +41,6 @@ export function useRevealOnScroll<T extends HTMLElement>(options?: {
         return () => tween.kill();
       });
 
-      // Reduced motion: garante o estado final explicitamente, sem transição.
       mm.add(REDUCED, () => {
         gsap.set(alvos, { opacity: 1, y: 0, clearProps: 'transform' });
       });

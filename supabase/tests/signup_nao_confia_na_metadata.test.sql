@@ -1,14 +1,5 @@
--- ============================================================
--- Registo: organização e cargo nunca vêm da metadata do cliente (pgTAP)
--- ============================================================
--- Corre com:  supabase start  &&  supabase test db
---
--- Achado CRITICAL da auditoria de 2026-09-16: handle_new_user_org() lia
--- org_id/cargo_id de raw_user_meta_data (o `data` do signUp, controlado
--- pelo browser) e só recusava cargos com "admin" no nome. Este ficheiro
--- fixa as cinco fontes de verdade da migração
--- 20260916120000_signup_nao_confia_na_metadata.sql.
--- ============================================================
+-- Registo: org/cargo nunca vêm da metadata do cliente (auditoria 2026-09-16).
+-- Corre com: supabase start && supabase test db
 
 begin;
 select plan(11);
@@ -19,9 +10,8 @@ insert into public.organizacoes (id, nome, codigo, ativa) values
   ('00000000-0000-0000-0000-0000005b0000', 'Org Signup B', 'signup-b', true),
   ('00000000-0000-0000-0000-0000005c0000', 'Org Signup Inactiva', 'signup-c', false);
 
--- Cargos privilegiados (sem "admin" no nome — era exactamente o buraco).
--- Nome próprio: ensure_base_cargos já cria "Gestor TVDE" ao inserir a org, e
--- (nome, org_id) é único.
+-- Cargo privilegiado sem "admin" no nome (era o buraco). Nome próprio porque
+-- ensure_base_cargos já cria "Gestor TVDE" por org.
 insert into public.cargos (id, nome, org_id) values
   ('00000000-0000-0000-0000-00000c5a0001', 'Gestor Frota Signup', '00000000-0000-0000-0000-0000005a0000'),
   ('00000000-0000-0000-0000-00000c5b0001', 'Gestor Frota Signup', '00000000-0000-0000-0000-0000005b0000');

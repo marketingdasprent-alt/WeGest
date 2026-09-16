@@ -2,18 +2,6 @@ import { addDays, endOfWeek, format, startOfWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Info } from 'lucide-react';
 
-/**
- * Nota junto ao campo de data, a explicar em que resumo o valor vai cair.
- *
- * Existe porque a regra é contra-intuitiva e já custou dinheiro: a data do
- * movimento não é o dia em que se lança, é a semana que se quer cobrar. Quem
- * lança um custo com a data da segunda-feira em que está a fazer o acerto
- * empurra-o para a semana seguinte, porque essa segunda é o primeiro dia do
- * período novo — não o último do que está a fechar.
- *
- * O exemplo é calculado com a data de hoje em vez de ser texto fixo: datas
- * concretas percebem-se à primeira, "a semana corrente" não.
- */
 export function NotaDataMovimento() {
   const hoje = new Date();
   const inicioSemana = startOfWeek(hoje, { weekStartsOn: 1 });

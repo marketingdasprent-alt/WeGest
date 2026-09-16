@@ -1,15 +1,3 @@
-/**
- * Legenda/tom do saldo pendente do motorista (motorista_saldo_pendente,
- * Σcrédito − Σdébito só sobre status='pendente'). Convenção de sinal
- * preservada da que já estava em produção no cartão "Saldo Atual" do
- * próprio motorista (MotoristaDashboard.tsx): positivo = a favor do
- * motorista (falta receber); negativo = motorista deve.
- *
- * O significado não pode depender só da cor — por isso devolve sempre um
- * texto também (mesmo padrão de legendaSaldo() em ClienteContaCorrenteTab.tsx,
- * que usa a convenção de sinal oposta — conta-corrente de clientes Renting,
- * entidade diferente, não confundir).
- */
 export type ToneSaldoMotorista = 'positivo' | 'negativo' | 'neutro';
 
 export interface LegendaSaldoMotorista {

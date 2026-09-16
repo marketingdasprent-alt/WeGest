@@ -5,9 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// dia/hora atuais em Lisboa (0=Domingo..6=Sábado, 0-23h) — calculado via Intl
-// em vez de um offset UTC fixo, para lidar corretamente com a mudança
-// de hora (WET/WEST).
+// `Intl` mantém o horário de Lisboa correto nas transições WET/WEST.
 function getLisbonDayHour(): { dayOfWeek: number; hour: number } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'Europe/Lisbon',
@@ -21,41 +19,19 @@ function getLisbonDayHour(): { dayOfWeek: number; hour: number } {
   return { dayOfWeek: dayMap[weekdayShort] ?? 0, hour: parseInt(hourStr, 10) % 24 };
 }
 
-/**
- * Horas decorridas desde o momento agendado mais recente desta integração.
- *
- * Antes comparava-se `sync_dia_semana`/`sync_hora` com o instante actual por
- * igualdade exacta: uma janela de UMA hora, uma vez por semana. Bastava um 502
- * do gateway nessa hora para a Via Verde saltar a semana inteira — a hora
- * seguinte respondia "não é devida" e nada recuperava. O Bolt tem a passagem
- * de reconciliação de quinta-feira a apanhá-lo; a Via Verde não tinha nada.
- * (A 24/08/2026 houve sete 502 num só dia, portanto isto não era hipotético.)
- *
- * Contam-se as horas em tempo de Lisboa, não em UTC, para a mudança de hora
- * não deslocar o agendamento.
- */
+// Mede o atraso no horário de Lisboa para recuperar uma hora agendada falhada.
 function horasDesdeAgendamento(
   agora: { dayOfWeek: number; hour: number },
   syncDiaSemana: number,
-  syncHora: number,
+  syncHora: number
 ): number {
   const decorridas = (agora.dayOfWeek - syncDiaSemana) * 24 + (agora.hour - syncHora);
-  // Negativo = o momento desta semana ainda não chegou; o relevante é o da
-  // semana passada, 168 horas antes.
+  // Antes do agendamento desta semana, compara com o da semana anterior.
   return decorridas < 0 ? decorridas + 168 : decorridas;
 }
 
-// Multi-tenant: percorre as integrações Via Verde com sync_automatico=true
-// que já passaram do seu momento agendado sem terem corrido, e
-// ENFILEIRA cada uma em via_verde_sync_queue (em vez de disparar o
-// robot-execute diretamente) — quem processa a fila, com concorrência
-// limitada, é o via-verde-sync-drain (cron a cada 5 min). Isto evita que
-// muitas integrações devidas na mesma hora disparem em paralelo e
-// ultrapassem a concorrência do plano Apify dedicado do Via Verde.
-// O cron chama esta função de hora a hora — é aqui que se decide quem está
-// "devido" agora, não no cron em si, já que cada integração pode ter o seu
-// próprio dia/hora configurado. O cálculo do período (semana anterior)
-// acontece dentro do robot-execute.
+// Enfileira cada integração devida para o drain limitar a concorrência do Apify.
+// O cron é horário, mas o agendamento é configurado por integração.
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -75,14 +51,7 @@ Deno.serve(async (req) => {
 
     if (error) throw error;
 
-    // Devida = o momento agendado já passou e não houve sync desde então.
-    // Assim, uma hora falhada é recuperada na hora seguinte em vez de custar
-    // a semana toda.
-    // Travão de repetição: o ultimo_sync só avança quando o sync termina bem,
-    // portanto uma integração avariada voltaria a entrar na fila todas as
-    // horas — 168 scrapes do Apify numa semana partida, a pagar. Uma tentativa
-    // recente, mesmo falhada, chega para esta passagem. O aviso de que ficou
-    // por resolver vem do vigia das filas, não daqui.
+    // Recupera a hora falhada, mas limita novas tentativas para não pagar scrapes repetidos.
     const HORAS_ENTRE_TENTATIVAS = 6;
     const desde = new Date(Date.now() - HORAS_ENTRE_TENTATIVAS * 3_600_000).toISOString();
     const { data: tentativasRecentes, error: erroTentativas } = await supabase
@@ -98,11 +67,7 @@ Deno.serve(async (req) => {
       if (jaTentadas.has(int.id)) return false;
       if (int.sync_dia_semana === null || int.sync_hora === null) return false;
       const horas = horasDesdeAgendamento({ dayOfWeek, hour }, int.sync_dia_semana, int.sync_hora);
-      // A partir do INÍCIO da hora, não de agora: dentro da própria hora
-      // agendada `horas` é 0, e usar o instante actual faria um sync acabado
-      // há dois minutos parecer anterior ao agendamento — disparava outra vez.
-      // Os fusos de Lisboa são deslocamentos de hora inteira, por isso o
-      // início da hora UTC e o da hora de Lisboa coincidem.
+      // A hora agendada começa no início da hora para não repetir um sync acabado agora.
       const inicioDaHora = Math.floor(agora / 3_600_000) * 3_600_000;
       const momentoAgendado = inicioDaHora - horas * 3_600_000;
       const ultimo = int.ultimo_sync ? new Date(int.ultimo_sync).getTime() : 0;
@@ -122,17 +87,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // O período NÃO pode ficar a null. Sem ele, o drain não o envia ao robô,
-    // o robô usa a janela que o portal da Via Verde mostrar por omissão, e
-    // essa janela fica sempre para trás: a 26/08, com crons de hora a hora
-    // desde o dia 24, os dados estavam parados a 21/08 — três dias de
-    // portagens de toda a frota fora de todos os fechos.
-    //
-    // Passa a pedir-se da ÚLTIMA PASSAGEM CONHECIDA até hoje, com margem
-    // para trás. A margem existe porque a Via Verde publica passagens com
-    // atraso: sem ela, um dia que só aparecesse depois de já termos avançado
-    // ficaria perdido para sempre. Reimportar não duplica — o via-verde-import
-    // faz upsert em (integracao_id, transaction_id).
+    // A margem cobre passagens publicadas tarde; o import faz upsert e evita duplicados.
     const DIAS_DE_MARGEM = 5;
     const DIAS_SEM_HISTORICO = 30;
     const hojeISO = new Date().toISOString().slice(0, 10);
@@ -153,9 +108,7 @@ Deno.serve(async (req) => {
       return base.toISOString().slice(0, 10);
     };
 
-    // Enfileira cada integração devida — 23505 (violação do índice único
-    // parcial de via_verde_sync_queue) significa "já está pendente/em
-    // execução", tratado como sucesso silencioso, não erro.
+    // 23505 significa que já está pendente ou em execução, não uma falha.
     const results = await Promise.all(
       integracoes.map(async (int) => {
         const { error: insertError } = await supabase.from('via_verde_sync_queue').insert({

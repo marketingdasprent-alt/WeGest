@@ -6,25 +6,15 @@ function normalizeStr(str: string): string {
   if (!str) return '';
   return str
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // Remove acentos
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9 ]/g, ' ') // Remove pontuação
+    .replace(/[^a-z0-9 ]/g, ' ')
     .trim()
-    .replace(/\s+/g, ' '); // Normaliza espaços
+    .replace(/\s+/g, ' ');
 }
 
 const PARTICLES = ['de', 'da', 'do', 'das', 'dos', 'e'];
 
-/**
- * Quais destes ids de plataforma já têm motorista noutro registo.
- *
- * Pergunta só pelos candidatos (dezenas), em lotes e com paginação. Antes
- * traziam-se TODAS as linhas já ligadas para um Set — mas são 2664 na Uber e
- * 6004 na Bolt, e o PostgREST devolve no máximo 1000 por pedido. O conjunto
- * vinha ~83% incompleto na Bolt, por isso motoristas já associados contavam
- * como não-associados: reapareciam na lista e no contador por mais vezes que
- * alguém os associasse.
- */
 export async function idsJaLigados(
   tabela: 'uber_transactions' | 'bolt_resumos_semanais',
   coluna: 'uber_driver_id' | 'identificador_motorista',
@@ -50,7 +40,6 @@ export async function idsJaLigados(
   return ligados;
 }
 
-/** Pessoas distintas na Uber/Bolt (últimas 8 semanas) sem ficha de motorista. */
 export function useMotoristasPlataformaNaoAssociadosCount() {
   return useQuery({
     queryKey: ['motoristas-plataforma-nao-associados-count'],
@@ -68,9 +57,7 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
       );
 
       const [uberDrv, boltRows] = await Promise.all([
-        // `is_conta_frota` fora: é a conta da própria empresa na Uber (a que
-        // recebe as transferências semanais), não um motorista. Ver migração
-        // 20260911140000.
+        // A conta de frota recebe transferências; não representa um motorista.
         supabase
           .from('uber_drivers')
           .select('uber_driver_id, full_name')
@@ -84,8 +71,6 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
           .not('identificador_motorista', 'is', null),
       ]);
 
-      // Já com os candidatos em mão, confirmar quais estão ligados noutro
-      // registo — perguntando só por estes ids, sem a truncagem dos 1000.
       const candidatosUber = [
         ...new Set((uberDrv.data || []).map((d: any) => d.uber_driver_id).filter(Boolean)),
       ] as string[];
@@ -101,7 +86,6 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
       uberLigDb.forEach((id) => uberLigados.add(id));
       boltLigDb.forEach((id) => boltLigados.add(id));
 
-      // Contar PESSOAS (nome normalizado distinto), não registos.
       const nomes = new Set<string>();
       (uberDrv.data || []).forEach((d: any) => {
         if (d.uber_driver_id && !uberLigados.has(d.uber_driver_id)) {
@@ -118,7 +102,6 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
   });
 }
 
-/** Nomes únicos da Bolt ainda sem motorista_id mapeado — usado no dialog de mapeamento manual. */
 export function useUnmappedBoltDrivers(enabled: boolean) {
   return useQuery({
     queryKey: ['unmapped-bolt-drivers'],
@@ -144,25 +127,12 @@ export function useUnmappedBoltDrivers(enabled: boolean) {
   });
 }
 
-/**
- * Liga um identificador Bolt (driver_uuid) a um motorista.
- *
- * Escreve em `bolt_mapeamento_motoristas`, que é a fonte de verdade do sync.
- * A coluna `motoristas_ativos.bolt_id` só guarda UM uuid, e a Bolt emite um
- * novo sempre que o motorista sai da frota e volta — por isso a ligação tem
- * de viver numa tabela com N uuids por motorista. Fica lá como "último uuid
- * conhecido", para o código antigo que ainda a lê.
- *
- * `auto_mapped: false` marca que foi uma pessoa a confirmar, ao contrário das
- * ligações semeadas a partir do histórico (auditoria 2026-08-12).
- */
 export function useMapearMotoristaBolt() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async ({ motoristaId, boltId }: { motoristaId: string; boltId: string }) => {
-      // Contexto (org, integração, nome) do que a Bolt reportou para este uuid.
       const { data: ctx } = await supabase
         .from('bolt_resumos_semanais')
         .select('org_id, integracao_id, motorista_nome, telefone')
@@ -192,17 +162,13 @@ export function useMapearMotoristaBolt() {
       );
       if (erroMapa) throw erroMapa;
 
-      // Reatribui o histórico deste uuid. É isto que corrige semanas que
-      // tinham ficado sem dono — ou com o dono errado.
       const { error: erroResumos } = await supabase
         .from('bolt_resumos_semanais')
         .update({ motorista_id: motoristaId })
         .eq('identificador_motorista', boltId);
       if (erroResumos) throw erroResumos;
 
-      // Compatibilidade, best-effort: o índice único (org_id, bolt_id) recusa
-      // se o uuid estiver noutra ficha. Não é motivo para falhar a ligação —
-      // quem manda agora é o mapa.
+      // A tabela de mapeamento é a fonte de verdade; esta cópia é compatibilidade.
       const { error: erroFicha } = await supabase
         .from('motoristas_ativos')
         .update({ bolt_id: boltId })
@@ -231,7 +197,6 @@ export function useMapearMotoristaBolt() {
   });
 }
 
-/** Identidades de plataforma já ligadas a um motorista (Bolt: N uuids). */
 export function useIdentidadesPlataforma(motoristaId: string | null) {
   return useQuery({
     queryKey: ['bolt-mapeamento', motoristaId],
@@ -254,44 +219,29 @@ export function useIdentidadesPlataforma(motoristaId: string | null) {
   });
 }
 
-/** Sincronização em massa: cruza motoristas locais com Uber/Bolt por nome/telefone/email. */
 export function useSincronizarMotoristasPlataformaIds() {
   const qc = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async () => {
-      // 1. Buscar todos os motoristas
-      //
-      // O `org_id` vem em todas as queries daqui para baixo porque o cruzamento
-      // é por nome/telefone/email — dados que a mesma pessoa tem iguais em duas
-      // empresas. Quem tem acesso a mais do que uma org vê motoristas das duas,
-      // e sem este campo o casamento saía cruzado: em 08/2026 quatro motoristas
-      // da Premium Ride (Hugo Palma, Kuldeep Singh, Rakesh Kumar, Paulo Silva)
-      // ficaram pendurados nas fichas da Década Ousada, com 7 transações Uber
-      // na conta-corrente da empresa errada.
-      //
-      // A mesma pessoa DEVE ter uma ficha por empresa — são contas-correntes
-      // independentes. O que não pode é a ficha de uma org apanhar o ID da outra.
+      // O emparelhamento inclui org_id: a mesma pessoa pode ter fichas independentes.
       const { data: currentMotoristas, error: motError } = await supabase
         .from('motoristas_ativos')
         .select('id, nome, email, telefone, bolt_id, uber_uuid, org_id');
       if (motError) throw motError;
 
-      // 2. Buscar resumos Bolt com IDs
       const { data: resumos, error: resError } = await supabase
         .from('bolt_resumos_semanais')
         .select('motorista_nome, identificador_motorista, telefone, email, motorista_id, org_id')
         .not('identificador_motorista', 'is', null);
       if (resError) throw resError;
 
-      // 3. Buscar Uber Drivers mapeados
       const { data: uberDrivers, error: uberError } = await supabase
         .from('uber_drivers')
         .select('full_name, uber_driver_id, motorista_id, org_id')
         .not('uber_driver_id', 'is', null)
-        // Nunca casar uma ficha com a conta da própria empresa: o cruzamento é
-        // por nome, e o nome da frota parece-se com o de quem a gere.
+        // A conta de frota não pode participar no cruzamento por nome.
         .eq('is_conta_frota', false);
       if (uberError) throw uberError;
 
@@ -309,10 +259,8 @@ export function useSincronizarMotoristasPlataformaIds() {
         const updatedData: any = {};
         let needsUpdate = false;
 
-        // Tentar encontrar na Bolt
         if (!m.bolt_id || !m.email || !m.telefone) {
           const match = (resumos || []).find((r) => {
-            // Nunca cruzar empresas — ver nota nas queries acima.
             if (!r.org_id || !m.org_id || r.org_id !== m.org_id) return false;
 
             const rClean = normalizeStr(r.motorista_nome || '');
@@ -320,11 +268,9 @@ export function useSincronizarMotoristasPlataformaIds() {
             const rPhone = r.telefone ? r.telefone.replace(/\D/g, '').slice(-9) : null;
             const rEmail = r.email?.toLowerCase().trim();
 
-            // Prioridade 1: Match por Telefone ou Email (Confiança Total)
             if (mEmail && rEmail && mEmail === rEmail) return true;
             if (mPhone && rPhone && mPhone === rPhone) return true;
 
-            // Prioridade 2: Match por Nome
             if (rClean === mClean) return true;
             if (mWords.length >= 2 && rWords.length >= 2) {
               const mFirstLast = `${mWords[0]} ${mWords[mWords.length - 1]}`;
@@ -333,7 +279,7 @@ export function useSincronizarMotoristasPlataformaIds() {
 
               const intersection = mWords.filter((w) => rWords.includes(w));
               const score = intersection.length / Math.min(mWords.length, rWords.length);
-              if (score >= 0.8) return true; // Confiança alta para enriquecer dados
+              if (score >= 0.8) return true;
             }
 
             return false;
@@ -355,10 +301,8 @@ export function useSincronizarMotoristasPlataformaIds() {
           }
         }
 
-        // Tentar encontrar na Uber
         if (!m.uber_uuid) {
           const matchUber = (uberDrivers || []).find((u) => {
-            // Nunca cruzar empresas — ver nota nas queries acima.
             if (!u.org_id || !m.org_id || u.org_id !== m.org_id) return false;
 
             const uClean = normalizeStr(u.full_name || '');
@@ -387,7 +331,6 @@ export function useSincronizarMotoristasPlataformaIds() {
       }
 
       if (updates.length > 0) {
-        // Executar em grupos de 10 para evitar timeouts
         for (let i = 0; i < updates.length; i += 10) {
           await Promise.all(updates.slice(i, i + 10));
         }
@@ -414,13 +357,6 @@ export function useSincronizarMotoristasPlataformaIds() {
   });
 }
 
-/**
- * UUIDs Bolt vistos nos resumos que ainda não pertencem a ninguém.
- *
- * Vive aqui e não no componente: a regra no-restricted-syntax proíbe
- * supabase.from() directo em components/pages, e com razão — uma consulta
- * dentro de um ecrã é uma consulta que ninguém reutiliza nem testa.
- */
 export function useIdentidadesBoltPorLigar() {
   return useQuery({
     queryKey: ['bolt-identidades-por-ligar'],

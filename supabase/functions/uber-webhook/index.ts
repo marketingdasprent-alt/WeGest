@@ -1,10 +1,11 @@
-import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 type UntypedSupabaseClient = ReturnType<typeof createClient<any>>;
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-uber-signature",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-uber-signature',
 };
 
 type JsonValue = string | number | boolean | null | { [key: string]: JsonValue } | JsonValue[];
@@ -25,9 +26,9 @@ type ProcessResult = {
     transactions: UpsertCount;
   };
   diagnostics?: Record<string, unknown>;
-  domain: "driver" | "vehicle" | "transaction" | "unknown";
+  domain: 'driver' | 'vehicle' | 'transaction' | 'unknown';
   message: string;
-  status: "processed" | "ignored" | "failed";
+  status: 'processed' | 'ignored' | 'failed';
 };
 
 type StoredWebhookEvent = {
@@ -40,101 +41,101 @@ type StoredWebhookEvent = {
 
 const textEncoder = new TextEncoder();
 const COMMON_WRAPPER_PATHS = [
-  "data",
-  "body",
-  "resource",
-  "entity",
-  "payload",
-  "detail",
-  "details",
-  "object",
-  "event",
-  "message",
-  "attributes",
-  "meta",
-  "context",
-  "result",
-  "record",
-  "item",
+  'data',
+  'body',
+  'resource',
+  'entity',
+  'payload',
+  'detail',
+  'details',
+  'object',
+  'event',
+  'message',
+  'attributes',
+  'meta',
+  'context',
+  'result',
+  'record',
+  'item',
 ] as const;
 const DRIVER_SHAPE_PATHS = [
-  "driverId",
-  "driver_id",
-  "partnerId",
-  "partner_id",
-  "earnerId",
-  "earner_id",
-  "userId",
-  "user_id",
-  "uuid",
-  "driver.id",
-  "driver.uuid",
-  "partner.id",
-  "partner.uuid",
-  "earner.id",
-  "earner.uuid",
-  "firstName",
-  "first_name",
-  "fullName",
-  "full_name",
-  "email",
-  "contact.email",
-  "phone",
-  "contact.phone",
-  "phone.number",
-  "onboardingStatus",
-  "driverStatus",
-  "rating",
+  'driverId',
+  'driver_id',
+  'partnerId',
+  'partner_id',
+  'earnerId',
+  'earner_id',
+  'userId',
+  'user_id',
+  'uuid',
+  'driver.id',
+  'driver.uuid',
+  'partner.id',
+  'partner.uuid',
+  'earner.id',
+  'earner.uuid',
+  'firstName',
+  'first_name',
+  'fullName',
+  'full_name',
+  'email',
+  'contact.email',
+  'phone',
+  'contact.phone',
+  'phone.number',
+  'onboardingStatus',
+  'driverStatus',
+  'rating',
 ] as const;
 const VEHICLE_SHAPE_PATHS = [
-  "vehicleId",
-  "vehicle_id",
-  "carId",
-  "car_id",
-  "fleetVehicleId",
-  "fleet_vehicle_id",
-  "uuid",
-  "vehicle.id",
-  "vehicle.uuid",
-  "car.id",
-  "car.uuid",
-  "licensePlate",
-  "license_plate",
-  "vehicle.licensePlate",
-  "registrationNumber",
-  "registration_number",
-  "plate",
-  "make",
-  "model",
-  "year",
-  "status",
+  'vehicleId',
+  'vehicle_id',
+  'carId',
+  'car_id',
+  'fleetVehicleId',
+  'fleet_vehicle_id',
+  'uuid',
+  'vehicle.id',
+  'vehicle.uuid',
+  'car.id',
+  'car.uuid',
+  'licensePlate',
+  'license_plate',
+  'vehicle.licensePlate',
+  'registrationNumber',
+  'registration_number',
+  'plate',
+  'make',
+  'model',
+  'year',
+  'status',
 ] as const;
 const TRANSACTION_SHAPE_PATHS = [
-  "transactionId",
-  "transaction_id",
-  "paymentId",
-  "payment_id",
-  "earningId",
-  "earning_id",
-  "payoutId",
-  "payout_id",
-  "statementId",
-  "statement_id",
-  "uuid",
-  "tripReference",
-  "trip_reference",
-  "tripId",
-  "trip_id",
-  "payment.id",
-  "payout.id",
-  "trip.id",
-  "grossAmount",
-  "grossAmount.amount",
-  "netAmount",
-  "netAmount.amount",
-  "amount",
-  "currency",
-  "status",
+  'transactionId',
+  'transaction_id',
+  'paymentId',
+  'payment_id',
+  'earningId',
+  'earning_id',
+  'payoutId',
+  'payout_id',
+  'statementId',
+  'statement_id',
+  'uuid',
+  'tripReference',
+  'trip_reference',
+  'tripId',
+  'trip_id',
+  'payment.id',
+  'payout.id',
+  'trip.id',
+  'grossAmount',
+  'grossAmount.amount',
+  'netAmount',
+  'netAmount.amount',
+  'amount',
+  'currency',
+  'status',
 ] as const;
 
 const emptyCounts = () => ({
@@ -146,11 +147,14 @@ const emptyCounts = () => ({
 const jsonResponse = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
 const normalizeSignature = (signature: string | null) =>
-  signature?.trim().replace(/^sha256=/i, "").replace(/^v1=/i, "") ?? "";
+  signature
+    ?.trim()
+    .replace(/^sha256=/i, '')
+    .replace(/^v1=/i, '') ?? '';
 
 const hexToBytes = (hex: string) => {
   const normalized = hex.trim().toLowerCase();
@@ -176,16 +180,14 @@ const safeEqual = (a: Uint8Array, b: Uint8Array) => {
 
 const createHmacSha256 = async (secret: string, payload: string) => {
   const cryptoKey = await crypto.subtle.importKey(
-    "raw",
+    'raw',
     textEncoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
+    { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ["sign"],
+    ['sign']
   );
 
-  return new Uint8Array(
-    await crypto.subtle.sign("HMAC", cryptoKey, textEncoder.encode(payload)),
-  );
+  return new Uint8Array(await crypto.subtle.sign('HMAC', cryptoKey, textEncoder.encode(payload)));
 };
 
 const isValidUberSignature = async (secret: string, payload: string, signature: string | null) => {
@@ -204,10 +206,10 @@ const isValidUberSignature = async (secret: string, payload: string, signature: 
 };
 
 const isRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const getByPath = (source: unknown, dottedPath: string) => {
-  return dottedPath.split(".").reduce<unknown>((current, segment) => {
+  return dottedPath.split('.').reduce<unknown>((current, segment) => {
     if (!isRecord(current)) return null;
     return current[segment] ?? null;
   }, source);
@@ -240,7 +242,7 @@ const collectNestedRecords = (
   value: unknown,
   maxDepth = 5,
   seen = new WeakSet<object>(),
-  records: JsonRecord[] = [],
+  records: JsonRecord[] = []
 ): JsonRecord[] => {
   if (maxDepth < 0) return records;
 
@@ -272,14 +274,14 @@ const getSearchSources = (payload: JsonRecord, preferredPaths: readonly string[]
 };
 
 const asTrimmedString = (value: unknown) => {
-  if (typeof value !== "string") return null;
+  if (typeof value !== 'string') return null;
   const normalized = value.trim();
   return normalized ? normalized : null;
 };
 
 const asNumber = (value: unknown) => {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -307,7 +309,7 @@ const firstNumber = (sources: unknown[], paths: readonly string[]) => {
 };
 
 const normalizePhone = (input?: string | null) => {
-  const digits = (input ?? "").replace(/\D/g, "");
+  const digits = (input ?? '').replace(/\D/g, '');
   if (!digits) return null;
   if (/^351\d{9}$/.test(digits)) return digits.slice(-9);
   if (/^0\d{9}$/.test(digits)) return digits.slice(-9);
@@ -315,31 +317,36 @@ const normalizePhone = (input?: string | null) => {
 };
 
 const normalizePlate = (input?: string | null) => {
-  const normalized = (input ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  const normalized = (input ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
   return normalized || null;
 };
 
 const normalizeName = (input?: string | null): string => {
   if (!input) return '';
-  return input.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+  return input
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
 };
 
 const buildPhone = (value: unknown) => {
-  if (typeof value === "string") return value.trim() || null;
+  if (typeof value === 'string') return value.trim() || null;
   if (!isRecord(value)) return null;
 
   const countryCode =
-    asTrimmedString(value.countryCode)
-    ?? asTrimmedString(value.country_code)
-    ?? asTrimmedString(value.callingCode)
-    ?? asTrimmedString(value.calling_code)
-    ?? "";
+    asTrimmedString(value.countryCode) ??
+    asTrimmedString(value.country_code) ??
+    asTrimmedString(value.callingCode) ??
+    asTrimmedString(value.calling_code) ??
+    '';
   const number =
-    asTrimmedString(value.number)
-    ?? asTrimmedString(value.phoneNumber)
-    ?? asTrimmedString(value.phone_number)
-    ?? asTrimmedString(value.value)
-    ?? "";
+    asTrimmedString(value.number) ??
+    asTrimmedString(value.phoneNumber) ??
+    asTrimmedString(value.phone_number) ??
+    asTrimmedString(value.value) ??
+    '';
   const result = `${countryCode}${number}`.trim();
   return result || null;
 };
@@ -356,8 +363,8 @@ const firstPhone = (sources: unknown[], paths: readonly string[]) => {
 };
 
 const amountToNumber = (value: unknown): number | null => {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -416,17 +423,17 @@ const prioritizeSources = (sources: unknown[], shapePaths: readonly string[]) =>
 
 const getEventId = (payload: JsonRecord, headers: Headers) => {
   const payloadEventId = payload.event_id ?? payload.id ?? payload.eventId;
-  if (typeof payloadEventId === "string" && payloadEventId.trim()) {
+  if (typeof payloadEventId === 'string' && payloadEventId.trim()) {
     return payloadEventId.trim();
   }
 
-  const headerEventId = headers.get("x-uber-event-id") ?? headers.get("x-event-id");
+  const headerEventId = headers.get('x-uber-event-id') ?? headers.get('x-event-id');
   return headerEventId?.trim() || null;
 };
 
 const getEventType = (payload: JsonRecord) => {
   const payloadType = payload.event_type ?? payload.type ?? payload.eventType;
-  return typeof payloadType === "string" && payloadType.trim() ? payloadType.trim() : "unknown";
+  return typeof payloadType === 'string' && payloadType.trim() ? payloadType.trim() : 'unknown';
 };
 
 const headersToObject = (headers: Headers) => Object.fromEntries(headers.entries());
@@ -440,19 +447,19 @@ const chunkArray = <T>(items: T[], size: number) => {
 };
 
 const requireUserId = async (req: Request, supabaseUrl: string, anonKey: string) => {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    throw new Error("Sessão inválida. Inicie sessão novamente.");
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new Error('Sessão inválida. Inicie sessão novamente.');
   }
 
-  const token = authHeader.replace("Bearer ", "");
+  const token = authHeader.replace('Bearer ', '');
   const authClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
 
   const { data, error } = await authClient.auth.getClaims(token);
   if (error || !data?.claims?.sub) {
-    throw new Error("Sessão inválida. Inicie sessão novamente.");
+    throw new Error('Sessão inválida. Inicie sessão novamente.');
   }
 
   return data.claims.sub;
@@ -461,7 +468,7 @@ const requireUserId = async (req: Request, supabaseUrl: string, anonKey: string)
 const loadLookups = async (
   supabase: UntypedSupabaseClient,
   integracaoId: string,
-  orgId: string,
+  orgId: string
 ): Promise<Lookups> => {
   const [
     { data: motoristasData, error: motoristasError },
@@ -469,16 +476,30 @@ const loadLookups = async (
     { data: uberDriversData, error: uberDriversError },
     { data: uberVehiclesData, error: uberVehiclesError },
   ] = await Promise.all([
-    supabase.from("motoristas_ativos").select("id, email, telefone, nome").eq("status_ativo", true).eq("org_id", orgId),
-    supabase.from("viaturas").select("id, matricula").eq("org_id", orgId),
-    supabase.from("uber_drivers").select("uber_driver_id, motorista_id").eq("integracao_id", integracaoId).not("motorista_id", "is", null),
-    supabase.from("uber_vehicles").select("uber_vehicle_id, viatura_id").eq("integracao_id", integracaoId).not("viatura_id", "is", null),
+    supabase
+      .from('motoristas_ativos')
+      .select('id, email, telefone, nome')
+      .eq('status_ativo', true)
+      .eq('org_id', orgId),
+    supabase.from('viaturas').select('id, matricula').eq('org_id', orgId),
+    supabase
+      .from('uber_drivers')
+      .select('uber_driver_id, motorista_id')
+      .eq('integracao_id', integracaoId)
+      .not('motorista_id', 'is', null),
+    supabase
+      .from('uber_vehicles')
+      .select('uber_vehicle_id, viatura_id')
+      .eq('integracao_id', integracaoId)
+      .not('viatura_id', 'is', null),
   ]);
 
-  if (motoristasError) throw new Error("Não foi possível carregar os motoristas locais.");
-  if (viaturasError) throw new Error("Não foi possível carregar as viaturas locais.");
-  if (uberDriversError) throw new Error("Não foi possível carregar o mapeamento Uber de motoristas.");
-  if (uberVehiclesError) throw new Error("Não foi possível carregar o mapeamento Uber de viaturas.");
+  if (motoristasError) throw new Error('Não foi possível carregar os motoristas locais.');
+  if (viaturasError) throw new Error('Não foi possível carregar as viaturas locais.');
+  if (uberDriversError)
+    throw new Error('Não foi possível carregar o mapeamento Uber de motoristas.');
+  if (uberVehiclesError)
+    throw new Error('Não foi possível carregar o mapeamento Uber de viaturas.');
 
   const motoristasByEmail = new Map<string, string>();
   const motoristasByPhone = new Map<string, string>();
@@ -488,32 +509,47 @@ const loadLookups = async (
   const uberVehicleToViatura = new Map<string, string>();
 
   for (const motorista of motoristasData ?? []) {
-    const email = typeof motorista.email === "string" ? motorista.email.trim().toLowerCase() : "";
-    const phone = normalizePhone(typeof motorista.telefone === "string" ? motorista.telefone : null);
-    const name = normalizeName(typeof motorista.nome === "string" ? motorista.nome : null);
+    const email = typeof motorista.email === 'string' ? motorista.email.trim().toLowerCase() : '';
+    const phone = normalizePhone(
+      typeof motorista.telefone === 'string' ? motorista.telefone : null
+    );
+    const name = normalizeName(typeof motorista.nome === 'string' ? motorista.nome : null);
     if (email && !motoristasByEmail.has(email)) motoristasByEmail.set(email, motorista.id);
     if (phone && !motoristasByPhone.has(phone)) motoristasByPhone.set(phone, motorista.id);
     if (name && !motoristasByName.has(name)) motoristasByName.set(name, motorista.id);
   }
 
   for (const viatura of viaturasData ?? []) {
-    const plate = normalizePlate(typeof viatura.matricula === "string" ? viatura.matricula : null);
+    const plate = normalizePlate(typeof viatura.matricula === 'string' ? viatura.matricula : null);
     if (plate && !viaturasByPlate.has(plate)) viaturasByPlate.set(plate, viatura.id);
   }
 
   for (const uberDriver of uberDriversData ?? []) {
-    if (typeof uberDriver.uber_driver_id === "string" && typeof uberDriver.motorista_id === "string") {
+    if (
+      typeof uberDriver.uber_driver_id === 'string' &&
+      typeof uberDriver.motorista_id === 'string'
+    ) {
       uberDriverToMotorista.set(uberDriver.uber_driver_id, uberDriver.motorista_id);
     }
   }
 
   for (const uberVehicle of uberVehiclesData ?? []) {
-    if (typeof uberVehicle.uber_vehicle_id === "string" && typeof uberVehicle.viatura_id === "string") {
+    if (
+      typeof uberVehicle.uber_vehicle_id === 'string' &&
+      typeof uberVehicle.viatura_id === 'string'
+    ) {
       uberVehicleToViatura.set(uberVehicle.uber_vehicle_id, uberVehicle.viatura_id);
     }
   }
 
-  return { motoristasByEmail, motoristasByPhone, motoristasByName, viaturasByPlate, uberDriverToMotorista, uberVehicleToViatura };
+  return {
+    motoristasByEmail,
+    motoristasByPhone,
+    motoristasByName,
+    viaturasByPlate,
+    uberDriverToMotorista,
+    uberVehicleToViatura,
+  };
 };
 
 const upsertRows = async ({
@@ -535,21 +571,21 @@ const upsertRows = async ({
 
   const ids = rows
     .map((row) => row[idColumn])
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
+    .filter((value): value is string => typeof value === 'string' && value.length > 0);
   const existing = new Set<string>();
 
   for (const chunk of chunkArray(Array.from(new Set(ids)), 200)) {
     const { data, error } = await supabase
       .from(table)
       .select(idColumn)
-      .eq("integracao_id", integracaoId)
+      .eq('integracao_id', integracaoId)
       .in(idColumn, chunk);
 
     if (error) throw new Error(`Não foi possível verificar registos existentes em ${table}.`);
     for (const row of data ?? []) {
       if (!isRecord(row)) continue;
       const value = row[idColumn];
-      if (typeof value === "string") existing.add(value);
+      if (typeof value === 'string') existing.add(value);
     }
   }
 
@@ -563,27 +599,34 @@ const upsertRows = async ({
       if (error) throw error;
     }
   } catch (upsertError) {
-    console.warn(`[upsertRows] upsert falhou em ${table}, tentando fallback individual:`, upsertError);
+    console.warn(
+      `[upsertRows] upsert falhou em ${table}, tentando fallback individual:`,
+      upsertError
+    );
     for (const row of rows) {
       const identifier = row[idColumn];
-      if (typeof identifier !== "string" || !identifier) continue;
+      if (typeof identifier !== 'string' || !identifier) continue;
 
       if (existing.has(identifier)) {
         const { error } = await supabase
           .from(table)
           .update(row)
-          .eq("integracao_id", integracaoId)
+          .eq('integracao_id', integracaoId)
           .eq(idColumn, identifier);
 
         if (error) {
           console.error(`[upsertRows] update falhou em ${table}:`, JSON.stringify(error));
-          throw new Error(`Não foi possível actualizar dados em ${table}: ${error.message} (code: ${error.code})`);
+          throw new Error(
+            `Não foi possível actualizar dados em ${table}: ${error.message} (code: ${error.code})`
+          );
         }
       } else {
         const { error } = await supabase.from(table).insert(row);
         if (error) {
           console.error(`[upsertRows] insert falhou em ${table}:`, JSON.stringify(error));
-          throw new Error(`Não foi possível guardar dados em ${table}: ${error.message} (code: ${error.code})`);
+          throw new Error(
+            `Não foi possível guardar dados em ${table}: ${error.message} (code: ${error.code})`
+          );
         }
         existing.add(identifier);
       }
@@ -596,9 +639,9 @@ const upsertRows = async ({
 
 const findInterestingPayloadPaths = (
   value: unknown,
-  currentPath = "",
+  currentPath = '',
   depth = 0,
-  results: string[] = [],
+  results: string[] = []
 ): string[] => {
   if (depth > 5 || results.length >= 40) return results;
 
@@ -616,7 +659,11 @@ const findInterestingPayloadPaths = (
 
   for (const [key, nestedValue] of Object.entries(value)) {
     const path = currentPath ? `${currentPath}.${key}` : key;
-    if (/(driver|vehicle|car|plate|trip|transaction|payment|earning|amount|gross|net|fee|commission|email|phone|status|city|name|id|uuid)/i.test(key)) {
+    if (
+      /(driver|vehicle|car|plate|trip|transaction|payment|earning|amount|gross|net|fee|commission|email|phone|status|city|name|id|uuid)/i.test(
+        key
+      )
+    ) {
       if (Array.isArray(nestedValue) || isRecord(nestedValue)) {
         findInterestingPayloadPaths(nestedValue, path, depth + 1, results);
       } else {
@@ -635,10 +682,12 @@ const findInterestingPayloadPaths = (
 const buildPayloadDiagnostics = (
   payload: JsonRecord,
   sources: unknown[],
-  identified: Record<string, unknown> = {},
+  identified: Record<string, unknown> = {}
 ) => {
   const cleanedIdentified = Object.fromEntries(
-    Object.entries(identified).filter(([, value]) => value !== null && value !== undefined && value !== ""),
+    Object.entries(identified).filter(
+      ([, value]) => value !== null && value !== undefined && value !== ''
+    )
   );
 
   return {
@@ -656,69 +705,83 @@ const summarizeDiagnostics = (diagnostics?: Record<string, unknown>) => {
   const identified = isRecord(diagnostics.identified) ? diagnostics.identified : {};
   const identifiedSummary = Object.entries(identified)
     .slice(0, 6)
-    .map(([key, value]) => `${key}=${typeof value === "string" ? value : JSON.stringify(value)}`)
-    .join(", ");
+    .map(([key, value]) => `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)
+    .join(', ');
 
   const paths = Array.isArray(diagnostics.interesting_paths)
     ? diagnostics.interesting_paths
-        .filter((value): value is string => typeof value === "string")
+        .filter((value): value is string => typeof value === 'string')
         .slice(0, 6)
     : [];
 
-  return [
-    identifiedSummary ? `Identificado: ${identifiedSummary}` : null,
-    paths.length > 0 ? `Campos: ${paths.join(", ")}` : null,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" · ") || null;
+  return (
+    [
+      identifiedSummary ? `Identificado: ${identifiedSummary}` : null,
+      paths.length > 0 ? `Campos: ${paths.join(', ')}` : null,
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(' · ') || null
+  );
 };
 
 const inferDomain = (eventType: string, payload: JsonRecord) => {
   const normalizedType = eventType.toLowerCase();
 
   if (
-    normalizedType.includes("payment") ||
-    normalizedType.includes("transaction") ||
-    normalizedType.includes("earn") ||
-    normalizedType.includes("payout") ||
-    normalizedType.includes("statement") ||
-    normalizedType.includes("fare") ||
-    normalizedType.includes("trip.") ||
-    normalizedType.includes("job.")
+    normalizedType.includes('payment') ||
+    normalizedType.includes('transaction') ||
+    normalizedType.includes('earn') ||
+    normalizedType.includes('payout') ||
+    normalizedType.includes('statement') ||
+    normalizedType.includes('fare') ||
+    normalizedType.includes('trip.') ||
+    normalizedType.includes('job.')
   ) {
-    return "transaction" as const;
+    return 'transaction' as const;
   }
 
   if (
-    normalizedType.startsWith("vehicle.") ||
-    normalizedType.includes("car.") ||
-    normalizedType.includes("fleet") ||
-    normalizedType.includes("supply")
+    normalizedType.startsWith('vehicle.') ||
+    normalizedType.includes('car.') ||
+    normalizedType.includes('fleet') ||
+    normalizedType.includes('supply')
   ) {
-    return "vehicle" as const;
+    return 'vehicle' as const;
   }
 
   if (
-    normalizedType.startsWith("driver.") ||
-    normalizedType.includes("partner") ||
-    normalizedType.includes("earner") ||
-    normalizedType.includes("courier")
+    normalizedType.startsWith('driver.') ||
+    normalizedType.includes('partner') ||
+    normalizedType.includes('earner') ||
+    normalizedType.includes('courier')
   ) {
-    return "driver" as const;
+    return 'driver' as const;
   }
 
   const sources = getSearchSources(payload, []);
-  if (prioritizeSources(sources, TRANSACTION_SHAPE_PATHS).some((source) => recordMatchesShape(source, TRANSACTION_SHAPE_PATHS))) {
-    return "transaction" as const;
+  if (
+    prioritizeSources(sources, TRANSACTION_SHAPE_PATHS).some((source) =>
+      recordMatchesShape(source, TRANSACTION_SHAPE_PATHS)
+    )
+  ) {
+    return 'transaction' as const;
   }
-  if (prioritizeSources(sources, VEHICLE_SHAPE_PATHS).some((source) => recordMatchesShape(source, VEHICLE_SHAPE_PATHS))) {
-    return "vehicle" as const;
+  if (
+    prioritizeSources(sources, VEHICLE_SHAPE_PATHS).some((source) =>
+      recordMatchesShape(source, VEHICLE_SHAPE_PATHS)
+    )
+  ) {
+    return 'vehicle' as const;
   }
-  if (prioritizeSources(sources, DRIVER_SHAPE_PATHS).some((source) => recordMatchesShape(source, DRIVER_SHAPE_PATHS))) {
-    return "driver" as const;
+  if (
+    prioritizeSources(sources, DRIVER_SHAPE_PATHS).some((source) =>
+      recordMatchesShape(source, DRIVER_SHAPE_PATHS)
+    )
+  ) {
+    return 'driver' as const;
   }
 
-  return "unknown" as const;
+  return 'unknown' as const;
 };
 
 const processDriverEvent = async ({
@@ -738,92 +801,91 @@ const processDriverEvent = async ({
 }): Promise<ProcessResult> => {
   const sources = prioritizeSources(
     getSearchSources(payload, [
-      "meta",
-      "meta.driver",
-      "meta.partner",
-      "meta.earner",
-      "driver",
-      "data.driver",
-      "data.resource.driver",
-      "body.driver",
-      "resource.driver",
-      "entity.driver",
-      "payload.driver",
-      "partner",
-      "data.partner",
-      "resource.partner",
-      "earner",
-      "data.earner",
-      "resource.earner",
-      "driverProfile",
-      "profile",
-      "data.profile",
-      "profile.driver",
-      "user",
-      "data.user",
-      "account",
+      'meta',
+      'meta.driver',
+      'meta.partner',
+      'meta.earner',
+      'driver',
+      'data.driver',
+      'data.resource.driver',
+      'body.driver',
+      'resource.driver',
+      'entity.driver',
+      'payload.driver',
+      'partner',
+      'data.partner',
+      'resource.partner',
+      'earner',
+      'data.earner',
+      'resource.earner',
+      'driverProfile',
+      'profile',
+      'data.profile',
+      'profile.driver',
+      'user',
+      'data.user',
+      'account',
     ]),
-    DRIVER_SHAPE_PATHS,
+    DRIVER_SHAPE_PATHS
   );
 
   const uberDriverId =
     firstString(sources, [
-      "driverId",
-      "driver_id",
-      "driverUUID",
-      "driver_uuid",
-      "partnerId",
-      "partner_id",
-      "earnerId",
-      "earner_id",
-      "userId",
-      "user_id",
-      "driver.id",
-      "driver.uuid",
-      "partner.id",
-      "partner.uuid",
-      "earner.id",
-      "earner.uuid",
-      "account.id",
-      "user.id",
-    ])
-    ?? firstString(sources, ["uuid", "id", "externalId", "external_id"]);
+      'driverId',
+      'driver_id',
+      'driverUUID',
+      'driver_uuid',
+      'partnerId',
+      'partner_id',
+      'earnerId',
+      'earner_id',
+      'userId',
+      'user_id',
+      'driver.id',
+      'driver.uuid',
+      'partner.id',
+      'partner.uuid',
+      'earner.id',
+      'earner.uuid',
+      'account.id',
+      'user.id',
+    ]) ?? firstString(sources, ['uuid', 'id', 'externalId', 'external_id']);
 
   const email = firstString(sources, [
-    "email",
-    "contact.email",
-    "contactInfo.email",
-    "profile.email",
-    "driver.email",
-    "partner.email",
-    "earner.email",
-    "account.email",
-    "user.email",
+    'email',
+    'contact.email',
+    'contactInfo.email',
+    'profile.email',
+    'driver.email',
+    'partner.email',
+    'earner.email',
+    'account.email',
+    'user.email',
   ]);
   const rawPhone = firstPhone(sources, [
-    "phoneNumber",
-    "phone_number",
-    "phone",
-    "contact.phone",
-    "contact.phoneNumber",
-    "contactInfo.phone",
-    "profile.phone",
-    "driver.phone",
-    "partner.phone",
-    "earner.phone",
-    "account.phone",
-    "user.phone",
-    "mobilePhone",
-    "mobile_phone",
+    'phoneNumber',
+    'phone_number',
+    'phone',
+    'contact.phone',
+    'contact.phoneNumber',
+    'contactInfo.phone',
+    'profile.phone',
+    'driver.phone',
+    'partner.phone',
+    'earner.phone',
+    'account.phone',
+    'user.phone',
+    'mobilePhone',
+    'mobile_phone',
   ]);
   const normalizedPhone = normalizePhone(rawPhone);
   const motoristaId =
-    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined)
-    ?? (email ? lookups.motoristasByEmail.get(email.toLowerCase()) : undefined)
-    ?? (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) : undefined)
-    ?? null;
+    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined) ??
+    (email ? lookups.motoristasByEmail.get(email.toLowerCase()) : undefined) ??
+    (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) : undefined) ??
+    null;
   const diagnostics = buildPayloadDiagnostics(payload, sources, {
-    domain: "driver",
+    domain: 'driver',
     email: email?.toLowerCase() ?? null,
     motorista_id: motoristaId,
     phone: normalizedPhone,
@@ -834,39 +896,39 @@ const processDriverEvent = async ({
     return {
       counts: emptyCounts(),
       diagnostics,
-      domain: "driver",
-      message: "Evento de motorista sem identificador utilizável.",
-      status: "ignored",
+      domain: 'driver',
+      message: 'Evento de motorista sem identificador utilizável.',
+      status: 'ignored',
     };
   }
 
   const firstName = firstString(sources, [
-    "firstName",
-    "first_name",
-    "givenName",
-    "given_name",
-    "name.first",
-    "name.givenName",
+    'firstName',
+    'first_name',
+    'givenName',
+    'given_name',
+    'name.first',
+    'name.givenName',
   ]);
   const lastName = firstString(sources, [
-    "lastName",
-    "last_name",
-    "familyName",
-    "family_name",
-    "name.last",
-    "name.familyName",
+    'lastName',
+    'last_name',
+    'familyName',
+    'family_name',
+    'name.last',
+    'name.familyName',
   ]);
-  const fallbackFullName = [firstName, lastName].filter(Boolean).join(" ") || null;
+  const fallbackFullName = [firstName, lastName].filter(Boolean).join(' ') || null;
   const fullName =
     firstString(sources, [
-      "fullName",
-      "full_name",
-      "displayName",
-      "name.full",
-      "name",
-      "driverName",
-      "partnerName",
-      "earnerName",
+      'fullName',
+      'full_name',
+      'displayName',
+      'name.full',
+      'name',
+      'driverName',
+      'partnerName',
+      'earnerName',
     ]) ?? fallbackFullName;
 
   const row = {
@@ -877,17 +939,32 @@ const processDriverEvent = async ({
     full_name: fullName,
     email: email?.toLowerCase() ?? null,
     phone: rawPhone ?? null,
-    status: firstString(sources, ["status", "driverStatus", "driver_status", "state", "account.status"]),
-    account_status: firstString(sources, ["accountStatus", "account_status", "account.state"]),
-    onboarding_status: firstString(sources, ["onboardingStatus", "onboarding_status"]),
-    city: firstString(sources, ["city", "address.city", "profile.city", "driver.city"]),
-    rating: firstNumber(sources, ["rating", "metrics.rating", "driver.rating"]),
-    consent_granted_at: firstIsoDate(sources, ["consentGrantedAt", "consent_granted_at", "consentedAt", "consented_at"]),
-    flow_type: "webhook",
+    status: firstString(sources, [
+      'status',
+      'driverStatus',
+      'driver_status',
+      'state',
+      'account.status',
+    ]),
+    account_status: firstString(sources, ['accountStatus', 'account_status', 'account.state']),
+    onboarding_status: firstString(sources, ['onboardingStatus', 'onboarding_status']),
+    city: firstString(sources, ['city', 'address.city', 'profile.city', 'driver.city']),
+    rating: firstNumber(sources, ['rating', 'metrics.rating', 'driver.rating']),
+    consent_granted_at: firstIsoDate(sources, [
+      'consentGrantedAt',
+      'consent_granted_at',
+      'consentedAt',
+      'consented_at',
+    ]),
+    flow_type: 'webhook',
     raw_profile: payload,
     encrypted_fields: {
       event_type: eventType,
-      driverIdEncrypted: firstString(sources, ["driverIdEncrypted", "driver_id_encrypted", "partnerIdEncrypted"]),
+      driverIdEncrypted: firstString(sources, [
+        'driverIdEncrypted',
+        'driver_id_encrypted',
+        'partnerIdEncrypted',
+      ]),
     },
     decrypted_fields: null,
     motorista_id: motoristaId,
@@ -896,19 +973,19 @@ const processDriverEvent = async ({
 
   const counts = await upsertRows({
     supabase,
-    table: "uber_drivers",
+    table: 'uber_drivers',
     integracaoId,
-    idColumn: "uber_driver_id",
-    onConflict: "integracao_id,uber_driver_id",
+    idColumn: 'uber_driver_id',
+    onConflict: 'integracao_id,uber_driver_id',
     rows: [row],
   });
 
   return {
     counts: { ...emptyCounts(), drivers: counts },
     diagnostics,
-    domain: "driver",
-    message: `Motorista Uber ${counts.inserted > 0 ? "criado" : "actualizado"}.`,
-    status: "processed",
+    domain: 'driver',
+    message: `Motorista Uber ${counts.inserted > 0 ? 'criado' : 'actualizado'}.`,
+    status: 'processed',
   };
 };
 
@@ -929,64 +1006,65 @@ const processVehicleEvent = async ({
 }): Promise<ProcessResult> => {
   const sources = prioritizeSources(
     getSearchSources(payload, [
-      "meta",
-      "meta.vehicle",
-      "meta.car",
-      "vehicle",
-      "data.vehicle",
-      "data.resource.vehicle",
-      "body.vehicle",
-      "resource.vehicle",
-      "entity.vehicle",
-      "payload.vehicle",
-      "car",
-      "data.car",
-      "resource.car",
-      "fleet.vehicle",
-      "fleetVehicle",
-      "trip.vehicle",
-      "data.trip.vehicle",
-      "supply.vehicle",
-      "supplyVehicle",
-      "supply",
+      'meta',
+      'meta.vehicle',
+      'meta.car',
+      'vehicle',
+      'data.vehicle',
+      'data.resource.vehicle',
+      'body.vehicle',
+      'resource.vehicle',
+      'entity.vehicle',
+      'payload.vehicle',
+      'car',
+      'data.car',
+      'resource.car',
+      'fleet.vehicle',
+      'fleetVehicle',
+      'trip.vehicle',
+      'data.trip.vehicle',
+      'supply.vehicle',
+      'supplyVehicle',
+      'supply',
     ]),
-    VEHICLE_SHAPE_PATHS,
+    VEHICLE_SHAPE_PATHS
   );
 
   const uberVehicleId =
     firstString(sources, [
-      "vehicleId",
-      "vehicle_id",
-      "vehicleUUID",
-      "vehicle_uuid",
-      "carId",
-      "car_id",
-      "fleetVehicleId",
-      "fleet_vehicle_id",
-      "vehicle.id",
-      "vehicle.uuid",
-      "car.id",
-      "car.uuid",
-      "supply.vehicle.id",
-    ])
-    ?? firstString(sources, ["uuid", "id", "externalId", "external_id"]);
+      'vehicleId',
+      'vehicle_id',
+      'vehicleUUID',
+      'vehicle_uuid',
+      'carId',
+      'car_id',
+      'fleetVehicleId',
+      'fleet_vehicle_id',
+      'vehicle.id',
+      'vehicle.uuid',
+      'car.id',
+      'car.uuid',
+      'supply.vehicle.id',
+    ]) ?? firstString(sources, ['uuid', 'id', 'externalId', 'external_id']);
   const licensePlate = firstString(sources, [
-    "licensePlate",
-    "license_plate",
-    "vehicle.licensePlate",
-    "vehicle.license_plate",
-    "plate",
-    "registrationNumber",
-    "registration_number",
-    "vehiclePlate",
-    "vehicle_plate",
-    "numberPlate",
-    "number_plate",
+    'licensePlate',
+    'license_plate',
+    'vehicle.licensePlate',
+    'vehicle.license_plate',
+    'plate',
+    'registrationNumber',
+    'registration_number',
+    'vehiclePlate',
+    'vehicle_plate',
+    'numberPlate',
+    'number_plate',
   ]);
   const normalizedLicensePlate = normalizePlate(licensePlate);
-  const viaturaId = normalizedLicensePlate ? lookups.viaturasByPlate.get(normalizedLicensePlate) ?? null : null;
+  const viaturaId = normalizedLicensePlate
+    ? (lookups.viaturasByPlate.get(normalizedLicensePlate) ?? null)
+    : null;
   const diagnostics = buildPayloadDiagnostics(payload, sources, {
-    domain: "vehicle",
+    domain: 'vehicle',
     license_plate: normalizedLicensePlate,
     uber_vehicle_id: uberVehicleId,
     viatura_id: viaturaId,
@@ -996,9 +1074,9 @@ const processVehicleEvent = async ({
     return {
       counts: emptyCounts(),
       diagnostics,
-      domain: "vehicle",
-      message: "Evento de viatura sem identificador utilizável.",
-      status: "ignored",
+      domain: 'vehicle',
+      message: 'Evento de viatura sem identificador utilizável.',
+      status: 'ignored',
     };
   }
 
@@ -1006,27 +1084,31 @@ const processVehicleEvent = async ({
     integracao_id: integracaoId,
     uber_vehicle_id: uberVehicleId,
     owner_id: firstString(sources, [
-      "ownerId",
-      "owner_id",
-      "driverId",
-      "driver_id",
-      "partnerId",
-      "partner_id",
-      "owner.id",
+      'ownerId',
+      'owner_id',
+      'driverId',
+      'driver_id',
+      'partnerId',
+      'partner_id',
+      'owner.id',
     ]),
     license_plate: licensePlate,
-    make: firstString(sources, ["make", "brand", "manufacturer"]),
-    model: firstString(sources, ["model", "vehicleModel"]),
-    color: firstString(sources, ["color", "vehicleColor"]),
-    year: firstNumber(sources, ["year", "modelYear"]),
-    status: firstString(sources, ["status", "state", "vehicleStatus", "vehicle_status"]),
-    supply_status: firstString(sources, ["supplyStatus", "supply_status", "supply.state"]),
-    fleet_status: firstString(sources, ["fleetStatus", "fleet_status"]) ?? eventType,
+    make: firstString(sources, ['make', 'brand', 'manufacturer']),
+    model: firstString(sources, ['model', 'vehicleModel']),
+    color: firstString(sources, ['color', 'vehicleColor']),
+    year: firstNumber(sources, ['year', 'modelYear']),
+    status: firstString(sources, ['status', 'state', 'vehicleStatus', 'vehicle_status']),
+    supply_status: firstString(sources, ['supplyStatus', 'supply_status', 'supply.state']),
+    fleet_status: firstString(sources, ['fleetStatus', 'fleet_status']) ?? eventType,
     raw_vehicle: payload,
     encrypted_fields: {
       event_type: eventType,
-      vehicleIdEncrypted: firstString(sources, ["vehicleIdEncrypted", "vehicle_id_encrypted", "carIdEncrypted"]),
-      vin: firstString(sources, ["vin", "vehicleVin"]),
+      vehicleIdEncrypted: firstString(sources, [
+        'vehicleIdEncrypted',
+        'vehicle_id_encrypted',
+        'carIdEncrypted',
+      ]),
+      vin: firstString(sources, ['vin', 'vehicleVin']),
     },
     decrypted_fields: null,
     viatura_id: viaturaId,
@@ -1035,19 +1117,19 @@ const processVehicleEvent = async ({
 
   const counts = await upsertRows({
     supabase,
-    table: "uber_vehicles",
+    table: 'uber_vehicles',
     integracaoId,
-    idColumn: "uber_vehicle_id",
-    onConflict: "integracao_id,uber_vehicle_id",
+    idColumn: 'uber_vehicle_id',
+    onConflict: 'integracao_id,uber_vehicle_id',
     rows: [row],
   });
 
   return {
     counts: { ...emptyCounts(), vehicles: counts },
     diagnostics,
-    domain: "vehicle",
-    message: `Viatura Uber ${counts.inserted > 0 ? "criada" : "actualizada"}.`,
-    status: "processed",
+    domain: 'vehicle',
+    message: `Viatura Uber ${counts.inserted > 0 ? 'criada' : 'actualizada'}.`,
+    status: 'processed',
   };
 };
 
@@ -1070,166 +1152,170 @@ const processTransactionEvent = async ({
 }): Promise<ProcessResult> => {
   const sources = prioritizeSources(
     getSearchSources(payload, [
-      "meta",
-      "meta.payment",
-      "meta.transaction",
-      "meta.earning",
-      "meta.payout",
-      "meta.trip",
-      "transaction",
-      "data.transaction",
-      "body.transaction",
-      "resource.transaction",
-      "entity.transaction",
-      "payment",
-      "data.payment",
-      "data.resource.payment",
-      "body.payment",
-      "resource.payment",
-      "earning",
-      "data.earning",
-      "body.earning",
-      "resource.earning",
-      "payout",
-      "data.payout",
-      "resource.payout",
-      "statement",
-      "data.statement",
-      "trip",
-      "data.trip",
-      "trip.payment",
-      "trip.fare",
+      'meta',
+      'meta.payment',
+      'meta.transaction',
+      'meta.earning',
+      'meta.payout',
+      'meta.trip',
+      'transaction',
+      'data.transaction',
+      'body.transaction',
+      'resource.transaction',
+      'entity.transaction',
+      'payment',
+      'data.payment',
+      'data.resource.payment',
+      'body.payment',
+      'resource.payment',
+      'earning',
+      'data.earning',
+      'body.earning',
+      'resource.earning',
+      'payout',
+      'data.payout',
+      'resource.payout',
+      'statement',
+      'data.statement',
+      'trip',
+      'data.trip',
+      'trip.payment',
+      'trip.fare',
     ]),
-    TRANSACTION_SHAPE_PATHS,
+    TRANSACTION_SHAPE_PATHS
   );
 
   const tripReference = firstString(sources, [
-    "tripReference",
-    "trip_reference",
-    "tripId",
-    "trip_id",
-    "jobId",
-    "job_id",
-    "orderReference",
-    "order_reference",
-    "workflowId",
-    "workflow_id",
-    "trip.id",
-    "trip.uuid",
+    'tripReference',
+    'trip_reference',
+    'tripId',
+    'trip_id',
+    'jobId',
+    'job_id',
+    'orderReference',
+    'order_reference',
+    'workflowId',
+    'workflow_id',
+    'trip.id',
+    'trip.uuid',
   ]);
   const occurredAt = firstIsoDate(sources, [
-    "occurredAt",
-    "occurred_at",
-    "createdAt",
-    "created_at",
-    "eventTime",
-    "event_time",
-    "timestamp",
-    "tripDate",
-    "trip_date",
-    "paymentDate",
-    "payment_date",
-    "trip.createdAt",
-    "trip.created_at",
-    "settledAt",
-    "settled_at",
+    'occurredAt',
+    'occurred_at',
+    'createdAt',
+    'created_at',
+    'eventTime',
+    'event_time',
+    'timestamp',
+    'tripDate',
+    'trip_date',
+    'paymentDate',
+    'payment_date',
+    'trip.createdAt',
+    'trip.created_at',
+    'settledAt',
+    'settled_at',
   ]);
   const settledAt = firstIsoDate(sources, [
-    "settledAt",
-    "settled_at",
-    "paidAt",
-    "paid_at",
-    "updatedAt",
-    "updated_at",
-    "payment.updatedAt",
-    "payment.updated_at",
+    'settledAt',
+    'settled_at',
+    'paidAt',
+    'paid_at',
+    'updatedAt',
+    'updated_at',
+    'payment.updatedAt',
+    'payment.updated_at',
   ]);
   const uberDriverId = firstString(sources, [
-    "driverId",
-    "driver_id",
-    "earnerId",
-    "earner_id",
-    "partnerId",
-    "partner_id",
-    "driver.id",
-    "driver.uuid",
-    "earner.id",
-    "earner.uuid",
-    "partner.id",
-    "partner.uuid",
+    'driverId',
+    'driver_id',
+    'earnerId',
+    'earner_id',
+    'partnerId',
+    'partner_id',
+    'driver.id',
+    'driver.uuid',
+    'earner.id',
+    'earner.uuid',
+    'partner.id',
+    'partner.uuid',
   ]);
   const uberVehicleId = firstString(sources, [
-    "vehicleId",
-    "vehicle_id",
-    "carId",
-    "car_id",
-    "vehicle.id",
-    "vehicle.uuid",
-    "car.id",
-    "car.uuid",
-    "trip.vehicleId",
-    "trip.vehicle_id",
+    'vehicleId',
+    'vehicle_id',
+    'carId',
+    'car_id',
+    'vehicle.id',
+    'vehicle.uuid',
+    'car.id',
+    'car.uuid',
+    'trip.vehicleId',
+    'trip.vehicle_id',
   ]);
   const email = firstString(sources, [
-    "email",
-    "driver.email",
-    "partner.email",
-    "contact.email",
-    "user.email",
-    "account.email",
+    'email',
+    'driver.email',
+    'partner.email',
+    'contact.email',
+    'user.email',
+    'account.email',
   ]);
   const rawPhone = firstPhone(sources, [
-    "phone",
-    "phoneNumber",
-    "driver.phone",
-    "partner.phone",
-    "contact.phone",
-    "user.phone",
-    "account.phone",
+    'phone',
+    'phoneNumber',
+    'driver.phone',
+    'partner.phone',
+    'contact.phone',
+    'user.phone',
+    'account.phone',
   ]);
   const normalizedPhone = normalizePhone(rawPhone);
-  const normalizedLicensePlate = normalizePlate(firstString(sources, [
-    "licensePlate",
-    "license_plate",
-    "plate",
-    "registrationNumber",
-    "vehicle.licensePlate",
-    "trip.vehicle.licensePlate",
-  ]));
-  const fallbackTransactionId = eventId
-    ?? (([eventType, tripReference, occurredAt ?? syncedAt]
+  const normalizedLicensePlate = normalizePlate(
+    firstString(sources, [
+      'licensePlate',
+      'license_plate',
+      'plate',
+      'registrationNumber',
+      'vehicle.licensePlate',
+      'trip.vehicle.licensePlate',
+    ])
+  );
+  const fallbackTransactionId =
+    eventId ??
+    ([eventType, tripReference, occurredAt ?? syncedAt]
       .filter((value): value is string => Boolean(value))
-      .join(":")) || null);
+      .join(':') ||
+      null);
   const uberTransactionId =
     firstString(sources, [
-      "transactionId",
-      "transaction_id",
-      "paymentId",
-      "payment_id",
-      "earningId",
-      "earning_id",
-      "payoutId",
-      "payout_id",
-      "statementId",
-      "statement_id",
-      "payment.id",
-      "transaction.id",
-      "payout.id",
-      "statement.id",
-    ])
-    ?? firstString(sources, ["uuid", "id"])
-    ?? fallbackTransactionId;
+      'transactionId',
+      'transaction_id',
+      'paymentId',
+      'payment_id',
+      'earningId',
+      'earning_id',
+      'payoutId',
+      'payout_id',
+      'statementId',
+      'statement_id',
+      'payment.id',
+      'transaction.id',
+      'payout.id',
+      'statement.id',
+    ]) ??
+    firstString(sources, ['uuid', 'id']) ??
+    fallbackTransactionId;
   const motoristaId =
-    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined)
-    ?? (email ? lookups.motoristasByEmail.get(email.toLowerCase()) : undefined)
-    ?? (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) : undefined)
-    ?? null;
+    (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined) ??
+    (email ? lookups.motoristasByEmail.get(email.toLowerCase()) : undefined) ??
+    (normalizedPhone ? lookups.motoristasByPhone.get(normalizedPhone) : undefined) ??
+    null;
   const viaturaId =
-    (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) : undefined)
-    ?? (normalizedLicensePlate ? lookups.viaturasByPlate.get(normalizedLicensePlate) : undefined)
-    ?? null;
+    (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) : undefined) ??
+    (normalizedLicensePlate ? lookups.viaturasByPlate.get(normalizedLicensePlate) : undefined) ??
+    null;
   const diagnostics = buildPayloadDiagnostics(payload, sources, {
-    domain: "transaction",
+    domain: 'transaction',
     motorista_id: motoristaId,
     trip_reference: tripReference,
     uber_driver_id: uberDriverId,
@@ -1242,9 +1328,9 @@ const processTransactionEvent = async ({
     return {
       counts: emptyCounts(),
       diagnostics,
-      domain: "transaction",
-      message: "Evento financeiro sem identificador utilizável.",
-      status: "ignored",
+      domain: 'transaction',
+      message: 'Evento financeiro sem identificador utilizável.',
+      status: 'ignored',
     };
   }
 
@@ -1257,46 +1343,46 @@ const processTransactionEvent = async ({
     uber_driver_id: uberDriverId,
     uber_vehicle_id: uberVehicleId,
     transaction_type: eventType,
-    status: firstString(sources, ["status", "state", "paymentStatus", "payment_status"]),
+    status: firstString(sources, ['status', 'state', 'paymentStatus', 'payment_status']),
     currency: firstString(sources, [
-      "currency",
-      "currencyCode",
-      "currency_code",
-      "amount.currency",
-      "amount.currencyCode",
-      "grossAmount.currencyCode",
-      "money.currencyCode",
+      'currency',
+      'currencyCode',
+      'currency_code',
+      'amount.currency',
+      'amount.currencyCode',
+      'grossAmount.currencyCode',
+      'money.currencyCode',
     ]),
     gross_amount: firstAmount(sources, [
-      "grossAmount",
-      "gross_amount",
-      "amount",
-      "totalAmount",
-      "total_amount",
-      "fare",
-      "gross",
-      "paymentAmount",
+      'grossAmount',
+      'gross_amount',
+      'amount',
+      'totalAmount',
+      'total_amount',
+      'fare',
+      'gross',
+      'paymentAmount',
     ]),
     net_amount: firstAmount(sources, [
-      "netAmount",
-      "net_amount",
-      "net",
-      "driverAmount",
-      "driver_amount",
-      "earnings",
-      "payout",
-      "partnerAmount",
-      "partner_amount",
+      'netAmount',
+      'net_amount',
+      'net',
+      'driverAmount',
+      'driver_amount',
+      'earnings',
+      'payout',
+      'partnerAmount',
+      'partner_amount',
     ]),
     commission_amount: firstAmount(sources, [
-      "commissionAmount",
-      "commission_amount",
-      "fee",
-      "fees",
-      "serviceFee",
-      "service_fee",
-      "uberFee",
-      "uber_fee",
+      'commissionAmount',
+      'commission_amount',
+      'fee',
+      'fees',
+      'serviceFee',
+      'service_fee',
+      'uberFee',
+      'uber_fee',
     ]),
     occurred_at: occurredAt ?? syncedAt,
     settled_at: settledAt,
@@ -1305,19 +1391,19 @@ const processTransactionEvent = async ({
 
   const counts = await upsertRows({
     supabase,
-    table: "uber_transactions",
+    table: 'uber_transactions',
     integracaoId,
-    idColumn: "uber_transaction_id",
-    onConflict: "integracao_id,uber_transaction_id",
+    idColumn: 'uber_transaction_id',
+    onConflict: 'integracao_id,uber_transaction_id',
     rows: [row],
   });
 
   return {
     counts: { ...emptyCounts(), transactions: counts },
     diagnostics,
-    domain: "transaction",
-    message: `Evento financeiro Uber ${counts.inserted > 0 ? "criado" : "actualizado"}.`,
-    status: "processed",
+    domain: 'transaction',
+    message: `Evento financeiro Uber ${counts.inserted > 0 ? 'criado' : 'actualizado'}.`,
+    status: 'processed',
   };
 };
 
@@ -1338,14 +1424,15 @@ const logWebhookResult = async ({
   executadoPor: string | null;
   replay: boolean;
 }) => {
-  const logStatus = result.status === "processed" ? "success" : result.status === "ignored" ? "partial" : "error";
-  await supabase.from("uber_sync_logs").insert({
+  const logStatus =
+    result.status === 'processed' ? 'success' : result.status === 'ignored' ? 'partial' : 'error';
+  await supabase.from('uber_sync_logs').insert({
     integracao_id: integracaoId,
     executado_por: executadoPor,
-    tipo: replay ? "webhook_replay" : "webhook",
+    tipo: replay ? 'webhook_replay' : 'webhook',
     status: logStatus,
     mensagem: result.message,
-    erros: result.status === "failed" ? 1 : 0,
+    erros: result.status === 'failed' ? 1 : 0,
     viagens_novas: result.counts.transactions.inserted,
     viagens_atualizadas: result.counts.transactions.updated,
     detalhes: {
@@ -1377,7 +1464,7 @@ const processStoredEvent = async ({
 
   try {
     const domain = inferDomain(event.event_type, event.payload);
-    if (domain === "driver") {
+    if (domain === 'driver') {
       result = await processDriverEvent({
         supabase,
         integracaoId: event.integracao_id,
@@ -1386,7 +1473,7 @@ const processStoredEvent = async ({
         lookups,
         syncedAt,
       });
-    } else if (domain === "vehicle") {
+    } else if (domain === 'vehicle') {
       result = await processVehicleEvent({
         supabase,
         integracaoId: event.integracao_id,
@@ -1395,7 +1482,7 @@ const processStoredEvent = async ({
         lookups,
         syncedAt,
       });
-    } else if (domain === "transaction") {
+    } else if (domain === 'transaction') {
       result = await processTransactionEvent({
         supabase,
         integracaoId: event.integracao_id,
@@ -1409,10 +1496,10 @@ const processStoredEvent = async ({
       const sources = getSearchSources(event.payload, []);
       result = {
         counts: emptyCounts(),
-        diagnostics: buildPayloadDiagnostics(event.payload, sources, { domain: "unknown" }),
-        domain: "unknown",
+        diagnostics: buildPayloadDiagnostics(event.payload, sources, { domain: 'unknown' }),
+        domain: 'unknown',
         message: `Evento ${event.event_type} guardado, mas ainda sem parser dedicado.`,
-        status: "ignored",
+        status: 'ignored',
       };
     }
   } catch (error) {
@@ -1422,31 +1509,34 @@ const processStoredEvent = async ({
         domain: inferDomain(event.event_type, event.payload),
       }),
       domain: inferDomain(event.event_type, event.payload),
-      message: error instanceof Error ? error.message : "Falha ao processar o webhook.",
-      status: "failed",
+      message: error instanceof Error ? error.message : 'Falha ao processar o webhook.',
+      status: 'failed',
     };
   }
 
   const diagnosticsSummary = summarizeDiagnostics(result.diagnostics);
   console.info(
-    `[uber-webhook] ${replay ? "replay" : "receive"} ${event.event_type} -> ${result.status}${diagnosticsSummary ? ` | ${diagnosticsSummary}` : ""}`,
+    `[uber-webhook] ${replay ? 'replay' : 'receive'} ${event.event_type} -> ${result.status}${diagnosticsSummary ? ` | ${diagnosticsSummary}` : ''}`
   );
 
   await supabase
-    .from("uber_webhook_events")
+    .from('uber_webhook_events')
     .update({
       processing_status: result.status,
-      error_message: result.status === "processed"
-        ? null
-        : [result.message, diagnosticsSummary].filter((value): value is string => Boolean(value)).join(" · "),
+      error_message:
+        result.status === 'processed'
+          ? null
+          : [result.message, diagnosticsSummary]
+              .filter((value): value is string => Boolean(value))
+              .join(' · '),
       processed_at: new Date().toISOString(),
     })
-    .eq("id", event.id);
+    .eq('id', event.id);
 
   await supabase
-    .from("plataformas_configuracao")
+    .from('plataformas_configuracao')
     .update({ last_webhook_at: new Date().toISOString() })
-    .eq("id", event.integracao_id);
+    .eq('id', event.integracao_id);
 
   await logWebhookResult({
     supabase,
@@ -1461,36 +1551,119 @@ const processStoredEvent = async ({
   return result;
 };
 
-// ─── CSV Import Logic ───
-
 const CSV_COLUMN_ALIASES: Record<string, string[]> = {
-  uber_transaction_id: ["trip id", "reference", "referência", "referencia", "transaction id", "payment id", "id"],
-  trip_reference: ["trip id", "trip reference", "trip ref", "referência viagem", "referencia viagem"],
-  uber_driver_id: ["driver", "driver id", "motorista", "driver name", "nome motorista", "driver uuid", "uuid do motorista", "uuid_do_motorista"],
-  driver_first_name: ["nome próprio do motorista", "nome proprio do motorista", "first name", "nome próprio", "nome proprio", "nome_proprio_do_motorista"],
-  driver_last_name: ["apelido do motorista", "last name", "apelido", "apelido_do_motorista"],
-  uber_vehicle_id: ["vehicle", "vehicle id", "viatura", "plate", "license plate", "matrícula", "matricula", "veículo", "veiculo"],
-  occurred_at: ["date", "data", "occurred at", "trip date", "data viagem", "datetime", "data/hora", "timestamp"],
-  gross_amount: ["gross", "bruto", "total", "gross amount", "valor bruto", "valor total", "fare", "tarifa", "valor", "pago a si"],
-  net_amount: ["net", "líquido", "liquido", "net amount", "valor líquido", "valor liquido", "earnings", "ganhos", "driver earnings", "pago a si:os seus rendimentos", "pago a si : os seus rendimentos"],
-  commission_amount: ["commission", "comissão", "comissao", "fee", "taxa", "commission amount", "uber fee", "service fee", "pago a si:os seus rendimentos:taxa de serviço", "pago a si : os seus rendimentos : taxa de serviço", "pago a si:os seus rendimentos:taxa de servico", "pago a si : os seus rendimentos : taxa de servico"],
-  currency: ["currency", "moeda", "currency code"],
-  status: ["status", "estado", "state", "trip status"],
-  transaction_type: ["type", "tipo", "transaction type", "trip type"],
+  uber_transaction_id: [
+    'trip id',
+    'reference',
+    'referência',
+    'referencia',
+    'transaction id',
+    'payment id',
+    'id',
+  ],
+  trip_reference: [
+    'trip id',
+    'trip reference',
+    'trip ref',
+    'referência viagem',
+    'referencia viagem',
+  ],
+  uber_driver_id: [
+    'driver',
+    'driver id',
+    'motorista',
+    'driver name',
+    'nome motorista',
+    'driver uuid',
+    'uuid do motorista',
+    'uuid_do_motorista',
+  ],
+  driver_first_name: [
+    'nome próprio do motorista',
+    'nome proprio do motorista',
+    'first name',
+    'nome próprio',
+    'nome proprio',
+    'nome_proprio_do_motorista',
+  ],
+  driver_last_name: ['apelido do motorista', 'last name', 'apelido', 'apelido_do_motorista'],
+  uber_vehicle_id: [
+    'vehicle',
+    'vehicle id',
+    'viatura',
+    'plate',
+    'license plate',
+    'matrícula',
+    'matricula',
+    'veículo',
+    'veiculo',
+  ],
+  occurred_at: [
+    'date',
+    'data',
+    'occurred at',
+    'trip date',
+    'data viagem',
+    'datetime',
+    'data/hora',
+    'timestamp',
+  ],
+  gross_amount: [
+    'gross',
+    'bruto',
+    'total',
+    'gross amount',
+    'valor bruto',
+    'valor total',
+    'fare',
+    'tarifa',
+    'valor',
+    'pago a si',
+  ],
+  net_amount: [
+    'net',
+    'líquido',
+    'liquido',
+    'net amount',
+    'valor líquido',
+    'valor liquido',
+    'earnings',
+    'ganhos',
+    'driver earnings',
+    'pago a si:os seus rendimentos',
+    'pago a si : os seus rendimentos',
+  ],
+  commission_amount: [
+    'commission',
+    'comissão',
+    'comissao',
+    'fee',
+    'taxa',
+    'commission amount',
+    'uber fee',
+    'service fee',
+    'pago a si:os seus rendimentos:taxa de serviço',
+    'pago a si : os seus rendimentos : taxa de serviço',
+    'pago a si:os seus rendimentos:taxa de servico',
+    'pago a si : os seus rendimentos : taxa de servico',
+  ],
+  currency: ['currency', 'moeda', 'currency code'],
+  status: ['status', 'estado', 'state', 'trip status'],
+  transaction_type: ['type', 'tipo', 'transaction type', 'trip type'],
 };
 
 const detectCsvSeparator = (firstLine: string): string => {
   const tabCount = (firstLine.match(/\t/g) ?? []).length;
   const semiCount = (firstLine.match(/;/g) ?? []).length;
   const commaCount = (firstLine.match(/,/g) ?? []).length;
-  if (tabCount > commaCount && tabCount > semiCount) return "\t";
-  if (semiCount > commaCount) return ";";
-  return ",";
+  if (tabCount > commaCount && tabCount > semiCount) return '\t';
+  if (semiCount > commaCount) return ';';
+  return ',';
 };
 
 const parseCsvLine = (line: string, separator: string): string[] => {
   const result: string[] = [];
-  let current = "";
+  let current = '';
   let inQuotes = false;
 
   for (let i = 0; i < line.length; i++) {
@@ -1504,7 +1677,7 @@ const parseCsvLine = (line: string, separator: string): string[] => {
       }
     } else if (char === separator && !inQuotes) {
       result.push(current.trim());
-      current = "";
+      current = '';
     } else {
       current += char;
     }
@@ -1515,16 +1688,19 @@ const parseCsvLine = (line: string, separator: string): string[] => {
 
 const mapCsvHeaders = (headers: string[]): Map<number, string> => {
   const mapping = new Map<number, string>();
-  // Normalize: lowercase, remove BOM, trim, remove quotes, collapse spaces around colons
   const normalizedHeaders = headers.map((h) =>
-    h.toLowerCase().replace(/^\ufeff/, "").trim().replace(/['"]/g, "").replace(/\s*:\s*/g, ":")
+    h
+      .toLowerCase()
+      .replace(/^\ufeff/, '')
+      .trim()
+      .replace(/['"]/g, '')
+      .replace(/\s*:\s*/g, ':')
   );
 
   for (let i = 0; i < normalizedHeaders.length; i++) {
     const header = normalizedHeaders[i];
     for (const [field, aliases] of Object.entries(CSV_COLUMN_ALIASES)) {
-      // Also normalize aliases for comparison
-      const normalizedAliases = aliases.map((a) => a.replace(/\s*:\s*/g, ":"));
+      const normalizedAliases = aliases.map((a) => a.replace(/\s*:\s*/g, ':'));
       if (normalizedAliases.includes(header) && !Array.from(mapping.values()).includes(field)) {
         mapping.set(i, field);
         break;
@@ -1536,19 +1712,15 @@ const mapCsvHeaders = (headers: string[]): Map<number, string> => {
 
 const parseAmountValue = (value: string): number | null => {
   if (!value) return null;
-  // Handle European format (1.234,56) and standard (1,234.56)
-  let cleaned = value.replace(/[€$£\s]/g, "").trim();
+  let cleaned = value.replace(/[€$£\s]/g, '').trim();
   if (!cleaned) return null;
 
-  // If has both . and , check which is last (that's the decimal separator)
-  const lastComma = cleaned.lastIndexOf(",");
-  const lastDot = cleaned.lastIndexOf(".");
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
   if (lastComma > lastDot) {
-    // European: 1.234,56
-    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
   } else {
-    // Standard: 1,234.56
-    cleaned = cleaned.replace(/,/g, "");
+    cleaned = cleaned.replace(/,/g, '');
   }
 
   const num = Number(cleaned);
@@ -1578,7 +1750,14 @@ const processCsvImport = async ({
 }) => {
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length < 2) {
-    return { success: false, error: "CSV sem dados (apenas cabeçalho ou vazio)", total_rows: 0, inserted: 0, updated: 0, errors: 0 };
+    return {
+      success: false,
+      error: 'CSV sem dados (apenas cabeçalho ou vazio)',
+      total_rows: 0,
+      inserted: 0,
+      updated: 0,
+      errors: 0,
+    };
   }
 
   const separator = detectCsvSeparator(lines[0]);
@@ -1588,28 +1767,41 @@ const processCsvImport = async ({
   if (columnMap.size === 0) {
     return {
       success: false,
-      error: `Não foi possível mapear nenhuma coluna do CSV. Colunas encontradas: ${headerCells.join(", ")}`,
-      total_rows: 0, inserted: 0, updated: 0, errors: 0,
+      error: `Não foi possível mapear nenhuma coluna do CSV. Colunas encontradas: ${headerCells.join(', ')}`,
+      total_rows: 0,
+      inserted: 0,
+      updated: 0,
+      errors: 0,
     };
   }
 
-  console.info(`[uber-webhook] CSV import: ${lines.length - 1} rows, separator="${separator === "\t" ? "TAB" : separator}", mapped columns: ${Array.from(columnMap.entries()).map(([i, f]) => `${headerCells[i]}->${f}`).join(", ")}`);
+  console.info(
+    `[uber-webhook] CSV import: ${lines.length - 1} rows, separator="${separator === '\t' ? 'TAB' : separator}", mapped columns: ${Array.from(
+      columnMap.entries()
+    )
+      .map(([i, f]) => `${headerCells[i]}->${f}`)
+      .join(', ')}`
+  );
 
-  // Log the import event in uber_webhook_events
-  await supabase.from("uber_webhook_events").insert({
+  await supabase.from('uber_webhook_events').insert({
     integracao_id: integracaoId,
     org_id: orgId,
     event_id: `csv-import-${Date.now()}`,
-    event_type: "csv_import",
+    event_type: 'csv_import',
     signature: null,
-    payload: { origem, nome_original: nomeOriginal, data_extracao: dataExtracao, total_rows: lines.length - 1, columns_mapped: Array.from(columnMap.values()) },
-    headers: { "x-import-source": origem },
-    processing_status: "received",
+    payload: {
+      origem,
+      nome_original: nomeOriginal,
+      data_extracao: dataExtracao,
+      total_rows: lines.length - 1,
+      columns_mapped: Array.from(columnMap.values()),
+    },
+    headers: { 'x-import-source': origem },
+    processing_status: 'received',
     error_message: null,
     processed_at: null,
   });
 
-  // Load lookups for motorista/viatura matching
   const lookups = await loadLookups(supabase, integracaoId, orgId);
   const syncedAt = new Date().toISOString();
   const rows: Record<string, unknown>[] = [];
@@ -1618,7 +1810,6 @@ const processCsvImport = async ({
   const skippedReasons: string[] = [];
   const driverRowsMap = new Map<string, Record<string, unknown>>();
 
-  // UUID v4 regex for validating driver IDs
   const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const EXTREME_AMOUNT_THRESHOLD = -10000;
 
@@ -1626,12 +1817,10 @@ const processCsvImport = async ({
     const cells = parseCsvLine(lines[i], separator);
     const csvRow: Record<string, string> = {};
 
-    // Build raw row data
     for (let j = 0; j < cells.length && j < headerCells.length; j++) {
       csvRow[headerCells[j]] = cells[j];
     }
 
-    // Map to fields
     const mapped: Record<string, string> = {};
     for (const [colIndex, fieldName] of columnMap.entries()) {
       if (colIndex < cells.length && cells[colIndex]) {
@@ -1639,25 +1828,24 @@ const processCsvImport = async ({
       }
     }
 
-    // Extract period from filename (e.g. "20260309-20260316-payments_driver-...")
-    let filenamePeriod = "";
+    let filenamePeriod = '';
     let filenameDate: string | null = null;
     const filenameMatch = nomeOriginal?.match(/(\d{8})-(\d{8})/);
     if (filenameMatch) {
       filenamePeriod = `${filenameMatch[1]}-${filenameMatch[2]}`;
-      // Use start date as occurred_at fallback so transactions fall in the correct week view
       const startDateStr = filenameMatch[1];
-      const parsedStart = new Date(`${startDateStr.slice(0, 4)}-${startDateStr.slice(4, 6)}-${startDateStr.slice(6, 8)}T12:00:00Z`);
+      const parsedStart = new Date(
+        `${startDateStr.slice(0, 4)}-${startDateStr.slice(4, 6)}-${startDateStr.slice(6, 8)}T12:00:00Z`
+      );
       if (!Number.isNaN(parsedStart.getTime())) {
         filenameDate = parsedStart.toISOString();
       }
     }
 
-    // Período da importação: o enviado pelo wizard (manual) tem prioridade
-    // sobre o extraído do nome do ficheiro. Garante ID estável e data correta.
-    const bodyPeriod = (periodoInicio && periodoFim)
-      ? `${periodoInicio.replace(/-/g, "")}-${periodoFim.replace(/-/g, "")}`
-      : "";
+    const bodyPeriod =
+      periodoInicio && periodoFim
+        ? `${periodoInicio.replace(/-/g, '')}-${periodoFim.replace(/-/g, '')}`
+        : '';
     const periodo = bodyPeriod || filenamePeriod;
     let periodStartIso = filenameDate;
     if (periodoInicio) {
@@ -1665,14 +1853,11 @@ const processCsvImport = async ({
       if (!Number.isNaN(d.getTime())) periodStartIso = d.toISOString();
     }
 
-    // ID de transação DETERMINÍSTICO (sem Date.now): reimportar a mesma
-    // semana substitui em vez de duplicar.
-    const driverUuid = mapped.uber_driver_id || "";
-    const transactionId = mapped.uber_transaction_id
-      || (periodo ? `${driverUuid || `row${i}`}-${periodo}` : `${integracaoId}-row${i}`);
+    const driverUuid = mapped.uber_driver_id || '';
+    const transactionId =
+      mapped.uber_transaction_id ||
+      (periodo ? `${driverUuid || `row${i}`}-${periodo}` : `${integracaoId}-row${i}`);
 
-    // Data: coluna do CSV se existir, senão o INÍCIO do período (meio-dia UTC).
-    // Nunca a hora do upload — isso carimbava a semana errada.
     let occurredAt: string | null = null;
     if (mapped.occurred_at) {
       const parsed = new Date(mapped.occurred_at);
@@ -1682,55 +1867,63 @@ const processCsvImport = async ({
       occurredAt = periodStartIso;
     }
 
-    // Resolve motorista/viatura
     const uberDriverId = mapped.uber_driver_id || null;
     const uberVehicleId = mapped.uber_vehicle_id || null;
     const normalizedPlate = normalizePlate(uberVehicleId);
 
-    const driverFullName = mapped.driver_first_name && mapped.driver_last_name
-      ? `${mapped.driver_first_name} ${mapped.driver_last_name}`.trim()
-      : (mapped.driver_first_name || null);
+    const driverFullName =
+      mapped.driver_first_name && mapped.driver_last_name
+        ? `${mapped.driver_first_name} ${mapped.driver_last_name}`.trim()
+        : mapped.driver_first_name || null;
 
     const motoristaId =
-      (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined)
-      ?? (driverFullName ? lookups.motoristasByName.get(normalizeName(driverFullName)) : undefined)
-      ?? null;
+      (uberDriverId ? lookups.uberDriverToMotorista.get(uberDriverId) : undefined) ??
+      (driverFullName ? lookups.motoristasByName.get(normalizeName(driverFullName)) : undefined) ??
+      null;
 
     const viaturaId =
-      (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) : undefined)
-      ?? (normalizedPlate ? lookups.viaturasByPlate.get(normalizedPlate) : undefined)
-      ?? null;
+      (uberVehicleId ? lookups.uberVehicleToViatura.get(uberVehicleId) : undefined) ??
+      (normalizedPlate ? lookups.viaturasByPlate.get(normalizedPlate) : undefined) ??
+      null;
 
-    // === Validation: skip summary/totals rows ===
-    const grossAmount = parseAmountValue(mapped.gross_amount || "");
-    const netAmount = parseAmountValue(mapped.net_amount || "");
+    const grossAmount = parseAmountValue(mapped.gross_amount || '');
+    const netAmount = parseAmountValue(mapped.net_amount || '');
 
-    // Skip rows with extremely negative amounts (likely totals/summary rows)
     if (grossAmount !== null && grossAmount < EXTREME_AMOUNT_THRESHOLD) {
       skippedRows++;
-      skippedReasons.push(`Row ${i}: gross_amount=${grossAmount} (below threshold ${EXTREME_AMOUNT_THRESHOLD})`);
-      console.warn(`[uber-webhook] CSV row ${i} skipped: gross_amount=${grossAmount} is below ${EXTREME_AMOUNT_THRESHOLD} — likely a totals/summary row`);
+      skippedReasons.push(
+        `Row ${i}: gross_amount=${grossAmount} (below threshold ${EXTREME_AMOUNT_THRESHOLD})`
+      );
+      console.warn(
+        `[uber-webhook] CSV row ${i} skipped: gross_amount=${grossAmount} is below ${EXTREME_AMOUNT_THRESHOLD} — likely a totals/summary row`
+      );
       continue;
     }
     if (netAmount !== null && netAmount < EXTREME_AMOUNT_THRESHOLD) {
       skippedRows++;
-      skippedReasons.push(`Row ${i}: net_amount=${netAmount} (below threshold ${EXTREME_AMOUNT_THRESHOLD})`);
-      console.warn(`[uber-webhook] CSV row ${i} skipped: net_amount=${netAmount} is below ${EXTREME_AMOUNT_THRESHOLD} — likely a totals/summary row`);
+      skippedReasons.push(
+        `Row ${i}: net_amount=${netAmount} (below threshold ${EXTREME_AMOUNT_THRESHOLD})`
+      );
+      console.warn(
+        `[uber-webhook] CSV row ${i} skipped: net_amount=${netAmount} is below ${EXTREME_AMOUNT_THRESHOLD} — likely a totals/summary row`
+      );
       continue;
     }
 
-    // Skip rows without a valid driver UUID (likely header repeats or totals)
     if (uberDriverId && !UUID_REGEX.test(uberDriverId)) {
       skippedRows++;
       skippedReasons.push(`Row ${i}: uber_driver_id="${uberDriverId}" is not a valid UUID`);
-      console.warn(`[uber-webhook] CSV row ${i} skipped: uber_driver_id="${uberDriverId}" is not a valid UUID`);
+      console.warn(
+        `[uber-webhook] CSV row ${i} skipped: uber_driver_id="${uberDriverId}" is not a valid UUID`
+      );
       continue;
     }
 
     if (uberDriverId && UUID_REGEX.test(uberDriverId)) {
       if (!driverRowsMap.has(uberDriverId)) {
-        const firstName = mapped.driver_first_name || "Motorista";
-        const lastName = mapped.driver_last_name || `(CSV ${nomeOriginal ? nomeOriginal.slice(0, 15) : "Import"})`;
+        const firstName = mapped.driver_first_name || 'Motorista';
+        const lastName =
+          mapped.driver_last_name || `(CSV ${nomeOriginal ? nomeOriginal.slice(0, 15) : 'Import'})`;
         driverRowsMap.set(uberDriverId, {
           integracao_id: integracaoId,
           org_id: orgId,
@@ -1740,11 +1933,10 @@ const processCsvImport = async ({
           full_name: `${firstName} ${lastName}`.trim(),
           email: null,
           phone: null,
-          status: "active",
+          status: 'active',
           motorista_id: motoristaId ?? undefined,
         });
       } else if (motoristaId && !driverRowsMap.get(uberDriverId)!.motorista_id) {
-        // Enrich existing entry with resolved motorista_id
         driverRowsMap.get(uberDriverId)!.motorista_id = motoristaId;
       }
     }
@@ -1758,64 +1950,61 @@ const processCsvImport = async ({
       viatura_id: viaturaId,
       uber_driver_id: uberDriverId,
       uber_vehicle_id: uberVehicleId,
-      transaction_type: mapped.transaction_type || "csv_import",
-      status: mapped.status || "imported",
-      currency: mapped.currency || "EUR",
+      transaction_type: mapped.transaction_type || 'csv_import',
+      status: mapped.status || 'imported',
+      currency: mapped.currency || 'EUR',
       gross_amount: grossAmount,
       net_amount: netAmount,
-      commission_amount: parseAmountValue(mapped.commission_amount || ""),
+      commission_amount: parseAmountValue(mapped.commission_amount || ''),
       occurred_at: occurredAt || syncedAt,
       raw_transaction: { csv_row: csvRow, import_source: origem, nome_original: nomeOriginal },
     });
   }
 
-  // Upsert in batches
   let totalInserted = 0;
   let totalUpdated = 0;
 
   try {
     const counts = await upsertRows({
       supabase,
-      table: "uber_transactions",
+      table: 'uber_transactions',
       integracaoId,
-      idColumn: "uber_transaction_id",
-      onConflict: "integracao_id,uber_transaction_id",
+      idColumn: 'uber_transaction_id',
+      onConflict: 'integracao_id,uber_transaction_id',
       rows,
     });
     totalInserted = counts.inserted;
     totalUpdated = counts.updated;
   } catch (error) {
-    console.error("[uber-webhook] CSV upsert error:", error);
+    console.error('[uber-webhook] CSV upsert error:', error);
     parseErrors = rows.length;
   }
 
-  // Upsert drivers that were found in the CSV
   let newDrivers = 0;
   if (driverRowsMap.size > 0) {
     try {
       const driverCounts = await upsertRows({
         supabase,
-        table: "uber_drivers",
+        table: 'uber_drivers',
         integracaoId,
-        idColumn: "uber_driver_id",
-        onConflict: "integracao_id,uber_driver_id",
+        idColumn: 'uber_driver_id',
+        onConflict: 'integracao_id,uber_driver_id',
         rows: Array.from(driverRowsMap.values()),
       });
       newDrivers = driverCounts.inserted;
       console.info(`[uber-webhook] CSV added ${newDrivers} new drivers`);
     } catch (driverErr) {
-      console.warn("[uber-webhook] CSV upsert drivers error:", driverErr);
+      console.warn('[uber-webhook] CSV upsert drivers error:', driverErr);
     }
   }
 
-  // Log to uber_sync_logs
-  await supabase.from("uber_sync_logs").insert({
+  await supabase.from('uber_sync_logs').insert({
     integracao_id: integracaoId,
     org_id: orgId,
     executado_por: null,
-    tipo: "csv_import",
-    status: parseErrors > 0 ? "error" : "success",
-    mensagem: `Importação CSV: ${totalInserted} novos, ${totalUpdated} actualizados de ${rows.length} linhas${skippedRows > 0 ? `, ${skippedRows} ignoradas` : ""} (${nomeOriginal})`,
+    tipo: 'csv_import',
+    status: parseErrors > 0 ? 'error' : 'success',
+    mensagem: `Importação CSV: ${totalInserted} novos, ${totalUpdated} actualizados de ${rows.length} linhas${skippedRows > 0 ? `, ${skippedRows} ignoradas` : ''} (${nomeOriginal})`,
     erros: parseErrors,
     viagens_novas: totalInserted,
     viagens_atualizadas: totalUpdated,
@@ -1832,13 +2021,14 @@ const processCsvImport = async ({
     },
   });
 
-  // Update last_webhook_at
   await supabase
-    .from("plataformas_configuracao")
+    .from('plataformas_configuracao')
     .update({ last_webhook_at: new Date().toISOString() })
-    .eq("id", integracaoId);
+    .eq('id', integracaoId);
 
-  console.info(`[uber-webhook] CSV import done: ${totalInserted} inserted, ${totalUpdated} updated, ${parseErrors} errors, ${skippedRows} skipped`);
+  console.info(
+    `[uber-webhook] CSV import done: ${totalInserted} inserted, ${totalUpdated} updated, ${parseErrors} errors, ${skippedRows} skipped`
+  );
 
   return {
     success: parseErrors === 0,
@@ -1851,36 +2041,33 @@ const processCsvImport = async ({
   };
 };
 
-// Eventos push do Uber (sincronização automática) DESATIVADOS.
-// O import manual por CSV (ramo `dados_csv_brutos`) continua funcional.
-// Reativar: pôr a false e re-registar o webhook na consola do Uber.
 const UBER_PUSH_DESATIVADO = true;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  if (req.method !== "POST") {
-    return jsonResponse({ success: false, error: "Método não suportado" }, 405);
+  if (req.method !== 'POST') {
+    return jsonResponse({ success: false, error: 'Método não suportado' }, 405);
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return jsonResponse({ success: false, error: "Configuração Supabase em falta" }, 500);
+    return jsonResponse({ success: false, error: 'Configuração Supabase em falta' }, 500);
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const requestUrl = new URL(req.url);
-  const signature = req.headers.get("x-uber-signature");
+  const signature = req.headers.get('x-uber-signature');
   const rawBody = await req.text();
   const headers = headersToObject(req.headers);
 
   if (!rawBody.trim()) {
-    return jsonResponse({ success: false, error: "Payload vazio" }, 400);
+    return jsonResponse({ success: false, error: 'Payload vazio' }, 400);
   }
 
   let parsedBody: JsonRecord;
@@ -1888,21 +2075,21 @@ Deno.serve(async (req) => {
     const parsedJson = JSON.parse(rawBody);
     parsedBody = isRecord(parsedJson) ? parsedJson : { data: parsedJson as JsonValue };
   } catch (error) {
-    const integracaoId = requestUrl.searchParams.get("integracao_id");
+    const integracaoId = requestUrl.searchParams.get('integracao_id');
     if (integracaoId) {
-      await supabase.from("uber_webhook_events").insert({
+      await supabase.from('uber_webhook_events').insert({
         integracao_id: integracaoId,
-        event_type: "invalid_json",
+        event_type: 'invalid_json',
         signature,
         payload: rawBody,
         headers,
-        processing_status: "rejected",
-        error_message: error instanceof Error ? error.message : "JSON inválido",
+        processing_status: 'rejected',
+        error_message: error instanceof Error ? error.message : 'JSON inválido',
         processed_at: new Date().toISOString(),
       });
     }
 
-    return jsonResponse({ success: false, error: "Payload JSON inválido" }, 400);
+    return jsonResponse({ success: false, error: 'Payload JSON inválido' }, 400);
   }
 
   const replayPending = parsedBody.replay_pending === true;
@@ -1911,110 +2098,133 @@ Deno.serve(async (req) => {
 
   if (isReplay) {
     if (!anonKey) {
-      return jsonResponse({ success: false, error: "SUPABASE_ANON_KEY em falta para replay." }, 500);
+      return jsonResponse(
+        { success: false, error: 'SUPABASE_ANON_KEY em falta para replay.' },
+        500
+      );
     }
 
     try {
       const executadoPor = await requireUserId(req, supabaseUrl, anonKey);
-      const integracaoId = asTrimmedString(parsedBody.integracao_id) ?? requestUrl.searchParams.get("integracao_id");
+      const integracaoId =
+        asTrimmedString(parsedBody.integracao_id) ?? requestUrl.searchParams.get('integracao_id');
       if (!integracaoId) {
-        return jsonResponse({ success: false, error: "integracao_id é obrigatório para replay" }, 400);
+        return jsonResponse(
+          { success: false, error: 'integracao_id é obrigatório para replay' },
+          400
+        );
       }
 
       const { data: replayIntCfg } = await supabase
-        .from("plataformas_configuracao")
-        .select("org_id")
-        .eq("id", integracaoId)
+        .from('plataformas_configuracao')
+        .select('org_id')
+        .eq('id', integracaoId)
         .single();
       if (!replayIntCfg?.org_id) {
-        return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+        return jsonResponse({ success: false, error: 'Integração Uber não encontrada' }, 404);
       }
       const replayOrgId = replayIntCfg.org_id;
 
       const replayLimit = Math.max(1, Math.min(asNumber(parsedBody.limit) ?? 20, 100));
       let query = supabase
-        .from("uber_webhook_events")
-        .select("id, integracao_id, event_id, event_type, payload")
-        .eq("integracao_id", integracaoId);
+        .from('uber_webhook_events')
+        .select('id, integracao_id, event_id, event_type, payload')
+        .eq('integracao_id', integracaoId);
 
       if (replayEventId) {
-        query = query.eq("id", replayEventId);
+        query = query.eq('id', replayEventId);
       } else {
         query = query
-          .in("processing_status", ["received", "failed", "ignored"])
-          .order("created_at", { ascending: false })
+          .in('processing_status', ['received', 'failed', 'ignored'])
+          .order('created_at', { ascending: false })
           .limit(replayLimit);
       }
 
       const { data: replayEvents, error: replayError } = await query;
       if (replayError) {
-        return jsonResponse({ success: false, error: "Não foi possível carregar eventos para replay" }, 500);
+        return jsonResponse(
+          { success: false, error: 'Não foi possível carregar eventos para replay' },
+          500
+        );
       }
 
       if (!replayEvents || replayEvents.length === 0) {
-        return jsonResponse({ success: true, message: "Nenhum evento pendente para reprocessar.", replayed: 0 });
+        return jsonResponse({
+          success: true,
+          message: 'Nenhum evento pendente para reprocessar.',
+          replayed: 0,
+        });
       }
 
       const lookups = await loadLookups(supabase, integracaoId, replayOrgId);
       const results = [] as ProcessResult[];
       for (const event of replayEvents as StoredWebhookEvent[]) {
-        results.push(await processStoredEvent({
-          supabase,
-          event,
-          lookups,
-          executadoPor,
-          replay: true,
-        }));
+        results.push(
+          await processStoredEvent({
+            supabase,
+            event,
+            lookups,
+            executadoPor,
+            replay: true,
+          })
+        );
       }
 
       return jsonResponse({
         success: true,
         message: `${results.length} evento(s) reprocessado(s).`,
         replayed: results.length,
-        processed: results.filter((result) => result.status === "processed").length,
-        ignored: results.filter((result) => result.status === "ignored").length,
-        failed: results.filter((result) => result.status === "failed").length,
+        processed: results.filter((result) => result.status === 'processed').length,
+        ignored: results.filter((result) => result.status === 'ignored').length,
+        failed: results.filter((result) => result.status === 'failed').length,
       });
     } catch (error) {
-      return jsonResponse({
-        success: false,
-        error: error instanceof Error ? error.message : "Não foi possível reprocessar eventos.",
-      }, 401);
+      return jsonResponse(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : 'Não foi possível reprocessar eventos.',
+        },
+        401
+      );
     }
   }
 
-  // ─── Proxy: Apify dual-report format → uber-import-reports ───
-  // Accept both new keys (pagamentos_csv/viagens_csv) and legacy keys (dados_csv_pagamentos/dados_csv_atividades)
-  const hasNewKeys = typeof parsedBody.pagamentos_csv === "string" || typeof parsedBody.viagens_csv === "string";
-  const hasLegacyKeys = typeof parsedBody.dados_csv_pagamentos === "string" || typeof parsedBody.dados_csv_atividades === "string";
+  const hasNewKeys =
+    typeof parsedBody.pagamentos_csv === 'string' || typeof parsedBody.viagens_csv === 'string';
+  const hasLegacyKeys =
+    typeof parsedBody.dados_csv_pagamentos === 'string' ||
+    typeof parsedBody.dados_csv_atividades === 'string';
 
   if (hasNewKeys || hasLegacyKeys) {
-    const formatDetected = hasNewKeys ? "apify_dual_report_new_keys" : "apify_dual_report_legacy_keys";
+    const formatDetected = hasNewKeys
+      ? 'apify_dual_report_new_keys'
+      : 'apify_dual_report_legacy_keys';
     console.info(`[uber-webhook] Proxy detected format: ${formatDetected}`);
 
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     if (bearerToken !== serviceRoleKey) {
-      return jsonResponse({ success: false, error: "Autenticação inválida. Use SERVICE_ROLE_KEY." }, 401);
+      return jsonResponse(
+        { success: false, error: 'Autenticação inválida. Use SERVICE_ROLE_KEY.' },
+        401
+      );
     }
 
-    // Normalize legacy keys to canonical keys before proxying
     const normalizedBody = { ...parsedBody };
     if (hasLegacyKeys && !hasNewKeys) {
-      if (typeof parsedBody.dados_csv_pagamentos === "string") {
+      if (typeof parsedBody.dados_csv_pagamentos === 'string') {
         normalizedBody.pagamentos_csv = parsedBody.dados_csv_pagamentos;
       }
-      if (typeof parsedBody.dados_csv_atividades === "string") {
+      if (typeof parsedBody.dados_csv_atividades === 'string') {
         normalizedBody.viagens_csv = parsedBody.dados_csv_atividades;
       }
     }
 
-    // Auto-resolve integracao_id if not provided
     if (!normalizedBody.integracao_id) {
       const { data: uberConfigs } = await supabase
-        .from("plataformas_configuracao")
-        .select("id")
-        .eq("plataforma", "uber")
+        .from('plataformas_configuracao')
+        .select('id')
+        .eq('plataforma', 'uber')
         .limit(2);
 
       if (uberConfigs?.length === 1) {
@@ -2026,33 +2236,31 @@ Deno.serve(async (req) => {
     const proxyUrl = `${supabaseUrl}/functions/v1/uber-import-reports`;
     try {
       const proxyResp = await fetch(proxyUrl, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceRoleKey}`,
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${serviceRoleKey}`,
         },
         body: JSON.stringify(normalizedBody),
       });
       const proxyBody = await proxyResp.text();
       return new Response(proxyBody, {
         status: proxyResp.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (err) {
-      console.error("[uber-webhook] Proxy to uber-import-reports failed:", err);
-      return jsonResponse({ success: false, error: "Falha ao redirecionar para uber-import-reports" }, 502);
+      console.error('[uber-webhook] Proxy to uber-import-reports failed:', err);
+      return jsonResponse(
+        { success: false, error: 'Falha ao redirecionar para uber-import-reports' },
+        502
+      );
     }
   }
 
-  // ─── CSV Import from Apify Bot or Admin Upload ───
   const csvBruto = parsedBody.dados_csv_brutos;
-  if (typeof csvBruto === "string" && csvBruto.length > 0) {
-    // Validate auth: accept SERVICE_ROLE_KEY or authenticated user (a
-    // permissão de admin é validada POR-ORG mais abaixo, contra a org dona
-    // da integração — o flag global profiles.is_admin dava 403/401 errado a
-    // utilizadores multi-org).
-    const authHeader = req.headers.get("Authorization") ?? "";
-    const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+  if (typeof csvBruto === 'string' && csvBruto.length > 0) {
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
     const isRobotCall = bearerToken === serviceRoleKey;
     let csvCallerUserId: string | null = null;
 
@@ -2063,54 +2271,58 @@ Deno.serve(async (req) => {
         });
         const { data: userData } = await authClient.auth.getUser();
         if (userData?.user?.id) csvCallerUserId = userData.user.id;
-      } catch {
-        // Auth validation failed — csvCallerUserId stays null
-      }
+      } catch {}
     }
 
     if (!isRobotCall && !csvCallerUserId) {
-      return jsonResponse({ success: false, error: "Autenticação inválida para importação CSV" }, 401);
+      return jsonResponse(
+        { success: false, error: 'Autenticação inválida para importação CSV' },
+        401
+      );
     }
 
-    const csvIntegracaoId = requestUrl.searchParams.get("integracao_id") ?? asTrimmedString(parsedBody.integracao_id);
+    const csvIntegracaoId =
+      requestUrl.searchParams.get('integracao_id') ?? asTrimmedString(parsedBody.integracao_id);
     if (!csvIntegracaoId) {
-      return jsonResponse({ success: false, error: "integracao_id é obrigatório para importação CSV" }, 400);
+      return jsonResponse(
+        { success: false, error: 'integracao_id é obrigatório para importação CSV' },
+        400
+      );
     }
 
-    // org_id da integração: necessário para gravar as linhas com a org certa
-    // (o service-role client não tem auth.uid(), get_current_org_id() ficaria NULL).
     const { data: csvIntCfg } = await supabase
-      .from("plataformas_configuracao")
-      .select("org_id")
-      .eq("id", csvIntegracaoId)
+      .from('plataformas_configuracao')
+      .select('org_id')
+      .eq('id', csvIntegracaoId)
       .single();
     if (!csvIntCfg) {
-      return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+      return jsonResponse({ success: false, error: 'Integração Uber não encontrada' }, 404);
     }
     const csvOrgId = csvIntCfg.org_id;
 
-    // Utilizador autenticado: tem de ser admin da org dona da integração.
     if (csvCallerUserId) {
       const { data: csvMembership } = await supabase
-        .from("user_organizacoes")
-        .select("is_admin")
-        .eq("user_id", csvCallerUserId)
-        .eq("org_id", csvOrgId)
+        .from('user_organizacoes')
+        .select('is_admin')
+        .eq('user_id', csvCallerUserId)
+        .eq('org_id', csvOrgId)
         .maybeSingle();
       if (!csvMembership?.is_admin) {
         return jsonResponse(
-          { success: false, error: "Sem permissão de administrador nesta organização" },
-          403,
+          { success: false, error: 'Sem permissão de administrador nesta organização' },
+          403
         );
       }
     }
 
-    // Verify integration exists
-    const { data: csvConfigRows, error: csvConfigError } = await supabase.rpc("get_uber_platform_config", {
-      p_integracao_id: csvIntegracaoId,
-    });
+    const { data: csvConfigRows, error: csvConfigError } = await supabase.rpc(
+      'get_uber_platform_config',
+      {
+        p_integracao_id: csvIntegracaoId,
+      }
+    );
     if (csvConfigError || !csvConfigRows?.[0]) {
-      return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+      return jsonResponse({ success: false, error: 'Integração Uber não encontrada' }, 404);
     }
 
     try {
@@ -2119,131 +2331,124 @@ Deno.serve(async (req) => {
         integracaoId: csvIntegracaoId,
         orgId: csvOrgId,
         csvText: csvBruto,
-        origem: asTrimmedString(parsedBody.origem) ?? "apify",
-        nomeOriginal: asTrimmedString(parsedBody.nome_original) ?? "unknown.csv",
+        origem: asTrimmedString(parsedBody.origem) ?? 'apify',
+        nomeOriginal: asTrimmedString(parsedBody.nome_original) ?? 'unknown.csv',
         dataExtracao: asTrimmedString(parsedBody.data_extracao) ?? new Date().toISOString(),
         periodoInicio: asTrimmedString(parsedBody.periodo_inicio),
         periodoFim: asTrimmedString(parsedBody.periodo_fim),
       });
 
-      // Ligar os motoristas novos às fichas, tal como o uber-import-reports faz
-      // no fim da importação dele.
-      //
-      // Sem isto, tudo o que entrasse por aqui ficava com `motorista_id` a null:
-      // os resumos ainda apareciam certos no ecrã, mas só porque ContasResumoTab
-      // compara pelo primeiro+último nome quando não há ficha ligada. Uma gralha
-      // no nome — "Pinha" em vez de "Pinho" — e o dinheiro ia para outra pessoa.
-      // Em 08/2026 a Premium Ride tinha 9 motoristas nesta situação, presos a
-      // essa comparação por nome desde Julho.
-      //
-      // Falhar aqui não invalida a importação: os dados já estão gravados e o
-      // auto-map é reentrante (só olha para linhas com motorista_id a null).
       let autoMap: unknown = null;
       try {
-        const { data, error } = await supabase.functions.invoke("uber-auto-map-drivers", {
+        const { data, error } = await supabase.functions.invoke('uber-auto-map-drivers', {
           body: { integracao_id: csvIntegracaoId },
         });
         if (error) {
-          console.error("[uber-webhook] Auto-map falhou:", error.message);
+          console.error('[uber-webhook] Auto-map falhou:', error.message);
           autoMap = { error: error.message };
         } else {
           autoMap = data;
-          console.info(`[uber-webhook] Auto-map: ${(data as { message?: string })?.message ?? "ok"}`);
+          console.info(
+            `[uber-webhook] Auto-map: ${(data as { message?: string })?.message ?? 'ok'}`
+          );
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error("[uber-webhook] Auto-map exception:", msg);
+        console.error('[uber-webhook] Auto-map exception:', msg);
         autoMap = { error: msg };
       }
 
       return jsonResponse({ ...csvResult, auto_map: autoMap }, csvResult.success ? 200 : 500);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Falha ao processar CSV";
-      console.error("[uber-webhook] CSV import error:", msg);
+      const msg = error instanceof Error ? error.message : 'Falha ao processar CSV';
+      console.error('[uber-webhook] CSV import error:', msg);
       return jsonResponse({ success: false, error: msg }, 500);
     }
   }
 
-  // Daqui para baixo é o processamento de eventos push do Uber (automático).
-  // Está desativado — só o import manual por CSV (acima) funciona.
   if (UBER_PUSH_DESATIVADO) {
-    return jsonResponse({
-      success: true,
-      ignored: true,
-      message: "Webhook de eventos Uber desativado (apenas import manual por CSV).",
-    }, 200);
+    return jsonResponse(
+      {
+        success: true,
+        ignored: true,
+        message: 'Webhook de eventos Uber desativado (apenas import manual por CSV).',
+      },
+      200
+    );
   }
 
-  const integracaoId = requestUrl.searchParams.get("integracao_id") ?? asTrimmedString(parsedBody.integracao_id);
+  const integracaoId =
+    requestUrl.searchParams.get('integracao_id') ?? asTrimmedString(parsedBody.integracao_id);
   if (!integracaoId) {
-    return jsonResponse({ success: false, error: "integracao_id é obrigatório" }, 400);
+    return jsonResponse({ success: false, error: 'integracao_id é obrigatório' }, 400);
   }
 
-  const { data: configRows, error: configError } = await supabase.rpc("get_uber_platform_config", {
+  const { data: configRows, error: configError } = await supabase.rpc('get_uber_platform_config', {
     p_integracao_id: integracaoId,
   });
 
   if (configError) {
-    console.error("Erro ao obter configuração Uber:", configError);
-    return jsonResponse({ success: false, error: "Não foi possível obter a configuração da integração" }, 500);
+    console.error('Erro ao obter configuração Uber:', configError);
+    return jsonResponse(
+      { success: false, error: 'Não foi possível obter a configuração da integração' },
+      500
+    );
   }
 
   const config = configRows?.[0];
   if (!config) {
-    return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+    return jsonResponse({ success: false, error: 'Integração Uber não encontrada' }, 404);
   }
 
-  // get_uber_platform_config não devolve org_id — resolver à parte para o
-  // matching de motorista/viatura em loadLookups (service-role client não
-  // tem sessão, get_current_org_id() ficaria NULL).
   const { data: webhookIntCfg } = await supabase
-    .from("plataformas_configuracao")
-    .select("org_id")
-    .eq("id", integracaoId)
+    .from('plataformas_configuracao')
+    .select('org_id')
+    .eq('id', integracaoId)
     .single();
   if (!webhookIntCfg?.org_id) {
-    return jsonResponse({ success: false, error: "Integração Uber não encontrada" }, 404);
+    return jsonResponse({ success: false, error: 'Integração Uber não encontrada' }, 404);
   }
   const webhookOrgId = webhookIntCfg.org_id;
 
-  // Use webhook_signing_key (preferred) or fall back to client_secret for backwards compat
   const signingKey = config.webhook_signing_key || config.client_secret;
   if (!signingKey) {
-    return jsonResponse({ success: false, error: "Webhook signing key da integração Uber em falta" }, 400);
+    return jsonResponse(
+      { success: false, error: 'Webhook signing key da integração Uber em falta' },
+      400
+    );
   }
 
   const payload = parsedBody;
   const eventId = getEventId(payload, req.headers);
   const eventType = getEventType(payload);
-  const uberEnvironment = req.headers.get("x-environment") ?? null;
+  const uberEnvironment = req.headers.get('x-environment') ?? null;
 
-  // Extract event_time (unix timestamp) and convert to ISO
   const rawEventTime = payload.event_time;
-  const eventTimeIso = typeof rawEventTime === "number" && rawEventTime > 0
-    ? new Date(rawEventTime * 1000).toISOString()
-    : null;
+  const eventTimeIso =
+    typeof rawEventTime === 'number' && rawEventTime > 0
+      ? new Date(rawEventTime * 1000).toISOString()
+      : null;
 
   const signatureValid = await isValidUberSignature(signingKey, rawBody, signature);
 
-  // Enrich headers with X-Environment for traceability
   const enrichedHeaders = { ...headers };
-  if (uberEnvironment) enrichedHeaders["x-environment"] = uberEnvironment;
-  if (eventTimeIso) enrichedHeaders["x-event-time-iso"] = eventTimeIso;
+  if (uberEnvironment) enrichedHeaders['x-environment'] = uberEnvironment;
+  if (eventTimeIso) enrichedHeaders['x-event-time-iso'] = eventTimeIso;
 
   if (!signatureValid) {
-    await supabase.from("uber_webhook_events").insert({
+    await supabase.from('uber_webhook_events').insert({
       integracao_id: integracaoId,
       event_id: eventId,
       event_type: eventType,
       signature,
       payload,
       headers: enrichedHeaders,
-      processing_status: "rejected",
-      error_message: "Assinatura HMAC inválida",
+      processing_status: 'rejected',
+      error_message: 'Assinatura HMAC inválida',
       processed_at: new Date().toISOString(),
     });
 
-    return jsonResponse({ success: false, error: "Assinatura inválida" }, 401);
+    return jsonResponse({ success: false, error: 'Assinatura inválida' }, 401);
   }
 
   const insertPayload = {
@@ -2253,24 +2458,27 @@ Deno.serve(async (req) => {
     signature,
     payload,
     headers: enrichedHeaders,
-    processing_status: "received",
+    processing_status: 'received',
     error_message: null,
     processed_at: null,
   };
 
   const { data: insertedEvent, error: insertError } = await supabase
-    .from("uber_webhook_events")
+    .from('uber_webhook_events')
     .insert(insertPayload)
-    .select("id, integracao_id, event_id, event_type, payload")
+    .select('id, integracao_id, event_id, event_type, payload')
     .single();
 
   if (insertError) {
-    if (insertError.code === "23505") {
-      return jsonResponse({ success: true, duplicate: true, message: "Evento já recebido anteriormente" }, 200);
+    if (insertError.code === '23505') {
+      return jsonResponse(
+        { success: true, duplicate: true, message: 'Evento já recebido anteriormente' },
+        200
+      );
     }
 
-    console.error("Erro ao registar evento Uber:", insertError);
-    return jsonResponse({ success: false, error: "Não foi possível guardar o evento" }, 500);
+    console.error('Erro ao registar evento Uber:', insertError);
+    return jsonResponse({ success: false, error: 'Não foi possível guardar o evento' }, 500);
   }
 
   const lookups = await loadLookups(supabase, integracaoId, webhookOrgId);
@@ -2283,7 +2491,7 @@ Deno.serve(async (req) => {
   });
 
   return jsonResponse({
-    success: result.status !== "failed",
+    success: result.status !== 'failed',
     counts: result.counts,
     domain: result.domain,
     event_id: eventId,

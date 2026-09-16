@@ -1,20 +1,11 @@
-/**
- * Regras de quem assina um documento enviado para assinatura.
- *
- * Estão aqui, e não dentro das edge functions, porque o `vitest.config.ts`
- * exclui `supabase/**` — um teste ao lado da função nunca correria. As funções
- * repetem a verificação por defesa; esta é a versão que o ecrã usa e que fica
- * coberta por testes.
- */
+/** Regras de assinatura vivem fora das Edge Functions para cobertura Vitest. */
 
-/** Papéis que assinam pelo link. Espelha o `check` da tabela de pedidos. */
 export type PapelSignatario = 'cliente' | 'condutor' | 'motorista';
 
 export interface Signatario {
   papel: PapelSignatario;
   nome: string;
   email: string | null;
-  /** Ficha de origem, quando existe — serve para reconhecer a mesma pessoa. */
   clienteId?: string | null;
   motoristaId?: string | null;
 }
@@ -23,13 +14,7 @@ export type ValidacaoSignatarios =
   | { ok: true; signatarios: Array<Signatario & { email: string }> }
   | { ok: false; semEmail: string[] };
 
-/**
- * Só se envia para quem tem email na ficha.
- *
- * Quando falta, o envio pára e diz **quem** falta, pelo nome. Saltar a pessoa em
- * silêncio deixaria quem enviou convencido de que toda a gente recebeu — e a
- * assinatura que falta só apareceria semanas depois, quando fizesse falta.
- */
+/** Falhas de email são bloqueantes para evitar envios parcialmente omitidos. */
 export function validarSignatarios(lista: Signatario[]): ValidacaoSignatarios {
   const temEmail = (s: Signatario) => typeof s.email === 'string' && s.email.trim() !== '';
 
@@ -42,18 +27,7 @@ export function validarSignatarios(lista: Signatario[]): ValidacaoSignatarios {
   };
 }
 
-/**
- * Nomes de pessoas escolhidas mais do que uma vez, em papéis diferentes.
- *
- * Acontece a sério: o cliente de um contrato é muitas vezes também o condutor.
- * Como cada pedido é independente, essa pessoa receberia dois emails e assinaria
- * dois documentos — o que é legítimo, mas tem de ser uma escolha e não uma
- * surpresa.
- *
- * A identidade vem da ficha (`clienteId` ou `motoristaId`) e só na falta dela do
- * email. O nome nunca serve: há homónimos, e dois "Ana Reis" diferentes não são
- * a mesma pessoa.
- */
+/** Identifica repetidos por ficha ou email, nunca pelo nome, para evitar homónimos. */
 export function agruparPorPessoa(lista: Signatario[]): string[] {
   const vistos = new Map<string, { nome: string; vezes: number }>();
 
@@ -69,28 +43,13 @@ export function agruparPorPessoa(lista: Signatario[]): string[] {
   return [...vistos.values()].filter((p) => p.vezes > 1).map((p) => p.nome);
 }
 
-/** Em que pé está um pedido de assinatura, do ponto de vista de quem abre o link. */
 export type EstadoToken = 'valido' | 'assinado';
 
-/**
- * O link NÃO expira, mas é de UMA utilização.
- *
- * Duas coisas separadas, e a distinção é o desenho todo: o tempo não fecha o
- * link — um pedido de há três meses continua a poder ser assinado — mas a
- * assinatura fecha-o. Depois de assinado, aquele link acabou.
- *
- * Repetir faz-se do outro lado: quem trata do contrato envia um pedido NOVO,
- * que gera um link novo, também sem prazo e também de uma só utilização. Quando
- * esse for assinado, é essa a assinatura que vale — a anterior fica história.
- *
- * Assim, um link que corra mundo não dá a ninguém o poder de reassinar o
- * documento mais tarde; para haver assinatura nova tem de partir de dentro.
- */
+/** O token não expira, mas fica inutilizável depois de assinado. */
 export function estadoDoToken(pedido: { assinado_em: string | null }): EstadoToken {
   return pedido.assinado_em ? 'assinado' : 'valido';
 }
 
-/** O mínimo que se precisa de saber de um condutor do contrato. */
 export interface CondutorDoContrato {
   cliente_id?: string | null;
   motorista_id?: string | null;
@@ -102,17 +61,7 @@ interface FichaComEmail {
   email?: string | null;
 }
 
-/**
- * Quem pode assinar os documentos de um contrato.
- *
- * Um condutor é uma ficha de cliente ou de motorista — e é isso que decide o
- * papel, porque um cliente que conduz assina como cliente. Quem não for
- * encontrado na respectiva lista é ignorado em vez de aparecer com o nome
- * vazio: um "(sem nome)" na lista de quem assina é pior do que não aparecer.
- *
- * A ordem é estável — clientes primeiro, depois motoristas — para a lista não
- * dançar entre aberturas do diálogo.
- */
+/** Clientes precedem motoristas para manter a lista de candidatos estável. */
 export function candidatosDoContrato(dados: {
   condutores: CondutorDoContrato[];
   clientes: FichaComEmail[];
@@ -158,13 +107,7 @@ export function candidatosDoContrato(dados: {
   return candidatos.filter((c) => c.nome.trim() !== '');
 }
 
-/**
- * Estreitamento explícito do resultado da validação.
- *
- * O `tsconfig.app.json` tem `"strict": false`, e sem `strictNullChecks` o
- * TypeScript não estreita uma união discriminada por `if (!r.ok)`. Um type
- * guard nomeado funciona em qualquer configuração — e lê-se melhor.
- */
+/** O type guard contorna o estreitamento inconsistente sem `strictNullChecks`. */
 export function validacaoFalhou(v: ValidacaoSignatarios): v is { ok: false; semEmail: string[] } {
   return !v.ok;
 }

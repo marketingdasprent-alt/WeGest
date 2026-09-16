@@ -89,12 +89,10 @@ interface Viatura {
   viatura_tipos?: ViaturasTipo | null;
 }
 
-/** Lower-case + strip diacritics + strip dashes/spaces — pesquisa de matrícula/marca/modelo. */
 function normalizeSearch(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-\s]/g, '');
 }
 
-/** Define se uma viatura entra no âmbito do filtro de status quanto a vendidas. */
 function matchesVendaScope(v: { is_vendida?: boolean | null }, statusFilter: string): boolean {
   if (statusFilter === 'vendido') return !!v.is_vendida;
   if (statusFilter === 'todos_vendidos') return true;
@@ -108,19 +106,8 @@ export default function Viaturas() {
   const [loading, setLoading] = useState(true);
   const [tipos, setTipos] = useState<ViaturasTipo[]>([]);
 
-  // Os filtros vivem no endereço, como já acontece em Motoristas.
-  //
-  // Antes eram estado local: filtrar a lista, abrir uma viatura e voltar atrás
-  // devolvia a lista inteira, sem ordenação, e era preciso filtrar tudo de
-  // novo. O browser guarda o endereço em cada passo do histórico — é a única
-  // coisa que o "voltar" consegue repor.
-  //
-  // `replace` em vez de push: senão cada tecla escrita na pesquisa criava uma
-  // entrada no histórico e o "voltar" andava filtro a filtro.
-  //
-  // A forma funcional de setSearchParams é obrigatória aqui: o toggleSort faz
-  // duas chamadas seguidas (campo e direcção), e com o objecto capturado a
-  // segunda escrevia por cima da primeira.
+  // A URL preserva filtros no histórico; atualizações funcionais não se sobrepõem.
+  // `replace` evita uma entrada de histórico por cada tecla na pesquisa.
   const filtroNoUrl = useCallback(
     (chave: string, omissao: string) =>
       [
@@ -129,8 +116,7 @@ export default function Viaturas() {
           setSearchParams(
             (anterior) => {
               const proximo = new URLSearchParams(anterior);
-              // Valores por omissão não vão para o endereço — senão ficava
-              // cheio de ruído logo ao abrir a página.
+              // Não poluir o endereço com valores por omissão.
               if (!valor || valor === omissao) proximo.delete(chave);
               else proximo.set(chave, valor);
               return proximo;
@@ -151,8 +137,7 @@ export default function Viaturas() {
   const sortDir = sortDirRaw as 'asc' | 'desc';
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
-  // Distinguir "não há nada" de "os filtros não deixam ver nada" — cada caso
-  // pede uma acção diferente de quem está a olhar para a lista vazia.
+  // Lista vazia e filtros sem resultados exigem ações diferentes.
   const temFiltrosAtivos =
     searchTerm !== '' ||
     statusFilter !== 'all' ||
@@ -160,9 +145,7 @@ export default function Viaturas() {
     combustivelFilter !== 'all' ||
     tipoFilter !== 'all';
 
-  // Uma só escrita ao endereço em vez de cinco chamadas encadeadas: assim o
-  // "voltar" do browser desfaz a limpeza de uma vez, e não filtro a filtro.
-  // A ordenação não é filtro e fica onde está.
+  // Uma só alteração faz o histórico desfazer toda a limpeza de filtros de uma vez.
   const limparFiltros = () =>
     setSearchParams(
       (anterior) => {
@@ -175,7 +158,6 @@ export default function Viaturas() {
       { replace: true }
     );
 
-  // Dialog states
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedViatura, setSelectedViatura] = useState<Viatura | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -185,9 +167,7 @@ export default function Viaturas() {
   const { hasAccessToResource } = usePermissions();
   const podeEliminar = hasAccessToResource(RECURSOS.VIATURAS_ELIMINAR);
 
-  // Ocupação atual (reservas/contratos/movimentos/reparações ativos) para
-  // derivar o estado de cada viatura. Uma reserva/contrato marcado para o
-  // futuro já conta como ocupação.
+  // Reservas e contratos futuros já contam como ocupação da viatura.
   const { data: fontesMap } = useViaturasOcupacao();
 
   const estadoDe = useCallback(
@@ -267,18 +247,15 @@ export default function Viaturas() {
   const filteredViaturas = useMemo(() => {
     let result = [...viaturas];
 
-    // Âmbito de vendidas + estado derivado (controlado pelo filtro de status)
     if (statusFilter === 'vendido') {
       result = result.filter((v) => v.is_vendida);
     } else if (statusFilter === 'todos_vendidos') {
-      // mostra tudo, incluindo vendidas
     } else {
       result = result.filter((v) => !v.is_vendida);
       if (statusFilter === 'em_uso') {
         result = result.filter((v) => (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v)));
       } else if (statusFilter === 'alugadas') {
-        // Ocupadas mas NÃO reservadas — espelha o KPI "Alugadas" da homepage,
-        // que separa alugadas de reservadas (o `em_uso` acima junta as duas).
+        // "Alugadas" exclui reservas, como o KPI da homepage.
         result = result.filter(
           (v) =>
             estadoDe(v) !== 'em_reserva' &&
@@ -289,7 +266,6 @@ export default function Viaturas() {
       }
     }
 
-    // Filtro de pesquisa (ignora maiúsculas, acentos e traços)
     if (searchTerm) {
       const term = normalizeSearch(searchTerm);
       result = result.filter(
@@ -300,25 +276,21 @@ export default function Viaturas() {
       );
     }
 
-    // Filtro de categoria
     if (categoriaFilter !== 'all') {
       result = result.filter((v) => v.categoria === categoriaFilter);
     }
 
-    // Filtro de combustível
     if (combustivelFilter !== 'all') {
       result = result.filter((v) => v.combustivel === combustivelFilter);
     }
 
-    // Filtro de tipo / SLOT — "Todos" mostra tudo (incluindo slot); o separador
-    // SLOT mostra só slot; um tipo específico mostra só os desse tipo (não-slot).
+    // Um tipo específico exclui slots; o filtro slot é uma categoria própria.
     if (tipoFilter === 'slot') {
       result = result.filter((v) => v.is_slot);
     } else if (tipoFilter !== 'all') {
       result = result.filter((v) => !v.is_slot && v.tipo_id === tipoFilter);
     }
 
-    // Ordenação
     result.sort((a, b) => {
       let aVal: any = '';
       let bVal: any = '';
@@ -372,8 +344,6 @@ export default function Viaturas() {
     estadoDe,
   ]);
 
-  // Paginação partilhada (com seletor de tamanho). O resetKey volta à 1ª página
-  // sempre que os filtros/pesquisa mudam.
   const {
     page: safePage,
     setPage: setCurrentPage,
@@ -506,14 +476,12 @@ export default function Viaturas() {
         </div>
       </StickyPageHeader>
 
-      {/* Stats Cards */}
       <ViaturaStatsCards
         stats={stats}
         activeFilter={statusFilter}
         onFilter={(filter) => setStatusFilter(filter)}
       />
 
-      {/* Tipo + SLOT filter cards */}
       {tipos.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
           {(() => {
@@ -593,7 +561,6 @@ export default function Viaturas() {
         </div>
       )}
 
-      {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:items-end gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -653,7 +620,6 @@ export default function Viaturas() {
         </div>
       </div>
 
-      {/* Table / Cards */}
       {loading ? (
         <TableSkeleton colunas={6} />
       ) : filteredViaturas.length === 0 ? (
@@ -676,7 +642,6 @@ export default function Viaturas() {
           />
         )
       ) : isMobile ? (
-        // Mobile: Cards
         <div className="space-y-3">
           {paginatedViaturas.map((viatura) => (
             <Card key={viatura.id} className="border-border/50">
@@ -702,12 +667,6 @@ export default function Viaturas() {
                     <span>{viatura.km_atual?.toLocaleString('pt-PT') || '0'} km</span>
                     <span className="capitalize">{viatura.combustivel || 'N/D'}</span>
                   </div>
-                  {/* Havia aqui um segundo botão, com um lápis, a chamar
-                      exactamente o mesmo handleViewPage que o olho. Não eram
-                      duas acções que por acaso coincidiam: /viaturas/:id abre o
-                      separador "dados", que É o formulário de edição
-                      (ViaturaTabDados tem onSave). Ver e editar são o mesmo
-                      ecrã, logo era um botão a mais. */}
                   <AcoesLinha
                     acoes={[
                       {
@@ -745,7 +704,6 @@ export default function Viaturas() {
           ))}
         </div>
       ) : (
-        // Desktop: Table
         <div className="rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
@@ -873,11 +831,7 @@ export default function Viaturas() {
                     </div>
                   </TableCell>
                   <TableCell className="py-2 text-right">
-                    {/* Mesmo lápis duplicado da vista em cartões, retirado pela
-                        mesma razão. O botão do olho NÃO é redundante com o
-                        clique na linha: <TableRow onClick> não é acessível por
-                        teclado (um <tr> não recebe foco), pelo que este botão é
-                        a única forma de abrir a viatura sem rato. */}
+                    {/* O botão Eye permite abrir a viatura por teclado; a linha não recebe foco. */}
                     <AcoesLinha
                       compacto
                       alinhamento="fim"
@@ -905,7 +859,6 @@ export default function Viaturas() {
         </div>
       )}
 
-      {/* Paginação */}
       {!loading && totalItems > 0 && (
         <div className="rounded-lg border border-border">
           <TablePagination
@@ -921,8 +874,6 @@ export default function Viaturas() {
           />
         </div>
       )}
-
-      {/* Dialogs */}
 
       <DeleteViaturaDialog
         viatura={selectedViatura}

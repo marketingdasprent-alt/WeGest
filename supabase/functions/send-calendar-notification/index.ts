@@ -8,12 +8,8 @@ import {
   requireOrgMember,
 } from "../_shared/auth/edgeAuthorization.ts";
 
-// Aviso por email aos gestores de uma organização de que entrou um evento
-// novo no calendário. Chamada pela UI autenticada (NovoEventoPage e os passos
-// de check-in/entrega/troca). Quem chama tem de ser membro da organização
-// indicada — ou trazer a service role key (chamada interna). Aberta, qualquer
-// pessoa enumerava os gestores de qualquer org e disparava emails em massa
-// em nome do WeGest (auditoria 2026-09-16).
+// Aviso aos gestores de um evento novo no calendário. Exige membro da
+// organização indicada, ou service role (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

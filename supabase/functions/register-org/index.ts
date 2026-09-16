@@ -3,26 +3,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { buildCargoPermissoes } from "../_shared/register-org/buildCargoPermissoes.ts";
 import { EmailService } from "../_shared/email/services/EmailService.ts";
 
-// Registo público de uma organização nova (/registar-org). Anónimo por
-// natureza — quem se regista ainda não tem conta. Três defesas, todas
-// desta função (auditoria 2026-09-16):
-//
-//   · O administrador nasce por confirmar (email_confirm: false) e recebe um
-//     link de confirmação por email; só depois de clicar é que a sessão abre.
-//     Antes, `email_confirm: true` dava acesso de administrador a quem
-//     escrevesse o email de outra pessoa.
-//   · O email não é enumerável: se já existir, a resposta é a MESMA que no
-//     sucesso (a pessoa recebe um email a dizer que já tem conta) — nada na
-//     resposta HTTP distingue os dois casos. Código/nome/NIF continuam a ser
-//     verificados abertamente: o código é público por definição (é o
-//     subdomínio) e o nome/NIF de uma empresa não são dados pessoais.
-//   · Limite por origem (5 registos/hora por IP, hash sem guardar o IP).
-//     Contador em memória do isolate — melhor esforço, suficiente para travar
-//     scripts; um limite duradouro exigiria uma tabela própria.
-//
-// org_id/cargo_id do administrador vão em app_metadata — a única fonte que o
-// trigger handle_new_user_org aceita. O override manual abaixo fica como
-// rede de segurança idempotente.
+// Registo público de organização (/registar-org). Admin nasce por confirmar
+// (email_confirm: false), resposta não enumerável se o email já existir, e
+// limite por origem em memória (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -21,43 +21,17 @@ export interface CondutorPrincipal {
 
 export interface GenerateContratoPdfParams {
   contrato: ContratoRenting;
-  /** Condutor principal — usado para preencher o "PRIMEIRO OUTORGANTE" no template. */
   condutorPrincipal: CondutorPrincipal | null;
   clientes: ClienteComDocumentos[];
   motoristas: Motorista[];
-  /** Viatura do contrato — fornece marca/modelo/kms para os placeholders {{viatura_*}}. */
   viatura?: ViaturaBasic | null;
-  /** Empresa actual — fornece dados para os placeholders {{empresa_*}}. */
   empresa: EmpresaConfig | null;
-  /** 'email' gera o PDF sem imprimir/descarregar — quem chama trata do envio. */
   action?: 'print' | 'download' | 'email';
-  /** IDs de templates a gerar (ordenados), escolhidos no dialog "Gerar
-   *  Documentos". Quando dado, gera exactamente estes; senão, decide pelo
-   *  regime (rent_a_car → aluguer; tvde → prestação + aluguer). */
   templateIds?: string[];
-  /** Cidade de assinatura escolhida no dialog (normalmente a cidade de uma
-   *  estação). Manda sobre o fallback (sede da empresa / cidade do motorista). */
   cidadeAssinatura?: string;
-  /**
-   * Um PDF por documento em vez de um só combinado.
-   *
-   * Para imprimir/descarregar um único PDF é o que faz sentido (folheia-se de
-   * uma ponta à outra). Por email não: quem recebe quer o Contrato, a
-   * Declaração e o Termo como ficheiros distintos, para assinar e arquivar
-   * cada um por si — não uma pilha de 12 páginas onde tem de os separar.
-   */
   separados?: boolean;
 }
 
-/**
- * Um anexo gerado à parte.
- *
- * Leva consigo o `templateId` e os dados que o produziram porque quem o envia
- * para assinatura precisa de congelar uma fotografia deles — sem isso, o
- * documento assinado teria de ser reconstruído a partir dos dados vivos, que
- * entretanto podem ter mudado. Quem só quer imprimir ou anexar ignora estes
- * dois campos.
- */
 export interface ContratoAnexo {
   pdf: jsPDF;
   fileName: string;
@@ -65,10 +39,8 @@ export interface ContratoAnexo {
   doc: DocumentoCombinado;
 }
 
-/** Um PDF combinado, ou vários (um por documento) quando `separados`. */
 export type ContratoPdfResultado = { pdf: jsPDF; fileName: string } | { anexos: ContratoAnexo[] };
 
-/** Nome de ficheiro seguro a partir do nome do template. */
 function nomeFicheiro(nomeTemplate: string, codigo: number | null | undefined): string {
   const base = `${nomeTemplate}_${codigo ?? ''}`
     .normalize('NFD')
@@ -79,12 +51,6 @@ function nomeFicheiro(nomeTemplate: string, codigo: number | null | undefined): 
   return base || 'Documento';
 }
 
-/**
- * Mapeia os dados do contrato + condutor principal para o formato
- * esperado por `generateDocumentFromTemplate`, que usa placeholders
- * centrados no motorista TVDE. Em rent-a-car, o cliente toma o lugar
- * do motorista no template.
- */
 export const generateContratoPdf = async ({
   contrato,
   condutorPrincipal,
@@ -101,11 +67,6 @@ export const generateContratoPdf = async ({
     throw new Error('Empresa não definida — impossível gerar contrato.');
   }
 
-  // 1) Escolher os templates para esta empresa, conforme o `regime`:
-  //      - rent_a_car → só o Contrato de Aluguer
-  //      - tvde       → Contrato de Prestação + Contrato de Aluguer (1 PDF,
-  //        folha branca a separar). O motorista presta serviço sob a licença
-  //        da empresa (prestação) E aluga a viatura (aluguer).
   const [{ data: templatesEmpresa, error: templatesErr }, { data: folhasOrg, error: folhasErr }] =
     await Promise.all([
       supabase
@@ -114,11 +75,6 @@ export const generateContratoPdf = async ({
         .eq('ativo', true)
         .eq('cliente_empresa_id', empresa.id)
         .order('nome', { ascending: true }),
-      // A Folha de Danos é um anexo da VIATURA e vive ao nível da org, não da
-      // empresa emissora — tem de entrar aqui pela mesma regra do diálogo
-      // "Gerar Documentos". Sem isto, escolhê-la dava "Nenhum documento
-      // seleccionado para gerar": o id vinha do diálogo mas não existia nesta
-      // lista, e ficava pelo caminho no `.map()` mais abaixo.
       supabase
         .from('document_templates')
         .select('id, nome, tipo, cliente_empresa_id')
@@ -149,7 +105,6 @@ export const generateContratoPdf = async ({
     porPrefixo('Contrato Prestação') ??
     porPrefixo('Contrato Prestacao');
 
-  // No modo automático (sem escolha manual) o Aluguer é obrigatório.
   if (!templateIds?.length) {
     if (!aluguerTemplate) {
       throw new Error(
@@ -164,11 +119,6 @@ export const generateContratoPdf = async ({
     }
   }
 
-  // 2a) Cliente do contrato (locatário) — é SEMPRE o contrato.cliente_id,
-  //     independentemente de quem é o condutor principal. Alimenta os
-  //     placeholders {{cliente_*}}.
-  //     Se o cliente não vier na lista (race condition na UI), vai-se buscar
-  //     directamente à BD — para garantir que {{cliente_*}} resolve sempre.
   let clienteContrato: ClienteComDocumentos | null = contrato.cliente_id
     ? (clientes.find((c) => c.id === contrato.cliente_id) ?? null)
     : null;
@@ -208,8 +158,6 @@ export const generateContratoPdf = async ({
     );
   }
 
-  // 2b) Resolver o condutor principal para preencher o "motorista" no template.
-  //     TVDE: motorista directo. Rent-a-car: cliente mapeado para motorista_*.
   const cli = condutorPrincipal?.cliente_id
     ? (clientes.find((c) => c.id === condutorPrincipal.cliente_id) ?? null)
     : null;
@@ -217,10 +165,6 @@ export const generateContratoPdf = async ({
     ? (motoristas.find((m) => m.id === condutorPrincipal.motorista_id) ?? null)
     : null;
 
-  // 2c) Procurar QUALQUER motorista entre os condutores do contrato (não só o
-  //     principal). Se houver, prefere-se sempre esse para {{motorista_*}} —
-  //     evita que rent-a-car com cliente como condutor principal mas com um
-  //     motorista também registado nos condutores não pinte o motorista.
   if (!mo) {
     try {
       const { data: condutoresAll } = await supabase
@@ -299,9 +243,6 @@ export const generateContratoPdf = async ({
         }
       : { nome: '—', nif: '', morada: '', email: '', telefone: '' };
 
-  // 3) Duração em meses (placeholder {{duracao_meses}}). Arredonda para cima.
-  // TVDE não tem data_fim (contrato aberto, renovação automática) — usa o
-  // intervalo de renovação (normalmente 30 dias) como base do cálculo.
   const msDia = 86400000;
   const diasContrato = contrato.data_fim
     ? Math.max(
@@ -313,10 +254,6 @@ export const generateContratoPdf = async ({
     : Math.max(1, contrato.renovacao_intervalo_dias ?? 30);
   const duracaoMeses = Math.max(1, Math.round(diasContrato / 30));
 
-  // Colaborador que gera o contrato — placeholders {{colaborador_nome}} e
-  // {{assinatura_colaborador}} (assinatura pela empresa). Vêm do perfil do
-  // utilizador autenticado. A assinatura é um data URL PNG; o motor de PDF
-  // desenha-a na célula "O Colaborador". Sem assinatura, fica em branco.
   let colaboradorNome = '';
   let colaboradorAssinatura = '';
   try {
@@ -331,12 +268,8 @@ export const generateContratoPdf = async ({
       colaboradorAssinatura =
         (perfil as { assinatura_url?: string | null } | null)?.assinatura_url ?? '';
     }
-  } catch {
-    /* segue sem nome/assinatura do colaborador */
-  }
+  } catch {}
 
-  // 3b) Resolver nomes das estações de levantamento/devolução (placeholders
-  //     {{local_entrega}}/{{local_recolha}}). São UUIDs no contrato.
   const estacaoIds = [contrato.estacao_entrega_id, contrato.estacao_recolha_id].filter(
     (id): id is string => !!id
   );
@@ -355,14 +288,12 @@ export const generateContratoPdf = async ({
     ? (estacaoNome.get(contrato.estacao_recolha_id) ?? '—')
     : '—';
 
-  // 4) Dados do contrato (placeholders {{data_inicio}}, {{viatura_*}}, etc.)
   const today = new Date().toISOString().split('T')[0];
   const eur = (n: number | null | undefined) =>
     n != null && !Number.isNaN(Number(n)) ? `${Number(n).toFixed(2)} €` : '—';
   const num = (n: number | null | undefined) =>
     n != null && !Number.isNaN(Number(n)) ? String(n) : '—';
 
-  // Cartão de combustível do motorista (placeholders {{cartao_frota_*}}).
   const cartaoFrota = await resolveCartaoFrota(mo?.id ?? null);
 
   const documentData = {
@@ -375,24 +306,17 @@ export const generateContratoPdf = async ({
     dias: String(diasContrato),
     numero_contrato: contrato.codigo != null ? String(contrato.codigo) : '',
     colaborador_nome: colaboradorNome,
-    // Data URL PNG da assinatura (vazio = sem assinatura → linha em branco).
-    // Só o template de Aluguer tem a sentinela {{assinatura_colaborador}}.
     assinatura_colaborador: colaboradorAssinatura,
-    // Viatura
     viatura_matricula: contrato.matricula ?? viatura?.matricula ?? '—',
     viatura_data_matricula: viatura?.data_matricula ?? '',
     viatura_marca_modelo: viatura ? `${viatura.marca} ${viatura.modelo}`.trim() : '—',
     viatura_grupo: contrato.grupo ?? '—',
     viatura_kms: num(viatura?.km_atual),
-    // Nível de combustível/bateria com que a viatura foi entregue ao
-    // motorista. Elétricas/híbridas mostram a bateria; as restantes, o
-    // combustível — só um dos dois costuma estar preenchido.
     viatura_combustivel_saida: precisaEletrico(viatura?.combustivel)
       ? (contrato.eletricidade_saida ?? '—')
       : (contrato.combustivel_saida ?? '—'),
     local_entrega: localEntrega,
     local_recolha: localRecolha,
-    // Financeiro (já formatado; total_final só existe após facturar)
     tarifa_diaria: eur(contrato.tarifa_diaria),
     franquia: eur(contrato.franquia_valor),
     caucao: eur(contrato.caucao_valor),
@@ -407,10 +331,6 @@ export const generateContratoPdf = async ({
     cartao_frota_validade: cartaoFrota.validade,
     cartao_frota_limite: cartaoFrota.limite,
     empresaData: empresaDocData(empresa),
-    // Cliente do contrato (locatário) — alimenta os placeholders {{cliente_*}}.
-    // É sempre o contrato.cliente_id, NÃO o condutor principal. Em TVDE, o
-    // locatário pode ser uma empresa cliente; o motorista (condutor) é outra
-    // pessoa e resolve em {{motorista_*}}.
     clienteData: clienteContrato
       ? {
           nome: clienteContrato.nome ?? '',
@@ -429,9 +349,6 @@ export const generateContratoPdf = async ({
       : undefined,
   };
 
-  // 5) Anexar fotos de check-in/check-out em folhas extra (grelha 2×3).
-  //    Vivem em contrato_media (bucket "contrato-media"), ligadas ao contrato
-  //    de renting. Só se anexam as que existirem nesse momento.
   let anexoFotos: Array<{ titulo: string; urls: string[] }> | undefined;
   try {
     const { data: media } = await supabase
@@ -441,9 +358,6 @@ export const generateContratoPdf = async ({
       .in('tipo', ['checkin', 'checkout'])
       .order('created_at', { ascending: true });
 
-    // Deduplicar: re-envios do MESMO ficheiro (mesmo nome + tamanho) criam
-    // linhas com paths diferentes. Mostra-se cada ficheiro uma só vez — nunca
-    // se "enche" a grelha; anexa-se só o que existe.
     const vistos = new Set<string>();
     const mediaUnica = (media ?? []).filter((m) => {
       const chave = `${m.tipo}|${m.nome_ficheiro ?? m.url}|${m.tamanho_bytes ?? ''}`;
@@ -467,8 +381,6 @@ export const generateContratoPdf = async ({
           .map((m) => urlByPath.get(m.url))
           .filter((u): u is string => !!u);
 
-      // checkout = entrega ao cliente; checkin = recolha da viatura (ver
-      // RealizarEntregaPage). Ordem lógica: entrega primeiro, recolha depois.
       const entrega = urlsDe('checkout');
       const recolha = urlsDe('checkin');
       anexoFotos = [];
@@ -481,19 +393,13 @@ export const generateContratoPdf = async ({
     console.warn('Não foi possível anexar fotos de check-in/out:', error);
   }
 
-  // Rodapé da empresa (nome · NIF · sede) em todos os documentos gerados.
   const footerText = empresaFooterText(empresa);
 
-  // As fotos de check-in/out anexam-se ao template de ALUGUER (ou, na falta
-  // dele entre os escolhidos, ao último documento).
   const anexarFotosA = (lista: { tipo: string }[]) => {
     const idxAluguer = lista.findIndex((t) => t.tipo === 'contrato_aluguer');
     return idxAluguer >= 0 ? idxAluguer : lista.length - 1;
   };
 
-  // Lista ordenada de templates a gerar:
-  //  - templateIds dados (dialog "Gerar Documentos") → exactamente esses, na ordem;
-  //  - senão, por regime: rent_a_car → [aluguer]; tvde → [prestação, aluguer].
   let templatesEscolhidos: { id: string; nome: string; tipo: string }[];
   if (templateIds?.length) {
     templatesEscolhidos = templateIds
@@ -507,10 +413,6 @@ export const generateContratoPdf = async ({
   }
 
   if (templatesEscolhidos.length === 0) {
-    // Distinguir os dois casos: nada escolhido vs. escolhido mas não
-    // encontrado. O 2.º é sempre um template que a query acima não trouxe
-    // (tipicamente por estar noutra empresa) — dizer "nenhum seleccionado"
-    // nesse caso manda quem depura para o lado errado.
     throw new Error(
       templateIds?.length
         ? 'Os documentos seleccionados não estão disponíveis para esta empresa.'
@@ -526,18 +428,6 @@ export const generateContratoPdf = async ({
     headerLogoUrl: empresa.logoUrl || '/Logo.png',
     footerText,
     anexoFotos: i === idxFotos ? anexoFotos : undefined,
-    // Folha de danos: a viatura faz o renderer puxar TODOS os danos activos
-    // + fotos + QR para o placeholder {{secao_danos}}.
-    //
-    // O contratoId VAI (é ele que dá o número no canto, a identificação do
-    // cliente/condutor e o QR com o âmbito deste contrato), mas com
-    // folhaDanosMomentoActual=false: aqui não estamos num handover, e sem essa
-    // ressalva os danos deste contrato saíam rotulados "Nesta recolha/entrega"
-    // em vez de "Contrato #N", que é o que faz sentido a ler isto mais tarde.
-    //
-    // Os km/combustível vêm do contrato: sem eles a folha saía com esses
-    // campos em branco. O momento segue o estado — um contrato já devolvido
-    // tem km de entrada, os restantes só os de saída.
     ...(t.tipo === 'anexo_danos'
       ? {
           viaturaId: viatura?.id,
@@ -548,15 +438,10 @@ export const generateContratoPdf = async ({
             : 'ENTREGA',
           km_saida: contrato.km_saida != null ? String(contrato.km_saida) : '',
           km_entrada: contrato.km_entrada != null ? String(contrato.km_entrada) : '',
-          // Numa eléctrica o nível vive em eletricidade_*, não em combustivel_*
-          // — sem isto a folha saía em branco no campo que mais gera discussão
-          // na devolução. nivelEnergia resolve pelo tipo da viatura.
           combustivel_saida: nivelEnergia(viatura?.combustivel, {
             combustivel: contrato.combustivel_saida,
             eletricidade: contrato.eletricidade_saida,
           }),
-          // A folha de RECOLHA precisa dos valores de entrada; antes só iam os
-          // de saída, por isso a metade direita da folha vinha sempre vazia.
           combustivel_entrada: nivelEnergia(viatura?.combustivel, {
             combustivel: contrato.combustivel_entrada,
             eletricidade: contrato.eletricidade_entrada,
@@ -567,8 +452,6 @@ export const generateContratoPdf = async ({
       : {}),
   }));
 
-  // Um PDF por documento — cada um gerado à parte, para irem como anexos
-  // distintos no mesmo email.
   if (separados) {
     const anexos: ContratoAnexo[] = [];
     for (let i = 0; i < docs.length; i++) {
