@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { stripAcc, parseNumber, findField, findNumericField } from '../_shared/repsol/campos.ts';
+import { temHora, transactionKey } from '../_shared/repsol/chave.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -216,47 +217,6 @@ function normalizeName(name: string): string {
     .replace(/\s+/g, ' ');
 }
 
-/**
- * Identidade de uma abastecida, estável entre formatos de export.
- *
- * NÃO usar o hash da linha inteira: a Repsol exporta o mesmo período ora com
- * 45 colunas ora com 8, e trunca o nome do posto de maneira diferente em cada
- * um ("E.S. LEIRIA SUL" vs "E.S. LEIRIA SUL QT TABORD"). Qualquer diferença
- * mudava o hash e a reimportação entrava a dobrar — 348 movimentos duplicados
- * em 84 cartões entre 03/08 e 06/09 de 2026, 15 503,79 €.
- *
- * `ID. OPERAÇÃO` também não serve: em 86 dos 87 pares duplicados que o traziam
- * dos dois lados, a Repsol deu um id diferente à MESMA abastecida.
- *
- * O que identifica a abastecida é cartão + instante + valor + litros. Dois
- * abastecimentos do mesmo cartão no mesmo minuto, com o mesmo valor e os
- * mesmos litros, são a mesma compra.
- *
- * Exports antigos (até 2026-07-06) vinham sem hora, e aí o instante não chega:
- * o mesmo cartão abastecia duas vezes no mesmo dia em postos diferentes. Nesse
- * caso entra o posto, truncado a 15 caracteres — o comprimento a que o export
- * curto corta — para aguentar a truncatura variável.
- */
-function transactionKey(args: {
-  card: string;
-  txDate: string;
-  amount: number | null;
-  qty: number | null;
-  station: string;
-  hasTime: boolean;
-}): string {
-  const valor = args.amount == null ? '' : args.amount.toFixed(2);
-  const litros = args.qty == null ? '' : args.qty.toFixed(2);
-  const instante = args.txDate.replace(/\D/g, '');
-  const base = `repsol-${args.card}-${instante}-${valor}-${litros}`;
-  if (args.hasTime) return base;
-  const posto = stripAcc(args.station || '')
-    .replace(/\W/g, '')
-    .toLowerCase()
-    .slice(0, 15);
-  return `${base}-${posto}`;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -423,9 +383,7 @@ Deno.serve(async (req) => {
         amount,
         qty,
         station,
-        // O export declara hora, ou ela vinha colada à data e o parser tirou-a
-        // de lá. Só quando não há hora nenhuma é que o posto entra na chave.
-        hasTime: /\d/.test(timeStr || '') || !/T00:00/.test(txDate),
+        hasTime: temHora(timeStr, txDate),
       });
       let motoristaId = sanitized ? cardMap.get(sanitized) : null;
       if (!motoristaId && sanitized.length >= 4) motoristaId = cardMap.get(sanitized.slice(-4));
