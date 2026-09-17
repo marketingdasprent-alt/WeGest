@@ -29,6 +29,12 @@ import {
 } from './cartoesFlotaTab.types';
 import { parseSheet, readWorkbook } from './cartoesFlotaImport';
 import { normalizarNumeroCartao } from './cartoesFlotaNumero';
+import {
+  limitesRpc,
+  periodoPorOmissao,
+  rotuloPeriodo,
+  type PeriodoCartoes,
+} from './cartoesFlotaPeriodo';
 import type { ImportRow, TipoCartao } from './cartoesFlotaImport';
 import { exportarCartoesExcel, exportarCartoesPrint } from './cartoesFlotaExport';
 import { CartoesFlotaKpis } from './CartoesFlotaKpis';
@@ -59,6 +65,7 @@ export function CartoesFlotaTab() {
   const [sortField, setSortField] = useState<string>('numero');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [statusSel, setStatusSel] = useState<string>('ativos');
+  const [periodo, setPeriodo] = useState<PeriodoCartoes>(periodoPorOmissao);
   const [consumoMap, setConsumoMap] = useState<Record<string, { total: number; litros: number }>>(
     {}
   );
@@ -80,31 +87,35 @@ export function CartoesFlotaTab() {
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
-    carregarConsumo();
-  }, []);
+  // Datas em texto nas dependências: novas instâncias de Date reentrariam sempre.
+  const { desde, ate } = limitesRpc(periodo);
 
-  const carregarConsumo = async () => {
-    try {
-      const now = new Date();
-      const desde = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const ate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-      const { data, error } = await supabase.rpc('get_cartoes_consumo', {
-        p_desde: desde,
-        p_ate: ate,
-      });
-      if (error) throw error;
-      const map: Record<string, { total: number; litros: number }> = {};
-      (data || []).forEach((r: any) => {
-        if (r.numero == null) return;
-        map[`${r.tipo}|${r.numero}`] = {
-          total: Number(r.total) || 0,
-          litros: Number(r.litros) || 0,
-        };
-      });
-      setConsumoMap(map);
-    } catch {}
-  };
+  useEffect(() => {
+    let cancelado = false;
+    const carregar = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_cartoes_consumo', {
+          p_desde: desde,
+          p_ate: ate,
+        });
+        if (error) throw error;
+        if (cancelado) return;
+        const map: Record<string, { total: number; litros: number }> = {};
+        (data || []).forEach((r: any) => {
+          if (r.numero == null) return;
+          map[`${r.tipo}|${r.numero}`] = {
+            total: Number(r.total) || 0,
+            litros: Number(r.litros) || 0,
+          };
+        });
+        setConsumoMap(map);
+      } catch {}
+    };
+    carregar();
+    return () => {
+      cancelado = true;
+    };
+  }, [desde, ate]);
 
   const motoristaNome = (id: string | null) =>
     id ? (motoristas.find((m) => m.id === id)?.nome ?? '') : '';
@@ -182,11 +193,10 @@ export function CartoesFlotaTab() {
     const plafondAtivo = filtered
       .filter((c) => c.status === 'em_uso')
       .reduce((s, c) => s + (c.limite || 0), 0);
-    const consumoMes = filtered.reduce(
-      (s, c) => s + (consumoMap[`${c.tipo}|${c.numero}`]?.total ?? 0),
-      0
-    );
-    return { total: filtered.length, emUso, disp, canc, plafondAtivo, consumoMes };
+    // Pela mesma chave normalizada da coluna; com o número cru dava sempre 0.
+    const consumoPeriodo = filtered.reduce((s, c) => s + consumoOf(c), 0);
+    return { total: filtered.length, emUso, disp, canc, plafondAtivo, consumoPeriodo };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, consumoMap]);
 
   const statusCounts = useMemo(() => {
@@ -415,7 +425,9 @@ export function CartoesFlotaTab() {
     return null;
   };
 
-  const handleExport = () => exportarCartoesExcel({ filtered, consumoOf });
+  const periodoLabel = rotuloPeriodo(periodo);
+
+  const handleExport = () => exportarCartoesExcel({ filtered, consumoOf, periodoLabel });
 
   const handlePrint = () =>
     exportarCartoesPrint({
@@ -426,13 +438,16 @@ export function CartoesFlotaTab() {
       search,
       consumoOf,
       titularLabel,
+      periodoLabel,
     });
 
   return (
     <div className="space-y-4 mt-4">
-      <CartoesFlotaKpis kpis={kpis} />
+      <CartoesFlotaKpis kpis={kpis} periodoLabel={periodoLabel} />
 
       <CartoesFlotaFiltros
+        periodo={periodo}
+        onPeriodoChange={setPeriodo}
         search={search}
         onSearchChange={setSearch}
         tipoFilter={tipoFilter}
@@ -464,6 +479,7 @@ export function CartoesFlotaTab() {
           }
         }}
         consumoOf={consumoOf}
+        periodoLabel={periodoLabel}
         titularLabel={titularLabel}
         onEdit={(c) => openEdit(c)}
         onEntrega={(c) => openEdit(c, 'entrega')}

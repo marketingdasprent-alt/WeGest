@@ -344,7 +344,7 @@ export default function Motoristas() {
             encontrado{filteredMotoristas.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-end gap-2 w-full sm:w-auto">
           {naoAssociadosCount > 0 && (
             <Button
               variant="outline"
