@@ -2,25 +2,40 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-/** Centraliza os hooks de anexos; a tabela dinâmica exige o único cast local. */
+/**
+ * Factory de hooks de anexos: os domínios (reserva, contrato, cliente, movimento) partilhavam
+ * ~95% do código, agora centralizado aqui; cada hook de domínio é um wrapper fino com a sua config.
+ * A tabela é resolvida em runtime, por isso o único cast de tipo vive aqui (antes havia 3 variantes inconsistentes espalhadas).
+ */
 
+/** Campos mínimos que qualquer linha de anexo expõe à UI. */
 export interface AnexoBase {
   id: string;
   ficheiro_url: string;
 }
 
 export interface AnexosConfig {
+  /** Tabela Supabase, ex.: `'reserva_anexos'`. */
   table: string;
+  /** Coluna FK para o pai, ex.: `'reserva_id'`. */
   fkColumn: string;
+  /** Bucket de storage, ex.: `'reserva-anexos'`. */
   bucket: string;
+  /** Domínio da queryKey (sem o id), ex.: `['renting', 'reserva-anexos']`. */
   queryDomain: readonly string[];
+  /** Limite de tamanho em bytes. */
   maxBytes: number;
+  /** MIME types aceites. */
   allowedMime: ReadonlySet<string>;
+  /** Mensagem de erro quando o MIME não é aceite. */
   mimeError: string;
+  /** Se a tabela tem coluna `mime_type` (escrita no upload). Default: `true`. */
   hasMimeType?: boolean;
+  /** Título do toast de sucesso no upload. Default: `'Anexo carregado'`. */
   uploadOkTitle?: string;
 }
 
+/** Conjunto de MIME types comum a documentos (PDF, imagens, Office, texto). */
 export const ANEXO_MIME_DOCUMENTOS: ReadonlySet<string> = new Set([
   'application/pdf',
   'image/jpeg',
@@ -50,7 +65,7 @@ export function createAnexosHooks<TRow extends AnexoBase>(config: AnexosConfig) 
 
   const queryKey = (parentId: string | null) => [...queryDomain, parentId] as const;
 
-  // A tabela é resolvida em runtime, fora dos overloads tipados do cliente.
+  // Cast único da tabela dinâmica — ver nota no topo do ficheiro.
   const from = () => (supabase as any).from(table);
 
   function validateFile(file: File): void {
@@ -60,6 +75,7 @@ export function createAnexosHooks<TRow extends AnexoBase>(config: AnexosConfig) 
     }
   }
 
+  /** Upload directo (sem hook). Útil para batch upload após criar o pai. */
   async function uploadSync(
     parentId: string,
     file: File,
@@ -76,7 +92,7 @@ export function createAnexosHooks<TRow extends AnexoBase>(config: AnexosConfig) 
       .upload(path, file, { contentType: file.type, upsert: false });
     if (uploadError) throw uploadError;
 
-    // O trigger da BD preenche `org_id`.
+    // org_id é preenchido por trigger na BD.
     const row: Record<string, unknown> = {
       [fkColumn]: parentId,
       nome: (nomeOverride ?? file.name).trim() || file.name,
@@ -88,6 +104,7 @@ export function createAnexosHooks<TRow extends AnexoBase>(config: AnexosConfig) 
 
     const { error: insertError } = await from().insert(row);
     if (insertError) {
+      // Rollback: remover o ficheiro carregado
       await supabase.storage.from(bucket).remove([path]);
       throw insertError;
     }
@@ -169,7 +186,7 @@ export function createAnexosHooks<TRow extends AnexoBase>(config: AnexosConfig) 
         const { error: delErr } = await from().delete().eq('id', anexo.id);
         if (delErr) throw delErr;
 
-        // A limpeza do storage não deve ocultar o erro de remoção da linha.
+        // Best-effort: limpar o ficheiro do bucket
         await supabase.storage.from(bucket).remove([anexo.ficheiro_url]);
       },
       onSuccess: () => {
@@ -186,6 +203,7 @@ export function createAnexosHooks<TRow extends AnexoBase>(config: AnexosConfig) 
     });
   }
 
+  /** Cria URL assinada (10 min) para abrir o ficheiro num separador novo. */
   async function getSignedUrl(path: string): Promise<string | null> {
     const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 10);
     if (error) return null;

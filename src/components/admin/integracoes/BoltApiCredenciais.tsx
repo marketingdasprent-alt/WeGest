@@ -22,10 +22,18 @@ import {
 } from './boltIntegracao';
 import type { BoltCompanyOption } from './types';
 
+/**
+ * Credenciais da API oficial Bolt Fleet — mesmo bloco no wizard de criação e na edição.
+ * Regras que centraliza (antes espalhadas pelo wizard): não grava sem teste de ligação
+ * com sucesso; empresa vem sempre da lista do getCompanies, nunca de um ID à mão;
+ * alterar credenciais invalida o teste e a lista de empresas anteriores.
+ */
+
 interface BoltApiCredenciaisProps {
   contexto: 'criar' | 'editar';
+  /** auth_mode gravado na BD. Em 'criar' é sempre 'password' (não há linha ainda). */
   modoGravado: BoltAuthMode;
-  /** Indica segredo gravado sem o voltar a expor. */
+  /** Já existe um Client Secret gravado (mostra-se que existe, nunca o valor). */
   segredoGravado?: boolean;
   companyIdGravado?: number | null;
   companyNameGravado?: string | null;
@@ -47,6 +55,8 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
   const [mostrarSegredo, setMostrarSegredo] = useState(false);
   const [estadoTeste, setEstadoTeste] = useState<EstadoTesteBolt>('idle');
   const [erroTeste, setErroTeste] = useState('');
+  // Diagnóstico devolvido pela função em caso de sucesso (empresa, nº de
+  // viagens no período de sondagem) — vale a pena mostrar tal e qual.
   const [mensagemTeste, setMensagemTeste] = useState('');
   const [empresas, setEmpresas] = useState<BoltCompanyOption[]>([]);
 
@@ -62,7 +72,8 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
 
   const empresaEscolhida = empresas.find((e) => String(e.company_id) === companyId) ?? null;
 
-  // A ref evita um ciclo de renderização causado pelo callback do pai.
+  // Reportar o estado ao pai sem o meter nas dependências: o pai guarda-o em
+  // useState e voltaria a criar o callback a cada render (ciclo infinito).
   const onEstadoRef = useRef(onEstado);
   onEstadoRef.current = onEstado;
   useEffect(() => {
@@ -95,7 +106,11 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
     setEmpresas([]);
   };
 
-  /** `getCompanies` não garante acesso às viagens; confirme a empresa antes de gravar. */
+  /**
+   * Segundo passo: confirmar a empresa escolhida. Estar na lista do getCompanies
+   * não garante permissão para ler viagens (erros só aparecem ao pedir os dados),
+   * e é da sondagem ao getFleetOrders que sai o company_name a gravar.
+   */
   const confirmarEmpresa = async (idEmpresa: string) => {
     setEstadoTeste('testing');
     setErroTeste('');
@@ -150,7 +165,8 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
     setEmpresas([]);
     setCompanyId('');
     try {
-      // As credenciais são testadas antes de persistir qualquer alteração.
+      // Valida-se antes de gravar; sem company_id a função chama o getCompanies
+      // e devolve a lista de empresas a que estas credenciais dão acesso.
       const { data, error } = await supabase.functions.invoke('bolt-test-connection', {
         body: { client_id: clientId.trim(), client_secret: clientSecret.trim() },
       });
@@ -162,6 +178,8 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
 
       const lista = normalizarEmpresasBolt(data);
       if (lista.length === 0) {
+        // A função já devolve success=false com o código SEM_EMPRESAS neste
+        // caso; esta rede de segurança é para a lista vir vazia por outra via.
         setEstadoTeste('error');
         setErroTeste(
           'As credenciais são válidas mas a Bolt não devolveu nenhuma empresa associada. Peça à Bolt para associar as frotas a estas credenciais.'
@@ -180,6 +198,7 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
             : `Credenciais válidas — ${lista.length} empresas disponíveis. Escolha a desta integração.`,
       });
 
+      // Uma só empresa (o caso normal): escolhe-se sozinha e confirma-se já.
       if (lista.length === 1) {
         const unica = String(lista[0].company_id);
         setCompanyId(unica);
@@ -279,6 +298,7 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
           </Button>
         </div>
 
+        {/* Estados: por testar / a testar / válido / inválido. */}
         {estadoTeste === 'idle' && (
           <p className="text-xs text-muted-foreground">
             Por testar — a lista de empresas só aparece depois de a ligação ser confirmada.
@@ -296,6 +316,9 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
         {estadoTeste === 'error' && <p className="text-xs text-destructive">{erroTeste}</p>}
       </div>
 
+      {/* A empresa escolhe-se da lista devolvida pelo getCompanies. Fica visível
+          mesmo enquanto a empresa escolhida está a ser validada, ou se essa
+          validação falhar, para se poder escolher outra. */}
       {decisao.mostrarEmpresas && (
         <div className="space-y-2">
           <Label htmlFor="bolt-company">
@@ -330,6 +353,7 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
         </div>
       )}
 
+      {/* Em edição, o que já lá está gravado — o segredo nunca reaparece. */}
       {contexto === 'editar' && modoGravado === 'oauth' && !decisao.preenchido && (
         <p className="text-xs text-muted-foreground" data-testid="bolt-credenciais-gravadas">
           Credenciais da API gravadas

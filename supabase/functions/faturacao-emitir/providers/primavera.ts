@@ -1,3 +1,11 @@
+// Adapter de faturação: Primavera V10 (via AS Connect) — baseado em fila.
+// O Primavera de cada empresa vive na rede privada dela; uma edge function
+// não chega lá directamente. Por isso o pedido vai para uma fila
+// (`primavera_jobs`) e um agente local (ver `agent/primavera-agent/`) reclama-o,
+// fala com o AS Connect localmente, e reporta o resultado.
+// As credenciais do AS Connect nunca ficam nesta BD — `cfg.apiKey` é só a
+// chave do agente. Só FT está confirmado com a documentação recebida; PDF e
+// anulação não têm endpoint documentado (ver project_primavera-integration.md).
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import type {
   EmitDocResult,
@@ -26,6 +34,8 @@ interface JobRow {
   error_message: string | null;
 }
 
+/** Põe um pedido na fila desta organização. Sem org resolvida (ex.: "Testar
+ *  ligação" antes de guardar credenciais) não há fila possível — falha cedo. */
 async function enfileirar(
   cfg: ProviderConfig,
   tipo: 'emit' | 'health',
@@ -48,6 +58,9 @@ async function enfileirar(
   return data.id as string;
 }
 
+/** Espera o agente reclamar e concluir o job. Ao expirar: 'pending' é falha
+ *  conhecida (seguro reagendar); 'claimed' é ambíguo (nunca reemitir sem
+ *  confirmar manualmente); 'done'/'failed' é o resultado real do agente. */
 async function esperarResultado(jobId: string, timeoutMs: number): Promise<JobRow> {
   const supabase = adminClient();
   const inicio = Date.now();
@@ -64,6 +77,7 @@ async function esperarResultado(jobId: string, timeoutMs: number): Promise<JobRo
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
 
+  // Esgotou o tempo — vai ver o estado final para classificar o timeout.
   const { data } = await supabase
     .from('primavera_jobs')
     .select('id, status, resultado, error_message')
@@ -76,6 +90,7 @@ async function esperarResultado(jobId: string, timeoutMs: number): Promise<JobRo
         'a correr na rede da empresa (ver instruções em agent/primavera-agent/).'
     );
   }
+  // 'claimed': o agente reclamou mas não reportou a tempo — desfecho desconhecido.
   throw new EmissaoAmbiguaError(
     'Primavera (agente local): o agente reclamou o pedido mas não confirmou o resultado a ' +
       'tempo — impossível confirmar se o documento foi criado. Não reemitir sem verificar ' +
@@ -93,6 +108,8 @@ export const primaveraProvider: FaturacaoProvider = {
   },
 
   hasDoctype(tipo: EmitInput['tipo'], _cfg: ProviderConfig): boolean {
+    // Só FT está confirmado (ver topo do ficheiro); bloquear RC impede o
+    // preflight de criar acordos de parcelamento contra Primavera.
     return tipo === 'FT';
   },
 

@@ -1,3 +1,12 @@
+// Para onde vai cada movimento financeiro do motorista.
+//
+// Antes vivia escrito à mão em três sítios que discordavam entre si (um
+// crédito de `renda_viatura` era descartado em silêncio pelo resumo mas
+// contado noutros ecrãs). Regras: só se ignora um DÉBITO já calculado por
+// outra via (evita duplicar); um CRÉDITO nunca é ignorado por esse motivo
+// (é sempre um acerto, não duplica); categoria desconhecida vai para "outros",
+// nunca desaparece; e tudo o que é ignorado fica registado em `ignorados` com motivo.
+
 export interface MovimentoMotorista {
   tipo: string | null;
   categoria: string | null;
@@ -14,15 +23,28 @@ export type DestinoMovimento =
 
 export interface Classificacao {
   destino: DestinoMovimento;
+  /** Preenchido só quando destino === 'ignorado'. */
   motivo?: string;
 }
 
+/** Categorias cujo débito o CONTRATO já representa (aluguer = dias × tarifa).
+ *  Exportada porque quem mostra o resumo precisa de saber isto: sem contrato
+ *  a cobrir o período, um débito destes não está representado em lado nenhum
+ *  e tem de ser mostrado como valor por explicar, em vez de sumir. */
 export const DEBITOS_QUE_O_CONTRATO_COBRE = ['aluguer', 'renda_viatura'];
 
+/** Categorias cujo DÉBITO o resumo já calcula por outra via. */
 const JA_CALCULADAS_COMO_DEBITO = [...DEBITOS_QUE_O_CONTRATO_COBRE, 'reparacao'];
 
+/** Categorias cujo CRÉDITO já vem na receita das plataformas. */
 const JA_CONTADAS_COMO_RECEITA = ['bolt', 'uber'];
 
+/** Categorias que o PRÓPRIO resumo escreve de volta em motorista_financeiro.
+ *
+ *  O trigger `sincronizar_movimento_resumo` grava o líquido da semana como
+ *  movimento dentro da própria semana; voltar a lê-lo aqui somava o líquido a
+ *  si mesmo, dobrando a cada recarregamento. Ignora-se nos dois sentidos,
+ *  porque não é uma cobrança duplicada — é a conta a entrar na própria conta. */
 const ESCRITAS_PELO_PROPRIO_RESUMO = ['resumos'];
 
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
@@ -45,9 +67,11 @@ export function classificarMovimento(m: MovimentoMotorista): Classificacao {
         motivo: `crédito de ${categoria} já está na receita da plataforma`,
       };
     }
+    // A caução devolvida tem tratamento próprio no bloco da caução.
     if (categoria === 'caucao') {
       return { destino: 'ignorado', motivo: 'devolução de caução, tratada à parte' };
     }
+    // Tudo o resto — incluindo acertos de renda_viatura e reparacao — entra.
     return { destino: 'receita_outras' };
   }
 
@@ -60,6 +84,8 @@ export function classificarMovimento(m: MovimentoMotorista): Classificacao {
 
   if (categoria === 'caucao') return { destino: 'caucao' };
   if (categoria === 'seguros') return { destino: 'seguros' };
+  // Slot mensal (ver NovoMovimentoFinanceiroOverlay / gerar_cobrancas_slot_mensais):
+  // linha própria para não se misturar com "outros custos" avulsos.
   if (categoria === 'slot_mensal') return { destino: 'slot' };
   return { destino: 'outros' };
 }
@@ -70,6 +96,7 @@ export interface MovimentosAgregados {
   seguros: number;
   slot: number;
   outros: number;
+  /** O que ficou de fora, e porquê. Para mostrar, auditar ou avisar. */
   ignorados: Array<{ categoria: string; tipo: string; valor: number; motivo: string }>;
 }
 

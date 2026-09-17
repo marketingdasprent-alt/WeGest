@@ -1,3 +1,8 @@
+// Adapter de faturação: KeyInvoice (API 5.0 — REST).
+// A chave nunca tem fallback global: é sempre cfg.apiKey (por org), para
+// nunca arriscar emitir pela conta de outra organização.
+// RC (Recibo) não tem doctype próprio — usa insertReceipt, que referencia o
+// documento original (FT/FR); insertDocument recusa "Tipo de documento inválido".
 import type {
   Cliente,
   EmitDocResult,
@@ -24,6 +29,7 @@ interface KIResponse {
 
 const ok = (d: KIResponse) => Number(d?.Status) === 1;
 
+/** Funde a config da org com os secrets do deployment e os defaults do adapter. */
 function resolve(cfg: ProviderConfig) {
   const s = (cfg.settings ?? {}) as Record<string, any>;
   const dt = (s.doctypes ?? {}) as Record<string, any>;
@@ -34,6 +40,7 @@ function resolve(cfg: ProviderConfig) {
       FT: String(dt.FT ?? env('KI_DOCTYPE_FT') ?? '4'), // Fatura
       FR: String(dt.FR ?? env('KI_DOCTYPE_FR') ?? '34'), // Fatura-Recibo
       NC: String(dt.NC ?? env('KI_DOCTYPE_NC') ?? '7'), // Nota de Crédito
+      // RC não entra aqui — não tem doctype próprio (ver topo do ficheiro).
     } as Record<string, string>,
     defaultProduct: String(s.default_product || env('KI_DEFAULT_PRODUCT') || ''),
     defaultIdTax: String(s.default_idtax || env('KI_DEFAULT_IDTAX') || ''),
@@ -58,6 +65,8 @@ async function call(
   const text = await res.text();
   try {
     const parsed = JSON.parse(text) as KIResponse;
+    // Guarda o status HTTP: um gateway/WAF à frente do KeyInvoice pode
+    // devolver JSON válido sem ser do próprio KeyInvoice.
     parsed.__httpStatus = res.status;
     return parsed;
   } catch {
@@ -74,6 +83,7 @@ async function authenticate(apiKey: string, endpoint: string): Promise<string> {
   return d.Sid;
 }
 
+/** getTaxes -> mapa { taxa(%) : IdTax }. Tolerante a nomes de campos. */
 async function buildTaxMap(endpoint: string, sid: string): Promise<Record<number, string>> {
   const map: Record<number, string> = {};
   try {
@@ -84,10 +94,13 @@ async function buildTaxMap(endpoint: string, sid: string): Promise<Record<number
       const id = String(t.Id ?? t.IdTax ?? t.Key ?? t.IdIva ?? '');
       if (!Number.isNaN(rate) && id) map[rate] = id;
     }
-  } catch (_) {}
+  } catch (_) {
+    /* usa fallback */
+  }
   return map;
 }
 
+/** Garante o cliente no KeyInvoice (NIF) e devolve IdClient; null = consumidor final. */
 async function resolveIdClient(
   endpoint: string,
   sid: string,
@@ -127,6 +140,7 @@ export const keyInvoiceProvider: FaturacaoProvider = {
   },
 
   hasDoctype(tipo: EmitInput['tipo'], cfg) {
+    // RC não usa "tipo de documento" próprio — só precisa de autenticação.
     if (tipo === 'RC') return true;
     const r = resolve(cfg);
     return Boolean(r.doctypes[tipo]);
@@ -152,6 +166,8 @@ export const keyInvoiceProvider: FaturacaoProvider = {
     let doc: Record<string, unknown>;
 
     if (input.tipo === 'RC') {
+      // insertReceipt (não insertDocument): referencia o documento original
+      // por DocType+DocSeries+DocNum, resolvidos pelo index.ts a partir de `invoices`.
       if (!input.documentoOriginal) {
         throw new Error('Recibo (RC) exige o documento original (doctype/série/nº) a liquidar.');
       }
@@ -176,6 +192,7 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       const docLines = input.itens.map((it) => {
         const idProduct = it.id_produto || it.ref || r.defaultProduct;
         const idTax = it.id_tax || taxMap[Number(it.taxa_iva)] || r.defaultIdTax;
+        // KeyInvoice espera todos os valores como string.
         return {
           IdProduct: String(idProduct),
           ProductName: it.descricao,
@@ -200,18 +217,22 @@ export const keyInvoiceProvider: FaturacaoProvider = {
     try {
       res = await call(r.endpoint, method, doc, { sid });
     } catch (e) {
+      // Falha de transporte: não se sabe se o documento chegou a ser criado — nunca reemitir sem reconciliar.
       throw new EmissaoAmbiguaError(`${method}: falha de transporte — ${(e as Error).message}`);
     }
     if (!ok(res)) {
       const status = res.__httpStatus ?? 0;
       if (status < 200 || status >= 300) {
+        // HTTP não-2xx pode vir de um gateway/WAF à frente do KeyInvoice, não do próprio.
         throw new EmissaoAmbiguaError(
           `${method}: HTTP ${status} — impossível confirmar se o documento foi criado.`
         );
       }
+      // 2xx com Status !== 1: o provider recusou explicitamente — nada foi criado.
       throw new Error(`${method} falhou: ${res?.ErrorMessage || 'recusado'}`);
     }
     if (!res.Data) {
+      // Status OK sem Data não é recusa; impossível confirmar criação — nunca reemitir sem reconciliar.
       throw new EmissaoAmbiguaError(
         `${method}: provider respondeu Status OK sem Data — impossível confirmar se o documento foi criado.`
       );
@@ -233,6 +254,8 @@ export const keyInvoiceProvider: FaturacaoProvider = {
   },
 
   async voidReceipt(input: VoidReceiptInput, cfg): Promise<void> {
+    // setReceiptVoid: anular só localmente não revertia a liquidação real no
+    // KeyInvoice, deixando a fatura original com "saldo pendente" errado (30/07/2026).
     const r = resolve(cfg);
     const sid = await authenticate(r.apiKey, r.endpoint);
     const d = await call(

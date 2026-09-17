@@ -1,3 +1,8 @@
+// A cor da marca tirada do próprio logótipo, para propor em vez de pedir um
+// hexadecimal a quem configura. Não é a cor mais frequente (seria o fundo
+// transparente/branco/preto) — é a cor cromática dominante, pesada por área E
+// saturação, para um azul vivo em pouca área ganhar a um bege lavado em muita.
+
 /** Um pixel só entra na contagem acima desta opacidade. */
 const ALFA_MINIMO = 128;
 
@@ -63,7 +68,8 @@ export function corDominanteDePixeis(dados: Uint8ClampedArray): string | null {
     balde.soma[1] += g;
     balde.soma[2] += b;
     balde.n += 1;
-    // O peso quadrático favorece a cor viva sobre grandes áreas lavadas.
+    // Peso ao quadrado: linear deixava um bege lavado em área bater um
+    // vermelho vivo do símbolo, que é como o olho realmente decide.
     balde.peso += s * s;
     baldes.set(chave, balde);
   }
@@ -76,17 +82,15 @@ export function corDominanteDePixeis(dados: Uint8ClampedArray): string | null {
   }
   if (!melhor) return null;
 
-  // O balde agrupa tons; a média devolve a cor precisa.
+  // Média real dos pixéis do balde vencedor — o balde é grosseiro de
+  // propósito (agrupa tons vizinhos), mas a cor devolvida é precisa.
   return paraHex(melhor.soma[0] / melhor.n, melhor.soma[1] / melhor.n, melhor.soma[2] / melhor.n);
 }
 
 /**
  * Carrega a imagem e devolve a sua cor dominante. Só funciona no browser.
- *
- * Devolve `null` — nunca lança — quando a imagem não carrega, quando o
- * servidor não permite ler os pixéis (canvas contaminado por falta de CORS) ou
- * quando o logótipo não tem cor. Isto corre num ecrã de configuração: falhar
- * significa "não sugiro nada", nunca "rebentar o formulário".
+ * Nunca lança — corre num ecrã de configuração, falhar deve significar
+ * "não sugiro nada", nunca "rebentar o formulário".
  */
 export async function corDominanteDaImagem(url: string): Promise<string | null> {
   if (!url) return null;
@@ -94,14 +98,14 @@ export async function corDominanteDaImagem(url: string): Promise<string | null> 
   try {
     const imagem = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
-      // Sem CORS, `getImageData` falha num canvas contaminado.
+      // Sem isto o canvas fica contaminado e getImageData atira.
       img.crossOrigin = 'anonymous';
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('imagem não carregou'));
       img.src = url;
     });
 
-    // A amostragem limita o custo de ler logótipos grandes.
+    // Reduzir antes de ler: 64×64 chega e evita milhões de pixéis à toa.
     const LADO = 64;
     const canvas = document.createElement('canvas');
     canvas.width = LADO;

@@ -49,17 +49,9 @@ export function precisaGpl(tipoCombustivel: string | null | undefined): boolean 
 }
 
 /**
- * O que escrever no campo de nível de energia de uma folha de danos ou PDF.
- *
- * As folhas lêem `combustivel_saida`/`combustivel_entrada`, mas numa viatura
- * eléctrica o nível está guardado em `eletricidade_*` — o campo saía em branco
- * e o motorista assinava uma folha sem o dado que mais gera discussão na
- * devolução. Isto resolve pelo tipo da viatura, sem obrigar as organizações a
- * editar os templates que já têm.
- *
- * Híbridas devolvem os dois valores: têm mesmo depósito e bateria, e um único
- * campo não pode fingir que só têm um. Se só um lado estiver preenchido, sai
- * esse — nunca um separador solto.
+ * Viaturas eléctricas guardam o nível em `eletricidade_*`, não em
+ * `combustivel_*` — sem isto a folha de danos saía em branco nesse campo.
+ * Híbridas mostram os dois valores; falta de um dos lados não deixa separador solto.
  */
 export function nivelEnergia(
   tipoCombustivel: string | null | undefined,

@@ -18,6 +18,11 @@ import { ESTADO_TICKET_ROTULO } from '@/lib/tiTicketEstados';
 
 const TAMANHO_PAGINA = 5;
 
+/**
+ * Histórico só de leitura dos próprios tickets. Sem acções de gerir de
+ * propósito — responder a sugestões é o papel de TicketTIAutor (link por
+ * email), não daqui. Mesmo layout da lista do admin, sem pesquisa/filtro.
+ */
 export function MeusTiTicketsLista() {
   const { data = [], isLoading, error } = useMeusTiTickets();
   const [pagina, setPagina] = useState(1);

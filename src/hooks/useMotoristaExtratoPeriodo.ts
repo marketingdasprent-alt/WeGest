@@ -1,7 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-/** A autorização é validada pela RPC; o ID no pedido identifica apenas o alvo. */
+/**
+ * Extrato do motorista num período. Chama `motorista_extrato_periodo`, que verifica no
+ * servidor que quem pede é mesmo aquele motorista (o id no pedido nunca é a autorização).
+ * Não confundir com `useMotoristaResumoSemanal` (fecho de semana, base dos acertos) — as
+ * duas contas podem divergir, e o cartão mostra ambas quando isso acontece.
+ */
 export interface ExtratoMotorista {
   periodoInicio: string;
   periodoFim: string;
@@ -18,36 +23,43 @@ export interface ExtratoMotorista {
   outros: number;
   totalCustos: number;
   liquido: number;
-  /** Distingue período não importado de receita zero. */
+  /** Falso = período ainda não importado. Não é o mesmo que ter ganho zero. */
   temDadosReceita: boolean;
-  /** Distingue custos não lançados de custos nulos. */
+  /** Falso = não há custos lançados. Não é o mesmo que não ter custos. */
   temCustosLancados: boolean;
+  /** Líquido segundo o fecho de semana, quando existe para este período. */
   acertoLiquido: number | null;
   temAcerto: boolean;
   mediaPorDia: number;
   diasDecorridos: number;
 }
 
+/** Segunda-feira da semana de `d`, em hora local. */
 export function inicioDaSemana(d = new Date()): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
   return x;
 }
 
+/** Domingo da semana de `d`. */
 export function fimDaSemana(d = new Date()): Date {
   const x = inicioDaSemana(d);
   x.setDate(x.getDate() + 6);
   return x;
 }
 
-/** Evita que `toISOString` devolva o dia anterior a leste de Greenwich. */
+/** `YYYY-MM-DD` em hora local — `toISOString` daria o dia anterior a leste de Greenwich. */
 export function paraDataSql(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-/** A RPC devolve `numeric` como string; valores inválidos não podem chegar à UI como `NaN`. */
+/**
+ * A função devolve `numeric`, que o cliente entrega como string. Sem esta
+ * conversão defensiva um nulo virava `NaN` e chegava ao motorista escrito no
+ * ecrã como "NaN €".
+ */
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -77,7 +89,8 @@ export function useMotoristaExtratoPeriodo(
       if (!r) return null;
 
       const receita = num(r.receita);
-      // A média usa apenas os dias já decorridos no período.
+      // Dias DECORRIDOS, não os sete da semana: a meio da semana, dividir por
+      // sete dá uma média que o motorista não reconhece como sua.
       const agora = new Date();
       const fimEfetivo = agora < fim ? agora : fim;
       const decorridos = Math.max(

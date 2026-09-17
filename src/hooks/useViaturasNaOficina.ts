@@ -14,6 +14,11 @@ export interface ViaturaNaOficina {
   km_entrada: number | null;
 }
 
+/**
+ * Viaturas que entraram na oficina e ainda não saíram (`data_entrada`
+ * preenchida e `data_saida` vazia). Serve o bloco "Na oficina" da página de
+ * Assistência, que antes obrigava a abrir carro a carro para saber quem estava parado.
+ */
 export function useViaturasNaOficina() {
   return useQuery({
     queryKey: ['viaturas-na-oficina'],
@@ -30,7 +35,8 @@ export function useViaturasNaOficina() {
       const linhas = data ?? [];
       if (linhas.length === 0) return [];
 
-      // Não há FK no PostgREST para um embed seguro desta relação.
+      // Segunda consulta em vez de join embebido: a relação não está declarada
+      // como FK no PostgREST e o embedding falharia em silêncio.
       const ids = [...new Set(linhas.map((r) => r.viatura_id).filter(Boolean))] as string[];
       const { data: viaturas, error: errV } = await supabase
         .from('viaturas')

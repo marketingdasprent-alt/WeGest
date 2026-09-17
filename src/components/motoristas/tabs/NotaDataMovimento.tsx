@@ -2,6 +2,11 @@ import { addDays, endOfWeek, format, startOfWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { Info } from 'lucide-react';
 
+/**
+ * Nota junto ao campo de data: a regra é contra-intuitiva e já custou dinheiro
+ * (a data do movimento define a semana a cobrar, não o dia em que se lança).
+ * Exemplo calculado com a data de hoje para se perceber à primeira.
+ */
 export function NotaDataMovimento() {
   const hoje = new Date();
   const inicioSemana = startOfWeek(hoje, { weekStartsOn: 1 });

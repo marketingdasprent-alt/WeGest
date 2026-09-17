@@ -1,3 +1,14 @@
+/**
+ * Combustível de um cliente: os cartões que tem e o que gastaram no período.
+ *
+ * SOMA ao vivo das três tabelas de transacções (espelha `motorista_extrato_periodo`);
+ * não entra em `conta_movimentos` porque isso geraria dívida e documento fiscal
+ * sem essa decisão estar tomada — o consumo mostra-se, não se cobra.
+ *
+ * `cliente_id` (quem gastou) e `devedor_cliente_id` (quem paga: o titular do
+ * contrato rent-a-car, ou ele próprio) vêm de `cartao_atribuicoes`, por isso
+ * correcções retroactivas de quem tinha o cartão re-imputam o passado sozinhas.
+ */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -11,9 +22,12 @@ export interface CartaoDoCliente {
 }
 
 export interface ConsumoCombustivel {
+  /** O que ESTE cliente tem a pagar no período (soma das transacções cujo devedor é ele) — vai à conta-corrente. */
   total: number;
+  /** Quantas transacções entraram no total — distingue "zero" de "sem dados". */
   transacoes: number;
   porTipo: Record<'bp' | 'repsol' | 'edp', number>;
+  /** O que ele gastou mas é cobrado a outro, por conduzir sob contrato alheio. Normalmente zero. */
   gastoCobradoAOutro: number;
 }
 
@@ -23,6 +37,7 @@ export const clienteCartoesKey = (clienteId: string) =>
 export const clienteConsumoKey = (clienteId: string, inicio: string, fim: string) =>
   ['cliente-combustivel', 'consumo', clienteId, inicio, fim] as const;
 
+/** Cartões de frota actualmente atribuídos a este cliente. */
 export function useCartoesDoCliente(clienteId: string | null) {
   return useQuery({
     queryKey: clienteCartoesKey(clienteId ?? ''),
@@ -46,13 +61,23 @@ const ORIGENS = [
   { tipo: 'edp' as const, tabela: 'edp_transacoes' as const },
 ];
 
+/**
+ * Consumo do cliente entre duas datas (inclusive).
+ *
+ * Três queries e não uma: as tabelas são separadas por fornecedor e não há
+ * vista que as una. É o mesmo `UNION ALL` que `motorista_extrato_periodo` faz
+ * do lado do servidor.
+ */
 export function useConsumoDoCliente(clienteId: string | null, inicio: string, fim: string) {
   return useQuery({
     queryKey: clienteConsumoKey(clienteId ?? '', inicio, fim),
     queryFn: async (): Promise<ConsumoCombustivel> => {
+      // `fim` inclusivo; coluna é timestamptz, por isso o corte é no dia seguinte.
       const ateExclusivo = new Date(`${fim}T00:00:00`);
       ateExclusivo.setDate(ateExclusivo.getDate() + 1);
 
+      // Traz as linhas onde ele é qualquer um dos dois lados e separa aqui,
+      // para não fazer seis queries por tabela.
       const resultados = await Promise.all(
         ORIGENS.map(async ({ tipo, tabela }) => {
           const { data, error } = await supabase

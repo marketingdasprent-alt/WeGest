@@ -1,3 +1,11 @@
+// Edge Function: faturacao-emitir (provider-agnostic).
+// Emite documentos fiscais (FT/FR/NC/RC) no provider configurado por
+// organização e grava o espelho local em `public.invoices`.
+// A chave da API vem sempre da org (client_secret), nunca de um secret
+// global — sem org resolvida a emissão falha cedo em vez de arriscar
+// emitir pela conta de outra organização.
+// Actions: 'emit' (default), 'health' (testa a chave), 'preflight' (confirma
+// RC configurado antes de criar um acordo de parcelamento), 'pdf'.
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { keyInvoiceProvider } from './providers/keyinvoice.ts';
@@ -13,6 +21,9 @@ const corsHeaders = {
 
 const env = (k: string) => Deno.env.get(k);
 
+/** Confirma se o pedido vem autenticado com a service role key (workers internos).
+ *  `Boolean(serviceRoleKey)` evita que, com a env var por definir, o literal
+ *  "Bearer undefined" passe a autenticar como service role. */
 function isServiceRoleRequest(req: Request): boolean {
   const serviceRoleKey = env('SUPABASE_SERVICE_ROLE_KEY');
   return (
@@ -21,6 +32,7 @@ function isServiceRoleRequest(req: Request): boolean {
   );
 }
 
+// Registo de providers — adicionar aqui novos adapters (ex.: moloni, invoicexpress).
 const PROVIDERS: Record<string, FaturacaoProvider> = {
   keyinvoice: keyInvoiceProvider,
   primavera: primaveraProvider,
@@ -29,6 +41,7 @@ const DEFAULT_PROVIDER = 'keyinvoice';
 
 interface Body {
   action?: 'emit' | 'health' | 'pdf' | 'preflight' | 'void_receipt';
+  // emit
   tipo?: 'FT' | 'FR' | 'NC' | 'RC';
   cliente?: Cliente;
   itens?: Item[];
@@ -37,11 +50,18 @@ interface Body {
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string;
+  /**
+   * Organização em nome da qual emitir. SÓ é aceite de um chamador service-role
+   * (workers internos). De um utilizador seria escalada de tenant — emitiria
+   * pela conta de faturação de outra organização.
+   */
   org_id?: string;
+  // pdf
   provider_doctype?: string;
   provider_docnum?: string;
   serie?: string;
   signed?: boolean;
+  // health (teste de ligação com credenciais ainda não gravadas)
   provider?: string;
   apiKey?: string;
   settings?: Record<string, unknown>;
@@ -56,12 +76,25 @@ function json(body: unknown, status = 200): Response {
 
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
+/** Cliente Supabase com o JWT do chamador (p/ RLS + trigger de org_id). */
 function callerClient(req: Request) {
   return createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_ANON_KEY') ?? '', {
     global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
   });
 }
 
+/**
+ * Resolve { provider, cfg } da org. Sem org → sem chave (falha cedo e claro).
+ *
+ * Sem `providerFiltro`: lê a integração de faturação ATIVA (a que emite de
+ * facto) — só pode haver uma por org (ver migração
+ * 20260807150000_faturacao_unica_ativa_por_org.sql).
+ *
+ * Com `providerFiltro`: lê a linha desse provider especificamente, ativa ou
+ * não — usado pelo teste de ligação ("Testar ligação" no diálogo), para
+ * testar a integração que se está a CONFIGURAR (ex.: Primavera ainda não
+ * promovida a ativa) sem depender de qual delas está em produção agora.
+ */
 async function getOrgConfig(
   req: Request,
   orgIdExplicito?: string,
@@ -74,10 +107,13 @@ async function getOrgConfig(
   if (isServiceRole && orgIdExplicito) {
     orgId = orgIdExplicito;
   } else if (!isServiceRole) {
+    // A org de um utilizador normal vem sempre do JWT, nunca do body.
     try {
       const { data } = await callerClient(req).rpc('get_current_org_id');
       orgId = (data as string) ?? null;
-    } catch {}
+    } catch {
+      /* segue sem org */
+    }
   }
 
   if (!orgId)
@@ -89,7 +125,9 @@ async function getOrgConfig(
     .select('client_secret, config')
     .eq('plataforma', 'faturacao')
     .eq('org_id', orgId);
-  query = providerFiltro ? query.eq('config->>provider', providerFiltro) : query.eq('ativo', true);
+  query = providerFiltro
+    ? query.eq('config->>provider', providerFiltro)
+    : query.eq('ativo', true);
   const { data: row } = await query.maybeSingle();
 
   const settings = ((row as any)?.config ?? null) as Record<string, unknown> | null;
@@ -119,17 +157,20 @@ serve(async (req) => {
     return json({ success: false, error: 'Body inválido (JSON esperado)' });
   }
 
+  // ── health ──
   if (payload.action === 'health') {
     try {
       let provider: string;
       let cfg: ProviderConfig;
       if (payload.apiKey) {
+        // Teste direto com credenciais fornecidas, antes de gravar na app.
         provider = String(payload.provider || DEFAULT_PROVIDER).toLowerCase();
         cfg = {
           apiKey: payload.apiKey ?? null,
           settings: { provider, ...(payload.settings ?? {}) },
         };
       } else if (payload.provider) {
+        // Testa a linha já gravada desse provider, mesmo que não seja a ativa.
         ({ provider, cfg } = await getOrgConfig(req, payload.org_id, payload.provider));
       } else {
         ({ provider, cfg } = await getOrgConfig(req, payload.org_id));
@@ -141,6 +182,7 @@ serve(async (req) => {
     }
   }
 
+  // ── preflight ── confirma que a org emite Recibos antes de criar um acordo.
   if (payload.action === 'preflight') {
     try {
       const { provider, cfg } = await getOrgConfig(req, payload.org_id);
@@ -165,6 +207,8 @@ serve(async (req) => {
     }
   }
 
+  // ── void_receipt ── sem isto, anular um recibo internamente não reverte a
+  // liquidação no provider e a fatura original fica com saldo errado (30/07/2026).
   if (payload.action === 'void_receipt') {
     try {
       if (!payload.provider_docnum) {
@@ -181,6 +225,7 @@ serve(async (req) => {
     }
   }
 
+  // ── pdf (base64 on-demand) ──
   if (payload.action === 'pdf') {
     try {
       if (!payload.provider_doctype || !payload.provider_docnum) {
@@ -205,6 +250,7 @@ serve(async (req) => {
     }
   }
 
+  // ── emit ──
   if (!payload?.tipo || !['FT', 'FR', 'NC', 'RC'].includes(payload.tipo)) {
     return json({ success: false, error: 'tipo inválido (FT|FR|NC|RC)', classe: 'known_failed' });
   }
@@ -224,11 +270,17 @@ serve(async (req) => {
     const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id);
     const adapter = pickAdapter(provider);
 
+    // Worker (service role) grava com org_id explícito: o trigger set_invoice_org_id
+    // não resolve a org sem sessão de utilizador. Precisa disto já aqui porque
+    // o Recibo consulta `invoices` antes de chamar o adapter.
     const isServiceRole = isServiceRoleRequest(req);
     const supabase = isServiceRole
       ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
       : callerClient(req);
 
+    // RC: o chamador só manda `documento_referencia` (nº legal); resolvemos aqui
+    // os campos do documento original a partir de `invoices`, para nenhum
+    // chamador ter de conhecer o formato interno do provider.
     let documentoOriginal: EmitInput['documentoOriginal'];
     if (payload.tipo === 'RC') {
       const { data: original, error: originalErr } = await supabase
@@ -264,6 +316,7 @@ serve(async (req) => {
       documentoOriginal,
     };
     const doc = await adapter.emit(emitInput, cfg);
+    // Documento já existe no provider — falhas seguintes nunca são 'known_failed'.
     docEmitido = true;
 
     const total = payload.itens.reduce((s, it) => {
@@ -315,6 +368,9 @@ serve(async (req) => {
 
     return json({ success: true, invoice, provider: providerMeta });
   } catch (e) {
+    // known_failed = provado que nada foi criado, seguro reagendar.
+    // unknown = não se sabe se foi criado — nunca reemitir sem reconciliar
+    //   (risco de um segundo documento fiscal sobre o mesmo pagamento).
     const ambiguo = docEmitido || e instanceof EmissaoAmbiguaError;
     return json({
       success: false,

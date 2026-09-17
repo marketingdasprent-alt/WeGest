@@ -70,7 +70,10 @@ export function traduzirErro(msg?: string, fallback = 'Ocorreu um erro. Tente no
     m.includes('rls')
   )
     return 'Não tem permissão para esta ação. Inicie sessão novamente e tente outra vez.';
-  // A coluna ausente e o schema cache desatualizado são indistinguíveis no cliente.
+  // "Could not find column" pode ser coluna em falta ou cache do PostgREST por
+  // atualizar — o cliente não distingue. Caso real (2026-09-08): a coluna
+  // faltava mesmo e dois candidatos tentaram 12x porque a mensagem mandava
+  // esperar. Por isso não se manda repetir; diz-se para avisar-nos.
   if (m.includes('could not find') && m.includes('column'))
     return 'Não foi possível guardar: o sistema não reconheceu um dos campos do formulário. Não é nada que tenha preenchido mal, e repetir não resolve — avise-nos, por favor. (Para quem gere o sistema: falta a coluna na tabela, ou o schema do PostgREST precisa de ser recarregado.)';
   if (m.includes('duplicate') || m.includes('already exists') || m.includes('unique'))
@@ -88,6 +91,7 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
   const errors: Record<string, string> = {};
   const UPLOAD_HINT = 'carregue o ficheiro (PDF, JPG ou PNG, até 10MB).';
 
+  // Dados Pessoais
   if (!campos.nome.trim()) errors.nome = 'Dados Pessoais — Nome: preencha o seu nome completo.';
   if (!campos.email.trim()) {
     errors.email = 'Dados Pessoais — Email: indique o seu email.';
@@ -118,6 +122,7 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
   if (!campos.comprovativoMoradaUrl)
     errors.comprovativoMoradaUrl = `Dados Pessoais — Comprovativo de Morada: ${UPLOAD_HINT}`;
 
+  // Documento de Identificação
   if (!campos.documentoTipo)
     errors.documentoTipo = 'Documento de Identificação — Tipo: selecione o tipo de documento.';
   if (!campos.documentoNumero.trim()) {
@@ -133,6 +138,7 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
   if (!campos.documentoIdentificacaoVersoUrl)
     errors.documentoIdentificacaoVersoUrl = `Documento de Identificação — Verso: ${UPLOAD_HINT}`;
 
+  // Carta de Condução
   if (!campos.cartaConducao.trim()) {
     errors.cartaConducao = 'Carta de Condução — Número: indique o número da carta.';
   } else {
@@ -149,6 +155,7 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
   if (!campos.cartaConducaoVersoUrl)
     errors.cartaConducaoVersoUrl = `Carta de Condução — Verso: ${UPLOAD_HINT}`;
 
+  // Licença TVDE
   if (!campos.licencaTvdeNumero.trim())
     errors.licencaTvdeNumero = 'Licença TVDE — Número: indique o número da licença.';
   if (!campos.licencaTvdeValidade)
@@ -156,6 +163,7 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
   if (!campos.licencaTvdeFicheiroUrl)
     errors.licencaTvdeFicheiroUrl = `Licença TVDE — Ficheiro: ${UPLOAD_HINT}`;
 
+  // Documentos Adicionais
   if (!campos.registoCriminalUrl) errors.registoCriminalUrl = `Registo Criminal: ${UPLOAD_HINT}`;
   if (!campos.iban.trim()) {
     errors.iban = 'Documentos Adicionais — IBAN: indique o seu IBAN.';

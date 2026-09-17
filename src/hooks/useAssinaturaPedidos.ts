@@ -12,21 +12,36 @@ export interface AssinaturaPedido {
   created_at: string;
   expires_at: string;
   assinado_em: string | null;
-  /** Indica assinatura substituída por outra posterior do mesmo documento. */
+  /** Já houve uma assinatura MAIS RECENTE do mesmo documento, por outro pedido —
+   * cada link serve para uma utilização, e a antiga continua visível mas deixa de valer. */
   substituida: boolean;
+  /** PDF ORIGINAL, tal como foi enviado para assinar. Existe sempre. */
   documento_path: string;
+  /** PDF com a assinatura dentro. Só existe depois de assinado. */
   documento_assinado_path: string | null;
-  /** Preserva documentos assinados sobre uma versão anterior do contrato. */
+  /**
+   * O pedido foi feito sobre uma linha de contrato anterior a esta (reverter para
+   * reserva e recriar gera nova linha, mesmo número — cf. contrato 841/00-62-VF).
+   * Não se promovem ao contrato actual de propósito: foram assinados sobre os dados de então.
+   */
   de_versao_anterior: boolean;
 }
 
+/**
+ * Pedidos de assinatura de um contrato, do mais recente para o mais antigo.
+ *
+ * Serve para responder a "já assinou?" sem ir procurar no email. Não há estado
+ * agregado nem semáforos: cada pedido vive por si, e a lista é a soma deles.
+ */
 export function useAssinaturaPedidos(contratoId: string | null | undefined) {
   return useQuery({
     queryKey: ['assinatura-pedidos', contratoId],
     enabled: !!contratoId,
     staleTime: 30_000,
     queryFn: async (): Promise<AssinaturaPedido[]> => {
-      // Pedidos de versões da mesma reserva pertencem ao mesmo contrato comercial.
+      // Todas as linhas de contrato nascidas da mesma reserva contam: são o
+      // mesmo negócio, refeito. Se a leitura da reserva falhar, fica-se pelo
+      // contrato actual — vale mais mostrar menos do que rebentar a aba.
       let ids: string[] = [contratoId as string];
       const { data: atual } = await supabase
         .from('contratos_renting')
@@ -62,7 +77,11 @@ export function useAssinaturaPedidos(contratoId: string | null | undefined) {
   });
 }
 
-/** Só substitui assinaturas posteriores do mesmo documento. */
+/**
+ * Marca as assinaturas substituídas por uma mais recente do MESMO documento
+ * (assinar de novo o "Contrato" não afecta a "Folha de Danos"), comparando pela
+ * data de assinatura, não pela ordem da lista.
+ */
 export function marcarSubstituidas(pedidos: AssinaturaPedido[]): AssinaturaPedido[] {
   const maisRecentePorDocumento = new Map<string, string>();
   for (const p of pedidos) {
@@ -79,7 +98,13 @@ export function marcarSubstituidas(pedidos: AssinaturaPedido[]): AssinaturaPedid
   }));
 }
 
-/** O bucket é privado; a abertura requer um URL assinado temporário. */
+/**
+ * Link temporário para abrir um documento do pedido — o original ou o assinado.
+ *
+ * O bucket é privado: sem link assinado não há como lá chegar, e é assim que
+ * deve ser — um documento destes não pode ficar acessível a quem descubra o
+ * endereço. Abre num separador, e é daí que se imprime ou se guarda em PDF.
+ */
 export async function getDocumentoUrl(path: string): Promise<string | null> {
   const { data, error } = await supabase.storage.from('documentos').createSignedUrl(path, 3600);
   if (error) throw error;

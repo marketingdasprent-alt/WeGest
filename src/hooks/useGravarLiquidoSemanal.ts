@@ -5,12 +5,19 @@ import { supabase } from '@/integrations/supabase/client';
 interface GravarLiquidoSemanalInput {
   motoristaId: string | null | undefined;
   motoristaNome: string | null | undefined;
+  /** O "VALOR LÍQUIDO A RECEBER" tal como o relatório o mostra. */
   liquido: number;
   semanaInicio: Date;
   semanaFim: Date;
+  /** Só grava quando o resumo está pronto — nunca a meio de carregar. */
   pronto: boolean;
 }
 
+/**
+ * Guarda o líquido semanal JÁ CALCULADO pelo ecrã (não recalcula), para o
+ * histórico nunca contradizer o que foi comunicado ao motorista mesmo que a
+ * fórmula mude depois. Falha silenciosa: não deve bloquear o ecrã.
+ */
 export function useGravarLiquidoSemanal({
   motoristaId,
   motoristaNome,
@@ -19,6 +26,8 @@ export function useGravarLiquidoSemanal({
   semanaFim,
   pronto,
 }: GravarLiquidoSemanalInput) {
+  // Evita regravar a mesma coisa a cada render: só volta a gravar quando
+  // muda o motorista, a semana ou o próprio valor.
   const ultimaGravacao = useRef<string | null>(null);
 
   useEffect(() => {

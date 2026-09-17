@@ -1,5 +1,23 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
-import { type BoltCredenciais, type FleetDriver, paginar } from '../_shared/bolt/client.ts';
+import {
+  type BoltCredenciais,
+  type FleetDriver,
+  paginar,
+} from '../_shared/bolt/client.ts';
+
+/**
+ * bolt-drivers-sync — traz a lista de motoristas de cada frota Bolt
+ * (getDrivers) e grava-a em bolt_drivers.
+ *
+ * Serve para decidir, pelo `state` (active/suspended/deactivated) que o
+ * getDrivers devolve por uuid, se dois driver_uuid são reentradas da mesma
+ * pessoa ou pessoas diferentes — as heurísticas por nome/telefone usadas até
+ * 2026-08 eram pouco fiáveis (16% de telefones divergentes).
+ *
+ * Não usa o bolt-full-sync porque esse escreve em bolt_viagens e preenche
+ * driver_earnings, que tem de ficar a NULL (regra 3 do bolt-sync-semana) para
+ * não duplicar receita. Esta função só lê da Bolt e só escreve em bolt_drivers.
+ */
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,12 +36,15 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
     const body = await req.json().catch(() => ({}));
     const filtroIntegracao = (body as { integracao_id?: string }).integracao_id ?? null;
 
+    // Bolt exige janela temporal e recusa janelas largas (>5 meses), por isso
+    // percorre-se o histórico em blocos de 30 dias para apanhar também quem
+    // já saiu; o upsert por driver_uuid evita duplicar entre janelas.
     const desde = (body as { desde?: string }).desde ?? '2026-03-01';
     const DIAS_JANELA = 30;
     const janelas: Array<{ inicio: number; fim: number }> = [];
@@ -40,6 +61,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    // As mesmas condições do agendador: activa, oauth e mesmo Bolt.
     let query = supabase
       .from('plataformas_configuracao')
       .select('id, nome, org_id, client_id, client_secret, company_id')
@@ -69,13 +91,14 @@ Deno.serve(async (req) => {
       const cred: BoltCredenciais = { clientId, clientSecret };
 
       try {
+        // Acumula por uuid: fica a última janela, para reflectir o state mais recente.
         const porUuid = new Map<string, FleetDriver>();
         for (const janela of janelas) {
           const lote = await paginar<FleetDriver>(
             cred,
             'getDrivers',
             { company_id: companyId, start_ts: janela.inicio, end_ts: janela.fim },
-            { limite: 500 }
+            { limite: 500 },
           );
           for (const d of lote) {
             if (d?.driver_uuid) porUuid.set(d.driver_uuid, d);
@@ -90,6 +113,7 @@ Deno.serve(async (req) => {
             name: [d.first_name, d.last_name].filter(Boolean).join(' ').trim() || null,
             email: d.email ?? null,
             phone: d.phone ?? null,
+            // `state` é o campo certo; bolt-full-sync lia `status`, que não existe.
             status: d.state ?? null,
             dados_raw: d,
             integracao_id: cfg.id,
@@ -107,8 +131,7 @@ Deno.serve(async (req) => {
         }
 
         const porEstado: Record<string, number> = {};
-        for (const l of linhas)
-          porEstado[l.status ?? '(sem estado)'] = (porEstado[l.status ?? '(sem estado)'] ?? 0) + 1;
+        for (const l of linhas) porEstado[l.status ?? '(sem estado)'] = (porEstado[l.status ?? '(sem estado)'] ?? 0) + 1;
 
         resultados.push({
           integracao: cfg.nome,

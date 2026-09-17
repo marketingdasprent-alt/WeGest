@@ -7,7 +7,13 @@ export interface MotoristaComVariasViaturas {
   matriculas: string[];
 }
 
-/** Deteta atribuições ativas a viaturas distintas, ignorando linhas duplicadas. */
+/**
+ * Motoristas com mais do que uma viatura DISTINTA atribuída ao mesmo tempo — um motorista
+ * conduz um carro de cada vez, por isso duas atribuições activas para veículos diferentes
+ * indicam algo por fechar (substituição ou troca mal terminada).
+ * Conta viaturas distintas, não linhas: várias linhas para o MESMO veículo são duplicação
+ * de registo (o cálculo semanal já une os dias — ver buildSlotPeriodos), não este aviso.
+ */
 export function useMotoristasVariasViaturas() {
   return useQuery({
     queryKey: ['motoristas-varias-viaturas'],
@@ -27,7 +33,7 @@ export function useMotoristasVariasViaturas() {
           nome: linha.motoristas_ativos?.nome ?? '—',
           matriculas: new Map<string, string>(),
         };
-        // A matrícula pode mudar; o ID identifica a viatura.
+        // Chave pelo id da viatura: é o que distingue veículos, não a matrícula.
         actual.matriculas.set(linha.viatura_id, linha.viaturas?.matricula ?? '—');
         porMotorista.set(id, actual);
       });

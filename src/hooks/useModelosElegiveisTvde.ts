@@ -1,6 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
+/**
+ * Modelos (modelo_id) elegíveis para TVDE: existe pelo menos uma viatura
+ * desse modelo com `viatura_tipos.elegivel_tvde = true` — derivado dos dados
+ * existentes, sem campo novo. Usado para filtrar tarifas e reservas TVDE.
+ */
 export function useModelosElegiveisTvde() {
   return useQuery({
     queryKey: ['modelos_elegiveis_tvde'],

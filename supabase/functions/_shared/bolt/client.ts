@@ -317,10 +317,7 @@ function backoffMs(tentativa: number): number {
   return base + jitter;
 }
 
-/**
- * Espera antes da próxima tentativa, honrando o Retry-After (segundos ou
- * HTTP-date) com tecto de 30s. Portado de bolt-sync/index.ts.
- */
+/** Espera antes da próxima tentativa, honrando Retry-After (segundos ou HTTP-date), tecto 30s. */
 export function getRetryAfterMs(resposta: Response, tentativa: number): number {
   const retryAfter = resposta.headers.get('retry-after');
   if (retryAfter) {
@@ -340,13 +337,8 @@ export function getRetryAfterMs(resposta: Response, tentativa: number): number {
 }
 
 /**
- * Códigos de erro da Bolt (HTTP 200!) que valem uma nova tentativa.
- *
- * O 1005 (TOO_MANY_REQUESTS) é um limite de débito: repetir mais tarde é
- * exactamente a resposta certa. Vinha a ser tratado como determinista — como
- * o 498810 ou o 702 — e abortava a semana à primeira. Apareceu a 2026-08-13,
- * depois de as páginas passarem a ir 4 a 4 com 2 jobs em simultâneo: até 8
- * pedidos ao mesmo tempo era mais do que a Bolt aceita.
+ * 1005 (TOO_MANY_REQUESTS, HTTP 200) é limite de débito, não erro determinista.
+ * Apareceu a 2026-08-13 quando as páginas passaram a ir 4 a 4 com 2 jobs em paralelo.
  */
 function codigoBoltRepetivel(codigo: number): boolean {
   return codigo === 1005;
@@ -542,13 +534,7 @@ function totalPorDefeito(corpo: unknown): number | undefined {
   return typeof total === 'number' ? total : undefined;
 }
 
-/**
- * Percorre todas as páginas de um endpoint paginado.
- *
- * Quando a Bolt declara um total (total_orders) e começámos no offset 0,
- * confirmamos no fim que trouxemos tudo — trazer menos do que o declarado é
- * dinheiro a faltar num acerto, por isso lança em vez de devolver incompleto.
- */
+/** Percorre todas as páginas; confirma no fim que trouxe o total declarado (menos = dinheiro a faltar num acerto). */
 export async function paginar<T>(
   cred: BoltCredenciais,
   operacao: BoltOperacao,

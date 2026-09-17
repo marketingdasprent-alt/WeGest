@@ -1,3 +1,9 @@
+/**
+ * Legenda/tom do saldo pendente do motorista. Convenção: positivo = a favor
+ * do motorista, negativo = motorista deve (mesma de MotoristaDashboard.tsx).
+ * Sinal OPOSTO ao de legendaSaldo() em ClienteContaCorrenteTab.tsx — entidade
+ * diferente, não confundir. Devolve sempre texto, nunca só cor.
+ */
 export type ToneSaldoMotorista = 'positivo' | 'negativo' | 'neutro';
 
 export interface LegendaSaldoMotorista {

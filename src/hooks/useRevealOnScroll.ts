@@ -7,9 +7,17 @@ gsap.registerPlugin(ScrollTrigger);
 const REDUCED = '(prefers-reduced-motion: reduce)';
 const FULL = '(prefers-reduced-motion: no-preference)';
 
+/**
+ * Revela `[data-reveal]` do container ao entrar no viewport. `opacity: 0` é
+ * aplicado por JS (não CSS) para o conteúdo ficar legível sem JS/GSAP.
+ * `desordenado` é intencional nalgumas secções (ver ReconhecimentoSection).
+ */
 export function useRevealOnScroll<T extends HTMLElement>(options?: {
+  /** Segundos entre cada elemento. */
   stagger?: number;
+  /** Deslocamento vertical inicial, em px. */
   distancia?: number;
+  /** Ordem aleatória mas estável — encena dispersão. */
   desordenado?: boolean;
 }): RefObject<T> {
   const ref = useRef<T>(null);
@@ -41,6 +49,7 @@ export function useRevealOnScroll<T extends HTMLElement>(options?: {
         return () => tween.kill();
       });
 
+      // Reduced motion: garante o estado final explicitamente, sem transição.
       mm.add(REDUCED, () => {
         gsap.set(alvos, { opacity: 1, y: 0, clearProps: 'transform' });
       });
