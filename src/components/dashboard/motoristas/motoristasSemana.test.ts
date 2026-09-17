@@ -86,10 +86,7 @@ describe('agruparPorGestor', () => {
   });
 
   it('desempata por nome para a ordem não depender da ordem das linhas', () => {
-    const r = agruparPorGestor([
-      { gestor_responsavel: 'Zita' },
-      { gestor_responsavel: 'Ana' },
-    ]);
+    const r = agruparPorGestor([{ gestor_responsavel: 'Zita' }, { gestor_responsavel: 'Ana' }]);
     expect(r.map((g) => g.nome)).toEqual(['Ana', 'Zita']);
   });
 

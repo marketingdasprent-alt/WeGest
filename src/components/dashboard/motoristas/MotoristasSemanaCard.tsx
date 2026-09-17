@@ -18,7 +18,13 @@ import {
  *  `lg` a página rola na mesma e o cartão cresce com o conteúdo. */
 const ALTURA = 'lg:h-full';
 
-function NegativoRow({ motorista, onClick }: { motorista: MotoristaNegativo; onClick: () => void }) {
+function NegativoRow({
+  motorista,
+  onClick,
+}: {
+  motorista: MotoristaNegativo;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
