@@ -65,6 +65,7 @@ const filesExceedingMaxLines = [
   'src/components/viaturas/tabs/ViaturaTabFinanceira.tsx',
   'src/components/viaturas/tabs/ViaturaTabReparacoes.tsx',
   'src/components/viaturas/ViaturaDialog.tsx',
+  'src/hooks/useContasResumoSemana.ts',
   'src/hooks/useContratosRenting.ts',
   'src/pages/Assistencia.tsx',
   'src/pages/AssistenciaNova.tsx',

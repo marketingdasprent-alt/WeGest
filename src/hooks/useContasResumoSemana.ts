@@ -377,6 +377,13 @@ export function useContasResumoSemana(
         }
       });
 
+      // Contas de frota não são motoristas — excluídas dos resumos (ver migração conta_frota_fora_dos_resumos_uber).
+      const contasFrota = new Set(
+        (uberDriversResult.data || [])
+          .filter((d: any) => d.is_conta_frota)
+          .map((d: any) => d.uber_driver_id)
+      );
+
       const uberViagensByDriver: Record<string, number> = {};
       (atividadeResult.data || []).forEach((a) => {
         if (a.uber_driver_id && !contasFrota.has(a.uber_driver_id)) {
