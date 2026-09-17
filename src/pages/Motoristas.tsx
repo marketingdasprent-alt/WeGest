@@ -344,103 +344,7 @@ export default function Motoristas() {
             encontrado{filteredMotoristas.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-end gap-2 w-full sm:w-auto">
-          {naoAssociadosCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setNaoAssociadosOpen(true)}
-              className="w-full sm:w-auto gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
-            >
-              <Link2 className="h-4 w-4" />
-              {naoAssociadosCount} sem ficha
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-amber-500/20 text-amber-700 dark:text-amber-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
-          {motoristasFichaIncompleta.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setFichaIncompletaOpen(true)}
-              className="w-full sm:w-auto gap-2 border-rose-500/50 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400"
-            >
-              <FileWarning className="h-4 w-4" />
-              {motoristasFichaIncompleta.length} sem documentos
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-rose-500/20 text-rose-700 dark:text-rose-300"
-              >
-                atualizar
-              </Badge>
-            </Button>
-          )}
-          {variasViaturas.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setVariasViaturasOpen(true)}
-              className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
-            >
-              <Car className="h-4 w-4" />
-              {variasViaturas.length} com 2 viaturas
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
-              >
-                fechar
-              </Badge>
-            </Button>
-          )}
-          {cartoesCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setCartoesOpen(true)}
-              className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
-            >
-              <CreditCard className="h-4 w-4" />
-              {cartoesCount} cartões
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
-          {portagensCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setPortagensOpen(true)}
-              className="w-full sm:w-auto gap-2 border-blue-500/50 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
-            >
-              <Car className="h-4 w-4" />
-              {portagensCount} sem portagens
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-blue-500/20 text-blue-700 dark:text-blue-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
-          {bpNaoAssociadasCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setBpNaoAssociadasOpen(true)}
-              className="w-full sm:w-auto gap-2 border-green-500/50 text-green-700 hover:bg-green-500/10 dark:text-green-400"
-            >
-              <Fuel className="h-4 w-4" />
-              {bpNaoAssociadasCount} BP sem motorista
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-green-500/20 text-green-700 dark:text-green-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={handleExport}
@@ -456,6 +360,106 @@ export default function Motoristas() {
           </Button>
           <AdicionarMotoristaButton onAdicionar={handleAddMotorista} />
         </div>
+      </div>
+
+      {/* Alertas operacionais — faixa própria para não empurrar as ações do header */}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 empty:hidden">
+        {naoAssociadosCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setNaoAssociadosOpen(true)}
+            className="w-full sm:w-auto gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+          >
+            <Link2 className="h-4 w-4" />
+            {naoAssociadosCount} sem ficha
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-amber-500/20 text-amber-700 dark:text-amber-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
+        {motoristasFichaIncompleta.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setFichaIncompletaOpen(true)}
+            className="w-full sm:w-auto gap-2 border-rose-500/50 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400"
+          >
+            <FileWarning className="h-4 w-4" />
+            {motoristasFichaIncompleta.length} sem documentos
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-rose-500/20 text-rose-700 dark:text-rose-300"
+            >
+              atualizar
+            </Badge>
+          </Button>
+        )}
+        {variasViaturas.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setVariasViaturasOpen(true)}
+            className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+          >
+            <Car className="h-4 w-4" />
+            {variasViaturas.length} com 2 viaturas
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
+            >
+              fechar
+            </Badge>
+          </Button>
+        )}
+        {cartoesCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setCartoesOpen(true)}
+            className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+          >
+            <CreditCard className="h-4 w-4" />
+            {cartoesCount} cartões
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
+        {portagensCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setPortagensOpen(true)}
+            className="w-full sm:w-auto gap-2 border-blue-500/50 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+          >
+            <Car className="h-4 w-4" />
+            {portagensCount} sem portagens
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-blue-500/20 text-blue-700 dark:text-blue-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
+        {bpNaoAssociadasCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setBpNaoAssociadasOpen(true)}
+            className="w-full sm:w-auto gap-2 border-green-500/50 text-green-700 hover:bg-green-500/10 dark:text-green-400"
+          >
+            <Fuel className="h-4 w-4" />
+            {bpNaoAssociadasCount} BP sem motorista
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-green-500/20 text-green-700 dark:text-green-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
