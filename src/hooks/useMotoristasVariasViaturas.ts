@@ -8,19 +8,11 @@ export interface MotoristaComVariasViaturas {
 }
 
 /**
- * Motoristas com mais do que uma viatura DISTINTA atribuída ao mesmo tempo.
- *
- * Um motorista conduz um carro de cada vez. Duas atribuições activas para
- * veículos diferentes querem sempre dizer que algo ficou por fechar — uma
- * substituição temporária que nunca foi encerrada, ou uma troca feita fora do
- * fluxo de troca. Caso real: a Lucia Duceac ficou com a AC-41-ES e a BM-60-FC
- * abertas no mesmo dia, criadas pela mesma pessoa, uma delas com o motivo
- * "Substituição temporária".
- *
- * Conta viaturas distintas, não linhas: várias linhas para o MESMO veículo são
- * duplicação de registo (acontece, e o cálculo semanal já une os dias — ver
- * buildSlotPeriodos), não um motorista com dois carros. O Marco Reis tem três
- * linhas activas, todas da BL-22-IP: não é caso para este aviso.
+ * Motoristas com mais do que uma viatura DISTINTA atribuída ao mesmo tempo — um motorista
+ * conduz um carro de cada vez, por isso duas atribuições activas para veículos diferentes
+ * indicam algo por fechar (substituição ou troca mal terminada).
+ * Conta viaturas distintas, não linhas: várias linhas para o MESMO veículo são duplicação
+ * de registo (o cálculo semanal já une os dias — ver buildSlotPeriodos), não este aviso.
  */
 export function useMotoristasVariasViaturas() {
   return useQuery({

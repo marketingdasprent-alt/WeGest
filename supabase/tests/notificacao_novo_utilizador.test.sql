@@ -42,10 +42,13 @@ select is(
 );
 
 -- 2. Criar um COLABORADOR (staff) emite o evento, com nome e email no payload.
-insert into auth.users (id, email, raw_user_meta_data) values
+--    A org vem de raw_app_meta_data (o que create-user escreve pelo servidor);
+--    desde a auditoria de 2026-09-16 o trigger ignora org_id em user_metadata.
+insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data) values
   (
     '00000000-0000-0000-0000-0000000d0002', 'novo.colaborador@novo-utilizador-d.pt',
-    jsonb_build_object('nome', 'Novo Colaborador', 'org_id', '00000000-0000-0000-0000-0000000d0000')
+    jsonb_build_object('nome', 'Novo Colaborador'),
+    jsonb_build_object('org_id', '00000000-0000-0000-0000-0000000d0000')
   );
 
 select is(

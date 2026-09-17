@@ -1,15 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-/**
- * Grupos e tarifas de renting em forma mínima, partilhados pela reserva e pelo
- * contrato. Mantém as queryKeys 'renting_grupos_min'/'renting_tarifas_min' para
- * reaproveitar o cache já populado pelo formulário de reserva.
- *
- * Ao escolher uma viatura, ambos os formulários derivam o `grupo` (nome) e a
- * tarifa aplicável (do grupo_id da viatura) — ver `aplicarDadosViatura`.
- */
-
 export interface RentingGrupoMin {
   id: string;
   nome: string;
@@ -19,7 +10,7 @@ export interface RentingTarifaMin {
   id: string;
   grupo_id: string;
   nome: string;
-  tipo: string; // 'renting' | 'tvde'
+  tipo: string;
   kms_incluidos: number | null;
   km_adicional_valor: number | null;
   preco_dia: number | null;
@@ -27,32 +18,22 @@ export interface RentingTarifaMin {
   preco_mes: number | null;
 }
 
-/**
- * Preço por modelo, específico de uma tarifa. Consoante o tipo da tarifa:
- *   TVDE       → usa preco_semana (+ km_mensal/km_adicional_valor/franquia_valor)
- *   Rent-a-Car → usa preco_dia/preco_mes/km_mensal (+ km_adicional_valor_iva/franquia_valor_iva)
- * Os campos de km incluídos (km_mensal), km extra e franquia são copiados para
- * o contrato/reserva ao escolher a tarifa+viatura.
- */
 export interface RentingTarifaPrecoModelo {
   tarifa_id: string;
   modelo_id: string;
   preco_semana: number | null;
   preco_dia: number | null;
   preco_mes: number | null;
-  // TVDE: km incluídos/mês, km extra, franquia e caução
   km_mensal: number | null;
   km_adicional_valor: number | null;
   franquia_valor: number | null;
   caucao_valor: number | null;
-  // Rent-a-Car: km incluídos/mês, km extra, franquia e caução (c/IVA) — independentes do TVDE
   km_mensal_iva: number | null;
   km_adicional_valor_iva: number | null;
   franquia_valor_iva: number | null;
   caucao_valor_iva: number | null;
 }
 
-/** Grupos de renting activos (id + nome). */
 export function useRentingGruposMin() {
   return useQuery({
     queryKey: ['renting_grupos_min'],
@@ -68,7 +49,6 @@ export function useRentingGruposMin() {
   });
 }
 
-/** Tarifas de renting activas (por grupo). */
 export function useRentingTarifasMin() {
   return useQuery({
     queryKey: ['renting_tarifas_min'],
@@ -86,7 +66,6 @@ export function useRentingTarifasMin() {
   });
 }
 
-/** Preços por modelo de todas as tarifas (TVDE e Rent-a-Car) activas da org. */
 export function useRentingTarifaPrecosModelo() {
   return useQuery({
     queryKey: ['renting_tarifa_precos_modelo_min'],
@@ -104,29 +83,12 @@ export function useRentingTarifaPrecosModelo() {
 }
 
 export interface FaturacaoRenting {
-  valor: number; // valor faturado ao cliente
+  valor: number;
   modo: 'Diário' | 'Mensal' | 'Semanal';
   descricao: string;
-  semanalCondutor: number | null; // preço/semana atribuído ao condutor (só TVDE)
+  semanalCondutor: number | null;
 }
 
-/**
- * Valor a faturar ao cliente a partir da tarifa:
- *   TVDE              → semanal, preço POR MODELO da viatura (precoModeloSemana)
- *   ALD (longa dur.)  → mensal, preço/mês POR MODELO (precoModeloMes) com
- *                       fallback ao preço/mês do grupo
- *   Rent-a-Car normal → diário, preço/dia POR MODELO (precoModeloDia) com
- *                       fallback ao preço/dia do grupo
- *
- * Tanto TVDE como Rent-a-Car definem o preço por modelo na tarifa
- * (renting_tarifa_precos_modelo). No TVDE, se o modelo não tiver preço,
- * devolve null e a UI bloqueia + avisa. No Rent-a-Car, se o modelo não
- * tiver preço, recai no preço do grupo (tarifa.preco_dia/preco_mes) para
- * não quebrar contratos/grupos existentes.
- *
- * Partilhado por reserva e contrato — ao trocar de viatura ambos recalculam.
- * Devolve null se a tarifa não cobrir o regime.
- */
 export interface CalculoBaseAluguerRentingInput {
   regime: string;
   isLongaDuracao: boolean;
@@ -134,9 +96,7 @@ export interface CalculoBaseAluguerRentingInput {
   tarifa: Pick<RentingTarifaMin, 'preco_dia' | 'preco_semana' | 'preco_mes'> | null;
   valorTotalManual?: number | null;
   precoModeloSemana?: number | null;
-  /** Preço/dia s/IVA do modelo na tarifa Rent-a-Car (tem prioridade sobre o grupo). */
   precoModeloDia?: number | null;
-  /** Preço/mês s/IVA do modelo na tarifa Rent-a-Car (tem prioridade sobre o grupo). */
   precoModeloMes?: number | null;
 }
 
@@ -152,10 +112,7 @@ export function calcularBaseAluguerRenting(input: CalculoBaseAluguerRentingInput
     precoModeloMes,
   } = input;
 
-  // `null` = sem override, segue a tarifa. Qualquer número escrito à mão manda
-  // — incluindo 0 (aluguer oferecido/incluído). Antes o 0 caía no cálculo
-  // automático, o que tornava impossível pôr um aluguer a zero: gravava-se 0 e
-  // reaparecia o preço da tarifa.
+  // `null` segue a tarifa; 0 é uma sobreposição manual válida.
   if (valorTotalManual != null) return valorTotalManual;
 
   if (regime === 'tvde') {
@@ -182,8 +139,7 @@ export function calcularFaturacaoRenting(
   precoModeloMes?: number | null
 ): FaturacaoRenting | null {
   if (regime === 'tvde') {
-    // TVDE cobra por semana, com preço específico do modelo da viatura.
-    if (precoModeloSemana == null) return null; // modelo sem preço nesta tarifa → bloqueia
+    if (precoModeloSemana == null) return null;
     return {
       valor: Number(precoModeloSemana.toFixed(2)),
       modo: 'Semanal',
@@ -192,7 +148,6 @@ export function calcularFaturacaoRenting(
     };
   }
 
-  // Rent-a-Car: preço por modelo da tarifa tem prioridade; recai no grupo.
   if (isLongaDuracao) {
     const mes = precoModeloMes ?? tarifa?.preco_mes ?? null;
     if (mes == null) return null;
@@ -214,20 +169,7 @@ export function calcularFaturacaoRenting(
   };
 }
 
-/**
- * O preço a gravar quando o utilizador ESCOLHE uma tarifa diferente no
- * formulário do contrato.
- *
- * Antes disto, trocar a tarifa não mexia em nada: `valor_total_manual` manda
- * sobre `calcularBaseAluguerRenting` e sobre o próprio preview deste cartão
- * (que mostra `valor_total_manual ?? faturacao.valor`) — com um manual
- * gravado, nem o preview reagia à tarifa nova. Em 206 dos 236 contratos vivos
- * há um `valor_total_manual` gravado, portanto isto não era um caso raro.
- *
- * `null` = não tocar em `valor_total_manual` (regime slot, tarifa limpa, ou
- * a combinação tarifa+modelo não tem preço — não se inventa um valor).
- * Caso contrário, o número a gravar.
- */
+// `null` preserva o valor manual quando a nova combinação não tem preço.
 export function resolverValorTotalManualAoMudarTarifa(
   regime: string,
   isLongaDuracao: boolean,

@@ -1,27 +1,13 @@
 /**
  * Combustível de um cliente: os cartões que tem e o que gastaram no período.
  *
- * É o espelho do que `motorista_extrato_periodo` faz para o motorista — uma
- * SOMA ao vivo das três tabelas de transacções, não um lançamento. Nada disto
- * entra em `conta_movimentos`: essa é a conta-corrente, alimentada por
- * cobranças e recibos, e pôr combustível lá dentro é gerar dívida ao cliente e
- * documento fiscal a seguir. Enquanto essa decisão não for tomada, o consumo
- * mostra-se, não se cobra.
+ * SOMA ao vivo das três tabelas de transacções (espelha `motorista_extrato_periodo`);
+ * não entra em `conta_movimentos` porque isso geraria dívida e documento fiscal
+ * sem essa decisão estar tomada — o consumo mostra-se, não se cobra.
  *
- * QUEM GASTOU vs QUEM PAGA
- * O gatilho carimba dois campos a partir de `cartao_atribuicoes` (quem tinha o
- * cartão naquele dia) e do contrato:
- *   `cliente_id`         — quem gastou
- *   `devedor_cliente_id` — quem paga: o titular do contrato rent-a-car onde o
- *                          condutor está vigente, ou ele próprio se não houver.
- * Quando o condutor é o titular, os dois coincidem. Quando conduz sob contrato
- * de outro, o gasto é dele e a conta é do titular.
- *
- * Como ambos derivam de `cartao_atribuicoes`, o total responde a correcções
- * retroactivas: corrigir quem tinha o cartão re-imputa o passado sozinho.
- *
- * RLS: as três tabelas exigem `can_view_financeiro()`. Quem não o tiver recebe
- * listas vazias em vez de erro — é o mesmo gate do extrato do motorista.
+ * `cliente_id` (quem gastou) e `devedor_cliente_id` (quem paga: o titular do
+ * contrato rent-a-car, ou ele próprio) vêm de `cartao_atribuicoes`, por isso
+ * correcções retroactivas de quem tinha o cartão re-imputam o passado sozinhas.
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,23 +22,12 @@ export interface CartaoDoCliente {
 }
 
 export interface ConsumoCombustivel {
-  /**
-   * O que ESTE cliente tem a pagar no período — a soma das transacções cujo
-   * devedor é ele. É este o número que vai à conta-corrente.
-   *
-   * Inclui o que outros condutores gastaram sob contrato dele (é ele o titular)
-   * e exclui o que ele gastou sob contrato de outro.
-   */
+  /** O que ESTE cliente tem a pagar no período (soma das transacções cujo devedor é ele) — vai à conta-corrente. */
   total: number;
   /** Quantas transacções entraram no total — distingue "zero" de "sem dados". */
   transacoes: number;
   porTipo: Record<'bp' | 'repsol' | 'edp', number>;
-  /**
-   * O que ele gastou com os cartões dele mas é cobrado a outro — porque conduz
-   * sob contrato alheio. Zero na esmagadora maioria dos casos; quando não é,
-   * a diferença entre "gastou" e "paga" tem de estar à vista, senão o número
-   * parece simplesmente errado a quem o lê.
-   */
+  /** O que ele gastou mas é cobrado a outro, por conduzir sob contrato alheio. Normalmente zero. */
   gastoCobradoAOutro: number;
 }
 
@@ -97,14 +72,12 @@ export function useConsumoDoCliente(clienteId: string | null, inicio: string, fi
   return useQuery({
     queryKey: clienteConsumoKey(clienteId ?? '', inicio, fim),
     queryFn: async (): Promise<ConsumoCombustivel> => {
-      // `fim` é inclusivo para quem lê; a coluna é timestamptz, por isso o
-      // corte é no início do dia seguinte.
+      // `fim` inclusivo; coluna é timestamptz, por isso o corte é no dia seguinte.
       const ateExclusivo = new Date(`${fim}T00:00:00`);
       ateExclusivo.setDate(ateExclusivo.getDate() + 1);
 
-      // Trazemos as linhas em que ele é QUALQUER um dos dois lados e separamos
-      // aqui. Duas queries por tabela dariam seis idas à base para responder a
-      // uma pergunta só, e o volume por cliente e período é pequeno.
+      // Traz as linhas onde ele é qualquer um dos dois lados e separa aqui,
+      // para não fazer seis queries por tabela.
       const resultados = await Promise.all(
         ORIGENS.map(async ({ tipo, tabela }) => {
           const { data, error } = await supabase

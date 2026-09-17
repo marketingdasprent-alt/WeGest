@@ -1,16 +1,5 @@
-// Facebook Pixel — carregado lazy, só em páginas públicas.
-//
-// Antes, o Pixel era inicializado globalmente em `index.html` e tracava
-// PageView + cliques automáticos em TODA a app — incluindo o backoffice
-// autenticado, leaking metadata de uso ao Facebook. Agora:
-//
-//   • O script do Pixel só é carregado quando uma página explícita
-//     chama `initPixel()` (landing, formulário público).
-//   • As funções `trackEventOnce` / `trackLeadOnce` chamam `initPixel()`
-//     automaticamente — se forem chamadas de um sítio onde o Pixel ainda
-//     não foi carregado, ele carrega-se aí.
-//   • Dentro do backoffice nada chama estas funções, portanto o Pixel
-//     nunca é carregado.
+// O Pixel só é carregado por páginas públicas para não enviar metadados do
+// backoffice autenticado ao Facebook.
 
 export type PixelEventParams = Record<string, any>;
 
@@ -24,13 +13,6 @@ declare global {
 const PIXEL_ID = '1212569624343076';
 let initialized = false;
 
-/**
- * Carrega o script do Facebook Pixel e inicializa-o + dispara PageView.
- * Idempotente: chamadas subsequentes são no-op.
- *
- * Chamar em useEffect de páginas públicas onde queremos atribuição
- * (landing, formulário público de leads).
- */
 export function initPixel(): void {
   if (initialized || typeof window === 'undefined') return;
   if (typeof window.fbq === 'function') {
@@ -38,7 +20,6 @@ export function initPixel(): void {
     return;
   }
 
-  // Stub fbq que vai bufferizar chamadas até o script real carregar.
   (function (f: Window, b: Document, e: string, v: string) {
     const n: any = function () {
       // eslint-disable-next-line prefer-rest-params
@@ -63,7 +44,6 @@ export function initPixel(): void {
   initialized = true;
 }
 
-// Track an event only once per session and route
 export function trackEventOnce(eventName: string, params: PixelEventParams = {}, key?: string) {
   try {
     const routeKey = typeof window !== 'undefined' ? window.location.pathname : 'unknown';
@@ -71,14 +51,12 @@ export function trackEventOnce(eventName: string, params: PixelEventParams = {},
     const storageKey = `fb_event_${lockKey}`;
 
     if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(storageKey)) {
-      return; // already tracked in this session/route
+      return;
     }
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem(storageKey, '1');
     }
 
-    // Lazy-init: se este chamador é uma página pública e ainda não inicializou,
-    // inicializamos aqui.
     initPixel();
 
     if (typeof window !== 'undefined' && typeof window.fbq === 'function') {

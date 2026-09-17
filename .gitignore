@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+.playwright-mcp/
 node_modules
 dist
 dist-ssr
@@ -25,10 +25,20 @@ dist-ssr
 
 .vercel
 
-# Environment variables
+# Environment variables e segredos — cobre variantes (.env.staging, .env.test…),
+# chaves privadas e ficheiros de credenciais de fornecedores. Só o exemplo entra.
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+service-account.json
+secrets*.json
+secrets*.yml
+secrets*.yaml
 
 # Supabase CLI — ficheiros temporários/estado local
 supabase/.temp/

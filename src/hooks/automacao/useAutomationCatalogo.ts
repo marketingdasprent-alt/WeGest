@@ -2,16 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * O catálogo de automação, lido do servidor.
- *
- * A fonte de verdade é `public.automation_catalogo()`, uma função SQL. Este
- * módulo NÃO tem uma cópia da lista de eventos nem de acções — só os tipos que
- * descrevem o que ela devolve. Duplicá-la aqui era garantir que um dia divergem
- * e a UI passa a oferecer uma acção que o motor recusa.
- *
- * Os dois eixos são separados de propósito, e isso vem do motor: as CONDIÇÕES
- * avaliam o payload do EVENTO, as ACÇÕES operam sobre uma ENTIDADE. Não são a
- * mesma lista vista de ângulos diferentes.
+ * Catálogo de automação, lido de `public.automation_catalogo()` (SQL). Este
+ * módulo só tem os tipos de retorno, nunca uma cópia da lista — para não
+ * divergir e a UI oferecer uma acção que o motor recusa.
  */
 
 /** Os tipos que o catálogo sabe declarar hoje. */
@@ -34,18 +27,14 @@ export interface AccaoCatalogo {
   label: string;
   modulo: string;
   /**
-   * Tabela sobre que a acção opera. O motor recusa se não bater com a do run.
-   * Só acções internas vivem aqui — a acção de email não opera sobre uma
-   * entidade do domínio (dirige-se a pessoas, não a registos) e por isso tem
-   * a sua própria chave no catálogo, `notificacao_email`, fora de `accoes`.
+   * Tabela sobre que a acção opera; o motor recusa se não bater com a do run.
+   * A acção de email fica fora de `accoes` (chave própria `notificacao_email`)
+   * porque não opera sobre uma entidade do domínio.
    */
   entidade: string;
   /**
-   * Recurso do RBAC associado à acção. Só é EXIGIDO pelo validador do
-   * servidor nas automações internas (`can_edit(user, recurso)`); para
-   * notificação e email é apenas descritivo — quem escreve qualquer
-   * `automation_rules` já passa pela RLS de `can_edit(user, 'automacoes')`,
-   * independentemente do tipo de acção.
+   * Recurso do RBAC. Só é exigido pelo servidor nas automações internas; para
+   * notificação/email é descritivo, já coberto pela RLS de `automation_rules`.
    */
   recurso: string;
   /** Presente nas acções que escrevem num campo. */
@@ -83,15 +72,9 @@ export function camposDoEvento(
 }
 
 /**
- * As acções que fazem sentido para aquele evento.
- *
- * O motor já recusa uma acção cuja entidade não bata com a do run — em runtime
- * e, quando conhece o evento, também na escrita. Isto é só para o utilizador
- * não escolher uma combinação que vai ser rejeitada: a autoridade continua a
- * ser o servidor.
- *
- * Quando o catálogo não conhece o evento, devolve tudo em vez de nada: filtrar
- * por informação que não existe esconderia acções válidas.
+ * Acções que fazem sentido para aquele evento — só para evitar no UI uma
+ * combinação que o motor já recusa no servidor; a autoridade é sempre lá.
+ * Evento desconhecido devolve tudo, para não esconder acções válidas.
  */
 export function accoesParaEvento(
   catalogo: AutomationCatalogo | undefined,

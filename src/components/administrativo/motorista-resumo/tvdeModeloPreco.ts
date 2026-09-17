@@ -1,29 +1,11 @@
 /**
- * Preço TVDE por modelo — o mapa de RECURSO, quando o contrato não resolve.
+ * Preço TVDE por modelo — mapa de RECURSO, só quando o contrato não resolve.
  *
- * O preço certo vem sempre da tarifa que o CONTRATO indica
- * (`${tarifa_id}|${modelo_id}`). Este mapa é só o último recurso, e quem o usa
- * marca a linha como `estimado`.
- *
- * PORQUE EXISTE ESTE FICHEIRO
- * O mapa era construído com `map[modelo_id] = preco` dentro de um `forEach`,
- * em dois sítios independentes. Havendo mais do que uma tarifa TVDE activa a
- * dar preço ao mesmo modelo, ficava a última que a base de dados devolvesse —
- * e a base de dados não promete ordem nenhuma. O mesmo ecrã, aberto duas
- * vezes, podia cobrar valores diferentes.
- *
- * É o padrão "último a ler ganha" já registado na memória do projecto, que já
- * custou dinheiro três vezes.
- *
- * A REGRA
- * Entre tarifas activas que dão preço ao mesmo modelo, ganha o preço MAIS
- * BAIXO; empate desempata pelo `tarifa_id`, para ser reproduzível.
- *
- * Qualquer escolha aqui é arbitrária — a tabela de tarifas é que está
- * ambígua. Entre errar por cima e errar por baixo num palpite, escolhe-se por
- * baixo: cobrar a mais a um motorista com base num palpite é pior do que
- * cobrar a menos, e a linha vai marcada como estimada para alguém ir arrumar
- * a tarifa.
+ * Havia mais do que uma tarifa activa a dar preço ao mesmo modelo, e um
+ * `forEach` ficava com a última que a BD devolvesse (sem ordem garantida) —
+ * o padrão "último a ler ganha" que já custou dinheiro. Agora ganha sempre o
+ * preço mais baixo (desempate por `tarifa_id`, reproduzível): errar por
+ * baixo é menos grave do que cobrar a mais, e a linha fica marcada `estimado`.
  */
 export interface TarifaModeloRow {
   tarifa_id?: string | null;

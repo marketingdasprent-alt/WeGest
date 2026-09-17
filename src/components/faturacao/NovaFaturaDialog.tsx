@@ -1,19 +1,3 @@
-/**
- * "Nova Fatura" — fatura ADICIONAL de um contrato ou reserva, com linhas
- * livres (artigos digitados à mão). Permite emitir mais que uma fatura por
- * contrato/reserva.
- *
- * - O campo "Tipo" da linha é uma lista fixa (FATURA_ARTIGO_TIPOS); descrição,
- *   valor e unidades são livres.
- * - O valor inserido é **SEM IVA**. O IVA (23%) é somado por cima, por linha.
- *   O checkbox "Isento" põe a linha a 0% e passa a exigir uma **justificação**
- *   (a lei obriga a indicar o motivo da isenção no documento).
- * - Um bloco de resumo no fundo soma Subtotal → IVA → Total, ao vivo, no mesmo
- *   formato do "Resumo do contrato".
- * - Cria uma cobrança `manual = true` (fora do índice único de período, por
- *   isso convive com a faturação automática) e emite o documento fiscal no
- *   provider configurado. NÃO altera o estado_financeiro do contrato.
- */
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -62,44 +46,35 @@ const maisDias = (n: number) => {
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
 };
-/** Aceita vírgula decimal (pt-PT) além do ponto. */
 const num = (s: string) => Number(String(s).replace(',', '.')) || 0;
 
-/** Alvo da fatura: um contrato OU uma reserva. */
 export type NovaFaturaAlvo =
   | {
       tipo: 'contrato';
       id: string;
       orgId: string;
-      /** ex.: "Contrato #0123" */
       codigoLabel: string;
     }
   | {
       tipo: 'reserva';
       id: string;
       orgId: string;
-      /** ex.: "Reserva #45" */
       codigoLabel: string;
     };
 
 export interface NovaFaturaDestinatario {
   id: string;
   nome: string;
-  /** 'motorista' → o `id` vem de `motoristas_ativos`, não de `clientes`, e é
-   *  trocado pela ficha de cliente dele antes de gravar. */
   tipo?: 'cliente' | 'motorista';
 }
 
 interface LinhaArtigo {
-  /** id local p/ a key da lista */
   key: string;
   tipo: string;
   descricao: string;
-  /** valor unitário SEM IVA */
   valor: string;
   unidades: string;
   isentoIva: boolean;
-  /** Motivo legal da isenção — obrigatório quando `isentoIva`. */
   justificacao: string;
 }
 
@@ -108,7 +83,6 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   alvo: NovaFaturaAlvo;
   destinatario: NovaFaturaDestinatario;
-  /** Motorista TVDE principal do contrato — dívida cedida na emissão, nunca destinatário fiscal. */
   motoristaEntidade?: NovaFaturaDestinatario | null;
   emitente?: FaturacaoDocEmitente | null;
   onCriada: () => void;
@@ -139,16 +113,12 @@ export function NovaFaturaDialog({
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [tipoDoc, setTipoDoc] = useState<'fatura' | 'fatura_recibo'>('fatura');
-  // Destinatário fiscal do documento: o titular ou o motorista. Escolher
-  // "Motorista" emite a fatura em nome dele, com o NIF dele.
   const [entidade, setEntidade] = useState<'cliente' | 'motorista'>('cliente');
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
   const [linhas, setLinhas] = useState<LinhaArtigo[]>([novaLinha()]);
   const [submitting, setSubmitting] = useState(false);
-  // Alvo do "Parcelar" oferecido no toast de sucesso — só para faturas de
-  // contrato (ParcelamentoFaturaAlvo não suporta reservas, fora de âmbito).
   const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
 
   function patchLinha(key: string, patch: Partial<LinhaArtigo>) {
@@ -161,7 +131,6 @@ export function NovaFaturaDialog({
     setLinhas((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== key) : prev));
   }
 
-  // Valor da linha é SEM IVA; o IVA soma-se por cima (0% se isenta).
   const calc = useMemo(() => {
     let subtotal = 0;
     let totalIva = 0;
@@ -182,8 +151,7 @@ export function NovaFaturaDialog({
       if (l.isentoIva) totalIsento += linhaSemIva;
 
       const base = [l.tipo, l.descricao].filter(Boolean).join(' — ') || l.tipo || 'Artigo';
-      // Sem campo estruturado de isenção no provider, o motivo vai na descrição
-      // do artigo para constar do documento fiscal.
+      // O provider não tem campo estruturado; inclua o motivo fiscal na descrição.
       const descricaoFinal =
         l.isentoIva && l.justificacao.trim()
           ? `${base} (Isento de IVA: ${l.justificacao.trim()})`
@@ -200,7 +168,6 @@ export function NovaFaturaDialog({
     subtotal = round2(subtotal);
     totalIva = round2(totalIva);
     const totalComIva = round2(subtotal + totalIva);
-    // Taxa efetiva que reproduz o total (a cobrança guarda uma única taxa).
     const taxaEfetiva = subtotal > 0 ? round2((totalComIva / subtotal - 1) * 100) : 0;
     return {
       subtotal,
@@ -212,7 +179,6 @@ export function NovaFaturaDialog({
     };
   }, [linhas]);
 
-  /** Linhas com valor mas isentas e sem motivo — a lei exige o motivo. */
   const linhasSemJustificacao = useMemo(
     () => linhas.filter((l) => num(l.valor) > 0 && l.isentoIva && !l.justificacao.trim()),
     [linhas]
@@ -220,14 +186,11 @@ export function NovaFaturaDialog({
 
   const podeCriar = calc.totalComIva > 0 && !!destinatario.id && linhasSemJustificacao.length === 0;
 
-  // Quem fica no documento: o titular ou o motorista escolhido.
   const { destinatario: alvoFatura, precisaFichaCliente } = resolverDestinatario(entidade, {
     cliente: destinatario,
     motorista: motoristaEntidade,
   });
 
-  /** Id de `clientes` do destinatário — num motorista garante a ficha dele
-   *  (`destinatario_id` tem FK para `clientes`). */
   async function resolverIdFiscal(): Promise<string> {
     if (!precisaFichaCliente) return alvoFatura.id;
     const { data, error } = await supabase.rpc('garantir_cliente_do_motorista' as any, {
@@ -279,11 +242,9 @@ export function NovaFaturaDialog({
       const emitidaEm = new Date(`${dataDoc}T12:00:00`).toISOString();
       const periodo = dataDoc; // fatura manual: período pontual (data do documento)
 
-      // Id fiscal ANTES de gravar: num motorista troca-se o id dele pelo da
-      // ficha de cliente, senão a FK de destinatario_id rebenta.
+      // A FK exige `clientes`; converta o motorista antes de gravar.
       const destinatarioIdFiscal = await resolverIdFiscal();
 
-      // ── Fase 1 — cobrança manual (fonte de verdade na conta-corrente) ──────
       const { data: cobInserida, error: cobErr } = await supabase
         .from('contrato_cobrancas')
         .insert({
@@ -308,11 +269,8 @@ export function NovaFaturaDialog({
       if (cobErr) throw cobErr;
       const cobrancaId: string = cobInserida.id;
 
-      // Sem cedência de dívida: ao escolher "Motorista" a fatura é emitida em
-      // nome dele, por isso a dívida já nasce na conta-corrente do próprio.
-      // Ceder por cima (20260730170000) duplicava o valor.
+      // Não ceda dívida ao motorista: já nasce na conta-corrente dele.
 
-      // Factura-Recibo → regista o recibo (liquidação imediata).
       if (tipoDoc === 'fatura_recibo' && calc.totalComIva > 0) {
         const { error: recErr } = await supabase.from('recibos').insert(
           semCodigo<'recibos'>({
@@ -334,7 +292,6 @@ export function NovaFaturaDialog({
       qc.invalidateQueries({ queryKey: ['reserva-cobrancas', alvo.id] });
       qc.invalidateQueries({ queryKey: ['renting'] });
 
-      // ── Fase 2 — emissão fiscal no provider (não reverte a Fase 1) ─────────
       try {
         const cliente = await fetchClienteFatura(destinatarioIdFiscal);
         const res = await emitirMut.mutateAsync({
@@ -352,18 +309,11 @@ export function NovaFaturaDialog({
         if (res.invoice) {
           try {
             await baixarDocumentoPdf(res.invoice);
-          } catch {
-            /* download best-effort */
-          }
+          } catch {}
         }
         toast.success(
           `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`,
-          // "Parcelar" só faz sentido para faturas de contrato (ParcelamentoFaturaAlvo
-          // não cobre reservas, fora de âmbito) E quando ainda há saldo por liquidar.
-          // Uma Factura-Recibo já foi liquidada de imediato acima (insert em `recibos`,
-          // Fase 1) — saldoPagar seria 0 e gerarPlanoParcelas rejeitaria com "o valor a
-          // parcelar tem de ser positivo" (mesmo invariante que abrirParcelarParaRow em
-          // FaturacaoTab.tsx já impõe: nunca oferecer parcelamento sobre saldo liquidado).
+          // Só ofereça parcelamento para contratos com saldo ainda por liquidar.
           alvo.tipo === 'contrato' && tipoDoc === 'fatura'
             ? {
                 action: {
@@ -375,8 +325,6 @@ export function NovaFaturaDialog({
                       numeroDocumento: res.fullDocNumber ?? '',
                       dataDocumento: dataDoc,
                       valorTotal: calc.totalComIva,
-                      // Fatura acabada de criar (não Factura-Recibo, excluída acima):
-                      // nada foi liquidado ainda — o saldo por parcelar é o total.
                       saldoPagar: calc.totalComIva,
                       titularId: destinatarioIdFiscal,
                       titularNome: alvoFatura.nome,
@@ -429,7 +377,6 @@ export function NovaFaturaDialog({
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-            {/* Tipo + Método + Datas */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Tipo de documento</Label>
@@ -523,7 +470,6 @@ export function NovaFaturaDialog({
               </div>
             )}
 
-            {/* Artigos */}
             <div className="rounded-md border">
               <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/40">
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -541,7 +487,6 @@ export function NovaFaturaDialog({
                 </Button>
               </div>
 
-              {/* Cabeçalho (desktop) */}
               <div className="hidden sm:grid grid-cols-[170px_1fr_120px_70px_70px_110px_36px] gap-2 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground border-b">
                 <span>Tipo</span>
                 <span>Descrição</span>
@@ -605,7 +550,6 @@ export function NovaFaturaDialog({
                             onCheckedChange={(c) =>
                               patchLinha(l.key, {
                                 isentoIva: c === true,
-                                // Ao desmarcar, limpa o motivo — deixa de fazer sentido.
                                 ...(c === true ? {} : { justificacao: '' }),
                               })
                             }
@@ -627,7 +571,6 @@ export function NovaFaturaDialog({
                         </Button>
                       </div>
 
-                      {/* Justificação da isenção — obrigatória quando a linha é isenta */}
                       {l.isentoIva && (
                         <div className="sm:pl-[178px]">
                           <Input
@@ -650,7 +593,6 @@ export function NovaFaturaDialog({
             </div>
           </div>
 
-          {/* Resumo — sempre visível, soma ao vivo */}
           <div className="border-t bg-muted/20 px-6 py-3 shrink-0">
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
               <div className="space-y-1 text-sm min-w-[240px]">

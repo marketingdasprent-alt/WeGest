@@ -3,28 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface GestorTvde {
-  /** profiles.id — é o que contratos/reservas guardam em `gestor_id`. */
   id: string;
   nome: string;
 }
 
-/**
- * Gestores TVDE da organização activa — FONTE ÚNICA para todos os selectores
- * de "Gestor" da aplicação.
- *
- * Vem do RPC `get_gestores_tvde` e nunca de `profiles` directamente. Ler
- * `profiles` no cliente parece funcionar (quem testa costuma ser admin) mas
- * devolve lista VAZIA a qualquer não-admin: a policy `mt_profiles_select` só
- * deixa ver a própria linha sem `calendario_ver_gestores`/`admin_utilizadores`.
- * E como a RLS filtra linhas em vez de dar erro, o resultado é um `[]` com
- * HTTP 200 — impossível de distinguir de "não há gestores". Foi exactamente
- * assim que este bug sobreviveu a uma primeira correcção: havia três cópias
- * desta lógica e só uma foi corrigida.
- *
- * O RPC é SECURITY DEFINER, resolve a org do lado do servidor e devolve apenas
- * id + nome. Se precisares desta lista noutro sítio, usa este hook — não
- * escrevas outra query a `profiles`.
- */
+// O RPC SECURITY DEFINER devolve os gestores autorizados; consultar `profiles`
+// no cliente faria a RLS parecer uma lista vazia para utilizadores sem permissão.
 export function useGestoresTvde() {
   return useQuery({
     queryKey: ['gestores-tvde'],
@@ -40,15 +24,7 @@ export function useGestoresTvde() {
   });
 }
 
-/**
- * Mesma lista, reduzida a nomes únicos — para os selectores que guardam o
- * NOME em vez do id (ficha do motorista e diálogo de novo motorista, ambos
- * escrevem `motoristas_ativos.gestor_responsavel`, que é text).
- *
- * A deduplicação por nome é necessária porque a org pode ter dois perfis
- * distintos com o mesmo nome (caso real em produção: "Juliano Cury"
- * duplicado). Sem isto apareceria a mesma pessoa duas vezes, indistinguível.
- */
+// Alguns formulários guardam o nome; deduplique perfis homónimos no seletor.
 export function useGestoresTvdeNomes() {
   const { data, isLoading, isError } = useGestoresTvde();
 

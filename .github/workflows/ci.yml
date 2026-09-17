@@ -293,7 +293,20 @@ jobs:
             limite_diario_emails \
             enviar_digests_diarios
 
-      # ── Gate 3: isolamento e exposição ────────────────────────────────
+      # ── Gate 3: ingestão de plataformas ───────────────────────────────
+      # Os dois modos de falha que custaram dinheiro a sério em Setembro de
+      # 2026, ambos silenciosos: a conta da própria frota a entrar nos resumos
+      # da Uber como se fosse um motorista (-133 017 EUR a sujar totais), e
+      # semanas inteiras a não chegar sem ninguém dar por isso.
+      - name: pgTAP — ingestão de plataformas
+        if: steps.baseline.outputs.tem_baseline == 'true'
+        run: |
+          bash scripts/pgtap-suite.sh "Ingestão de plataformas" \
+            uber_conta_frota_fora_do_resumo \
+            semana_plataforma_em_falta \
+            bolt_liquido_a_pagar
+
+      # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
       # que nasça sem isolamento de org ou executável pelo papel anónimo.
       - name: pgTAP — segurança e multi-tenancy
@@ -301,9 +314,10 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
-            rls_anon_exposure
+            rls_anon_exposure \
+            signup_nao_confia_na_metadata
 
-      # ── Gate 4: concorrência a sério ──────────────────────────────────
+      # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de
       # `begin ... rollback`, e uma segunda ligação não vê fixtures por
       # confirmar. Dois workers a competir exigem dados commitados e dois

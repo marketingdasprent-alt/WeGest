@@ -34,6 +34,12 @@
 begin;
 select plan(25);
 
+-- Consome a vaga de "primeiro utilizador da instalação" (handle_new_user_org
+-- dá-lhe org+admin automaticamente) para não colidir com os inserts manuais
+-- de user_organizacoes/user_org_ativa abaixo.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000a0ff', 'bootstrap@exec-runs.pt');
+
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
 
@@ -170,8 +176,11 @@ select throws_ok(
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000a0004', 'gestor.testador@exec-runs.pt');
 
+-- handle_new_user_org já criou a linha (sem org, sem metadata); completa-se aqui.
 insert into public.profiles (id, org_id, nome, email, tipo_utilizador) values
-  ('00000000-0000-0000-0000-0000000a0004', '00000000-0000-0000-0000-0000000a0000', 'Gestor Testador', 'gestor.testador@exec-runs.pt', 'colaborador');
+  ('00000000-0000-0000-0000-0000000a0004', '00000000-0000-0000-0000-0000000a0000', 'Gestor Testador', 'gestor.testador@exec-runs.pt', 'colaborador')
+on conflict (id) do update set
+  org_id = excluded.org_id, nome = excluded.nome, email = excluded.email, tipo_utilizador = excluded.tipo_utilizador;
 
 insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) values
   ('00000000-0000-0000-0000-000000e00001', '00000000-0000-0000-0000-0000000a0000', 'Motorista Teste D', 'gestor testador');

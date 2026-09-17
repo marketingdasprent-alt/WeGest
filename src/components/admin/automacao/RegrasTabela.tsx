@@ -15,25 +15,15 @@ import { cn } from '@/lib/utils';
 import type { GrupoDeRegras } from './agrupamento';
 import { identidadeDoEvento, type ModuloIdentidade } from './rotulos';
 
-/** As colunas do cabeçalho. O cabeçalho de secção atravessa-as todas. */
 const N_COLUNAS = 8;
 
-/** O mesmo vocabulário que o construtor usa para os blocos de acção
- * (ver fluxoDaRegra.ts) — para o badge dizer "+ Enviar email", não
- * "+ email". */
 const ROTULO_DA_ACCAO: Record<string, string> = {
   notificacao: 'Enviar notificação',
   email: 'Enviar email',
   automacao_interna: 'Executar acção',
 };
 
-/**
- * Cabeçalho de secção: uma linha que atravessa a tabela.
- *
- * Uma linha em vez de tabelas separadas por módulo, porque tabelas separadas
- * perdiam o alinhamento das colunas entre secções — cada uma media a sua
- * largura pelo seu próprio conteúdo, e a lista deixava de se ler na vertical.
- */
+// Uma linha de secção preserva o alinhamento das colunas entre módulos.
 function CabecalhoDeSeccao({ modulo, total }: { modulo: ModuloIdentidade; total: number }) {
   const cor = `hsl(var(${modulo.token}))`;
   const { Icone } = modulo;
@@ -58,18 +48,7 @@ function CabecalhoDeSeccao({ modulo, total }: { modulo: ModuloIdentidade; total:
   );
 }
 
-/**
- * A tabela de regras, tal como estava na RegrasTab.
- *
- * Saiu de lá quando a vista de fluxo entrou: a RegrasTab passou a ser a casca
- * que escolhe entre as duas vistas, e uma casca não tem de saber desenhar
- * linhas de tabela.
- *
- * Recebe GRUPOS e não uma lista plana: é o agrupamento que decide a ordem, e
- * decidi-la aqui era decidi-la duas vezes. Os cabeçalhos só aparecem com mais
- * de um grupo — com o filtro num módulo só, ou quando só existe um, um
- * cabeçalho para a única secção seria ruído.
- */
+// A ordenação pertence ao agrupamento; cabeçalhos só aparecem com vários grupos.
 export function RegrasTabela({
   grupos,
   podeGerir,
@@ -80,13 +59,9 @@ export function RegrasTabela({
 }: {
   grupos: GrupoDeRegras[];
   podeGerir: boolean;
-  /** rule_id da regra a ser gravada — só essa fica travada. */
   toggleEmCurso?: string;
   onToggle: (id: string, ativo: boolean) => void;
-  /** Clicar na linha abre a automação no construtor. */
   onAbrir: (regra: { id: string; nome: string }) => void;
-  /** rule_id → tipos de acção das regras-irmãs (mesmo grupo_id, sem ela
-   * própria) — de `outrasAccoesDoGrupo`. */
   outrasAccoes: Map<string, string[]>;
 }) {
   const comSeccoes = grupos.length > 1;
@@ -95,8 +70,6 @@ export function RegrasTabela({
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          {/* Coluna sem título: é um ponto de estado, e um cabeçalho para ele
-              pesava mais do que a informação que dá. */}
           <TableHead className="w-8" aria-label="Saúde" />
           <TableHead>Automação</TableHead>
           <TableHead className="hidden md:table-cell">Módulo</TableHead>
@@ -132,8 +105,7 @@ export function RegrasTabela({
                             ? 'bg-success'
                             : 'bg-muted-foreground/40'
                     )}
-                    // Sem isto, o ponto era cor sem legenda para quem não distingue
-                    // verde de vermelho.
+                    // O título não depende apenas da cor para comunicar o estado.
                     title={
                       !regra.ativo
                         ? 'Desligada'
@@ -147,8 +119,7 @@ export function RegrasTabela({
                 </TableCell>
                 <TableCell className="font-medium">
                   {regra.nome}
-                  {/* Uma automação com várias acções (o mesmo grupo_id) —
-                      diz que outras dispara, sem abrir o construtor. */}
+                  {/* Mostra as ações irmãs sem obrigar a abrir o construtor. */}
                   {(outrasAccoes.get(regra.rule_id) ?? []).length > 0 && (
                     <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
                       +{' '}
@@ -157,7 +128,6 @@ export function RegrasTabela({
                         .join(', ')}
                     </span>
                   )}
-                  {/* Em ecrãs estreitos o módulo perde a coluna, mas não se perde. */}
                   <span
                     className="block text-[11px] md:hidden"
                     style={{ color: `hsl(var(${identidadeDoEvento(regra.event_type).token}))` }}
@@ -166,8 +136,7 @@ export function RegrasTabela({
                   </span>
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  {/* A mesma cor que o módulo tem no canvas e nos chips. Era aqui
-                  que a lista dizia cinzento o que o construtor dizia a cores. */}
+                  {/* Reutiliza o token do módulo para manter consistência com o construtor. */}
                   <Badge
                     variant="outline"
                     className="font-normal"
@@ -192,8 +161,7 @@ export function RegrasTabela({
                 </TableCell>
                 <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">
                   {regra.ultima_execucao ? (
-                    // Relativo em vez de data: "há 2 horas" responde à pergunta que
-                    // se faz a olhar para esta coluna.
+                    // O tempo relativo torna a última execução legível de relance.
                     <span
                       title={format(parseISO(regra.ultima_execucao), 'dd MMM yyyy HH:mm', {
                         locale: pt,

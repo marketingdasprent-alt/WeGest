@@ -14,16 +14,9 @@ interface GravarLiquidoSemanalInput {
 }
 
 /**
- * Guarda o líquido semanal do motorista, tal como o relatório o mostra.
- *
- * Grava o valor JÁ CALCULADO pelo ecrã — não o recalcula. É o que garante que
- * o histórico nunca contradiz o número que foi mostrado (e comunicado ao
- * motorista): se a fórmula mudar amanhã, o que ficou gravado continua a ser o
- * que se disse na altura.
- *
- * A gravação é um efeito lateral silencioso: se falhar, não interrompe nem
- * avisa quem está a ver o resumo — o objectivo é ter registo, não bloquear o
- * ecrã. A falha fica na consola.
+ * Guarda o líquido semanal JÁ CALCULADO pelo ecrã (não recalcula), para o
+ * histórico nunca contradizer o que foi comunicado ao motorista mesmo que a
+ * fórmula mude depois. Falha silenciosa: não deve bloquear o ecrã.
  */
 export function useGravarLiquidoSemanal({
   motoristaId,

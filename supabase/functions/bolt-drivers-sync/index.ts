@@ -9,28 +9,14 @@ import {
  * bolt-drivers-sync — traz a lista de motoristas de cada frota Bolt
  * (getDrivers) e grava-a em bolt_drivers.
  *
- * PARA QUE SERVE
- * Responder, com a fonte certa, a "estes dois driver_uuid são a mesma
- * pessoa?". A auditoria de 2026-08-12/13 encontrou 14 motoristas WeGest com
- * mais do que um uuid na MESMA frota, e não havia como decidir se eram
- * re-registos (saiu e voltou) ou pessoas diferentes fundidas na mesma ficha:
- * as 446 ligações do mapa vinham todas de heurísticas por nome/telefone, e
- * o telefone é pouco fiável (16% diferem do da ficha, e um número chega a
- * estar em 7 fichas).
+ * Serve para decidir, pelo `state` (active/suspended/deactivated) que o
+ * getDrivers devolve por uuid, se dois driver_uuid são reentradas da mesma
+ * pessoa ou pessoas diferentes — as heurísticas por nome/telefone usadas até
+ * 2026-08 eram pouco fiáveis (16% de telefones divergentes).
  *
- * O getDrivers devolve `state` por uuid — active / suspended / deactivated.
- * Com isso a pergunta fecha-se sem adivinhar:
- *   um 'deactivated' + um 'active'  → a mesma pessoa que saiu e voltou;
- *   dois 'active' na mesma frota    → duas pessoas.
- *
- * PORQUE NÃO O bolt-full-sync
- * Esse também chama o getDrivers, mas na mesma passagem escreve em
- * bolt_viagens pelo caminho legado, que preenche driver_earnings. Essa coluna
- * está a NULL de propósito (ver regra 3 do bolt-sync-semana): preenchê-la faz
- * a receita Bolt aparecer a dobrar nos ecrãs financeiros. Esta função não
- * toca em viagens nenhumas.
- *
- * SÓ LEITURA do lado da Bolt. Escreve apenas em bolt_drivers.
+ * Não usa o bolt-full-sync porque esse escreve em bolt_viagens e preenche
+ * driver_earnings, que tem de ficar a NULL (regra 3 do bolt-sync-semana) para
+ * não duplicar receita. Esta função só lê da Bolt e só escreve em bolt_drivers.
  */
 
 const corsHeaders = {
@@ -56,14 +42,9 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const filtroIntegracao = (body as { integracao_id?: string }).integracao_id ?? null;
 
-    // O getDrivers exige janela temporal (sem ela a Bolt devolve 702
-    // INVALID_REQUEST) e recusa janelas largas (498806 INVALID_DATE_RANGE com
-    // 5 meses). Só traz quem esteve na frota no intervalo pedido.
-    //
-    // Para apanhar também quem já SAIU — que são precisamente os
-    // `deactivated` que respondem a "saiu e voltou?" — percorre-se o
-    // histórico em janelas de 30 dias e acumula-se. O upsert é por
-    // driver_uuid, portanto repetições entre janelas não duplicam.
+    // Bolt exige janela temporal e recusa janelas largas (>5 meses), por isso
+    // percorre-se o histórico em blocos de 30 dias para apanhar também quem
+    // já saiu; o upsert por driver_uuid evita duplicar entre janelas.
     const desde = (body as { desde?: string }).desde ?? '2026-03-01';
     const DIAS_JANELA = 30;
     const janelas: Array<{ inicio: number; fim: number }> = [];
@@ -110,8 +91,7 @@ Deno.serve(async (req) => {
       const cred: BoltCredenciais = { clientId, clientSecret };
 
       try {
-        // Acumula por uuid: a última janela em que o motorista aparece é a que
-        // fica, por isso o `state` reflecte o mais recente que a Bolt reportou.
+        // Acumula por uuid: fica a última janela, para reflectir o state mais recente.
         const porUuid = new Map<string, FleetDriver>();
         for (const janela of janelas) {
           const lote = await paginar<FleetDriver>(
@@ -133,8 +113,7 @@ Deno.serve(async (req) => {
             name: [d.first_name, d.last_name].filter(Boolean).join(' ').trim() || null,
             email: d.email ?? null,
             phone: d.phone ?? null,
-            // `state` é o campo da spec. O bolt-full-sync lia `status`, que não
-            // existe — por isso a coluna vinha sempre a null.
+            // `state` é o campo certo; bolt-full-sync lia `status`, que não existe.
             status: d.state ?? null,
             dados_raw: d,
             integracao_id: cfg.id,

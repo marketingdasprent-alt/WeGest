@@ -1,16 +1,5 @@
-/**
- * Aba "Combustível" da ficha do cliente.
- *
- * Atribui e devolve cartões de frota, e mostra o que gastaram no período.
- *
- * Deliberadamente NÃO lança nada na conta-corrente — ver a nota em
- * `useClienteCombustivel`.
- *
- * A atribuição também existe em Administrativo → Cartões e é a MESMA RPC: o
- * cartão é um activo de frota, por isso a permissão que a guarda continua a ser
- * `administrativo_cartoes:editar`, e não a de gerir clientes. Quem não a tiver
- * vê o consumo mas não mexe.
- */
+// Cartões são activos de frota, pelo que a atribuição requer a permissão de
+// Administrativo → Cartões, mesmo quando é iniciada na ficha do cliente.
 import { useState } from 'react';
 import { Fuel, Zap, CreditCard, Plus, UserX, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -69,9 +58,6 @@ export function ClienteCombustivelTab({ clienteId }: ClienteCombustivelTabProps)
 
   const { toast } = useToast();
   const { canEdit } = usePermissions();
-  // O cartão é um activo de frota: quem o move é quem gere cartões, não quem
-  // gere clientes. Sem esta permissão a aba mostra, mas não mexe — e a RPC
-  // recusaria de qualquer forma.
   const podeGerir = canEdit(RECURSOS.ADMINISTRATIVO_CARTOES);
 
   const { data: cartoes = [], isLoading: aCarregarCartoes } = useCartoesDoCliente(clienteId);
@@ -119,7 +105,6 @@ export function ClienteCombustivelTab({ clienteId }: ClienteCombustivelTabProps)
 
   return (
     <div className="space-y-6">
-      {/* Cartões atribuídos */}
       <section className="space-y-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <CreditCard className="h-4 w-4 text-orange-600 dark:text-orange-400" />
@@ -175,7 +160,6 @@ export function ClienteCombustivelTab({ clienteId }: ClienteCombustivelTabProps)
           </div>
         )}
 
-        {/* Associar novo */}
         {podeGerir ? (
           <div className="border-t pt-3 space-y-2">
             <Label className="text-xs text-muted-foreground">Associar cartão disponível</Label>

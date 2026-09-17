@@ -15,16 +15,9 @@ interface GuardarFolhaDanosParams {
 }
 
 /**
- * Arquiva nos anexos do contrato a folha de danos que acabou de ser gerada.
- *
- * É o MESMO PDF que foi impresso e enviado por email — assinaturas, fotos e
- * estado do momento incluídos —, e não uma folha regerada mais tarde (essa
- * traria os danos actuais da viatura e viria sem assinaturas). Fica assim
- * disponível para descarregar as vezes que forem precisas no separador
- * "Anexos" do contrato.
- *
- * Fire-and-forget, como o [emailFolhaDanos]: um handover nunca falha por não
- * se ter conseguido arquivar a cópia.
+ * Arquiva nos anexos do contrato o MESMO PDF já impresso/enviado (com
+ * assinaturas e fotos), não uma folha regerada mais tarde sem elas.
+ * Fire-and-forget: um handover nunca falha por não conseguir arquivar.
  */
 export async function guardarFolhaDanos({
   pdf,

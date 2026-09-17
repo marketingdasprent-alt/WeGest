@@ -1,16 +1,3 @@
-// supabase/functions/_shared/bolt-import-csv/parse.ts
-//
-// Parser e validação do CSV semanal da Bolt. Extraído de bolt-import-csv/index.ts
-// para poder ser testado (Deno.test) fora do handler da edge function.
-//
-// Porquê validar o cabeçalho de forma bloqueante: em 2026-06-01 e 2026-06-08
-// entraram 204 linhas por semana com ganhos_brutos_total = 0,00 EUR. O ficheiro
-// vinha com a linha inteira entre aspas, o cabeçalho colapsou numa única coluna,
-// nenhuma coluna do COLUMN_MAP foi reconhecida e gravaram-se 408 registos vazios
-// sem que nada se queixasse. Sem a coluna do bruto total o ficheiro não vale
-// nada — mais vale devolver 422 e não gravar linha nenhuma.
-
-/** Coluna sem a qual o CSV não serve para nada: é o bruto que alimenta o financeiro. */
 export const COLUNA_GANHOS_BRUTOS = 'Ganhos brutos (total)|€';
 
 export interface CsvBolt {
@@ -53,10 +40,11 @@ export function parseCSVLine(line: string): string[] {
 }
 
 export function parseCSV(csvContent: string): CsvBolt {
-  // O BOM do Excel cola-se ao nome da primeira coluna e estraga o match do
-  // COLUMN_MAP — retirar antes de tudo o resto.
   const texto = (csvContent || '').replace(/^\uFEFF/, '');
-  const lines = texto.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  const lines = texto
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
   if (lines.length === 0) return { cabecalho: [], linhas: [] };
 
   const cabecalho = parseCSVLine(lines[0]).map((h) => h.trim());
@@ -74,15 +62,10 @@ export function parseCSV(csvContent: string): CsvBolt {
   return { cabecalho, linhas };
 }
 
-/** Corta textos longos para caberem numa mensagem de log sem a tornar ilegível. */
 function resumir(texto: string, max = 300): string {
   return texto.length <= max ? texto : `${texto.slice(0, max)}…`;
 }
 
-/**
- * Valida o cabeçalho ANTES de se gravar seja o que for. Devolve `ok: false`
- * com uma mensagem pronta a ir para bolt_sync_logs e para a resposta 422.
- */
 export function validarCabecalho(cabecalho: string[]): ResultadoValidacao {
   const colunas = (cabecalho || []).map((c) => (c || '').trim()).filter((c) => c.length > 0);
 
@@ -94,10 +77,6 @@ export function validarCabecalho(cabecalho: string[]): ResultadoValidacao {
     };
   }
 
-  // Linha inteira entre aspas (`"Motorista,Email,…"`), variante duplamente
-  // escapada do Excel (`"Motorista,""Email"",…"`) ou separador errado (`;`):
-  // em qualquer destes casos o cabeçalho vem numa só coluna que ainda traz os
-  // separadores lá dentro. Foi este o defeito das semanas a 0,00 EUR.
   if (colunas.length === 1 && /[,;\t]/.test(colunas[0])) {
     return {
       ok: false,
@@ -127,20 +106,16 @@ export function parseNumber(value: string): number {
   const cleaned = value.replace(/\s/g, '');
   let normalized: string;
   if (cleaned.includes(',') && cleaned.includes('.')) {
-    // Europeu com milhares: 1.234,56
     normalized = cleaned.replace(/\./g, '').replace(',', '.');
   } else if (cleaned.includes(',')) {
-    // Europeu sem milhares: 1234,56
     normalized = cleaned.replace(',', '.');
   } else {
-    // Internacional: 1234.56
     normalized = cleaned;
   }
   const num = parseFloat(normalized);
   return isNaN(num) ? 0 : num;
 }
 
-/** Minúsculas, sem acentos, sem pontuação, espaços colapsados. */
 export function normalizeStr(s: string): string {
   return s
     .toLowerCase()
@@ -151,20 +126,10 @@ export function normalizeStr(s: string): string {
     .trim();
 }
 
-/**
- * Chave estável de upsert: COALESCE(identificador_motorista, email, nome normalizado).
- *
- * A chave antiga era só o identificador_motorista, que vem NULL em ~465 linhas.
- * Como o Postgres trata NULLs como distintos entre si, essas linhas nunca
- * entravam em conflito e cada reimportação da mesma semana criava duplicados.
- *
- * Devolve null quando a linha não tem identificador, nem email, nem nome — nesse
- * caso não há forma de a deduplicar e o chamador trata-a como erro.
- */
 export function construirChaveMotorista(
   identificador?: string | null,
   email?: string | null,
-  nome?: string | null,
+  nome?: string | null
 ): string | null {
   const id = (identificador ?? '').trim();
   if (id) return id;
@@ -176,16 +141,6 @@ export function construirChaveMotorista(
   return nomeNormalizado || null;
 }
 
-// ---------------------------------------------------------------------------
-// Ligação ao motorista da WeGest
-// ---------------------------------------------------------------------------
-//
-// Vive aqui, e não dentro de uma edge function, porque o CSV e a API precisam
-// exactamente do mesmo emparelhamento: a Bolt não conhece o id do motorista na
-// WeGest, só o nome, o telefone e (no CSV) o email. Duas cópias desta cascata
-// significavam, mais cedo ou mais tarde, um motorista ligado por uma fonte e
-// não pela outra — e uma linha de ganhos sem dono.
-
 export interface MotoristaConhecido {
   id: string;
   nome?: string | null;
@@ -195,39 +150,20 @@ export interface MotoristaConhecido {
 }
 
 export interface MatcherMotoristas {
-  /** Ligação directa e sem ambiguidade: bolt_id === driver_uuid da API. */
   porBoltId(boltId?: string | null): string | null;
-  /** Cascata nome exacto → telefone → email → nome parcial. */
   encontrar(nome?: string | null, telefone?: string | null, email?: string | null): string | null;
 }
 
-/** Últimos 9 dígitos — o formato português, sem indicativo nem espaços. */
 function digitosTelefone(telefone?: string | null): string | null {
   const digitos = (telefone ?? '').replace(/\D/g, '').slice(-9);
   return digitos.length === 9 ? digitos : null;
 }
 
-/**
- * Índice de emparelhamento sobre os motoristas de UMA organização.
- *
- * Em caso de nomes/telefones repetidos fica o último da lista, como já
- * acontecia — é indiferente qual, porque um nome repetido dentro da mesma org
- * já é um problema de dados a montante.
- */
 export function criarMatcherMotoristas(
-  motoristas: readonly MotoristaConhecido[],
+  motoristas: readonly MotoristaConhecido[]
 ): MatcherMotoristas {
   const todos = motoristas ?? [];
 
-  // Índices com detecção de colisão. Uma chave que aponta para mais do que um
-  // motorista NÃO identifica ninguém e é descartada.
-  //
-  // Isto não é hipotético: na Década Ousada há 16 telefones repetidos em duas
-  // fichas e um (`910225915`) em SETE — provavelmente um número de escritório
-  // copiado para várias fichas. Com `mapa[chave] = id`, ganhava o último a ser
-  // escrito, em ordem arbitrária, e mandava o dinheiro para uma ficha à sorte.
-  // Descartar é o comportamento certo: o motorista fica por ligar e aparece no
-  // aviso do sync, em vez de ser ligado a alguém ao calhas.
   const indexar = (pares: Array<[string, string]>): Record<string, string> => {
     const mapa: Record<string, string> = {};
     const ambiguas = new Set<string>();
@@ -268,29 +204,19 @@ export function criarMatcherMotoristas(
   return {
     porBoltId(boltId?: string | null): string | null {
       const chave = (boltId ?? '').trim();
-      return chave ? porBolt[chave] ?? null : null;
+      return chave ? (porBolt[chave] ?? null) : null;
     },
 
-    // ORDEM: telefone → email → nome exacto → nome parcial (sem ambiguidade).
-    //
-    // O telefone vem PRIMEIRO de propósito. A Bolt verifica documentos, por
-    // isso o número identifica a pessoa; o nome que a API devolve é curto
-    // ("Paulo Silva", "Fernando Pereira") e casa com mais do que um motorista.
-    //
-    // Antes o nome vinha primeiro e o match parcial escolhia `todos.find` — o
-    // PRIMEIRO da lista, por ordem arbitrária. Isso juntou pessoas diferentes
-    // na mesma ficha (auditoria 2026-08-12): os ganhos do Paulo Sérgio da
-    // Silva #480 foram parar ao Paulo Alexandre Mena Antunes #25, e os do
-    // Fernando da Silva Pereira #418 ao Fernando Pereira #313 — em ambos os
-    // casos o telefone da Bolt apontava, correctamente, para o outro.
-    encontrar(nome?: string | null, telefone?: string | null, email?: string | null): string | null {
+    encontrar(
+      nome?: string | null,
+      telefone?: string | null,
+      email?: string | null
+    ): string | null {
       if (!nome && !telefone && !email) return null;
 
-      // 1. Telefone — identificador forte.
       const digitos = digitosTelefone(telefone);
       if (digitos && porTelefone[digitos]) return porTelefone[digitos];
 
-      // 2. Email — também só quando é de um só motorista.
       if (email) {
         const alvo = email.toLowerCase().trim();
         const achados = todos.filter((m) => (m.email ?? '').toLowerCase().trim() === alvo);
@@ -300,13 +226,8 @@ export function criarMatcherMotoristas(
 
       const normNome = nome ? normalizeStr(nome) : '';
 
-      // 3. Nome exacto (normalizado).
       if (normNome && porNome[normNome]) return porNome[normNome];
 
-      // 4/5. Nome parcial, nos dois sentidos. `filter` em vez de `find`: com
-      // mais do que um candidato o nome NAO chega para decidir, e adivinhar
-      // manda dinheiro para a ficha errada. Devolve null e o motorista fica
-      // por ligar — visível no aviso do sync, que é o comportamento correcto.
       if (normNome) {
         const partes = normNome.split(' ').filter((p) => p.length > 2);
         if (partes.length >= 2) {
@@ -319,7 +240,9 @@ export function criarMatcherMotoristas(
         }
 
         const inversos = todos.filter((m) => {
-          const partesAlvo = normalizeStr(m.nome ?? '').split(' ').filter((p) => p.length > 2);
+          const partesAlvo = normalizeStr(m.nome ?? '')
+            .split(' ')
+            .filter((p) => p.length > 2);
           if (partesAlvo.length < 2) return false;
           return partesAlvo.every((p) => normNome.includes(p));
         });
