@@ -28,6 +28,7 @@ import {
   type Movimento,
 } from './cartoesFlotaTab.types';
 import { parseSheet, readWorkbook } from './cartoesFlotaImport';
+import { normalizarNumeroCartao } from './cartoesFlotaNumero';
 import type { ImportRow, TipoCartao } from './cartoesFlotaImport';
 import { exportarCartoesExcel, exportarCartoesPrint } from './cartoesFlotaExport';
 import { CartoesFlotaKpis } from './CartoesFlotaKpis';
@@ -128,7 +129,10 @@ export function CartoesFlotaTab() {
         ? (clientes.find((c) => c.id === clienteId)?.nome ?? '')
         : '';
 
-  const consumoOf = (c: CartaoFrota) => consumoMap[`${c.tipo}|${c.numero}`]?.total ?? 0;
+  // `get_cartoes_consumo` devolve o número já normalizado (últimos 4 dígitos);
+  // `cartoes_frota.numero` tem 2 a 5, por isso normaliza-se pela mesma regra.
+  const consumoOf = (c: CartaoFrota) =>
+    consumoMap[`${c.tipo}|${normalizarNumeroCartao(c.numero)}`]?.total ?? 0;
 
   const filtered = useMemo(() => {
     const list = cartoes.filter((c) => {
