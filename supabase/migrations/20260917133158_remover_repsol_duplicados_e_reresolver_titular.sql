@@ -48,4 +48,13 @@ WHERE b.org_id IS NOT NULL
     SELECT 1 FROM public.motorista_liquido_semanal l
     WHERE l.org_id = b.org_id
       AND l.semana_inicio = (date_trunc('week', b.transaction_date))::date
+  )
+  -- `refecho_pendente` não tem chave única sobre (org, semana, motivo), por
+  -- isso um segundo passar desta migração acrescentaria as mesmas semanas
+  -- outra vez. Guarda explícita em vez de ON CONFLICT.
+  AND NOT EXISTS (
+    SELECT 1 FROM public.refecho_pendente r
+    WHERE r.org_id = b.org_id
+      AND r.semana_inicio = (date_trunc('week', b.transaction_date))::date
+      AND r.motivo = 'movimentos_duplicados_removidos'
   );
