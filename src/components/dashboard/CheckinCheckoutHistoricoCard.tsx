@@ -140,7 +140,7 @@ export const CheckinCheckoutHistoricoCard: React.FC<Props> = ({ enabled }) => {
 
   return (
     <>
-      <Card className="rounded-xl shadow-none">
+      <Card className="flex h-full flex-col overflow-hidden rounded-xl shadow-none">
         <CardHeader className="px-4 py-3">
           <CardTitle className="flex items-center gap-2 text-sm font-semibold">
             <Camera className="h-4 w-4 text-primary" />
@@ -152,7 +152,7 @@ export const CheckinCheckoutHistoricoCard: React.FC<Props> = ({ enabled }) => {
             )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="min-h-0 flex-1 overflow-y-auto p-0">
           {isLoading ? (
             <div className="divide-y divide-border/60">
               {Array.from({ length: PREVIEW_SIZE }).map((_, i) => (

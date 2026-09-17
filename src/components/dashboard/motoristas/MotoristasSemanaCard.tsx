@@ -1,58 +1,80 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TrendingDown, Users } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChevronRight } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/components/dashboard/frota/atividade';
 import { useMotoristasSemana } from '@/hooks/useMotoristasSemana';
 import {
+  formatarEuros,
   formatarIntervaloSemana,
+  percentagem,
   type GestorContagem,
   type MotoristaNegativo,
 } from './motoristasSemana';
 
-/** Quantos negativos cabem sem a lista empurrar o bloco dos gestores para fora. */
-const PREVIEW_NEGATIVOS = 5;
+/** O cartão preenche a altura que a linha lhe dá (a homepage está desenhada
+ *  para caber num ecrã, e essa altura é fixada em DashboardFrota). Abaixo de
+ *  `lg` a página rola na mesma e o cartão cresce com o conteúdo. */
+const ALTURA = 'lg:h-full';
 
 function NegativoRow({ motorista, onClick }: { motorista: MotoristaNegativo; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between gap-3 px-4 py-1.5 text-left transition-colors hover:bg-muted/50"
+      className="group flex w-full items-center gap-2 rounded-md px-2 py-[5px] text-left transition-colors duration-150 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <span className="truncate text-[13px] font-medium leading-tight">{motorista.nome}</span>
+      <span className="min-w-0 flex-1 truncate text-[13px] leading-tight">{motorista.nome}</span>
       <span className="shrink-0 text-[13px] font-semibold tabular-nums text-destructive">
-        {formatCurrency(motorista.liquido)}
+        {formatarEuros(motorista.liquido)}
       </span>
+      <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
     </button>
   );
 }
 
+/** Nome, barra e número em três colunas fixas. O preenchimento atrás do nome
+ *  (que isto substitui) fazia as barras começarem todas em sítios diferentes e
+ *  o texto assentar em cima da cor: dois valores próximos eram indistinguíveis.
+ *  Com a barra em coluna própria, todas arrancam do mesmo x e comparam-se de
+ *  relance. */
 function GestorRow({ gestor, maximo }: { gestor: GestorContagem; maximo: number }) {
-  const percentagem = maximo > 0 ? Math.round((gestor.total / maximo) * 100) : 0;
+  const largura = percentagem(gestor.total, maximo);
+  const semGestor = !gestor.chave;
   return (
-    <div className="flex items-center gap-3 px-4 py-1">
+    <div className="grid grid-cols-[6.5rem_1fr_1.75rem] items-center gap-2.5 px-2 py-[3px]">
       <span
         className={cn(
-          'w-32 shrink-0 truncate text-[13px] leading-tight',
-          gestor.chave ? 'font-medium' : 'italic text-muted-foreground'
+          'truncate text-[13px] leading-tight',
+          semGestor ? 'italic text-muted-foreground' : 'text-foreground'
         )}
+        title={gestor.nome}
       >
         {gestor.nome}
       </span>
-      {/* A barra é só escala relativa ao maior gestor — o número é que conta,
-          por isso fica fora dela e não dentro. */}
-      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+      {/* O carril fica sempre visível: sem ele, uma barra curta não se
+          distingue de uma barra em falta. */}
+      <span className="h-[5px] overflow-hidden rounded-full bg-foreground/[0.06]">
         <span
-          className="block h-full rounded-full bg-primary/70"
-          style={{ width: `${percentagem}%` }}
+          className={cn(
+            'block h-full rounded-full',
+            semGestor ? 'bg-muted-foreground/40' : 'bg-primary'
+          )}
+          style={{ width: `${Math.max(largura, 2)}%` }}
         />
       </span>
-      <span className="w-7 shrink-0 text-right text-[13px] font-semibold tabular-nums">
-        {gestor.total}
-      </span>
+      <span className="text-right text-[13px] font-semibold tabular-nums">{gestor.total}</span>
+    </div>
+  );
+}
+
+/** Cabeçalho de painel: uma linha só, rótulo à esquerda e o total à direita. */
+function PainelTitulo({ children, total }: { children: React.ReactNode; total: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 px-2 pb-1.5">
+      <h3 className="text-xs font-medium text-muted-foreground">{children}</h3>
+      <span className="text-xs tabular-nums text-muted-foreground">{total}</span>
     </div>
   );
 }
@@ -64,52 +86,65 @@ export const MotoristasSemanaCard: React.FC<{ enabled?: boolean }> = ({ enabled 
   const semana = data?.semana ?? null;
   const negativos = data?.negativos ?? [];
   const porGestor = data?.porGestor ?? [];
+  const comLiquido = data?.totalComLiquido ?? 0;
   const maximoGestor = porGestor[0]?.total ?? 0;
+  const fatiaNegativos = percentagem(negativos.length, comLiquido);
 
   return (
-    <Card className="flex flex-col rounded-xl shadow-none">
-      <CardHeader className="px-4 py-3">
-        <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-          <TrendingDown className="h-4 w-4 text-destructive" />
-          Motoristas negativos
-          {semana && (
-            <span className="ml-auto text-xs font-normal text-muted-foreground">
-              {formatarIntervaloSemana(semana.inicio, semana.fim)}
-            </span>
-          )}
-        </CardTitle>
-      </CardHeader>
+    <Card className={cn('flex flex-col overflow-hidden rounded-xl shadow-none', ALTURA)}>
+      <header className="flex items-baseline justify-between gap-3 border-b border-border/60 px-4 py-3">
+        <h2 className="text-sm font-semibold">Motoristas</h2>
+        {semana && (
+          <span className="text-xs text-muted-foreground">
+            semana de {formatarIntervaloSemana(semana.inicio, semana.fim)}
+          </span>
+        )}
+      </header>
 
-      <CardContent className="flex flex-1 flex-col gap-3 p-0 pb-3">
-        {isLoading ? (
-          <div className="space-y-2 px-4">
-            <Skeleton className="h-8 w-32" />
-            {Array.from({ length: PREVIEW_NEGATIVOS }).map((_, i) => (
-              <Skeleton key={i} className="h-4 w-full" />
-            ))}
-          </div>
-        ) : !semana ? (
-          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-            Ainda não há nenhuma semana fechada com líquidos gravados.
-          </p>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-2 px-4">
-              <span className="text-2xl font-semibold tabular-nums text-destructive">
-                {negativos.length}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                de {data?.totalComLiquido ?? 0} com líquido nessa semana
-              </span>
+      {isLoading ? (
+        <div className="grid flex-1 grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+          {[0, 1].map((coluna) => (
+            <div key={coluna} className="space-y-2">
+              <Skeleton className="h-7 w-24" />
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-4 w-full" />
+              ))}
             </div>
+          ))}
+        </div>
+      ) : !semana ? (
+        <p className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+          Assim que fechar uma semana com líquidos gravados, ela aparece aqui.
+        </p>
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-1 divide-y divide-border/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          {/* ── Quem fechou a semana negativo ───────────────────────────── */}
+          <section className="flex min-h-0 flex-col p-3">
+            <div className="flex items-end justify-between gap-2 px-2">
+              <div>
+                <p className="text-2xl font-semibold leading-none tabular-nums text-destructive">
+                  {negativos.length}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  fecharam negativos, de {comLiquido}
+                </p>
+              </div>
+              <span className="text-xs tabular-nums text-muted-foreground">{fatiaNegativos}%</span>
+            </div>
+            <span className="mx-2 mt-2 block h-1 overflow-hidden rounded-full bg-muted">
+              <span
+                className="block h-full rounded-full bg-destructive"
+                style={{ width: `${fatiaNegativos}%` }}
+              />
+            </span>
 
             {negativos.length === 0 ? (
-              <p className="px-4 text-sm text-muted-foreground">
-                Nenhum motorista fechou a semana negativo.
+              <p className="mt-3 px-2 text-sm text-muted-foreground">
+                Ninguém fechou a semana negativo.
               </p>
             ) : (
-              <div className="divide-y divide-border/60">
-                {negativos.slice(0, PREVIEW_NEGATIVOS).map((m) => (
+              <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
+                {negativos.map((m) => (
                   <NegativoRow
                     key={m.id}
                     motorista={m}
@@ -118,26 +153,23 @@ export const MotoristasSemanaCard: React.FC<{ enabled?: boolean }> = ({ enabled 
                 ))}
               </div>
             )}
+          </section>
 
-            <div className="mt-auto border-t border-border/60 pt-2">
-              <p className="flex items-center gap-2 px-4 pb-1 text-xs font-semibold text-muted-foreground">
-                <Users className="h-3.5 w-3.5" />
-                Motoristas por gestor
-                <span className="ml-auto font-normal tabular-nums">
-                  {data?.totalMotoristas ?? 0}
-                </span>
-              </p>
-              {porGestor.length === 0 ? (
-                <p className="px-4 py-2 text-sm text-muted-foreground">
-                  Nenhum motorista activo.
-                </p>
-              ) : (
-                porGestor.map((g) => <GestorRow key={g.chave} gestor={g} maximo={maximoGestor} />)
-              )}
-            </div>
-          </>
-        )}
-      </CardContent>
+          {/* ── Carteira de cada gestor ─────────────────────────────────── */}
+          <section className="flex min-h-0 flex-col p-3">
+            <PainelTitulo total={data?.totalMotoristas ?? 0}>Por gestor</PainelTitulo>
+            {porGestor.length === 0 ? (
+              <p className="px-2 text-sm text-muted-foreground">Nenhum motorista activo.</p>
+            ) : (
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {porGestor.map((g) => (
+                  <GestorRow key={g.chave} gestor={g} maximo={maximoGestor} />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </Card>
   );
 };

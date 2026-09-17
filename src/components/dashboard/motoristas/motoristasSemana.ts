@@ -124,3 +124,19 @@ export function formatarIntervaloSemana(inicio: string, fim: string): string {
   }
   return `${format(di, 'd MMM', { locale: pt })} – ${format(df, 'd MMM', { locale: pt })}`;
 }
+
+/**
+ * Euros sem cêntimos e com o sinal de menos tipográfico (U+2212). O hífen do
+ * teclado é mais estreito que um algarismo e desalinhava a coluna de valores,
+ * que é tabular.
+ */
+export function formatarEuros(valor: number): string {
+  const arredondado = Math.round(valor);
+  return `${arredondado < 0 ? '−' : ''}${Math.abs(arredondado)} €`;
+}
+
+/** Fatia inteira de `parte` no `total`; total zero dá zero em vez de NaN. */
+export function percentagem(parte: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((parte / total) * 100);
+}

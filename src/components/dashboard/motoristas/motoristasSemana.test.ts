@@ -4,6 +4,8 @@ import {
   agruparPorGestor,
   ordenarNegativos,
   formatarIntervaloSemana,
+  formatarEuros,
+  percentagem,
 } from './motoristasSemana';
 
 describe('escolherSemanaFechada', () => {
@@ -132,5 +134,29 @@ describe('formatarIntervaloSemana', () => {
 
   it('mostra os dois meses quando a semana atravessa o mês', () => {
     expect(formatarIntervaloSemana('2026-08-31', '2026-09-06')).toBe('31 ago – 6 set');
+  });
+});
+
+describe('formatarEuros', () => {
+  it('arredonda ao euro — numa lista densa os cêntimos só fazem ruído', () => {
+    expect(formatarEuros(-1400)).toBe('−1400 €');
+    expect(formatarEuros(-1346.99)).toBe('−1347 €');
+  });
+
+  it('usa o sinal de menos tipográfico, que alinha com os dígitos', () => {
+    // O hífen do teclado é mais curto e estreito que os algarismos: numa
+    // coluna tabular a coluna dos valores ficava a dançar.
+    expect(formatarEuros(-5)).toContain('−');
+    expect(formatarEuros(-5)).not.toContain('-');
+  });
+});
+
+describe('percentagem', () => {
+  it('dá a fatia inteira do total', () => {
+    expect(percentagem(68, 341)).toBe(20);
+  });
+
+  it('total zero não rebenta nem inventa 100%', () => {
+    expect(percentagem(0, 0)).toBe(0);
   });
 });

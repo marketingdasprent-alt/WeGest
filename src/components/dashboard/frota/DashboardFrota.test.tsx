@@ -291,9 +291,9 @@ describe('Homepage — KPIs, estado da frota, atenção, atividade, check-in/che
       expect(screen.getByText('Histórico Check-in / Check-out')).toBeTruthy();
     });
     // O mapa Car Track saiu do dashboard (vive na ficha da viatura). No lugar
-    // dele ficou o cartão da semana, que mostra sempre o título no cabeçalho,
+    // dele ficou o cartão dos motoristas da semana, que mostra sempre o título,
     // seja qual for o estado dos dados.
-    expect(screen.getByText('Motoristas negativos')).toBeTruthy();
+    expect(screen.getByText('Motoristas')).toBeTruthy();
     expect(screen.queryByText('Car Track')).toBeNull();
   });
 
