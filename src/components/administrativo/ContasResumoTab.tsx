@@ -308,6 +308,7 @@ export function ContasResumoTab() {
     loading,
     setLoading,
     statusAtivoMap,
+    contaFrotaMap,
     motoristasList,
     matriculaMap,
     gestorMap,
@@ -343,19 +344,30 @@ export function ContasResumoTab() {
   const filteredResumos = useMemo(() => {
     let result = resumos.filter((r) => {
       if (isCompanyName(r.driver_name)) return false;
-      // Motorista inativo: só se esconde nas semanas que começam DEPOIS de ele
-      // ter sido desativado. Nas anteriores continua a aparecer normalmente —
-      // são semanas que ele trabalhou e que podem ter contas por fechar
-      // (ganhos das plataformas, saldo pendente). Antes escondia-se em todas,
-      // e como fechar um contrato TVDE desativa o motorista automaticamente
-      // (useContratosRenting), recolher a viatura fazia desaparecer dinheiro
-      // real do ecrã onde se fazem os acertos — caso do motorista #252.
+      // A própria empresa não é um motorista. isCompanyName() acima é uma
+      // regex por sufixo ("Lda", "S.A.", "Unipessoal") e apanha as contas que
+      // vêm da Uber com o nome completo ("Década Ousada, Lda."), mas não
+      // apanha a ficha "PREMIUM RIDE" do CRM, que tem o nome da organização e
+      // sufixo nenhum. Essa vem marcada da base de dados — ver a migração
+      // 20260917110000.
+      if (r.motorista_id && contaFrotaMap[r.motorista_id]) return false;
+      // Motorista inativo: fora do ecrã, EXCEPTO se essa semana tiver valores.
+      //
+      // Não é possível escondê-lo sempre: fechar um contrato TVDE desativa o
+      // motorista automaticamente (useContratosRenting), e recolher a viatura
+      // fazia desaparecer dinheiro real do ecrã onde se fazem os acertos —
+      // caso do motorista #252. Por isso a linha sobrevive enquanto houver
+      // alguma coisa por acertar; assim que a semana está a zeros, é ruído e
+      // sai. Nas semanas que começam DEPOIS da desativação sai sempre.
       if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) {
         const desativadoEm = desativadoEmMap[r.motorista_id];
         // Sem data conhecida (inativo de antes desta funcionalidade): mantém o
         // comportamento antigo de esconder, para não ressuscitar histórico
         // antigo sem querer.
         if (!desativadoEm || new Date(desativadoEm) < weekStart) return false;
+        const temValores =
+          r.liquido !== 0 || r.total_faturado !== 0 || (r.saldoPendente ?? 0) !== 0;
+        if (!temValores) return false;
       }
       if (searchTerm && !matchesSearch(r.driver_name, searchTerm)) return false;
       if (filterRecibo === 'verde' && !r.recibo_verde) return false;
@@ -406,6 +418,7 @@ export function ContasResumoTab() {
     gestorMap,
     dataContratacaoMap,
     statusAtivoMap,
+    contaFrotaMap,
     desativadoEmMap,
     weekStart,
     weekEnd,

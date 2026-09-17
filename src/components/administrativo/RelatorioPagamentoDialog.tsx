@@ -13,10 +13,12 @@ import {
   ChevronDown,
   ChevronsUpDown,
   AlertTriangle,
+  Printer,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
 import { colunaDoMovimento, type ColunaFinanceira } from './relatorioPagamentoCategorias';
+import { gerarRelatorioPagamentoPrint } from './relatorioPagamentoPrint';
 
 interface ResumoBase {
   motorista_id?: string;
@@ -25,6 +27,9 @@ interface ResumoBase {
   _uid?: string;
   driver_uuid?: string;
   driver_name: string;
+  /** Passa recibo verde. `false` = "vermelho" — o nome sai a vermelho e o
+   *  filtro do cabeçalho separa uns dos outros. */
+  recibo_verde?: boolean;
   liquido: number;
   aluguer: number;
   combustivel: number;
@@ -52,6 +57,7 @@ interface LinhaRelatorio {
   motorista_id: string | null;
   nome: string;
   iban: string;
+  reciboVerde: boolean;
   liquido: number;
   viatura: number;
   combustivel: number;
@@ -109,6 +115,10 @@ export function RelatorioPagamentoDialog({
   // ordem manual; arrastar uma linha limpa a ordenação (ver handleDrop).
   const [sortCol, setSortCol] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Recibo verde: 'verde' = passa recibo, 'vermelho' = não passa. O filtro
+  // mexe também nos totais e no que vai para a impressão e para o Excel — é
+  // deliberado: quem filtra quer o total daquele grupo, não o da lista toda.
+  const [filtroRecibo, setFiltroRecibo] = useState<'todos' | 'verde' | 'vermelho'>('todos');
 
   // Reset da ordenação ao fechar (os "pagos" são recarregados da BD ao abrir).
   useEffect(() => {
@@ -118,6 +128,7 @@ export function RelatorioPagamentoDialog({
       setDragId(null);
       setSortCol(null);
       setSortDir('asc');
+      setFiltroRecibo('todos');
     }
   }, [open]);
 
@@ -289,6 +300,11 @@ export function RelatorioPagamentoDialog({
           motorista_id: motoristaId,
           nome: r.driver_name,
           iban: (motoristaId && ibanMap[motoristaId]) || '',
+          // Por omissão VERDE. O campo vem dos Resumos, que já o resolvem a
+          // partir da ficha; só fica indefinido em linhas sem ficha no CRM, e
+          // aí não há como saber — melhor não acusar ninguém de não passar
+          // recibo por falta de dados.
+          reciboVerde: r.recibo_verde !== false,
           liquido: r.liquido,
           viatura: r.aluguer,
           combustivel: r.combustivel,
@@ -312,7 +328,13 @@ export function RelatorioPagamentoDialog({
   // Motoristas fora da ordem manual (ex.: dados que carregaram depois) vão para
   // o fim, alfabéticos.
   const linhasOrdenadas = useMemo(() => {
-    const arr = [...linhas];
+    const arr = linhas.filter((l) =>
+      filtroRecibo === 'todos'
+        ? true
+        : filtroRecibo === 'verde'
+          ? l.reciboVerde
+          : !l.reciboVerde
+    );
 
     if (sortCol) {
       arr.sort((a, b) => {
@@ -335,7 +357,7 @@ export function RelatorioPagamentoDialog({
       const pb = pos.has(b.key) ? pos.get(b.key)! : Number.MAX_SAFE_INTEGER;
       return pa - pb;
     });
-  }, [linhas, ordemManual, sortCol, sortDir]);
+  }, [linhas, ordemManual, sortCol, sortDir, filtroRecibo]);
 
   // Drag-n-drop (HTML5 nativo — mesmo padrão do kanban-board do projeto).
   const handleDrop = (targetId: string) => {
@@ -382,10 +404,37 @@ export function RelatorioPagamentoDialog({
     return t;
   }, [linhasOrdenadas]);
 
+  // Contadores dos botões — sobre a lista INTEIRA, para continuarem a fazer
+  // sentido com um filtro activo.
+  const nVerdes = useMemo(() => linhas.filter((l) => l.reciboVerde).length, [linhas]);
+  const nVermelhos = linhas.length - nVerdes;
+
+  // Só descritivo — o que sai no cabeçalho do papel, para uma folha filtrada
+  // não se fazer passar pela lista completa.
+  const filtroLabel =
+    filtroRecibo === 'verde'
+      ? 'Apenas com recibo verde'
+      : filtroRecibo === 'vermelho'
+        ? 'Apenas sem recibo verde'
+        : undefined;
+
+  const handlePrint = () =>
+    gerarRelatorioPagamentoPrint({
+      // A MESMA lista do ecrã, na mesma ordem e com o mesmo filtro: a
+      // impressão não recalcula nada.
+      linhas: linhasOrdenadas.map((l) => ({
+        ...l,
+        pago: !!l.motorista_id && pagos.has(l.motorista_id),
+      })),
+      weekLabel,
+      filtroLabel,
+    });
+
   const handleExport = () => {
     const rows = linhasOrdenadas.map((l) => ({
       Nome: l.nome,
       IBAN: l.iban,
+      'Recibo Verde': l.reciboVerde ? 'Sim' : 'Não',
       Semana: weekLabel,
       Pago: l.motorista_id && pagos.has(l.motorista_id) ? 'Sim' : '',
       'Valor a Pagar (€)': l.liquido,
@@ -477,6 +526,48 @@ export function RelatorioPagamentoDialog({
                   Ordem alfabética
                 </Button>
               )}
+              {/* Verdes/Vermelhos = passa ou não passa recibo verde. Os
+                  contadores vêm de `linhas` (a lista toda), não de
+                  `linhasOrdenadas`, senão o grupo activo mostrava o seu
+                  próprio número e o outro ficava a zero. */}
+              <div className="flex items-center rounded-md border p-0.5">
+                {(
+                  [
+                    ['todos', `Todos (${linhas.length})`, ''],
+                    ['verde', `Verdes (${nVerdes})`, 'text-emerald-700 dark:text-emerald-400'],
+                    ['vermelho', `Vermelhos (${nVermelhos})`, 'text-red-600 dark:text-red-400'],
+                  ] as const
+                ).map(([valor, rotulo, cor]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => setFiltroRecibo(valor)}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                      filtroRecibo === valor
+                        ? 'bg-primary text-primary-foreground'
+                        : `hover:bg-muted ${cor}`
+                    }`}
+                    title={
+                      valor === 'vermelho'
+                        ? 'Motoristas que não passam recibo verde'
+                        : valor === 'verde'
+                          ? 'Motoristas que passam recibo verde'
+                          : 'Sem filtro de recibo'
+                    }
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                disabled={loading || linhasOrdenadas.length === 0}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir
+              </Button>
               <Button variant="outline" size="sm" onClick={handleExport} disabled={loading}>
                 <FileDown className="h-4 w-4 mr-2" />
                 Exportar Excel
@@ -614,10 +705,18 @@ export function RelatorioPagamentoDialog({
                                 : undefined
                             }
                           />
+                          {/* Nome a vermelho = não passa recibo verde. O verde
+                              do "pago" ganha-lhe: uma linha já paga deixa de
+                              ser um aviso. */}
                           <span
                             className={
-                              pago ? 'font-semibold text-emerald-800 dark:text-emerald-200' : ''
+                              pago
+                                ? 'font-semibold text-emerald-800 dark:text-emerald-200'
+                                : !l.reciboVerde
+                                  ? 'font-semibold text-red-600 dark:text-red-400'
+                                  : ''
                             }
+                            title={l.reciboVerde ? undefined : 'Não passa recibo verde'}
                           >
                             {l.nome}
                           </span>

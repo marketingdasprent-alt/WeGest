@@ -39,7 +39,7 @@ export interface MotoristaResumo {
 const fmtEur = (v: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
 
-async function fetchLogoDataUrl(): Promise<string> {
+export async function fetchLogoDataUrl(): Promise<string> {
   try {
     const res = await fetch('/Logo.png');
     const blob = await res.blob();

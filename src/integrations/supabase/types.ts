@@ -7784,6 +7784,7 @@ export type Database = {
           gestor_responsavel: string | null
           iban: string | null
           id: string
+          is_conta_frota: boolean
           is_slot: boolean | null
           lead_id: string | null
           licenca_tvde_ficheiro_url: string | null
@@ -7838,6 +7839,7 @@ export type Database = {
           gestor_responsavel?: string | null
           iban?: string | null
           id?: string
+          is_conta_frota?: boolean
           is_slot?: boolean | null
           lead_id?: string | null
           licenca_tvde_ficheiro_url?: string | null
@@ -7892,6 +7894,7 @@ export type Database = {
           gestor_responsavel?: string | null
           iban?: string | null
           id?: string
+          is_conta_frota?: boolean
           is_slot?: boolean | null
           lead_id?: string | null
           licenca_tvde_ficheiro_url?: string | null

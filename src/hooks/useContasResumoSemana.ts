@@ -51,6 +51,11 @@ export function useContasResumoSemana(
   // contar nas semanas ANTERIORES a esta data (ver filtro em filteredResumos,
   // em ContasResumoTab).
   const [desativadoEmMap, setDesativadoEmMap] = useState<Record<string, string>>({});
+  // motorista_id → a ficha é a própria empresa, não uma pessoa (ex.: a ficha
+  // "PREMIUM RIDE", com o nome da organização). Fora dos Resumos e do
+  // Relatório de Pagamento — ver a migração 20260917110000 e o filtro em
+  // ContasResumoTab.
+  const [contaFrotaMap, setContaFrotaMap] = useState<Record<string, boolean>>({});
   // motorista_id → aluguer sem contrato por trás (preço vindo da tarifa do
   // modelo). Assinalado no resumo para se ver quem falta regularizar.
   const [aluguerEstimadoMap, setAluguerEstimadoMap] = useState<Record<string, boolean>>({});
@@ -87,7 +92,7 @@ export function useContasResumoSemana(
       const { data: todosMotoristas } = await supabase
         .from('motoristas_ativos')
         .select(
-          'id, nome, recibo_verde, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at'
+          'id, nome, recibo_verde, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at, is_conta_frota'
         );
 
       // Mapa: uber_uuid -> motorista_id
@@ -361,13 +366,16 @@ export function useContasResumoSemana(
       const dcMap: Record<string, string> = {};
       const saMap: Record<string, boolean> = {};
       const deMap: Record<string, string> = {};
+      const cfMap: Record<string, boolean> = {};
       (todosMotoristas || []).forEach((m: any) => {
         if (m.gestor_responsavel) gMap[m.id] = m.gestor_responsavel;
         // Usar data_contratacao se disponível, senão usar created_at (sempre preenchido)
         dcMap[m.id] = m.data_contratacao || m.created_at;
         saMap[m.id] = m.status_ativo !== false;
         if (m.desativado_em) deMap[m.id] = m.desativado_em;
+        if (m.is_conta_frota) cfMap[m.id] = true;
       });
+      setContaFrotaMap(cfMap);
       setGestorMap(gMap);
       setDataContratacaoMap(dcMap);
       setStatusAtivoMap(saMap);
@@ -1134,6 +1142,7 @@ export function useContasResumoSemana(
     // funcionar depois da extracção.
     setLoading,
     statusAtivoMap,
+    contaFrotaMap,
     motoristasList,
     matriculaMap,
     gestorMap,
