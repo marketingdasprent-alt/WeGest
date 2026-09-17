@@ -282,7 +282,7 @@ describe('Homepage — KPIs, estado da frota, atenção, atividade, check-in/che
     expect(screen.getByText('Inativos')).toBeTruthy();
   }, 15000);
 
-  it('mostra "Histórico Check-in / Check-out" e o cartão "Car Track"', async () => {
+  it('mostra "Histórico Check-in / Check-out" e o cartão dos motoristas negativos', async () => {
     mockVariant('executivo');
 
     renderDashboard();
@@ -290,9 +290,11 @@ describe('Homepage — KPIs, estado da frota, atenção, atividade, check-in/che
     await waitFor(() => {
       expect(screen.getByText('Histórico Check-in / Check-out')).toBeTruthy();
     });
-    // Car Track deixou de ser placeholder — passou a ser o mapa (CartrackMapCard),
-    // que renderiza sempre o título no cabeçalho, seja qual for o estado.
-    expect(screen.getByText('Car Track')).toBeTruthy();
+    // O mapa Car Track saiu do dashboard (vive na ficha da viatura). No lugar
+    // dele ficou o cartão dos motoristas da semana, que mostra sempre o título,
+    // seja qual for o estado dos dados.
+    expect(screen.getByText('Motoristas')).toBeTruthy();
+    expect(screen.queryByText('Car Track')).toBeNull();
   });
 
   it('"Precisa de atenção" mostra o estado positivo quando não há nada', async () => {
