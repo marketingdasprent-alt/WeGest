@@ -22,6 +22,7 @@ interface CartoesFlotaTabelaProps {
   sortDir: 'asc' | 'desc';
   onSort: (field: string) => void;
   consumoOf: (c: CartaoFrota) => number;
+  periodoLabel: string;
   titularLabel: (c: CartaoFrota) => { texto: string; tipo: 'motorista' | 'cliente' } | null;
   onEdit: (c: CartaoFrota) => void;
   onEntrega: (c: CartaoFrota) => void;
@@ -49,6 +50,7 @@ export function CartoesFlotaTabela({
   sortDir,
   onSort,
   consumoOf,
+  periodoLabel,
   titularLabel,
   onEdit,
   onEntrega,
@@ -123,7 +125,7 @@ export function CartoesFlotaTabela({
               sortDir={sortDir}
               onSort={onSort}
             >
-              Consumo (mês)
+              <span title={`Consumo em ${periodoLabel}`}>Consumo</span>
             </SortableTableHead>
             <SortableTableHead
               field="validade"
