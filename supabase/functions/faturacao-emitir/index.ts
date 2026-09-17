@@ -1,26 +1,38 @@
 // ============================================================
 // Edge Function: faturacao-emitir  (provider-agnostic)
 // ============================================================
-// Emite documentos fiscais (FT / FR / NC / RC) no software de faturação
-// CONFIGURADO POR ORGANIZAÇÃO e grava o espelho local em `public.invoices`.
+// Emite documentos fiscais (FT / FR / NC / RC) no software de faturação DA
+// EMPRESA QUE ASSINA O DOCUMENTO e grava o espelho local em `public.invoices`.
 //
-// É genérica: resolve a config da org (qual provider + chave) e despacha para
-// o adapter correspondente. KeyInvoice é apenas um dos providers possíveis.
+// É genérica: resolve a config da empresa (qual provider + chave) e despacha
+// para o adapter correspondente. KeyInvoice é apenas um dos providers.
 //
-// Resolução da config (por org):
+// POR EMPRESA, não por organização (desde 2026-09-17). Quem emite uma factura
+// é a empresa emissora do contrato (`contratos_renting.emissor_id` →
+// `clientes.is_emissora`), cada uma com o seu NIF e a sua conta no software de
+// facturação. Uma organização tem várias. Até esta data havia uma só chave por
+// organização, e em produção uma única conta KeyInvoice tinha emitido 199
+// facturas em nome de CINCO empresas diferentes.
+//
+// Resolução da config:
 //   1) descobre a org do chamador via RPC get_current_org_id() (JWT do chamador) —
 //      EXCETO quando o chamador é service-role E indica org_id explícito no body,
 //      caso em que se usa esse org_id diretamente (workers internos, sem sessão de
 //      utilizador para o RPC resolver — ver getOrgConfig);
-//   2) lê a linha `plataformas_configuracao` (plataforma='faturacao', ativo) com
-//      SERVICE ROLE (a RLS é admin-only; o utilizador que fatura pode não ser admin);
-//   3) despacha para o adapter com a config da org (chave + settings).
-// A CHAVE da API vem SEMPRE da org (client_secret) — NÃO há fallback para um
-// secret global. Sem org resolvida ou sem config, a chave é vazia e a emissão
-// falha cedo e claro ("Chave do <provider> não configurada"), em vez de
-// arriscar emitir pela conta de outra organização. (Só valores não-sensíveis
-// que não identificam ninguém — endpoint, doctypes, defaults — é que o adapter
-// pode ainda buscar a secrets do deployment como predefinição partilhável.)
+//   2) descobre a EMPRESA do documento (ver resolverEmissorId): o que o body
+//      disser, senão o contrato, senão a cobrança (contrato ou reserva), senão
+//      — para PDF e anulação — a factura já emitida;
+//   3) lê a linha `plataformas_configuracao` (plataforma='faturacao', ativo,
+//      emissor_id) com SERVICE ROLE (a RLS é admin-only; quem fatura pode não
+//      ser admin);
+//   4) despacha para o adapter com a config dessa empresa (chave + settings).
+//
+// A CHAVE vem SEMPRE da empresa (client_secret) — NÃO há fallback para um
+// secret global nem para a chave de outra empresa. Sem empresa resolvida, ou
+// com uma empresa que não tem integração, a emissão falha cedo e claro: emitir
+// pela conta de outra empresa poria o NIF errado num documento fiscal. (Só
+// valores não-sensíveis que não identificam ninguém — endpoint, doctypes,
+// defaults — é que o adapter pode ainda buscar a secrets do deployment.)
 //
 // Actions (body.action):
 //   'emit'  (default) — cria o documento e grava em `invoices`.
@@ -71,6 +83,9 @@ interface Body {
   itens?: Item[];
   contrato_id?: string;
   cobranca_id?: string;
+  /** Empresa emissora (clientes.is_emissora). Opcional: o servidor resolve-a a
+   *  partir do contrato/cobrança quando não vier. É ela que escolhe a chave. */
+  emissor_id?: string;
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string;
@@ -107,12 +122,100 @@ function callerClient(req: Request) {
   });
 }
 
+/** Cliente com service role — a RLS de `plataformas_configuracao` é admin-only
+ *  e quem fatura pode não ser admin. */
+function serviceClient() {
+  return createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+}
+
 /**
- * Resolve { provider, cfg } da org. Sem org → sem chave (falha cedo e claro).
+ * Descobre a EMPRESA EMISSORA do documento — quem o assina fiscalmente.
  *
- * Sem `providerFiltro`: lê a integração de faturação ATIVA (a que emite de
- * facto) — só pode haver uma por org (ver migração
- * 20260807150000_faturacao_unica_ativa_por_org.sql).
+ * Quem emite não é a organização, é a empresa (`clientes.is_emissora`) a que o
+ * contrato ou a reserva aponta. Uma organização tem várias, cada uma com o seu
+ * NIF e a sua conta no software de facturação, e é por isso que a chave da API
+ * se escolhe por empresa e não por organização.
+ *
+ * Ordem: o que o chamador disser explicitamente, senão o contrato, senão a
+ * cobrança (que leva ao contrato ou à reserva). Devolve null quando nenhuma
+ * destas vias dá resposta — e sem empresa não se emite nada.
+ */
+async function resolverEmissorId(
+  payload: Body,
+  invoiceHint?: { provider_doctype?: string; provider_docnum?: string; serie?: string }
+): Promise<string | null> {
+  if (payload.emissor_id) return payload.emissor_id;
+  const db = serviceClient();
+
+  if (payload.contrato_id) {
+    const { data } = await db
+      .from('contratos_renting')
+      .select('emissor_id')
+      .eq('id', payload.contrato_id)
+      .maybeSingle();
+    if (data?.emissor_id) return data.emissor_id as string;
+  }
+
+  if (payload.cobranca_id) {
+    const { data: cob } = await db
+      .from('contrato_cobrancas')
+      .select('contrato_id, reserva_id')
+      .eq('id', payload.cobranca_id)
+      .maybeSingle();
+    if (cob?.contrato_id) {
+      const { data } = await db
+        .from('contratos_renting')
+        .select('emissor_id')
+        .eq('id', cob.contrato_id)
+        .maybeSingle();
+      if (data?.emissor_id) return data.emissor_id as string;
+    }
+    if (cob?.reserva_id) {
+      const { data } = await db
+        .from('reservas')
+        .select('emissor_id')
+        .eq('id', cob.reserva_id)
+        .maybeSingle();
+      if (data?.emissor_id) return data.emissor_id as string;
+    }
+  }
+
+  // PDF e anulação de recibo referem um documento JÁ emitido: a empresa é a
+  // que o emitiu, e isso está no espelho local.
+  if (invoiceHint?.provider_docnum) {
+    let q = db
+      .from('invoices')
+      .select('contrato_id')
+      .eq('provider_docnum', invoiceHint.provider_docnum);
+    if (invoiceHint.provider_doctype) q = q.eq('provider_doctype', invoiceHint.provider_doctype);
+    if (invoiceHint.serie) q = q.eq('serie', invoiceHint.serie);
+    const { data: inv } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (inv?.contrato_id) {
+      const { data } = await db
+        .from('contratos_renting')
+        .select('emissor_id')
+        .eq('id', inv.contrato_id)
+        .maybeSingle();
+      if (data?.emissor_id) return data.emissor_id as string;
+    }
+  }
+
+  return null;
+}
+
+/** Erro de configuração: a empresa do documento não tem software de faturação
+ *  ligado. Não é falha técnica, é uma coisa que alguém tem de ir configurar. */
+class EmpresaSemFaturacaoError extends Error {}
+
+/**
+ * Resolve { provider, cfg } da EMPRESA que vai emitir. Sem org ou sem empresa
+ * com integração → sem chave, e a emissão falha cedo e claro.
+ *
+ * Sem `providerFiltro`: lê a integração de faturação ATIVA DA EMPRESA — há uma
+ * por empresa (índice uq_faturacao_ativa_por_emissor, migração
+ * 20260917150000_faturacao_por_empresa_emissora.sql). Uma empresa sem
+ * integração não pode ser faturada: emitir pela conta de outra empresa poria
+ * o NIF errado num documento fiscal.
  *
  * Com `providerFiltro`: lê a linha desse provider especificamente, ativa ou
  * não — usado pelo teste de ligação ("Testar ligação" no diálogo), para
@@ -122,7 +225,8 @@ function callerClient(req: Request) {
 async function getOrgConfig(
   req: Request,
   orgIdExplicito?: string,
-  providerFiltro?: string
+  providerFiltro?: string,
+  emissorId?: string | null
 ): Promise<{ provider: string; cfg: ProviderConfig; orgId: string | null }> {
   const isServiceRole = isServiceRoleRequest(req);
 
@@ -144,16 +248,40 @@ async function getOrgConfig(
   if (!orgId)
     return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null }, orgId: null };
 
-  const service = createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+  const service = serviceClient();
   let query = service
     .from('plataformas_configuracao')
     .select('client_secret, config')
     .eq('plataforma', 'faturacao')
     .eq('org_id', orgId);
-  query = providerFiltro
-    ? query.eq('config->>provider', providerFiltro)
-    : query.eq('ativo', true);
+  if (providerFiltro) {
+    // Testar credenciais de uma integração concreta: a empresa é a que a
+    // própria linha tiver, não se filtra por ela.
+    query = query.eq('config->>provider', providerFiltro);
+    if (emissorId) query = query.eq('emissor_id', emissorId);
+  } else {
+    // Emitir a sério: a chave TEM de ser a da empresa do documento.
+    if (!emissorId) {
+      throw new EmpresaSemFaturacaoError(
+        'Não foi possível determinar a empresa emissora deste documento. ' +
+          'Verifique a empresa no contrato ou na reserva antes de faturar.'
+      );
+    }
+    query = query.eq('ativo', true).eq('emissor_id', emissorId);
+  }
   const { data: row } = await query.maybeSingle();
+
+  if (!providerFiltro && !row) {
+    const { data: empresa } = await service
+      .from('clientes')
+      .select('nome')
+      .eq('id', emissorId!)
+      .maybeSingle();
+    throw new EmpresaSemFaturacaoError(
+      `${empresa?.nome ?? 'Esta empresa'} não tem software de faturação configurado. ` +
+        'Ligue-lhe uma integração em Definições → Integrações antes de emitir documentos em nome dela.'
+    );
+  }
 
   const settings = ((row as any)?.config ?? null) as Record<string, unknown> | null;
   const provider =
@@ -215,7 +343,8 @@ serve(async (req) => {
   // custa um problema contabilístico.
   if (payload.action === 'preflight') {
     try {
-      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
+      const emissorId = await resolverEmissorId(payload);
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
       const adapter = pickAdapter(provider);
       const rcConfigurado = adapter.hasDoctype('RC', cfg);
 
@@ -247,7 +376,11 @@ serve(async (req) => {
       if (!payload.provider_docnum) {
         return json({ success: false, error: 'void_receipt: provider_docnum obrigatório' });
       }
-      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
+      const emissorId = await resolverEmissorId(payload, {
+        provider_docnum: payload.provider_docnum,
+        serie: payload.serie,
+      });
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
       await pickAdapter(provider).voidReceipt(
         { docnum: payload.provider_docnum, docseries: payload.serie },
         cfg
@@ -267,7 +400,12 @@ serve(async (req) => {
           error: 'pdf: provider_doctype e provider_docnum obrigatórios',
         });
       }
-      const { provider, cfg } = await getOrgConfig(req, payload.org_id);
+      const emissorId = await resolverEmissorId(payload, {
+        provider_doctype: payload.provider_doctype,
+        provider_docnum: payload.provider_docnum,
+        serie: payload.serie,
+      });
+      const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
       const base64 = await pickAdapter(provider).pdf(
         {
           doctype: payload.provider_doctype,
@@ -300,7 +438,8 @@ serve(async (req) => {
 
   let docEmitido = false;
   try {
-    const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id);
+    const emissorId = await resolverEmissorId(payload);
+    const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
     const adapter = pickAdapter(provider);
 
     // Worker (service role) grava com service role e org_id explícito — o trigger

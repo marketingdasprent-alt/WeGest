@@ -6,7 +6,7 @@ import {
 } from '@/components/renting/contratos/NotaCreditoDialog';
 import type { FaturacaoRow } from '../../faturacao';
 import type { InvoiceMetadata } from '@/types/faturacao';
-import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 
 interface FaturacaoDialogsSectionProps {
   selectedRow: FaturacaoRow | null;
