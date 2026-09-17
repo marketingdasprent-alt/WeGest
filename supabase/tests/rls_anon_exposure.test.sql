@@ -292,9 +292,14 @@ select ok(
   strpos(
     (select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname='public' and p.proname='handle_new_user_org'),
-    '''%admin%'''
+    'raw_user_meta_data->>''cargo_id'''
+  ) = 0
+  and strpos(
+    (select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname='public' and p.proname='handle_new_user_org'),
+    'raw_app_meta_data'
   ) > 0,
-  'handle_new_user_org recusa um cargo administrativo vindo da metadata do signUp'
+  'handle_new_user_org nunca lê cargo_id da metadata do signUp; confia em raw_app_meta_data (servidor)'
 );
 
 -- ------------------------------------------------------------

@@ -1,5 +1,3 @@
-// Envia ao autor do ticket o link para ver a sugestão. Exige JWT: é sempre a
-// app autenticada (o admin) que dispara, nunca o público.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const cors = {
@@ -15,7 +13,7 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Escape de caracteres especiais para HTML: &, <, >, ", '. Ordem crítica: & em primeiro. */
+/** `&` é escapado primeiro para não reescapar entidades HTML. */
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -25,21 +23,7 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-/**
- * Base do link que vai no email.
- *
- * NÃO se usa um domínio fixo: este produto é multi-tenant e cada organização
- * corre no seu próprio domínio (decada-ousada.lovable.app,
- * marketingdasprent-alt.lovable.app, ...). Um valor fixo no código serve uma
- * organização e manda todas as outras para o sítio errado — e a primeira versão
- * disto apontava para `app.wegest.pt`, que nem existe.
- *
- * Por isso a app envia a sua própria origem. Como quem dispara é um admin
- * autenticado, o valor tem de ser validado: sem isto, um admin podia fazer o
- * email apontar para um site à escolha dele e usá-lo para phishing com a nossa
- * assinatura. Só passam os domínios da plataforma (e localhost, para
- * desenvolvimento).
- */
+/** Restringe a origem a domínios da plataforma para impedir links de phishing. */
 function baseValida(origem: unknown): string | null {
   if (typeof origem !== 'string' || origem.length > 200) return null;
   let u: URL;
@@ -95,18 +79,7 @@ Deno.serve(async (req) => {
       return json({ success: false, error: 'Não foi possível obter a sugestão.' }, 500);
     }
 
-    // Preferência: TICKETS_BASE_URL, o domínio próprio dos pedidos. Vem em
-    // primeiro de propósito — sendo fixo do lado do servidor, o chamador deixa
-    // de poder influenciar o link que sai no email, e o problema que a
-    // validação abaixo existe para tapar deixa de se pôr. Estas páginas podem
-    // usar um domínio só para todas as organizações porque não precisam do
-    // domínio de nenhuma: a autorização vem do token do próprio URL.
-    //
-    // A origem enviada pela app fica como alternativa, para quem ainda não
-    // tenha a variável definida; sem isso, esta mudança partia o envio. Se
-    // nenhuma servir, NÃO se envia um email com um link roto — falha-se de
-    // forma visível para o admin poder avisar a pessoa por outra via, em vez
-    // de a mandar clicar em nada.
+    // A origem configurada no servidor não pode ser controlada pelo chamador.
     const base =
       baseValida(Deno.env.get('TICKETS_BASE_URL')) ??
       baseValida(origem) ??

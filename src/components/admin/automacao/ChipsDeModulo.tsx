@@ -2,26 +2,6 @@ import { cn } from '@/lib/utils';
 import type { ContagemDeModulo } from './agrupamento';
 import { TODOS_OS_MODULOS } from './rotulos';
 
-/**
- * O filtro por módulo, em chips com a cor do módulo.
- *
- * Substitui um `<Select>` de 176px que dizia "Módulo" e escondia atrás de um
- * clique tanto os módulos que existem como quantas regras cada um tem. Aqui
- * está tudo à vista — e a cor é a mesma que o canvas usa para o mesmo módulo,
- * o que antes não acontecia.
- *
- * ── A COR NUNCA É O ÚNICO SINAL ─────────────────────────────────────────────
- *
- * Cada chip leva o nome escrito e a contagem. Quem não distingue as matizes lê
- * exactamente a mesma informação; a cor acelera para quem a vê, não substitui
- * nada. O estado activo também não é só cor: é `aria-pressed`, e o fundo
- * tingido é acompanhado de borda.
- *
- * As cores entram por `style` e não por classes do Tailwind porque o token
- * varia por módulo — `bg-[hsl(var(--fluxo-viaturas))]` teria de existir como
- * classe literal para cada um dos oito, e o Tailwind não gera classes a partir
- * de variáveis.
- */
 export function ChipsDeModulo({
   contagens,
   valor,
@@ -29,10 +9,10 @@ export function ChipsDeModulo({
   total,
 }: {
   contagens: ContagemDeModulo[];
-  /** A chave do módulo escolhido, ou `TODOS_OS_MODULOS`. */
+
   valor: string;
   onEscolher: (chave: string) => void;
-  /** Quantas regras existem ao todo — o número do chip "Todas". */
+
   total: number;
 }) {
   return (
@@ -72,7 +52,7 @@ function Chip({
   activo: boolean;
   nome: string;
   contagem: number;
-  /** Ausente no chip "Todas": não é um módulo, não tem cor própria. */
+
   token?: string;
   onClick: () => void;
 }) {

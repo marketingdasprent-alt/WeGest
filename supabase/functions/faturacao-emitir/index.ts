@@ -1,35 +1,11 @@
-// ============================================================
-// Edge Function: faturacao-emitir  (provider-agnostic)
-// ============================================================
-// Emite documentos fiscais (FT / FR / NC / RC) no software de faturação
-// CONFIGURADO POR ORGANIZAÇÃO e grava o espelho local em `public.invoices`.
-//
-// É genérica: resolve a config da org (qual provider + chave) e despacha para
-// o adapter correspondente. KeyInvoice é apenas um dos providers possíveis.
-//
-// Resolução da config (por org):
-//   1) descobre a org do chamador via RPC get_current_org_id() (JWT do chamador) —
-//      EXCETO quando o chamador é service-role E indica org_id explícito no body,
-//      caso em que se usa esse org_id diretamente (workers internos, sem sessão de
-//      utilizador para o RPC resolver — ver getOrgConfig);
-//   2) lê a linha `plataformas_configuracao` (plataforma='faturacao', ativo) com
-//      SERVICE ROLE (a RLS é admin-only; o utilizador que fatura pode não ser admin);
-//   3) despacha para o adapter com a config da org (chave + settings).
-// A CHAVE da API vem SEMPRE da org (client_secret) — NÃO há fallback para um
-// secret global. Sem org resolvida ou sem config, a chave é vazia e a emissão
-// falha cedo e claro ("Chave do <provider> não configurada"), em vez de
-// arriscar emitir pela conta de outra organização. (Só valores não-sensíveis
-// que não identificam ninguém — endpoint, doctypes, defaults — é que o adapter
-// pode ainda buscar a secrets do deployment como predefinição partilhável.)
-//
-// Actions (body.action):
-//   'emit'  (default) — cria o documento e grava em `invoices`.
-//   'health' — confirma que a chave autentica. Aceita credenciais de teste no
-//              body ({ provider, apiKey, settings }) para testar ANTES de gravar.
-//   'preflight' — confirma que a org tem o Recibo (RC) configurado e a chave
-//                 autentica, ANTES de se criar um acordo de parcelamento.
-//   'pdf'    — devolve o PDF (base64). Body: { provider_doctype, provider_docnum, serie?, signed? }
-// ============================================================
+// Edge Function: faturacao-emitir (provider-agnostic).
+// Emite documentos fiscais (FT/FR/NC/RC) no provider configurado por
+// organização e grava o espelho local em `public.invoices`.
+// A chave da API vem sempre da org (client_secret), nunca de um secret
+// global — sem org resolvida a emissão falha cedo em vez de arriscar
+// emitir pela conta de outra organização.
+// Actions: 'emit' (default), 'health' (testa a chave), 'preflight' (confirma
+// RC configurado antes de criar um acordo de parcelamento), 'pdf'.
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { keyInvoiceProvider } from './providers/keyinvoice.ts';
@@ -129,10 +105,9 @@ async function getOrgConfig(
   let orgId: string | null = null;
 
   if (isServiceRole && orgIdExplicito) {
-    // Worker interno a emitir em nome de uma org concreta.
     orgId = orgIdExplicito;
   } else if (!isServiceRole) {
-    // Utilizador normal: a org vem SEMPRE do JWT, nunca do body.
+    // A org de um utilizador normal vem sempre do JWT, nunca do body.
     try {
       const { data } = await callerClient(req).rpc('get_current_org_id');
       orgId = (data as string) ?? null;
@@ -188,16 +163,14 @@ serve(async (req) => {
       let provider: string;
       let cfg: ProviderConfig;
       if (payload.apiKey) {
-        // teste direto com credenciais fornecidas (antes de gravar na app)
+        // Teste direto com credenciais fornecidas, antes de gravar na app.
         provider = String(payload.provider || DEFAULT_PROVIDER).toLowerCase();
         cfg = {
           apiKey: payload.apiKey ?? null,
           settings: { provider, ...(payload.settings ?? {}) },
         };
       } else if (payload.provider) {
-        // testa a linha JÁ GRAVADA desse provider especificamente — pode não
-        // ser a integração ativa (ex.: a testar o Primavera enquanto o
-        // KeyInvoice continua em produção).
+        // Testa a linha já gravada desse provider, mesmo que não seja a ativa.
         ({ provider, cfg } = await getOrgConfig(req, payload.org_id, payload.provider));
       } else {
         ({ provider, cfg } = await getOrgConfig(req, payload.org_id));
@@ -209,10 +182,7 @@ serve(async (req) => {
     }
   }
 
-  // ── preflight ──
-  // Responde "esta org consegue emitir Recibos?" ANTES de se criar um acordo.
-  // Falhar aqui custa um diálogo de erro; falhar depois de receber dinheiro
-  // custa um problema contabilístico.
+  // ── preflight ── confirma que a org emite Recibos antes de criar um acordo.
   if (payload.action === 'preflight') {
     try {
       const { provider, cfg } = await getOrgConfig(req, payload.org_id);
@@ -237,11 +207,8 @@ serve(async (req) => {
     }
   }
 
-  // ── void_receipt (anula um Recibo já emitido no provider) ──
-  // Chamado a partir da anulação interna de um recibo (recibos.estado →
-  // 'anulado') — sem isto, a liquidação real no KeyInvoice nunca é revertida
-  // e a fatura original fica com "saldo pendente" errado lá (achado ao
-  // testar manualmente, 30/07/2026).
+  // ── void_receipt ── sem isto, anular um recibo internamente não reverte a
+  // liquidação no provider e a fatura original fica com saldo errado (30/07/2026).
   if (payload.action === 'void_receipt') {
     try {
       if (!payload.provider_docnum) {
@@ -303,21 +270,17 @@ serve(async (req) => {
     const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id);
     const adapter = pickAdapter(provider);
 
-    // Worker (service role) grava com service role e org_id explícito — o trigger
-    // set_invoice_org_id não consegue resolver a org sem sessão de utilizador.
-    // Resolvido AQUI (não só mais abaixo) porque o Recibo precisa do mesmo
-    // cliente já para a consulta a `invoices` antes de sequer chamar o adapter.
+    // Worker (service role) grava com org_id explícito: o trigger set_invoice_org_id
+    // não resolve a org sem sessão de utilizador. Precisa disto já aqui porque
+    // o Recibo consulta `invoices` antes de chamar o adapter.
     const isServiceRole = isServiceRoleRequest(req);
     const supabase = isServiceRole
       ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
       : callerClient(req);
 
-    // Recibo (RC): a KeyInvoice não usa "tipo de documento" próprio para
-    // insertReceipt — referencia o documento ORIGINAL (FT/FR) por
-    // DocType+DocSeries+DocNum. O chamador só manda `documento_referencia`
-    // (o nº legal, ex. "4 4/90"); resolvemos aqui os 3 campos a partir do
-    // nosso próprio espelho local (`invoices`), para nenhum chamador (cliente
-    // web, worker) ter de conhecer o formato interno do provider.
+    // RC: o chamador só manda `documento_referencia` (nº legal); resolvemos aqui
+    // os campos do documento original a partir de `invoices`, para nenhum
+    // chamador ter de conhecer o formato interno do provider.
     let documentoOriginal: EmitInput['documentoOriginal'];
     if (payload.tipo === 'RC') {
       const { data: original, error: originalErr } = await supabase
@@ -353,11 +316,9 @@ serve(async (req) => {
       documentoOriginal,
     };
     const doc = await adapter.emit(emitInput, cfg);
-    // A partir daqui o documento fiscal JÁ EXISTE no provider — qualquer falha
-    // seguinte (gravar o espelho local, etc.) nunca pode ser 'known_failed'.
+    // Documento já existe no provider — falhas seguintes nunca são 'known_failed'.
     docEmitido = true;
 
-    // Total calculado a partir dos itens enviados (provider-agnostic)
     const total = payload.itens.reduce((s, it) => {
       const base = (Number(it.quantidade) || 0) * (Number(it.preco_unitario) || 0);
       const comDesc = base * (1 - (Number(it.desconto) || 0) / 100);
@@ -407,13 +368,9 @@ serve(async (req) => {
 
     return json({ success: true, invoice, provider: providerMeta });
   } catch (e) {
-    // known_failed = provado que nada foi criado (o provider respondeu e
-    //   recusou, ou a falha ocorreu antes de sequer tentar criar) — seguro
-    //   reagendar.
-    // unknown = não se sabe se foi criado (falha de transporte durante a
-    //   criação, OU falha DEPOIS de o adapter confirmar sucesso) — nunca
-    //   reemitir sem reconciliar primeiro; o risco é um SEGUNDO documento
-    //   fiscal legal sobre o mesmo pagamento.
+    // known_failed = provado que nada foi criado, seguro reagendar.
+    // unknown = não se sabe se foi criado — nunca reemitir sem reconciliar
+    //   (risco de um segundo documento fiscal sobre o mesmo pagamento).
     const ambiguo = docEmitido || e instanceof EmissaoAmbiguaError;
     return json({
       success: false,

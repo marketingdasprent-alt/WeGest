@@ -11,8 +11,6 @@ export interface CartaoItem {
 
 const TIPOS: CartaoTipo[] = ['bp', 'repsol', 'edp'];
 
-/** Cartões de frota (BP/Repsol/EDP) disponíveis para atribuir ao motorista —
- *  carrega ao abrir o dialog, e sincroniza a atribuição ao gravar. */
 export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | undefined) {
   const [cartoesFrota, setCartoesFrota] = useState<Record<CartaoTipo, CartaoItem[]>>({
     bp: [],
@@ -25,11 +23,7 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
     edp: '',
   });
 
-  /**
-   * O que estava atribuído quando o diálogo abriu. Sem isto não se sabe o que
-   * mudou, e "devolver o anterior" viraria um palpite — a devolução é o que
-   * fecha o período de quem gastou.
-   */
+  // Regista a atribuição inicial para devolver o cartão anterior e fechar o período do titular.
   const atribuidoInicial = useRef<Record<CartaoTipo, string>>({ bp: '', repsol: '', edp: '' });
 
   useEffect(() => {
@@ -58,26 +52,13 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
         };
         atribuidoInicial.current = { ...inicial };
         setSelectedCartao(inicial);
-      } catch {
-        /* silencioso */
-      }
+      } catch {}
     };
     loadCartoes();
   }, [open, motoristaId]);
 
-  /**
-   * Aplica as escolhas do dropdown, um tipo de cada vez, pelas RPC.
-   *
-   * Antes eram dois `update` directos em `cartoes_frota`. Isso mudava o titular
-   * sem abrir nem fechar o período em `cartao_atribuicoes` — que é o que decide
-   * a quem se imputa o combustível — e sem tocar no estado nem nas datas. O
-   * cartão mudava de mãos no ecrã e o consumo continuava a ser imputado a quem
-   * já o tinha devolvido.
-   *
-   * Devolve os erros em vez de os atirar: gravar o motorista já correu bem
-   * nesta altura, e falhar o save inteiro por causa de um cartão seria pior.
-   * Mas deixam de ser engolidos — quem chama mostra-os.
-   */
+  // As RPC mantêm o histórico que atribui o consumo; os erros são devolvidos
+  // porque a gravação do motorista já terminou e não deve ser revertida.
   const syncCartoes = async (novoMotoristaId: string): Promise<string[]> => {
     const erros: string[] = [];
 
@@ -87,8 +68,7 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
       if (escolhido === anterior) continue;
 
       try {
-        // Devolver primeiro: é o que fecha o período do titular anterior e o
-        // que liberta o cartão para poder ser atribuído a seguir.
+        // Devolve primeiro para fechar o período anterior antes de reatribuir o cartão.
         if (anterior) {
           const { error } = await supabase.rpc('devolver_cartao_frota', {
             p_cartao_id: anterior,

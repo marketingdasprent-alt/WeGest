@@ -89,6 +89,9 @@ serve(async (req: Request) => {
       await supabase.functions.invoke('send-webhook', {
         body: {
           evento: 'ticket_concluido_sem_fatura',
+          // Chamada interna (service role): o send-webhook exige a org para
+          // só disparar os webhooks desta organização.
+          org_id: orgId,
           dados: {
             ticket_id,
             numero: ticket.numero,

@@ -103,16 +103,21 @@ serve(async (req) => {
       isCargoAdmin = cargoNome?.toLowerCase().includes('admin') || false;
     }
 
-    // Criar utilizador com API Admin
+    // org_id/cargo_id vão em app_metadata — única fonte que o trigger aceita
+    // (auditoria 2026-09-16).
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
       email_confirm: true,
-      user_metadata: { 
+      user_metadata: {
         nome: nome,
-        cargo_id: cargo_id,
         cargo_nome: cargoNome
-      }
+      },
+      app_metadata: {
+        org_id: targetOrgId,
+        cargo_id: cargo_id || null,
+        tipo_utilizador: "colaborador",
+      },
     });
 
     if (createError) {

@@ -34,7 +34,6 @@ interface ImportResult {
   message: string;
 }
 
-// Parse Portuguese currency string: "265,00 €" → 265.00
 const parseCurrency = (val: string): number | null => {
   if (!val || val.trim() === '' || val.trim() === 'N/A' || val.trim() === '-----') return null;
   const cleaned = val.replace(/[€\s]/g, '').replace(',', '.').trim();
@@ -42,27 +41,22 @@ const parseCurrency = (val: string): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-// Parse integer KM
 const parseKm = (val: string): number | null => {
   if (!val || val.trim() === '' || val.trim() === 'N/A' || val.trim() === '-----') return null;
   const n = parseInt(val.replace(/\D/g, ''));
   return Number.isFinite(n) ? n : null;
 };
 
-// Parse date string "06/08/2025 10H00" or "06/08/2025" → "2025-08-06"
 const parseDate = (val: string): string | null => {
   if (!val || val.trim() === '' || val.trim() === 'N/A') return null;
-  // Try DD/MM/YYYY
   const match = val.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})/);
   if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   return null;
 };
 
-// Get gestor profile ID by matching initials to profiles.nome
-// "JC" → profile where nome starts with J... and has a word starting with C
 const resolveGestorId = (
   initials: string,
-  profiles: Array<{ id: string; nome: string | null }>,
+  profiles: Array<{ id: string; nome: string | null }>
 ): string | null => {
   if (!initials || initials.trim() === '' || initials.trim() === '-----') return null;
   const upper = initials.trim().toUpperCase();
@@ -70,17 +64,15 @@ const resolveGestorId = (
     if (!p.nome) continue;
     const words = p.nome.trim().split(/\s+/).filter(Boolean);
     const profileInitials = words.map((w) => w[0].toUpperCase()).join('');
-    // Exact match or starts-with
     if (profileInitials === upper || profileInitials.startsWith(upper)) return p.id;
   }
   return null;
 };
 
-// Normalise matricula: ensure XX-XX-XX format with dashes
 const normMatricula = (m: string): string => {
   const raw = m.trim().replace(/[-\s]/g, '').toUpperCase();
   if (raw.length === 6) return `${raw.slice(0, 2)}-${raw.slice(2, 4)}-${raw.slice(4, 6)}`;
-  return raw; // return as-is if unexpected length
+  return raw;
 };
 
 Deno.serve(async (req) => {
@@ -89,25 +81,28 @@ Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  // Auth: only SERVICE_ROLE_KEY (called from frontend with user JWT — verify admin below)
   const authHeader = req.headers.get('Authorization') ?? '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   if (!token) {
     return new Response(JSON.stringify({ error: 'Token em falta' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-  // Verify caller is admin
   const anonClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY')!, {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
-  const { data: { user }, error: authErr } = await anonClient.auth.getUser();
+  const {
+    data: { user },
+    error: authErr,
+  } = await anonClient.auth.getUser();
   if (authErr || !user) {
     return new Response(JSON.stringify({ error: 'Sessão inválida' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
   let rows: ExcelRow[];
@@ -119,12 +114,15 @@ Deno.serve(async (req) => {
     if (!Array.isArray(rows) || rows.length === 0) throw new Error('rows vazio');
     if (!callerOrgId) throw new Error('org_id em falta');
   } catch {
-    return new Response(JSON.stringify({ error: 'Payload inválido. Envie { rows: [...], org_id }' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: 'Payload inválido. Envie { rows: [...], org_id }' }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 
-  // Admin DESTA org (papel per-org em user_organizacoes, não profiles legado).
   const { data: callerMembership } = await supabase
     .from('user_organizacoes')
     .select('is_admin')
@@ -133,15 +131,19 @@ Deno.serve(async (req) => {
     .single();
   if (!callerMembership?.is_admin) {
     return new Response(JSON.stringify({ error: 'Sem permissão de administrador' }), {
-      status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 403,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
-  // Load all profiles once for gestor resolution (filtered by org)
-  const { data: allProfiles } = await supabase.from('profiles').select('id, nome').eq('org_id', callerOrgId);
+  const { data: allProfiles } = await supabase
+    .from('profiles')
+    .select('id, nome')
+    .eq('org_id', callerOrgId);
 
   const results: ImportResult[] = [];
-  let ok = 0, erros = 0;
+  let ok = 0,
+    erros = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -149,39 +151,22 @@ Deno.serve(async (req) => {
     const nomeTrim = row.nome?.trim() || '';
     const matriculaTrim = row.matricula?.trim() || '';
 
-    // Skip completely empty rows or header-like rows
     if (!nomeTrim && !matriculaTrim) continue;
     if (nomeTrim === '-----' && matriculaTrim === '-----') continue;
 
     try {
-      // ── 1. Upsert motorista (by NIF if present, else by nome) ──────────
       let motoristaId: string | null = null;
 
       const nifTrim = row.nif?.trim() || '';
-      // O Excel traz as INICIAIS do gestor ("JC"). `gestor_responsavel` guarda
-      // o nome por extenso ("Juliano Cury") — é assim que as 424 fichas actuais
-      // estão. Resolve-se as iniciais até ao perfil e guarda-se o nome dele.
       const gestorId = resolveGestorId(row.gestor || '', allProfiles || []);
       const gestorNome = gestorId
-        ? (allProfiles || []).find((p) => p.id === gestorId)?.nome ?? null
+        ? ((allProfiles || []).find((p) => p.id === gestorId)?.nome ?? null)
         : null;
       const caucaoVal = parseCurrency(row.caucao || '');
       const valorViatura = parseCurrency(row.valor_viatura || '');
       const kmVal = parseKm(row.km || '');
-      const isSlot = (row.tvde?.trim().toUpperCase() === 'SLOT');
+      const isSlot = row.tvde?.trim().toUpperCase() === 'SLOT';
 
-      // A tabela é `motoristas_ativos`, não `motoristas`. São duas tabelas
-      // diferentes, com ZERO ids em comum (265 linhas contra 532), e a
-      // aplicação só lê `motoristas_ativos`. Enquanto isto escrevia na legada,
-      // os motoristas importados por Excel NUNCA APARECIAM no WeGest: 137 das
-      // 265 linhas de `motoristas` não têm sequer nome correspondente do outro
-      // lado. Ver a migração 20260814150000.
-      //
-      // Três campos mudam de nome no destino:
-      //   nib       -> iban
-      //   caucao    -> caucao_valor
-      //   gestor_id -> gestor_responsavel, que guarda o NOME do gestor em
-      //                texto, não o uuid do perfil.
       const motoristaPayload: Record<string, unknown> = {
         nome: nomeTrim || null,
         nif: nifTrim || null,
@@ -195,7 +180,6 @@ Deno.serve(async (req) => {
         org_id: callerOrgId,
       };
 
-      // Remove null keys to avoid overwriting existing data with null
       Object.keys(motoristaPayload).forEach((k) => {
         if (motoristaPayload[k] === null || motoristaPayload[k] === undefined) {
           delete motoristaPayload[k];
@@ -203,36 +187,47 @@ Deno.serve(async (req) => {
       });
 
       if (nifTrim && nifTrim !== 'N/A') {
-        // Upsert by NIF (filtered by org)
         const { data: existing } = await supabase
-          .from('motoristas_ativos').select('id').eq('nif', nifTrim).eq('org_id', callerOrgId).maybeSingle();
+          .from('motoristas_ativos')
+          .select('id')
+          .eq('nif', nifTrim)
+          .eq('org_id', callerOrgId)
+          .maybeSingle();
 
         if (existing) {
           await supabase.from('motoristas_ativos').update(motoristaPayload).eq('id', existing.id);
           motoristaId = existing.id;
         } else {
           const { data: inserted, error: insErr } = await supabase
-            .from('motoristas_ativos').insert({ ...motoristaPayload, nif: nifTrim }).select('id').single();
+            .from('motoristas_ativos')
+            .insert({ ...motoristaPayload, nif: nifTrim })
+            .select('id')
+            .single();
           if (insErr) throw new Error(`Motorista insert: ${insErr.message}`);
           motoristaId = inserted.id;
         }
       } else if (nomeTrim) {
-        // Fallback: match by nome (case-insensitive, filtered by org)
         const { data: existing } = await supabase
-          .from('motoristas_ativos').select('id').ilike('nome', nomeTrim).eq('org_id', callerOrgId).maybeSingle();
+          .from('motoristas_ativos')
+          .select('id')
+          .ilike('nome', nomeTrim)
+          .eq('org_id', callerOrgId)
+          .maybeSingle();
 
         if (existing) {
           await supabase.from('motoristas_ativos').update(motoristaPayload).eq('id', existing.id);
           motoristaId = existing.id;
         } else {
           const { data: inserted, error: insErr } = await supabase
-            .from('motoristas_ativos').insert(motoristaPayload).select('id').single();
+            .from('motoristas_ativos')
+            .insert(motoristaPayload)
+            .select('id')
+            .single();
           if (insErr) throw new Error(`Motorista insert: ${insErr.message}`);
           motoristaId = inserted.id;
         }
       }
 
-      // ── 2. Upsert viatura (by matricula) ──────────────────────────────
       let viaturaId: string | null = null;
 
       if (matriculaTrim && matriculaTrim !== '-----' && matriculaTrim !== 'N/A') {
@@ -240,27 +235,30 @@ Deno.serve(async (req) => {
 
         const viaturaPayload: Record<string, unknown> = {
           matricula: mat,
-          marca: (row.marca?.trim() !== '-----' && row.marca?.trim()) ? row.marca.trim() : undefined,
-          modelo: (row.modelo?.trim() !== '-----' && row.modelo?.trim()) ? row.modelo.trim() : undefined,
+          marca: row.marca?.trim() !== '-----' && row.marca?.trim() ? row.marca.trim() : undefined,
+          modelo:
+            row.modelo?.trim() !== '-----' && row.modelo?.trim() ? row.modelo.trim() : undefined,
           valor_aluguer: valorViatura ?? undefined,
           km_atual: kmVal ?? undefined,
           is_slot: isSlot,
           org_id: callerOrgId,
         };
 
-        // Remove undefined
         Object.keys(viaturaPayload).forEach((k) => {
           if (viaturaPayload[k] === undefined) delete viaturaPayload[k];
         });
 
         const { data: existingV } = await supabase
-          .from('viaturas').select('id').eq('matricula', mat).eq('org_id', callerOrgId).maybeSingle();
+          .from('viaturas')
+          .select('id')
+          .eq('matricula', mat)
+          .eq('org_id', callerOrgId)
+          .maybeSingle();
 
         if (existingV) {
           await supabase.from('viaturas').update(viaturaPayload).eq('id', existingV.id);
           viaturaId = existingV.id;
         } else {
-          // Insert requires marca and modelo
           const insertPayload = {
             ...viaturaPayload,
             marca: (viaturaPayload.marca as string) || '—',
@@ -268,19 +266,20 @@ Deno.serve(async (req) => {
             status: 'disponivel',
           };
           const { data: insertedV, error: insVErr } = await supabase
-            .from('viaturas').insert(insertPayload).select('id').single();
+            .from('viaturas')
+            .insert(insertPayload)
+            .select('id')
+            .single();
           if (insVErr) throw new Error(`Viatura insert: ${insVErr.message}`);
           viaturaId = insertedV.id;
         }
       }
 
-      // ── 3. Associação motorista ↔ viatura ─────────────────────────────
       if (motoristaId && viaturaId) {
         const dataInicio = parseDate(row.data_inicio || '');
         const dataSaida = parseDate(row.data_saida || '');
 
         if (dataInicio) {
-          // Check if there's already an active association for this pair
           const { data: existingAssoc } = await supabase
             .from('motorista_viaturas')
             .select('id')
@@ -299,23 +298,20 @@ Deno.serve(async (req) => {
               org_id: callerOrgId,
             });
 
-            // Update viatura status if active
             if (!dataSaida) {
               await supabase.from('viaturas').update({ status: 'em_uso' }).eq('id', viaturaId);
             }
           } else if (dataSaida) {
-            // Update data_fim if now known
-            await supabase.from('motorista_viaturas')
+            await supabase
+              .from('motorista_viaturas')
               .update({ data_fim: dataSaida, status: 'encerrado' })
               .eq('id', existingAssoc.id);
           }
         }
       }
 
-      // ── 4. Cartão combustível ──────────────────────────────────────────
       const cartaoNum = row.cartao_combustivel?.trim() || '';
       if (cartaoNum && cartaoNum !== 'N/A' && cartaoNum !== '-----') {
-        // Link existing card by card_number if found
         const { data: cartao } = await supabase
           .from('bp_cartoes')
           .select('id')
@@ -330,21 +326,32 @@ Deno.serve(async (req) => {
             await supabase.from('bp_cartoes').update(cartaoUpdate).eq('id', cartao.id);
           }
         }
-        // If card not found, we skip — it will be linked when BP sync runs
       }
 
-      results.push({ row: rowNum, nome: nomeTrim, matricula: matriculaTrim, status: 'ok', message: 'Importado com sucesso' });
+      results.push({
+        row: rowNum,
+        nome: nomeTrim,
+        matricula: matriculaTrim,
+        status: 'ok',
+        message: 'Importado com sucesso',
+      });
       ok++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      results.push({ row: rowNum, nome: row.nome || '', matricula: row.matricula || '', status: 'erro', message: msg });
+      results.push({
+        row: rowNum,
+        nome: row.nome || '',
+        matricula: row.matricula || '',
+        status: 'erro',
+        message: msg,
+      });
       erros++;
       console.error(`[excel-import] Row ${rowNum} error:`, msg);
     }
   }
 
-  return new Response(
-    JSON.stringify({ success: true, total: rows.length, ok, erros, results }),
-    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-  );
+  return new Response(JSON.stringify({ success: true, total: rows.length, ok, erros, results }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
 });

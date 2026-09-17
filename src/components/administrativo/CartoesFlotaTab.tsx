@@ -58,28 +58,23 @@ export function CartoesFlotaTab() {
   const [tipoFilter, setTipoFilter] = useState<'todos' | 'bp' | 'repsol' | 'edp'>('todos');
   const [sortField, setSortField] = useState<string>('numero');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  // 'ativos' (esconde cancelados) · 'todos' · ou um estado específico
   const [statusSel, setStatusSel] = useState<string>('ativos');
   const [consumoMap, setConsumoMap] = useState<Record<string, { total: number; litros: number }>>(
     {}
   );
 
-  // CRUD Dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CartaoFrota | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [showPin, setShowPin] = useState(false);
 
-  // Delete
   const [deleteTarget, setDeleteTarget] = useState<CartaoFrota | null>(null);
 
-  // History Sheet
   const [historyCartao, setHistoryCartao] = useState<CartaoFrota | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Import
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
@@ -88,11 +83,6 @@ export function CartoesFlotaTab() {
   useEffect(() => {
     carregarConsumo();
   }, []);
-
-  // A lista de cartões e o dropdown de motoristas vivem em
-  // @/hooks/useCartoesFrota. `CartaoFrota` é escrito à mão e diverge da forma
-  // que a BD devolve com as relações embebidas — daí o parâmetro de tipo em
-  // useCartoesFrotaLista<CartaoFrota>(), que mantém a asserção num sítio só.
 
   const carregarConsumo = async () => {
     try {
@@ -113,15 +103,12 @@ export function CartoesFlotaTab() {
         };
       });
       setConsumoMap(map);
-    } catch {
-      /* consumo é opcional — a barra fica sem dados */
-    }
+    } catch {}
   };
 
   const motoristaNome = (id: string | null) =>
     id ? (motoristas.find((m) => m.id === id)?.nome ?? '') : '';
 
-  /** Nome de um titular, venha ele da lista de motoristas ou da de clientes. */
   const titularNome = (motoristaId: string | null, clienteId: string | null) =>
     motoristaId
       ? (motoristas.find((m) => m.id === motoristaId)?.nome ?? '')
@@ -188,7 +175,6 @@ export function CartoesFlotaTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartoes, search, tipoFilter, statusSel, sortField, sortDir, consumoMap]);
 
-  // KPIs sobre a VISTA FILTRADA (respondem a tipo/estado/pesquisa).
   const kpis = useMemo(() => {
     const emUso = filtered.filter((c) => c.status === 'em_uso').length;
     const disp = filtered.filter((c) => c.status === 'disponivel').length;
@@ -212,7 +198,6 @@ export function CartoesFlotaTab() {
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
     usePagination(filtered, 25, `${search}|${tipoFilter}|${sortField}|${sortDir}`);
 
-  // ── CRUD ──────────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm());
@@ -246,23 +231,8 @@ export function CartoesFlotaTab() {
     setDialogOpen(true);
   };
 
-  /**
-   * Guardar são duas coisas distintas, e o que as separa é a atomicidade.
-   *
-   * Os campos DESCRITIVOS (número, PIN, limite, notas…) são um update directo:
-   * mexem numa tabela só e o RLS chega.
-   *
-   * O MOVIMENTO (quem tem o cartão, o estado e as datas) toca em três sítios —
-   * `cartoes_frota`, a ficha do motorista e o período em `cartao_atribuicoes` —
-   * e vai pelas RPC, que os escrevem numa transacção. Escrito daqui, como era
-   * até agora, o período nunca era aberto: o cartão mudava de mãos no ecrã e o
-   * consumo continuava a ser imputado a quem já o tinha devolvido.
-   *
-   * Trocar de titular é devolver + atribuir, por essa ordem, de propósito: é
-   * assim que o dia da entrega fica a contar para quem entregou e o novo
-   * período começa no dia seguinte, sem colidir com o EXCLUDE de
-   * `cartao_atribuicoes`.
-   */
+  // Movimentos passam pelas RPCs atómicas; trocar titular devolve antes de atribuir
+  // para preservar períodos e imputação de consumo.
   const handleSave = async () => {
     if (!form.numero.trim()) {
       toast({ title: 'Número obrigatório', variant: 'destructive' });
@@ -277,7 +247,6 @@ export function CartoesFlotaTab() {
       return;
     }
 
-    // Sem movimento escolhido, mexer no titular à mão vale como movimento.
     const movimento: Movimento =
       form.movimento !== 'nenhum'
         ? form.movimento
@@ -300,14 +269,12 @@ export function CartoesFlotaTab() {
         detentor: form.detentor || null,
         notas: form.notas || null,
         devolucao: form.devolucao || null,
-        // Estado e datas só vêm daqui quando NÃO há movimento — havendo, é a
-        // RPC que os escreve, e os dois a escrever discordariam.
+        // A RPC é a única fonte de estado e datas quando há movimento.
         ...(movimento === 'nenhum'
           ? {
               status,
               data_entrega: form.data_entrega || null,
               data_devolucao: form.data_devolucao || null,
-              // `ativo` segue o ciclo de vida (usado no export/impressão).
               ativo: status === 'disponivel' || status === 'em_uso',
             }
           : {}),
@@ -356,7 +323,6 @@ export function CartoesFlotaTab() {
     setDeleteTarget(null);
   };
 
-  // ── HISTORY ───────────────────────────────────────────────────────────
   const openHistory = async (c: CartaoFrota) => {
     setHistoryCartao(c);
     setHistorico([]);
@@ -384,7 +350,6 @@ export function CartoesFlotaTab() {
     [historico]
   );
 
-  // ── IMPORT ────────────────────────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -463,7 +428,6 @@ export function CartoesFlotaTab() {
       titularLabel,
     });
 
-  // ── RENDER ────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 mt-4">
       <CartoesFlotaKpis kpis={kpis} />

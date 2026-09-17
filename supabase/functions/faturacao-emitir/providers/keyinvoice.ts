@@ -1,37 +1,8 @@
-// ============================================================
-// Adapter de faturação: KeyInvoice (API 5.0 — REST)
-// ============================================================
-// Implementa `FaturacaoProvider` para o KeyInvoice. O protocolo é o mesmo da
-// função original; a config (chave, endpoint, doctypes, defaults) chega via
-// `ProviderConfig` (da org).
-//
-// A CHAVE DA API NÃO TEM FALLBACK GLOBAL — é sempre a de `cfg.apiKey`
-// (plataformas_configuracao.client_secret, por org), nunca um secret partilhado
-// do deployment. Cada organização só consegue faturar com o KeyInvoice se
-// tiver a própria chave configurada em Integrações; sem isso, falha cedo e
-// claro (ver authenticate()), em vez de arriscar emitir pela conta de outra
-// organização.
-//
-// Protocolo (doc API5):
-//   POST <endpoint>   Content-Type: application/json
-//   authenticate   header  Apikey: <chave>   body {"method":"authenticate"}
-//                  -> {Status:1, Sid:<sessão>}            (sessão dura 3600s)
-//   restantes      header  Sid: <sessão>      body {"method":"...", ...}
-//                  -> {Status:1, Data:{...}} | {Status:0, ErrorMessage}
-//
-// Settings (plataformas_configuracao.config) — todos opcionais:
-//   { provider:'keyinvoice', endpoint?, doctypes?:{FT,FR,NC}, default_product?, default_idtax? }
-// Estes (não a chave) continuam a aceitar fallback de secrets do deployment
-// como valores por-defeito partilháveis: KEYINVOICE_ENDPOINT, KI_DOCTYPE_*,
-// KI_DEFAULT_PRODUCT, KI_DEFAULT_IDTAX — não identificam nenhuma organização.
-//
-// RC (Recibo) NÃO tem doctype próprio — API5 usa um método dedicado
-// (insertReceipt) que referencia o documento ORIGINAL (FT/FR) a liquidar por
-// DocType+DocSeries+DocNum, resolvidos pelo index.ts a partir de `invoices`.
-// Descoberto ao testar manualmente: o nº impresso num Recibo (ex. "9" em
-// "Recibo: 9 54/1072") não é um DocType de insertDocument — API5 nem aceita
-// insertDocument para Recibo ("Tipo de documento inválido").
-// ============================================================
+// Adapter de faturação: KeyInvoice (API 5.0 — REST).
+// A chave nunca tem fallback global: é sempre cfg.apiKey (por org), para
+// nunca arriscar emitir pela conta de outra organização.
+// RC (Recibo) não tem doctype próprio — usa insertReceipt, que referencia o
+// documento original (FT/FR); insertDocument recusa "Tipo de documento inválido".
 import type {
   Cliente,
   EmitDocResult,
@@ -63,14 +34,13 @@ function resolve(cfg: ProviderConfig) {
   const s = (cfg.settings ?? {}) as Record<string, any>;
   const dt = (s.doctypes ?? {}) as Record<string, any>;
   return {
-    // Sem fallback a secret global — só a chave da própria organização.
     apiKey: String(cfg.apiKey || '').trim(),
     endpoint: String(s.endpoint || env('KEYINVOICE_ENDPOINT') || DEFAULT_ENDPOINT),
     doctypes: {
       FT: String(dt.FT ?? env('KI_DOCTYPE_FT') ?? '4'), // Fatura
       FR: String(dt.FR ?? env('KI_DOCTYPE_FR') ?? '34'), // Fatura-Recibo
       NC: String(dt.NC ?? env('KI_DOCTYPE_NC') ?? '7'), // Nota de Crédito
-      // RC (Recibo) não entra aqui — não tem doctype próprio, ver cabeçalho do ficheiro.
+      // RC não entra aqui — não tem doctype próprio (ver topo do ficheiro).
     } as Record<string, string>,
     defaultProduct: String(s.default_product || env('KI_DEFAULT_PRODUCT') || ''),
     defaultIdTax: String(s.default_idtax || env('KI_DEFAULT_IDTAX') || ''),
@@ -95,9 +65,8 @@ async function call(
   const text = await res.text();
   try {
     const parsed = JSON.parse(text) as KIResponse;
-    // Guarda o status HTTP real na resposta — um corpo JSON pode vir de um
-    // gateway/WAF à frente do KeyInvoice (Cloudflare, ALB, nginx) em vez do
-    // próprio KeyInvoice, e só o status HTTP permite distinguir os dois casos.
+    // Guarda o status HTTP: um gateway/WAF à frente do KeyInvoice pode
+    // devolver JSON válido sem ser do próprio KeyInvoice.
     parsed.__httpStatus = res.status;
     return parsed;
   } catch {
@@ -171,8 +140,7 @@ export const keyInvoiceProvider: FaturacaoProvider = {
   },
 
   hasDoctype(tipo: EmitInput['tipo'], cfg) {
-    // RC não usa "tipo de documento" próprio (ver comentário em emit()) — só
-    // precisa de autenticação a funcionar, verificada à parte por health().
+    // RC não usa "tipo de documento" próprio — só precisa de autenticação.
     if (tipo === 'RC') return true;
     const r = resolve(cfg);
     return Boolean(r.doctypes[tipo]);
@@ -198,14 +166,8 @@ export const keyInvoiceProvider: FaturacaoProvider = {
     let doc: Record<string, unknown>;
 
     if (input.tipo === 'RC') {
-      // insertReceipt (API5) — NÃO é insertDocument com outro DocType: um
-      // Recibo não tem tipo de documento próprio. Referencia o(s) documento(s)
-      // ORIGINAL(is) que liquida por DocType+DocSeries+DocNum + SettleValue.
-      // O DocType/DocSeries/DocNum aqui são do documento ORIGINAL (FT/FR),
-      // resolvidos pelo index.ts a partir de `invoices` — nunca inventados
-      // aqui. Descoberto ao testar manualmente contra a API real: "9" (o nº
-      // que aparece impresso num Recibo) não é um DocType de insertDocument;
-      // API5 tem um método dedicado para recibos, sem DocType de entrada.
+      // insertReceipt (não insertDocument): referencia o documento original
+      // por DocType+DocSeries+DocNum, resolvidos pelo index.ts a partir de `invoices`.
       if (!input.documentoOriginal) {
         throw new Error('Recibo (RC) exige o documento original (doctype/série/nº) a liquidar.');
       }
@@ -230,7 +192,7 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       const docLines = input.itens.map((it) => {
         const idProduct = it.id_produto || it.ref || r.defaultProduct;
         const idTax = it.id_tax || taxMap[Number(it.taxa_iva)] || r.defaultIdTax;
-        // KeyInvoice espera todos os valores como STRING (ver exemplos da doc)
+        // KeyInvoice espera todos os valores como string.
         return {
           IdProduct: String(idProduct),
           ProductName: it.descricao,
@@ -255,30 +217,22 @@ export const keyInvoiceProvider: FaturacaoProvider = {
     try {
       res = await call(r.endpoint, method, doc, { sid });
     } catch (e) {
-      // A chamada em si falhou a nível de TRANSPORTE (rede, resposta não-JSON)
-      // — não se sabe se o KeyInvoice chegou a criar o documento antes da
-      // falha. NUNCA reemitir sem reconciliar primeiro.
+      // Falha de transporte: não se sabe se o documento chegou a ser criado — nunca reemitir sem reconciliar.
       throw new EmissaoAmbiguaError(`${method}: falha de transporte — ${(e as Error).message}`);
     }
     if (!ok(res)) {
       const status = res.__httpStatus ?? 0;
       if (status < 200 || status >= 300) {
-        // HTTP não-2xx: o corpo pode vir de um gateway/WAF à frente do
-        // KeyInvoice, não do próprio KeyInvoice — não se pode confiar que
-        // "Status ausente" significa "KeyInvoice recusou". Nunca reemitir
-        // sem reconciliar.
+        // HTTP não-2xx pode vir de um gateway/WAF à frente do KeyInvoice, não do próprio.
         throw new EmissaoAmbiguaError(
           `${method}: HTTP ${status} — impossível confirmar se o documento foi criado.`
         );
       }
-      // 2xx com Status !== 1: o provider RESPONDEU e recusou explicitamente
-      // o pedido — confirma-se que nada foi criado.
+      // 2xx com Status !== 1: o provider recusou explicitamente — nada foi criado.
       throw new Error(`${method} falhou: ${res?.ErrorMessage || 'recusado'}`);
     }
     if (!res.Data) {
-      // O provider respondeu Status OK mas sem Data — não é uma recusa. É
-      // impossível confirmar se o documento chegou a ser criado; nunca
-      // reemitir sem reconciliar primeiro.
+      // Status OK sem Data não é recusa; impossível confirmar criação — nunca reemitir sem reconciliar.
       throw new EmissaoAmbiguaError(
         `${method}: provider respondeu Status OK sem Data — impossível confirmar se o documento foi criado.`
       );
@@ -300,13 +254,8 @@ export const keyInvoiceProvider: FaturacaoProvider = {
   },
 
   async voidReceipt(input: VoidReceiptInput, cfg): Promise<void> {
-    // setReceiptVoid (API5) — "Anula um recibo". Descoberto ao testar
-    // manualmente (30/07/2026): anular um recibo só na WeGest nunca revertia
-    // a liquidação real no KeyInvoice — a fatura original ficava com "saldo
-    // pendente" errado lá, bloqueando qualquer tentativa nova de pagamento
-    // (insertReceipt recusava com "valor a liquidar superior ao valor
-    // pendente"). DocSeries é opcional — omitido, o provider usa a série da
-    // própria chave API.
+    // setReceiptVoid: anular só localmente não revertia a liquidação real no
+    // KeyInvoice, deixando a fatura original com "saldo pendente" errado (30/07/2026).
     const r = resolve(cfg);
     const sid = await authenticate(r.apiKey, r.endpoint);
     const d = await call(

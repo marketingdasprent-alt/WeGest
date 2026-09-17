@@ -68,19 +68,10 @@ import {
 // Mapeia o 1º campo do schema com erro para o separador onde ele vive —
 // os restantes campos ficam todos no separador "Geral" (ContratoFormSecoes).
 //
-// `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` caem neste
-// grupo. Desde que o SectionGeral foi apagado (tinha os únicos <FormMessage />
-// destes três campos), um erro de validação neles deixa de ter superfície
-// ACIONÁVEL: o `onInvalid` (mais abaixo) continua a abrir o separador "Geral" e
-// a mostrar o toast, mas lá não há nenhum destes campos para corrigir — e o
-// cartão lateral (ResumoContrato) não lê form.formState.errors.
-// Decisão deliberada, não um esquecimento: os três só entram no formulário
-// por hidratação de um contrato/reserva já gravado, e só se grava um
-// contrato passando por este mesmo schema (ou pela função SQL
-// renovar_contrato_renting, que copia uma linha já validada) — não há forma
-// de os tornar inválidos pela aplicação. `valor_total_manual` tem ainda o
-// CHECK chk_contratos_valor_total_manual_valido (>= 0) na BD como garantia
-// extra.
+// `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` não têm
+// campo próprio de erro desde que o SectionGeral foi apagado; ficam de fora
+// deliberadamente porque só entram no form já validados (hidratação de um
+// contrato/reserva gravado, ou renovar_contrato_renting).
 const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
   coberturas: 'coberturas',
   extras: 'extras',

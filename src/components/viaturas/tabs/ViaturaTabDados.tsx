@@ -67,21 +67,19 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
 
-  // Estado derivado da viatura (considera ocupações ativas: contrato, reserva, movimento)
   const { data: fontesMap } = useViaturasOcupacao();
   const estadoDerivedado = viatura
     ? deriveViaturaEstado(viatura, fontesMap?.get(viatura.id))
     : null;
 
-  // Batch upload
   const batchInputRef = useRef<HTMLInputElement | null>(null);
   const [batchEntries, setBatchEntries] = useState<BatchViaturaEntry[]>([]);
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
   const [batchUploading, setBatchUploading] = useState(false);
 
   const form = useForm<ViaturaFormData>({
-    // Viatura nova exige o tipo; a já existente não, para não bloquear as
-    // 105 que estão em produção sem ele.
+    // O tipo é obrigatório só em viaturas novas para não bloquear registos
+    // antigos em produção que ainda não o têm.
     resolver: zodResolver(isNew ? viaturaSchemaNova : viaturaSchema),
     defaultValues: {
       matricula: '',
@@ -112,8 +110,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     },
   });
 
-  // Catálogos em cache (react-query): instantâneos a partir da 2ª abertura,
-  // sem re-fetch nem flicker ao trocar de aba / abrir outra viatura.
   const watchedMarcaId = form.watch('marca_id');
   const marcas = useViaturaMarcas();
   const modelos = useViaturaModelos(watchedMarcaId);
@@ -125,22 +121,10 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   const tarifasTvdeModelo = useViaturaTarifasTvdeModelo();
   const tarifasRacModelo = useViaturaTarifasRacModelo();
 
-  // Subscrição ao estado dirty (lida em render) — usada para o botão Guardar.
   const isFormDirty = form.formState.isDirty;
 
-  // Hidratação do formulário a partir da viatura.
-  //
-  // Os <Select> por FK (marca, modelo, grupo, combustível, tipo, estação) só
-  // mostram o valor guardado quando a respetiva <SelectItem> já está montada — e
-  // os catálogos chegam de forma ASSÍNCRONA, depois da viatura. Por isso:
-  //  1) reset completo quando muda de viatura (baseline limpo);
-  //  2) reaplicação de cada FK à medida que o seu catálogo carrega (a opção já
-  //     está montada, portanto o Select passa a mostrar o valor), SEM sobrepor
-  //     campos que o utilizador tenha editado (guard por-campo via getFieldState).
-  //
-  // Antes usava-se um único reset com guard de dirty global: os IDs eram
-  // definidos antes de as opções existirem e nunca mais eram reaplicados, pelo
-  // que marca/modelo/grupo apareciam vazios apesar de estarem na BD.
+  // Os Selects por FK só aceitam opções já montadas. Reaplica cada valor quando
+  // o catálogo chega sem substituir campos que o utilizador já editou.
   const viaturaIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!viatura) return;
@@ -154,17 +138,13 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     for (const name of VIATURA_FK_FIELDS) {
       const alvo = valores[name];
       const atual = form.getValues(name);
-      // Reaplica quando o campo não foi editado pelo utilizador OU quando está
-      // vazio mas a viatura tem valor (recupera um <Select> que perdeu o valor
-      // por a opção ainda não estar montada). Como o efeito só corre enquanto os
-      // catálogos carregam, isto não impede o utilizador de limpar o campo depois.
+      // Recupera Selects antes de a opção montar, sem substituir uma edição do utilizador.
       if (atual !== alvo && (!form.getFieldState(name).isDirty || (!atual && alvo))) {
         form.setValue(name, alvo, { shouldDirty: false });
       }
     }
   }, [viatura, form, viaturasTipos, marcas, modelos, combustiveis, grupos, estacoes]);
 
-  // Documentos: carregar uma vez por viatura.
   useEffect(() => {
     if (viatura?.id) loadDocuments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -194,11 +174,8 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
   };
 
   const onSubmit = async (data: ViaturaFormData) => {
-    // Resolve text names from FK IDs. Preserva o valor existente na BD quando
-    // o catálogo não resolve (ex.: lista de modelos ainda a carregar após
-    // mudar a marca, ou marca/modelo inativos) — sem isto, o sync colapsava
-    // para '' e clobberava o texto correcto guardado, fazendo desaparecer a
-    // marca/modelo da listagem e do header.
+    // Mantém o texto guardado quando um catálogo não resolve a FK, incluindo
+    // modelos ainda a carregar e opções inativas.
     const marcaNome =
       marcas.find((m) => m.id === data.marca_id)?.nome || data.marca || viatura?.marca || '';
     const modeloNome =
@@ -240,16 +217,11 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
     };
 
     const ok = await onSave(payload);
-    // Marca os valores atuais como novo baseline "limpo" — sem isto, isFormDirty
-    // (usado para desativar o botão Guardar) ficava preso em `true` após gravar,
-    // porque a hidratação a partir da `viatura` do pai é ignorada enquanto dirty.
+    // Actualiza o baseline para o botão Guardar não ficar dirty após gravar.
     if (ok) form.reset(data);
   };
 
-  // Sem isto, uma validação falhada (ex.: marca/modelo obrigatórios ainda por
-  // escolher) fazia o handleSubmit não chamar o onSubmit E não dar feedback —
-  // o utilizador carregava em Guardar e "não acontecia nada". Mostra os campos
-  // em falta num toast.
+  // Dá feedback quando react-hook-form bloqueia o submit por validação.
   const onInvalid = (errors: FieldErrors<ViaturaFormData>) => {
     const resumo = resumoErrosViatura(errors);
     toast.error(resumo || 'Verifica os campos obrigatórios assinalados a vermelho.');
@@ -272,11 +244,9 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
       if (uploadError) throw uploadError;
 
-      // Check if document already exists
       const existingDoc = documents.find((d) => d.tipo_documento === tipoDoc);
 
       if (existingDoc) {
-        // Update existing
         const { error } = await supabase
           .from('viatura_documentos')
           .update({
@@ -288,7 +258,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
         if (error) throw error;
       } else {
-        // Insert new
         const { error } = await supabase.from('viatura_documentos').insert({
           viatura_id: viatura.id,
           tipo_documento: tipoDoc,
@@ -328,7 +297,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
     setBatchEntries(entries);
     setBatchDialogOpen(true);
-    // Reset input so the same files can be re-selected
     e.target.value = '';
   };
 
@@ -354,7 +322,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
         if (uploadError) throw uploadError;
 
-        // Check if document already exists (upsert)
         const { data: existing } = await supabase
           .from('viatura_documentos')
           .select('id')
@@ -445,7 +412,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      {/* Formulário Principal */}
       <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle>Dados da Viatura</CardTitle>
@@ -487,7 +453,6 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
 
               <Separator />
 
-              {/* Observações */}
               <FormField
                 control={form.control}
                 name="observacoes"

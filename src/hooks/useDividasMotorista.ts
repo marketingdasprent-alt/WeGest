@@ -1,24 +1,8 @@
-// src/hooks/useDividasMotorista.ts
-//
-// A dívida de um motorista não é um registo que alguém cria: é o líquido da
-// SEMANA quando dá negativo. Por isso a lista "por cobrar" sai de
-// `motorista_liquido_semanal` — a mesma linha que o resumo grava — e não de
-// uma tabela de dívidas: não há nada para inserir, nada que fique
-// desactualizado, e o mesmo motorista nunca aparece duas vezes na semana.
-//
-// POR SEMANA, E NÃO ACUMULADO
-//
-// Antes vinha da vista `dividas_motorista_abertas`, que soma TODOS os
-// movimentos pendentes do motorista. Numa lista onde se escolhe a semana isso
-// lia-se mal: com duas semanas gravadas, quem devia 200 € numa e 300 € noutra
-// aparecia a dever 500 € em ambas. A vista continua a existir para o saldo
-// global, que é o que a ficha do motorista mostra.
-//
-// A tabela `dividas_motorista` guarda LIQUIDAÇÕES: uma linha por cada vez que
-// alguém marcou a dívida como paga. Marcar paga liquida mesmo os movimentos
-// (passam a 'pago'), e por isso o motorista sai da lista de abertas — não é a
-// linha a desaparecer, é a dívida a deixar de existir. Essa liquidação também
-// é por semana: ver divida_marcar_paga(p_motorista_id, p_data_inicio, p_data_fim).
+// A dívida de um motorista é o líquido da SEMANA quando dá negativo, por isso
+// a lista "por cobrar" sai de `motorista_liquido_semanal` (mesma linha do
+// resumo) e não de uma tabela própria — evita duplicar o motorista por semana.
+// `dividas_motorista` guarda apenas as LIQUIDAÇÕES (marcar como paga muda os
+// movimentos para 'pago' e é o que tira o motorista da lista de abertas).
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -280,13 +264,9 @@ export interface DividasAnteriores {
  * ficou pendurado. Este contador é o que permite ir acompanhando: fica no topo
  * da aba e só aparece quando há mesmo algo por cobrar.
  *
- * QUEM CONTA COMO PAGO. `divida_marcar_paga` liquida os movimentos e grava a
- * liquidação em `dividas_motorista`, mas NÃO toca no líquido já gravado em
- * `motorista_liquido_semanal` — esse é a fotografia da semana e continua
- * negativo para sempre. Por isso "por cobrar" não pode ser só `liquido < 0`:
- * tem de excluir quem já tem liquidação a cobrir aquela semana. Só contam as
- * liquidações em estado 'paga' — uma 'cancelada' é uma cobrança desfeita, e
- * a dívida volta a estar em aberto.
+ * `divida_marcar_paga` não toca no líquido gravado (continua negativo para
+ * sempre), por isso "por cobrar" exclui quem já tem liquidação 'paga' a
+ * cobrir a semana — uma 'cancelada' volta a contar como em aberto.
  */
 export function useDividasAnterioresPorCobrar(semanaInicio: string | undefined) {
   return useQuery({

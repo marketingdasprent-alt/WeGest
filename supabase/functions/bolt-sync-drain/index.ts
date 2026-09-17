@@ -1,15 +1,3 @@
-// supabase/functions/bolt-sync-drain/index.ts
-//
-// Drena a bolt_sync_queue: reclama até MAX_CONCORRENTE linhas pendentes (por
-// RPC atómica) e corre o bolt-sync-semana para cada uma. Chamada a cada
-// 5 minutos pelo cron.
-//
-// DIFERENÇA PARA O DRAIN DA VIA VERDE
-// Lá, o robot-execute só ARRANCA o Apify e a linha fica em 'running' à espera
-// do webhook. Aqui o bolt-sync-semana é síncrono: faz o trabalho e responde.
-// Por isso a linha fecha nesta mesma invocação, com o resultado real gravado
-// em `resultado` — é de lá que se lê a calibração das 4 variantes da fórmula
-// sem ter de ir aos logs.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
@@ -24,10 +12,6 @@ const json = (corpo: unknown, status = 200) =>
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 
-// Duas de cada vez. A Bolt não documenta os limites de rate e o cliente já
-// faz backoff em 429, mas seis empresas a paginar em paralelo seria pedir
-// para descobrir esse limite à força. A 5 minutos por tick, seis contas
-// ficam despachadas em ~15 minutos.
 const MAX_CONCORRENTE = 2;
 
 interface LinhaFila {
@@ -36,7 +20,6 @@ interface LinhaFila {
   periodo_inicio: string;
   periodo_fim: string;
   formula_id: string | null;
-  /** completo | viagens | agregar — ver migração 20260813100000. */
   fase: string | null;
   semana_inicio: string | null;
 }
@@ -49,10 +32,13 @@ Deno.serve(async (req) => {
     requireInternalRequest(req, SERVICE_ROLE_KEY);
   } catch (error) {
     const status = error instanceof AuthorizationError ? error.status : 401;
-    return new Response(JSON.stringify({ success: false, error: 'Chamada interna não autorizada' }), {
-      status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ success: false, error: 'Chamada interna não autorizada' }),
+      {
+        status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 
   try {
@@ -73,7 +59,7 @@ Deno.serve(async (req) => {
       id: string,
       status: 'completed' | 'failed',
       resultado: unknown,
-      erro?: string,
+      erro?: string
     ) => {
       const { error } = await supabase
         .from('bolt_sync_queue')
@@ -90,10 +76,6 @@ Deno.serve(async (req) => {
     const resultados = await Promise.all(
       linhas.map(async (linha) => {
         try {
-          // Um 'agregar' só pode correr depois de TODOS os dias da sua semana
-          // estarem gravados — senão agregava uma semana pela metade. Enquanto
-          // faltar algum, volta para a fila em vez de falhar: o dia que falta
-          // está algures atrás nesta mesma fila.
           if (linha.fase === 'agregar' && linha.semana_inicio) {
             const { count } = await supabase
               .from('bolt_sync_queue')
@@ -129,8 +111,6 @@ Deno.serve(async (req) => {
             body: JSON.stringify(corpo),
           });
 
-          // O corpo do bolt-sync-semana traz o diagnóstico mesmo quando o
-          // estado HTTP é 4xx/5xx — é a parte que interessa guardar.
           const dados = await resposta.json().catch(() => null);
 
           if (!resposta.ok || dados?.success === false) {
@@ -138,18 +118,18 @@ Deno.serve(async (req) => {
               linha.id,
               'failed',
               dados,
-              dados?.error || dados?.message || `HTTP ${resposta.status}`,
+              dados?.error || dados?.message || `HTTP ${resposta.status}`
             );
             return { id: linha.id, ok: false };
           }
 
-          // Uma semana que veio vazia não é sucesso silencioso: o
-          // bolt-sync-semana devolve status 'vazio' e não escreve nada. Fica
-          // marcada como falhada na fila para aparecer em qualquer consulta
-          // por linhas problemáticas — foi assim que o robô escondeu cinco
-          // semanas partidas.
           if (dados?.status === 'vazio') {
-            await fechar(linha.id, 'failed', dados, dados?.message || 'A API não devolveu viagens.');
+            await fechar(
+              linha.id,
+              'failed',
+              dados,
+              dados?.message || 'A API não devolveu viagens.'
+            );
             return { id: linha.id, ok: false };
           }
 
@@ -160,11 +140,13 @@ Deno.serve(async (req) => {
           await fechar(linha.id, 'failed', null, msg);
           return { id: linha.id, ok: false };
         }
-      }),
+      })
     );
 
     const ok = resultados.filter((r) => r.ok).length;
-    console.log(`[bolt-sync-drain] processadas ${resultados.length} · ok ${ok} · falhadas ${resultados.length - ok}`);
+    console.log(
+      `[bolt-sync-drain] processadas ${resultados.length} · ok ${ok} · falhadas ${resultados.length - ok}`
+    );
 
     return json({
       success: true,

@@ -1,38 +1,15 @@
 /**
- * Lógica pura da integração Bolt: que campos mostrar e que payload gravar.
+ * Lógica pura da integração Bolt (que campos mostrar, que payload gravar) —
+ * fora dos componentes para ser testável sem DOM.
  *
- * Vive fora dos componentes de propósito — é aqui que estão as decisões que
- * mexem em dinheiro (que linha se actualiza, que colunas se escrevem) e essas
- * têm de ser testáveis sem montar um DOM.
- *
- * MODELO (decidido com o utilizador, não revisitar):
- *   A Bolt é UMA plataforma só. Uma integração Bolt é sempre a linha
- *   `plataforma='robot' + robot_target_platform='bolt'`; o que distingue as
- *   duas formas de ligar é o `auth_mode`:
- *     · 'password' → robô Apify com o login do portal (o que as 6 contas
- *       actuais ainda usam);
- *     · 'oauth'    → API oficial Bolt Fleet (client_credentials).
- *
- *   Converter uma conta é uma actualização NO LUGAR: o `id` não muda, porque há
- *   4312 linhas de `bolt_resumos_semanais` agarradas a esse `integracao_id` e o
- *   histórico tem de continuar ligado. Nunca criar uma linha nova para "a
- *   versão API" da mesma conta.
- *
- *   As duas formas COEXISTEM na mesma integração, e é isso que se quer: a API
- *   traz as viagens e o líquido todas as semanas sem ninguém mexer, e o robô
- *   traz o CSV do portal, que é o único sítio onde existem as campanhas e os
- *   reembolsos de despesas (a API devolve 9 campos de preço por viagem e
- *   nenhum deles é campanha — as campanhas são pagas por semana, não por
- *   viagem). Ver o comentário da RPC bolt_resumo_merge_api.
- *
- *   O login do portal tem colunas próprias — robot_portal_email/password — e
- *   NÃO se mistura com client_id/client_secret, que em oauth guardam a chave
- *   da API. Partilharem as mesmas colunas foi o que deixou 4 contas sem CSV
- *   (e sem campanhas) entre Agosto e Setembro de 2026, em silêncio.
- *   Ver migração 20260911100000_robot_portal_credenciais_proprias.sql.
- *
- * A importação manual do CSV mantém-se em qualquer dos modos (requisito
- * explícito): a API e o CSV são donos de campos diferentes do resumo semanal.
+ * A Bolt é UMA plataforma só (`plataforma='robot' + robot_target_platform='bolt'`);
+ * `auth_mode` distingue 'password' (robô Apify) de 'oauth' (API Fleet). Converter
+ * uma conta é UPDATE no lugar (nunca nova linha — há 4312 linhas de
+ * bolt_resumos_semanais agarradas ao integracao_id). As duas formas coexistem
+ * de propósito: a API traz viagens/líquido, o robô traz o CSV com campanhas e
+ * reembolsos (a API não os devolve). Login do portal e credenciais da API têm
+ * colunas próprias desde a migração 20260911100000 — partilhá-las deixou 4
+ * contas sem CSV entre Agosto e Setembro de 2026, em silêncio.
  */
 
 import { BOLT_DEFAULTS, type BoltCompanyOption } from './types';
@@ -57,16 +34,11 @@ export interface LinhaIntegracaoBolt {
 const preenchido = (v: string | null | undefined) => Boolean(v && v.trim());
 
 /**
- * O robô consegue entrar no portal desta conta?
- *
- * É o que decide se se mostra o botão de executar e o agendamento semanal — já
- * não é o auth_mode, porque a API e o robô deixaram de competir pelas mesmas
- * colunas e passaram a poder correr os dois.
- *
- * Espelha EXACTAMENTE a regra do robot-execute, e tem de continuar a espelhá-la:
- * usa-se robot_portal_email/password, e só numa conta ainda não convertida é que
- * client_id/client_secret servem de recurso (aí ainda são o login do portal;
- * em oauth são a chave da API, que no formulário de login não entra).
+ * O robô consegue entrar no portal desta conta? Decide se se mostra o botão
+ * de executar/agendamento — já não depende do auth_mode, porque API e robô já
+ * não competem pelas mesmas colunas. Tem de espelhar exactamente a regra do
+ * robot-execute: client_id/client_secret só serve de recurso numa conta ainda
+ * não convertida (aí ainda são o login do portal, não a chave da API).
  */
 export function temCredenciaisPortal(linha: LinhaIntegracaoBolt | null | undefined): boolean {
   if (!linha) return false;
@@ -99,11 +71,8 @@ export function boltAuthMode(linha: LinhaIntegracaoBolt | null | undefined): Bol
 /**
  * Normaliza a lista de empresas devolvida por bolt-test-connection.
  *
- * O getCompanies da Bolt devolve apenas `{ data: { company_ids: number[] } }` —
- * IDs, sem nomes. A edge function tenta enriquecer cada ID com o `company_name`
- * (via getFleetOrders), mas isso é best-effort: se a Bolt não responder, o nome
- * vem a null e mostra-se só o ID. Aceitam-se ambas as formas para o ecrã não
- * partir se a função mudar de formato.
+ * A Bolt só devolve IDs sem nomes; a edge function tenta enriquecer com
+ * company_name best-effort, por isso aceitam-se ambas as formas.
  */
 export function normalizarEmpresasBolt(payload: unknown): BoltCompanyOption[] {
   const corpo = payload as
@@ -335,14 +304,10 @@ export function payloadCriacaoBolt(entrada: EntradaCriacaoBolt): Record<string, 
  */
 export interface EntradaConversaoBolt extends CredenciaisApiBolt {
   /**
-   * Login do portal que esta linha tinha ANTES da conversão (o client_id/
-   * client_secret actuais de uma conta ainda em modo robô).
-   *
-   * A conversão está prestes a escrever a chave da API por cima dessas duas
-   * colunas. Passá-lo aqui salva-o para as colunas próprias do portal — é o
-   * que impede o robô de ficar sem forma de entrar, que foi exactamente o que
-   * aconteceu às contas convertidas em Agosto de 2026 e custou 5 semanas de
-   * campanhas por importar. Omitir só quando não há nada a salvar.
+   * Login do portal que esta linha tinha ANTES da conversão. A conversão
+   * escreve a chave da API por cima dessas colunas; passá-lo aqui salva-o nas
+   * colunas próprias do portal — sem isto o robô ficava sem forma de entrar
+   * (aconteceu em Agosto de 2026, custou 5 semanas de campanhas por importar).
    */
   portalAnterior?: { email?: string | null; password?: string | null } | null;
 }

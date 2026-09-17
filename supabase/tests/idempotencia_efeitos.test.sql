@@ -72,6 +72,12 @@
 begin;
 select plan(29);
 
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes de
+-- existir organização nenhuma, para o handle_new_user_org não lhe atribuir org
+-- (nem emitir utilizador.criado, nem escrever user_organizacoes/user_org_ativa).
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000d0ff', 'bootstrap@idem.pt');
+
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000d0000', 'Org Idempotencia', 'idem-a');
 

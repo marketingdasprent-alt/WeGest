@@ -5,35 +5,8 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BarraDoNo } from './BarraDoNo';
 
-/**
- * Cartão compacto de um passo.
- *
- * Quadrado de ícone, etiqueta de tipo e nome. O `event_type` e a contagem de
- * destinatários vivem no tooltip e no painel — a esta escala eram ruído.
- *
- * A regra dos 90/10: o cartão é neutro, e a cor entra só no ícone, num traço
- * fino de estado na base e na borda quando está seleccionado.
- *
- * A COR diz o módulo; a FORMA diz o tipo de passo. Tinha de ser assim: como a
- * cor é atribuída por módulo, nunca poderia distinguir um gatilho de uma acção
- * — e havia pares de módulos a 11 graus de matiz um do outro, que ao tamanho de
- * um ícone são a mesma cor. A forma lê-se de relance e sobrevive a preto e
- * branco.
- */
-
 export type FormaDoNo = 'gatilho' | 'condicao' | 'accao';
 
-/**
- * Cada categoria tem a sua silhueta.
- *
- * Mudar só o quadrado do ícone não chegou: a 100% de zoom continuavam a ler-se
- * quatro retângulos iguais. O que se reconhece de longe é o contorno do cartão.
- *
- *  · Gatilho  — ponta esquerda redonda, como um botão de arranque. Não tem
- *               entrada, por isso a aresta esquerda está livre para isso.
- *  · Só se    — mais estreito e com a saída em esquadria, como uma etiqueta.
- *  · Então    — o retângulo arredondado de base.
- */
 const FORMA: Record<
   FormaDoNo,
   { largura: string; cartao: string; recheio: string; caixa: string; icone: string }
@@ -41,7 +14,6 @@ const FORMA: Record<
   gatilho: {
     largura: 'w-56',
     cartao: 'rounded-l-full rounded-r-xl',
-    // Mais folga à esquerda para o ícone assentar dentro da ponta redonda.
     recheio: 'py-3 pl-2.5 pr-3.5',
     caixa: 'rounded-full',
     icone: '',
@@ -65,21 +37,16 @@ const FORMA: Record<
 export type EstadoDoNo = 'normal' | 'sucesso' | 'erro';
 
 export interface BlocoBaseProps {
-  /** Nome do token CSS da cor de categoria (ver `catalogo.ts`). */
   cor: string;
   Icone: LucideIcon;
   etiqueta: string;
-  /** Círculo, losango ou quadrado — ver `FORMA`. */
   forma: FormaDoNo;
   titulo: string;
-  /** Só aparece ao pairar. */
   detalhe?: ReactNode;
-  /** Linha discreta por baixo do nome: duração, contagem, o que for útil. */
   rodape?: ReactNode;
   seleccionado?: boolean;
   incompleto?: boolean;
   estado?: EstadoDoNo;
-  /** `false` desenha o cartão apagado — a regra está desligada. */
   ativo?: boolean;
   onLigar?: () => void;
   onRemover: () => void;
@@ -87,7 +54,6 @@ export interface BlocoBaseProps {
   saida?: boolean;
 }
 
-/** Traço de 2px na base. É todo o espaço que o estado ocupa no cartão. */
 const TRACO_DE_ESTADO: Record<EstadoDoNo, string> = {
   normal: 'bg-transparent',
   sucesso: 'bg-success/70',
@@ -97,7 +63,6 @@ const TRACO_DE_ESTADO: Record<EstadoDoNo, string> = {
 const CLASSE_HANDLE = cn(
   'h-2.5 w-2.5 rounded-full border-2 border-node bg-edge',
   'transition-colors hover:bg-node-selected',
-  // Alarga a área de agarrar sem alargar o desenho.
   'after:absolute after:-inset-2 after:content-[""]'
 );
 
@@ -121,11 +86,7 @@ export function BlocoBase({
   const [sobre, setSobre] = useState(false);
   const temporizador = useRef<number | null>(null);
 
-  /**
-   * A barra é desenhada FORA do cartão (o React Flow põe-na noutra camada), por
-   * isso mover o rato para lá conta como sair do nó. Sem esta folga, os botões
-   * desapareciam a meio caminho e era impossível carregar neles.
-   */
+  // A barra vive noutra camada; mantenha o hover ao cruzar para os botões.
   const mostrar = () => {
     if (temporizador.current) window.clearTimeout(temporizador.current);
     setSobre(true);
@@ -167,8 +128,7 @@ export function BlocoBase({
                 seleccionado
                   ? 'border-node-selected shadow-md ring-2 ring-node-selected/25'
                   : 'border-node-border hover:border-node-selected/40 hover:shadow-md',
-                // Desligada continua visível — escondê-la fazia o canvas mentir
-                // sobre o que existe — mas com menos contraste.
+                // Regras desligadas continuam visíveis para o canvas refletir o fluxo.
                 ativo === false && 'opacity-55 saturate-50'
               )}
             >
@@ -201,15 +161,11 @@ export function BlocoBase({
                   )}
                 </div>
 
-                {/* Um ícone, não uma faixa: o aviso não pode roubar altura ao
-                  cartão compacto. O que falta configurar diz-se no tooltip. */}
                 {incompleto && (
                   <AlertTriangle className="h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
                 )}
               </div>
 
-              {/* Estado num traço na base, não no fundo do cartão: um cartão
-                  inteiro verde ou vermelho gritava mais do que o conteúdo. */}
               <span
                 className={cn('absolute inset-x-0 bottom-0 h-0.5', TRACO_DE_ESTADO[estado])}
                 aria-hidden="true"

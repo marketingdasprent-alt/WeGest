@@ -263,16 +263,10 @@ export function useSincronizarMotoristasPlataformaIds() {
     mutationFn: async () => {
       // 1. Buscar todos os motoristas
       //
-      // O `org_id` vem em todas as queries daqui para baixo porque o cruzamento
-      // é por nome/telefone/email — dados que a mesma pessoa tem iguais em duas
-      // empresas. Quem tem acesso a mais do que uma org vê motoristas das duas,
-      // e sem este campo o casamento saía cruzado: em 08/2026 quatro motoristas
-      // da Premium Ride (Hugo Palma, Kuldeep Singh, Rakesh Kumar, Paulo Silva)
-      // ficaram pendurados nas fichas da Década Ousada, com 7 transações Uber
-      // na conta-corrente da empresa errada.
-      //
-      // A mesma pessoa DEVE ter uma ficha por empresa — são contas-correntes
-      // independentes. O que não pode é a ficha de uma org apanhar o ID da outra.
+      // `org_id` entra em todas as queries porque o cruzamento é por
+      // nome/telefone/email, iguais para a mesma pessoa em duas empresas —
+      // sem isto, em 08/2026, 4 motoristas da Premium Ride ficaram
+      // pendurados na Década Ousada com transações Uber na conta errada.
       const { data: currentMotoristas, error: motError } = await supabase
         .from('motoristas_ativos')
         .select('id, nome, email, telefone, bolt_id, uber_uuid, org_id');

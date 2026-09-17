@@ -27,25 +27,11 @@ interface NotificacoesContextValue {
 const NotificacoesContext = createContext<NotificacoesContextValue | null>(null);
 
 /**
- * Única subscrição real-time/polling de notificações para toda a app.
- * NotificationBell e NotificacoesPopup montam em simultâneo (sidebar
- * desktop + mobile + popup global) — se cada um chamasse useNotificacoes
- * diretamente, criavam 3 canais com o mesmo nome 'notificacoes-realtime',
- * e o supabase-js rejeita o segundo `.on()` num canal já subscrito.
- *
- * `enabled` decide ao mesmo tempo se se lê e se se mostra, e exige três coisas:
- *
- *  1. **Sessão autenticada.** A condição anterior era só
- *     `tipoUtilizador !== 'motorista'`, que é verdadeira para um visitante
- *     anónimo — não havia nada a impedir o arranque da subscrição sem sessão.
- *  2. **Rota não pública.** Mesmo com sessão válida, avisos operacionais não
- *     podem aparecer sobre a landing, as páginas institucionais ou o quadro de
- *     TV: são ecrãs à vista de terceiros. Era o que estava a acontecer.
- *  3. **Não ser motorista**, como antes — o portal do motorista tem os seus
- *     próprios avisos.
- *
- * Ao entrar aqui (e não só no componente do popup), uma rota pública deixa
- * também de disparar a query e o canal de realtime.
+ * Única subscrição real-time/polling de notificações para toda a app — evita
+ * que NotificationBell e NotificacoesPopup, montados em simultâneo, abram
+ * canais duplicados com o mesmo nome (o supabase-js rejeita o segundo `.on()`).
+ * `enabled` exige sessão autenticada, rota não pública (avisos não podem
+ * aparecer na landing/quadro de TV) e utilizador não motorista.
  */
 export function NotificacoesProvider({ children }: { children: ReactNode }) {
   const { user, loading: aAutenticar } = useAuth();

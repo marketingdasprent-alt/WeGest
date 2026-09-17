@@ -23,18 +23,10 @@ import {
 import type { BoltCompanyOption } from './types';
 
 /**
- * Credenciais da API oficial Bolt Fleet — o mesmo bloco no wizard de criação e
- * na edição de uma integração existente.
- *
- * Regras que este componente garante (e que estavam espalhadas pelo wizard):
- *   · não se gravam credenciais sem um teste de ligação com sucesso;
- *   · a empresa escolhe-se da lista devolvida pelo getCompanies, nunca a
- *     escrever um ID à mão — um ID que a conta não tenha só dá erro no
- *     primeiro sync;
- *   · qualquer alteração às credenciais invalida o teste anterior E a lista de
- *     empresas que veio com ele, senão gravava-se um company_id de outra conta;
- *   · o Client Secret nunca é reapresentado depois de gravado. Em edição o
- *     campo nasce vazio: para trocar credenciais cola-se o par outra vez.
+ * Credenciais da API oficial Bolt Fleet — mesmo bloco no wizard de criação e na edição.
+ * Regras que centraliza (antes espalhadas pelo wizard): não grava sem teste de ligação
+ * com sucesso; empresa vem sempre da lista do getCompanies, nunca de um ID à mão;
+ * alterar credenciais invalida o teste e a lista de empresas anteriores.
  */
 
 interface BoltApiCredenciaisProps {
@@ -115,13 +107,9 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
   };
 
   /**
-   * Segundo passo do teste: confirmar a empresa escolhida.
-   *
-   * Estar na lista do getCompanies não garante permissão para ler as viagens
-   * (COMPANY_NOT_ACTIVE / COMPANY_NOT_ALLOWED só aparecem ao pedir mesmo os
-   * dados), e o getCompanies devolve apenas IDs — o nome da empresa vem da
-   * sondagem ao getFleetOrders que a edge function faz quando lhe passamos o
-   * company_id. É daqui que sai o company_name que se grava.
+   * Segundo passo: confirmar a empresa escolhida. Estar na lista do getCompanies
+   * não garante permissão para ler viagens (erros só aparecem ao pedir os dados),
+   * e é da sondagem ao getFleetOrders que sai o company_name a gravar.
    */
   const confirmarEmpresa = async (idEmpresa: string) => {
     setEstadoTeste('testing');
@@ -177,10 +165,8 @@ export const BoltApiCredenciais: React.FC<BoltApiCredenciaisProps> = ({
     setEmpresas([]);
     setCompanyId('');
     try {
-      // bolt-test-connection recebe as credenciais no corpo do pedido (não lê a
-      // BD), portanto valida-se ANTES de gravar seja o que for. Sem company_id,
-      // a função pede o token OAuth e chama o getCompanies — é de lá que sai a
-      // lista de empresas a que estas credenciais dão acesso.
+      // Valida-se antes de gravar; sem company_id a função chama o getCompanies
+      // e devolve a lista de empresas a que estas credenciais dão acesso.
       const { data, error } = await supabase.functions.invoke('bolt-test-connection', {
         body: { client_id: clientId.trim(), client_secret: clientSecret.trim() },
       });

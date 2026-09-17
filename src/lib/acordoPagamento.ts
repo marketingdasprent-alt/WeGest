@@ -1,28 +1,18 @@
-/**
- * Registo do pagamento de uma parcela de acordo.
- *
- * Ordem deliberada: o dinheiro é gravado LOCALMENTE antes de se falar com o
- * provider. Se a emissão do recibo falhar, a conta-corrente já está correta e a
- * parcela fica em `liquidacao_pendente` — nunca se perde um pagamento por a API
- * estar em baixo, e nunca se marca uma parcela como paga sem recibo.
- */
+// Registe primeiro localmente; falhas no provider deixam a parcela pendente,
+// sem perder o pagamento nem marcar paga sem recibo.
 import { supabase } from '@/integrations/supabase/client';
 import { emitirDocumento, clienteRowToFatura } from './faturacao';
 
 export interface RegistarPagamentoInput {
   parcelaId: string;
   acordoId: string;
-  /** Conta-corrente onde entra o crédito: o RESPONSÁVEL pelo acordo. */
   entidadeId: string;
   contratoId: string | null;
   cobrancaId: string;
   valor: number;
-  /** ISO `YYYY-MM-DD`. */
   data: string;
   metodo: string;
-  /** Nº legal da fatura original. Null = cobrança sem documento fiscal. */
   numeroFaturaOriginal: string | null;
-  /** TITULAR da fatura — é o NIF que vai no recibo. Nunca o responsável. */
   titular: {
     nome: string;
     nif?: string | null;
@@ -41,11 +31,7 @@ export interface RegistarPagamentoResult {
   erro?: string;
 }
 
-/**
- * Marca de correlação que viaja DENTRO do documento no provider.
- * A API não aceita chave de idempotência; esta marca é o que permite, mais
- * tarde, descobrir se um recibo chegou a ser emitido.
- */
+// O provider não aceita chave de idempotência; esta marca permite reconciliar emissões.
 export function marcaCorrelacao(parcelaId: string): string {
   return `WG-IDK:${parcelaId}`;
 }
@@ -63,14 +49,12 @@ export async function registarPagamentoParcela(
   const payload = temDocumentoFiscal
     ? {
         tipo: 'RC' as const,
-        // TITULAR, não o responsável: o recibo herda o NIF da fatura que referencia.
         cliente: clienteRowToFatura(input.titular, input.titular.nome),
         itens: [
           {
             descricao: `Recibo de ${input.numeroFaturaOriginal}`,
             quantidade: 1,
             preco_unitario: input.valor,
-            // O IVA foi liquidado na fatura original — um recibo não é transmissão tributável.
             taxa_iva: 0,
           },
         ],
@@ -82,9 +66,7 @@ export async function registarPagamentoParcela(
       }
     : null;
 
-  // ① Registo atómico do pagamento: recibo + parcela + (se fiscal) outbox,
-  // tudo numa única transação com guarda de reentrância — corrige o Critical
-  // de não-atomicidade da revisão final da branch (migração 20260724100005).
+  // A RPC grava recibo, parcela e outbox atomicamente para evitar reentrância.
   const { data, error: rpcErr } = await supabase.rpc('acordo_parcela_registar_pagamento' as any, {
     p_parcela_id: input.parcelaId,
     p_valor: input.valor,
@@ -105,26 +87,15 @@ export async function registarPagamentoParcela(
   };
 
   if (resultado.estado === 'paga') {
-    // Cobrança sem documento fiscal — já liquidada pela própria RPC.
     return { estado: 'paga' };
   }
 
-  // ② A partir daqui existe uma linha de outbox 'em_curso' com a idempotency
-  // key desta parcela. O try/catch cobre APENAS emitirDocumento(): uma falha ali (known_failed ou
-  // unknown) é a única coisa que o bloco catch abaixo sabe classificar. A RPC de
-  // liquidação, mais abaixo, corre FORA deste try de propósito — ver o comentário
-  // junto a essa chamada.
+  // Este catch classifica apenas a emissão; a liquidação ocorre fora dele.
   let res: Awaited<ReturnType<typeof emitirDocumento>>;
   try {
     res = await emitirDocumento(payload!);
   } catch (e) {
-    // `classe`, anexado ao erro por emitirDocumento(), distingue:
-    //  • known_failed — confirma-se que nada foi criado. Seguro reagendar
-    //    automaticamente (outbox volta a 'pendente').
-    //  • unknown, ou AUSENTE (ex.: nem se conseguiu contactar a função) — não
-    //    se sabe se foi criado. NUNCA reemitir sem reconciliar primeiro —
-    //    suspende para intervenção manual. Ausência de classe cai aqui por
-    //    omissão SEGURA, não por acaso.
+    // Só `known_failed` pode reagendar; estados incertos exigem reconciliação.
     const classe = (e as Error & { classe?: 'known_failed' | 'unknown' })?.classe;
     if (classe === 'known_failed') {
       await supabase
@@ -144,36 +115,15 @@ export async function registarPagamentoParcela(
     return { estado: 'liquidacao_pendente', erro: (e as Error).message };
   }
 
-  // emitirDocumento() só devolve controlo quando o provider confirmou sucesso
-  // — QUALQUER falha (known_failed ou unknown) chega ao catch acima como
-  // excepção, nunca como retorno com success:false. Não existe "else" a
-  // tratar aqui.
-  //
-  // res.invoice pode faltar mesmo com sucesso: é o caso em que o documento
-  // foi emitido no provider mas a gravação do espelho local em `invoices`
-  // falhou depois (o "warning" da edge function). O documento é real;
-  // liquida-se na mesma, só sem o invoice_rc_id para o ligar.
-  //
-  // Esta chamada fica FORA do try/catch acima de propósito: uma falha aqui é
-  // qualitativamente diferente de uma falha em emitirDocumento() — o
-  // documento fiscal já foi emitido no provider, só a promoção local a 'paga'
-  // é que falhou. Tratá-la como known_failed/unknown reagendaria (ou
-  // suspenderia) a emissão como se nada tivesse sido criado, arriscando um
-  // SEGUNDO documento para o mesmo pagamento. Por isso propaga-se sempre —
-  // nunca se devolve {estado: 'paga'} sem a BD confirmar a promoção.
+  // Não capture a liquidação: o documento pode já existir e uma repetição criaria
+  // um segundo recibo; `res.invoice` é opcional após falha no espelho local.
   const { error: liquidarErr } = await supabase.rpc('acordo_parcela_liquidar' as any, {
     p_parcela_id: input.parcelaId,
     p_invoice_id: res.invoice?.id ?? null,
   });
   if (liquidarErr) throw liquidarErr;
 
-  // Write-back do nº real emitido no provider (mesmo padrão de
-  // useFaturacao.ts/NotaCreditoDialog.tsx) — sem isto, `recibos.documento_externo_ref`
-  // fica sempre null e a UI (numeroDoc, "Ver documento") não tem como distinguir
-  // os vários recibos de um acordo com parcelamento (todos com a mesma
-  // referência/cobranca_id) — cada um mostrava o mais recente para todos
-  // (achado ao testar manualmente). Best-effort: a liquidação já teve sucesso,
-  // um erro aqui só deixa a referência por preencher, não crítico.
+  // Best-effort: a liquidação já sucedeu, mas a referência distingue recibos parcelados.
   const fullDocNumber = res.provider?.FullDocNumber ?? res.invoice?.numero ?? null;
   if (fullDocNumber) {
     const { error: reciboRefErr } = await supabase
@@ -186,9 +136,7 @@ export async function registarPagamentoParcela(
     }
   }
 
-  // Best-effort: a liquidação (linha acima) já teve sucesso — o pagamento
-  // está correcto independentemente disto. Um erro aqui só atrasa a outbox
-  // em ficar 'sucesso'; o reaper (Tarefa 5) varre ao fim de 10 min.
+  // Best-effort: a liquidação já sucedeu e o reaper corrige a outbox depois.
   const { error: outboxSucessoErr } = await supabase
     .from('faturacao_outbox' as any)
     .update({ estado: 'sucesso', invoice_id: res.invoice?.id ?? null })
