@@ -16,6 +16,11 @@
 begin;
 select plan(16);
 
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" para não
+-- colidir com os inserts manuais de user_organizacoes/user_org_ativa abaixo.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000800ff', 'bootstrap@testar-regra-g.pt');
+
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-000000080000', 'Org Testar Regra', 'testar-regra-g'),
   ('00000000-0000-0000-0000-000000080ffe', 'Org Alheia', 'testar-regra-alheia');
