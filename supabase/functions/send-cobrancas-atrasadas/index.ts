@@ -6,6 +6,7 @@
 // auth.users, por isso não passa por notifications/notification_queue.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { EmailService } from '../_shared/email/services/EmailService.ts';
+import { resolverEmissorDoEmail } from '../_shared/email/emissor.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,19 +43,22 @@ Deno.serve(async (req) => {
 
     for (const c of cobrancas) {
       try {
-        const { data: org } = await supabase
-          .from('organizacoes')
-          .select('nome, logo_url')
-          .eq('id', c.org_id)
-          .maybeSingle();
+        // A marca é a da EMPRESA EMISSORA do contrato da cobrança (Dasp Rent
+        // Sul, Distância Arrojada, …), não a da organização — o cliente só
+        // conhece a empresa com quem assinou. A 15/09/2026 uma fatura da Dasp
+        // Rent Sul saiu com o nome e o logo da Década Ousada por isto.
+        const emissor = await resolverEmissorDoEmail(supabase, {
+          orgId: c.org_id,
+          cobrancaId: c.id,
+        });
 
         const result = await emailService.sendCobrancaAtraso(c.org_id, {
           destinatarioNome: c.destinatario_nome,
           numeroFatura: `COB-${c.id.slice(0, 8).toUpperCase()}`,
           valorTotal: c.saldo,
           diasAtraso: c.dias_em_aberto,
-          emissorNome: org?.nome,
-          emissorLogoUrl: org?.logo_url,
+          emissorNome: emissor.emissorNome,
+          emissorLogoUrl: emissor.emissorLogoUrl,
           to: c.destinatario_email,
           toNome: c.destinatario_nome,
         });

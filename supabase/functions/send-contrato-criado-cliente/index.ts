@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { EmailService } from '../_shared/email/services/EmailService.ts';
+import { resolverEmissorDoEmail } from '../_shared/email/emissor.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,9 +54,16 @@ serve(async (req) => {
 
     const { data: org } = await supabase
       .from('organizacoes')
-      .select('nome, logo_url, codigo')
+      .select('codigo')
       .eq('id', p.orgId)
       .maybeSingle();
+
+    // Marca do email = empresa emissora do contrato (com fallback à org) —
+    // ver _shared/email/emissor.ts.
+    const emissor = await resolverEmissorDoEmail(supabase, {
+      orgId: p.orgId,
+      contratoId: p.contratoId,
+    });
 
     const base = Deno.env.get('APP_URL') || (org?.codigo ? `https://${org.codigo}.wegest.pt` : undefined);
     const ctaUrl = base ? `${base}/renting/contratos/${p.contratoId}` : undefined;
@@ -67,8 +75,8 @@ serve(async (req) => {
       dataInicioFmt: fmtDatePt(p.dataInicio),
       valorMensal: p.valor ?? undefined,
       motoristaNome: p.destinatarioNome,
-      emissorNome: org?.nome,
-      emissorLogoUrl: org?.logo_url,
+      emissorNome: emissor.emissorNome,
+      emissorLogoUrl: emissor.emissorLogoUrl,
       ctaUrl,
       to: p.destinatarioEmail,
       toNome: p.destinatarioNome,

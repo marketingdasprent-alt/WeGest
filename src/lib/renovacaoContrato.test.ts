@@ -7,6 +7,7 @@ import {
   prazoRenovacao,
   proximaDataRenovacao,
   contratosExpiradosSemRenovacao,
+  contratosTerminamHoje,
   type ContratoRenovavelInput,
 } from './renovacaoContrato';
 
@@ -251,5 +252,74 @@ describe('contratosExpiradosSemRenovacao', () => {
     expect(
       contratosExpiradosSemRenovacao([{ ...curto, estado_operacional: 'fechado' }], hoje)
     ).toHaveLength(0);
+  });
+});
+
+// O botão "Terminam hoje" da lista de contratos. Ao contrário de
+// contratosPorRenovar, NÃO filtra por renovável: entra tudo o que acaba no
+// dia — longa e curta duração, TVDE e rent-a-car. O que fica de fora é o que
+// já não tem nada a fazer: fechado, cancelado, devolvido, substituído, apagado.
+describe('contratosTerminamHoje', () => {
+  const hoje = new Date('2026-09-11T14:30:00');
+  const termina = (data_fim: string | null, extra: Partial<ContratoRenovavelInput> = {}) => ({
+    ...base,
+    data_fim,
+    ...extra,
+  });
+
+  it('entra o que termina hoje, a qualquer hora do dia', () => {
+    const madrugada = termina('2026-09-11T00:05:00');
+    const noite = termina('2026-09-11T23:50:00');
+    expect(contratosTerminamHoje([madrugada, noite], hoje)).toEqual([madrugada, noite]);
+  });
+
+  it('ontem e amanhã ficam de fora — o dia é o dia, não uma janela', () => {
+    expect(
+      contratosTerminamHoje([termina('2026-09-10T23:59:00'), termina('2026-09-12T00:01:00')], hoje)
+    ).toEqual([]);
+  });
+
+  it('sem data de fim não termina em dia nenhum', () => {
+    expect(contratosTerminamHoje([termina(null)], hoje)).toEqual([]);
+  });
+
+  // "todos os que terminam naquele dia" — a regra de renovável não se aplica.
+  it('não filtra por renovável: curta duração e qualquer regime entram', () => {
+    const curta = termina('2026-09-11T10:00:00', { is_longa_duracao: false });
+    const tvde = termina('2026-09-11T10:00:00', { regime: 'tvde' });
+    const slot = termina('2026-09-11T10:00:00', { regime: 'slot' });
+    expect(contratosTerminamHoje([curta, tvde, slot], hoje)).toHaveLength(3);
+  });
+
+  it('um contrato já fechado, cancelado ou devolvido não tem nada a fazer', () => {
+    for (const estado of ['fechado', 'cancelado', 'devolvido'] as const) {
+      expect(
+        contratosTerminamHoje(
+          [termina('2026-09-11T10:00:00', { estado_operacional: estado })],
+          hoje
+        )
+      ).toEqual([]);
+    }
+  });
+
+  it('agendado ainda conta — é um contrato vivo', () => {
+    const agendado = termina('2026-09-11T10:00:00', { estado_operacional: 'agendado' });
+    expect(contratosTerminamHoje([agendado], hoje)).toEqual([agendado]);
+  });
+
+  it('substituído ou apagado nunca entra, mesmo a terminar hoje', () => {
+    expect(
+      contratosTerminamHoje(
+        [
+          termina('2026-09-11T10:00:00', { substituido_em: '2026-09-01T00:00:00Z' }),
+          termina('2026-09-11T10:00:00', { deleted_at: '2026-09-01T00:00:00Z' }),
+        ],
+        hoje
+      )
+    ).toEqual([]);
+  });
+
+  it('lista vazia devolve lista vazia', () => {
+    expect(contratosTerminamHoje([], hoje)).toEqual([]);
   });
 });

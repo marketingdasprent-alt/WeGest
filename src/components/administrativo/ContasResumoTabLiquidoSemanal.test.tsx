@@ -151,4 +151,52 @@ describe('ContasResumoTab — gravação do líquido semanal', () => {
     await waitFor(() => expect(screen.getByText('Período por fechar')).toBeTruthy());
     expect(escritas['motorista_liquido_semanal']).toBeUndefined();
   });
+
+  // A conta da própria frota na Uber (a que recebe as transferências semanais)
+  // apareceu nas Dívidas como um motorista chamado "Premium Ride": alguém lhe
+  // criou ficha a partir do ecrã de não-associados, o resumo Uber somou-lhe a
+  // transferência como ganho negativo, e esta lista gravou-lhe o líquido. A
+  // lista escondia a linha pelo nome de empresa, mas a gravação não filtrava.
+  it('a conta da frota não entra na lista nem no líquido gravado', async () => {
+    const frota = {
+      ...motorista,
+      id: 'm-frota',
+      nome: 'Premium Ride',
+      uber_uuid: 'uber-frota',
+      bolt_id: null,
+      gestor_responsavel: null,
+      data_contratacao: '2024-01-01',
+      status_ativo: true,
+      created_at: '2024-01-01',
+    };
+    mockarTabelas({
+      motorista_resumo_semanal: [{ id: 'r1' }],
+      ...dadosBase,
+      motoristas_ativos: [...dadosBase.motoristas_ativos, frota],
+      uber_drivers: [
+        {
+          uber_driver_id: 'uber-frota',
+          motorista_id: 'm-frota',
+          full_name: 'PREMIUM RIDE, LDA',
+          is_conta_frota: true,
+        },
+      ],
+      uber_resumos_semanais: [
+        {
+          uber_driver_id: 'uber-frota',
+          motorista_nome: 'PREMIUM RIDE, LDA',
+          motorista_id: 'm-frota',
+          ganhos_brutos: -3500,
+          gorjetas: 0,
+          viagens: 1,
+        },
+      ],
+    });
+    renderizar();
+
+    await waitFor(() => expect(escritas['motorista_liquido_semanal']).toBeDefined());
+
+    expect(lerResumos().map((r: any) => r.motorista_id)).toEqual(['m1']);
+    expect(escritas['motorista_liquido_semanal'].map((l: any) => l.motorista_id)).toEqual(['m1']);
+  });
 });

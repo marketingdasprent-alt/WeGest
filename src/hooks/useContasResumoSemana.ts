@@ -120,7 +120,7 @@ export function useContasResumoSemana(
 
       const uberDriversQuery = supabase
         .from('uber_drivers')
-        .select('uber_driver_id, motorista_id, full_name');
+        .select('uber_driver_id, motorista_id, full_name, is_conta_frota');
 
       const weekStartUtc = `${format(weekStart, 'yyyy-MM-dd')}T00:00:00Z`;
       const weekEndUtc = `${format(weekEnd, 'yyyy-MM-dd')}T23:59:59Z`;
@@ -379,7 +379,7 @@ export function useContasResumoSemana(
 
       const uberViagensByDriver: Record<string, number> = {};
       (atividadeResult.data || []).forEach((a) => {
-        if (a.uber_driver_id) {
+        if (a.uber_driver_id && !contasFrota.has(a.uber_driver_id)) {
           uberViagensByDriver[a.uber_driver_id] =
             (uberViagensByDriver[a.uber_driver_id] || 0) + (a.viagens_concluidas || 0);
         }
@@ -388,7 +388,7 @@ export function useContasResumoSemana(
       const uberDriverToMotoristaMap: Record<string, string> = {};
       const uberDriverNameMap: Record<string, string> = {};
       (uberDriversResult.data || []).forEach((d) => {
-        if (d.uber_driver_id) {
+        if (d.uber_driver_id && !contasFrota.has(d.uber_driver_id)) {
           if (d.motorista_id) uberDriverToMotoristaMap[d.uber_driver_id] = d.motorista_id;
           if (d.full_name) uberDriverNameMap[d.uber_driver_id] = d.full_name;
         }
@@ -508,6 +508,7 @@ export function useContasResumoSemana(
       > = {};
       (uberResult.data || []).forEach((t) => {
         const driverId = t.uber_driver_id || 'unknown';
+        if (contasFrota.has(driverId)) return;
         const nome = (t.motorista_nome || '').trim();
         const espaco = nome.indexOf(' ');
         if (!uberByDriver[driverId]) {
