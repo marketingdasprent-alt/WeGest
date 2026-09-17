@@ -34,7 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
-import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
@@ -93,41 +93,6 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
 
   const podeFaturar = !!reserva.cliente_id && calc.totalComIva > 0;
   const codigoLabel = `Reserva #${reserva.codigo}`;
-
-  async function abrirDocumentoLocal(numeroDoc: string) {
-    let clienteNif: string | null = null;
-    let clienteMorada: string | null = null;
-    try {
-      const { data: cli } = await supabase
-        .from('clientes')
-        .select('nif, morada, codigo_postal, cidade')
-        .eq('id', reserva.cliente_id!)
-        .single();
-      if (cli) {
-        clienteNif = (cli as any).nif ?? null;
-        clienteMorada =
-          [(cli as any).morada, (cli as any).codigo_postal, (cli as any).cidade]
-            .filter(Boolean)
-            .join(', ') || null;
-      }
-    } catch {
-      /* cabeçalho do cliente é opcional */
-    }
-    const aberto = openFaturacaoDocumento({
-      tipo: tipo === 'fatura_recibo' ? 'fatura_recibo' : 'fatura',
-      numero: numeroDoc,
-      data: dataDoc,
-      emitente: emitente ?? null,
-      cliente: { nome: reserva.cliente_nome ?? 'Cliente', nif: clienteNif, morada: clienteMorada },
-      linhas: [{ descricao: `Aluguer — ${codigoLabel}`, valor: calc.subtotal }],
-      subtotal: calc.subtotal,
-      taxaIva: calc.taxaIva,
-      iva: calc.iva,
-      total: calc.totalComIva,
-      metodoLabel: tipo === 'fatura_recibo' ? metodoLabel(metodo) : null,
-    });
-    if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento local.');
-  }
 
   async function fetchClienteFatura() {
     try {
@@ -249,10 +214,12 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
         if (res.warning) toast.warning(res.warning);
       } catch (kiErr: any) {
         console.error('Falha a emitir o documento fiscal da reserva:', kiErr);
+        // Sem documento nenhum: emitir uma factura é acto de software
+        // certificado. Se o provider não emitiu, não há factura.
         toast.warning(
-          'Reserva faturada, mas o documento fiscal ficou por emitir. Pode reemiti-lo na lista de faturas.'
+          'Reserva faturada na conta-corrente, mas o documento fiscal NÃO foi emitido. ' +
+            'Reemita-o na lista de faturas — até lá não existe documento para entregar ao cliente.'
         );
-        await abrirDocumentoLocal(descricao);
       }
 
       onFaturado();
