@@ -31,6 +31,7 @@ const FormularioPublico = lazy(() => import('@/pages/FormularioPublico'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const AssinarDocumento = lazy(() => import('@/pages/AssinarDocumento'));
 const QuadroLive = lazy(() => import('@/pages/QuadroLive'));
+const LinkCurto = lazy(() => import('@/pages/LinkCurto'));
 const TicketsTI = lazy(() => import('@/pages/TicketsTI'));
 const TicketTIAutor = lazy(() => import('@/pages/TicketTIAutor'));
 const DasprentLeads = lazy(() => import('@/pages/DasprentLeads'));
@@ -145,6 +146,10 @@ const WebAppRoutes = () => {
             <Route path="/danos/:token" element={<DanosPublicosPage />} />
             {/* Assinar um documento por link, sem login — mesma familia do /danos/:token */}
             <Route path="/assinar/:token" element={<AssinarDocumento />} />
+            {/* Link curto para um ficheiro privado (resumo enviado por WhatsApp).
+                Sem login: o código é a credencial, e quem o resolve é a edge
+                function link-curto. */}
+            <Route path="/r/:codigo" element={<LinkCurto />} />
             {/* Quadro TV público — sem login, acesso por token */}
             <Route path="/quadro/:token" element={<QuadroLive />} />
             {/* A rota do autor vem ANTES: /ti/:token capturaria /ti/ticket/xxx com
