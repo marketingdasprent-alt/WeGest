@@ -17,8 +17,7 @@ export const BASE_LINK_CURTO = 'https://wegest.pt/r';
 // 256 não é múltiplo do alfabeto, por isso um `% alfabeto` cru deixaria as
 // primeiras letras sair mais vezes do que as últimas. Descartam-se os bytes
 // acima do último múltiplo inteiro e o sorteio fica uniforme.
-const LIMITE_SEM_ENVIESAMENTO =
-  Math.floor(256 / ALFABETO_CODIGO.length) * ALFABETO_CODIGO.length;
+const LIMITE_SEM_ENVIESAMENTO = Math.floor(256 / ALFABETO_CODIGO.length) * ALFABETO_CODIGO.length;
 
 export function gerarCodigoLinkCurto(): string {
   // `crypto`, não `Math.random`: um gerador previsível transformava o código

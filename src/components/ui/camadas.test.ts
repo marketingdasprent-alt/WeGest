@@ -10,9 +10,7 @@ import { resolve } from 'path';
  */
 function zIndexDe(ficheiro: string): number[] {
   const src = readFileSync(resolve(process.cwd(), 'src/components/ui', ficheiro), 'utf8');
-  return [...src.matchAll(/(?:^|[\s'"`])z-(?:\[(\d+)\]|(\d+))/g)].map((m) =>
-    Number(m[1] ?? m[2])
-  );
+  return [...src.matchAll(/(?:^|[\s'"`])z-(?:\[(\d+)\]|(\d+))/g)].map((m) => Number(m[1] ?? m[2]));
 }
 
 const camadaDoDialogo = Math.max(...zIndexDe('dialog.tsx'));

@@ -37,7 +37,9 @@ export function montarMensagemResumo({
               `  ${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias}d × ${fmt(p.taxaDiaria)}/d = ${fmt(p.custo)}`
           )
           .join('\n') +
-        (slotPeriodos.length > 1 ? `\n  Total Slot: ${fmt(slotPeriodos.reduce((s, p) => s + p.custo, 0))}` : '')
+        (slotPeriodos.length > 1
+          ? `\n  Total Slot: ${fmt(slotPeriodos.reduce((s, p) => s + p.custo, 0))}`
+          : '')
       : '';
 
   return (
@@ -46,9 +48,7 @@ export function montarMensagemResumo({
     `*Receitas:* ${fmt(receitas)}\n` +
     `*Despesas:* ${fmt(despesas)}${slot}\n` +
     `*Líquido Final:* ${fmt(liquido)}\n\n` +
-    (linkPdf
-      ? `Resumo detalhado (expira em ${DIAS_VALIDADE_LINK} dias):\n${linkPdf}\n\n`
-      : '') +
+    (linkPdf ? `Resumo detalhado (expira em ${DIAS_VALIDADE_LINK} dias):\n${linkPdf}\n\n` : '') +
     'Se tiver alguma dúvida, por favor contacte-nos.'
   );
 }
@@ -77,4 +77,3 @@ export const SEGUNDOS_VALIDADE_LINK = DIAS_VALIDADE_LINK * 24 * 60 * 60;
 export function linkWhatsApp(texto: string): string {
   return `https://wa.me/?text=${encodeURIComponent(texto)}`;
 }
-
