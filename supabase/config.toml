@@ -302,3 +302,10 @@ verify_jwt = true
 # servidor. A função valida utilizador real e admin da organização ativa.
 [functions.integracao-robot-criar]
 verify_jwt = true
+
+# Resolve um link curto (wegest.pt/r/<codigo>) e reencaminha para o ficheiro.
+# Quem o abre é o motorista, no WhatsApp, sem sessão → verify_jwt = false. A
+# autorização é o próprio código: 12 caracteres aleatórios, com validade
+# gravada na linha, e o destino sai sempre da tabela — nunca do pedido.
+[functions.link-curto]
+verify_jwt = false

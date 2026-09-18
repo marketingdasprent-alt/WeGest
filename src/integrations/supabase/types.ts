@@ -6614,6 +6614,50 @@ export type Database = {
           },
         ]
       }
+      links_curtos: {
+        Row: {
+          aberturas: number
+          bucket: string
+          caminho: string
+          codigo: string
+          criado_em: string
+          criado_por: string | null
+          expira_em: string
+          org_id: string
+          ultima_abertura: string | null
+        }
+        Insert: {
+          aberturas?: number
+          bucket: string
+          caminho: string
+          codigo: string
+          criado_em?: string
+          criado_por?: string | null
+          expira_em: string
+          org_id: string
+          ultima_abertura?: string | null
+        }
+        Update: {
+          aberturas?: number
+          bucket?: string
+          caminho?: string
+          codigo?: string
+          criado_em?: string
+          criado_por?: string | null
+          expira_em?: string
+          org_id?: string
+          ultima_abertura?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "links_curtos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       login_attempts: {
         Row: {
           created_at: string
