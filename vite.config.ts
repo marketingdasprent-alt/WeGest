@@ -82,6 +82,12 @@ export default defineConfig(({ mode }) => ({
         globIgnores: ['**/images/**'],
         navigateFallbackDenylist: [/^\/~oauth/],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        // Nota: o vite-plugin-pwa precacheia SEMPRE o manifest.webmanifest (não
+        // tem interruptor, e `manifestTransforms` não chega às entradas que ele
+        // acrescenta). Quem já tem a app instalada só vê um `start_url` novo
+        // depois de aceitar a actualização do SW e de o Chrome reler o manifest.
+        // Entretanto é a `RaizDaApp` (rota `/`) que garante que a app instalada
+        // abre no painel do motorista.
         runtimeCaching: [
           {
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,

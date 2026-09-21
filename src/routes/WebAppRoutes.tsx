@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { RaizDaApp } from '@/components/auth/RaizDaApp';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { RouteErrorBoundary } from '@/components/ErrorBoundary';
@@ -130,7 +131,9 @@ const WebAppRoutes = () => {
             <Route
               path="/"
               element={
-                tokenDoDominioTickets(window.location.hostname) ? <TicketsTI /> : <Landing />
+                <RaizDaApp>
+                  {tokenDoDominioTickets(window.location.hostname) ? <TicketsTI /> : <Landing />}
+                </RaizDaApp>
               }
             />
             <Route path="/entrar" element={<Entrar />} />
