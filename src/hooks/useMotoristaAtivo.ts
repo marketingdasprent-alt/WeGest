@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
 
-export type MotoristaAtivo = Database['public']['Views']['motoristas_ativos']['Row'];
+// `motoristas_ativos` é uma TABELA (a ficha do motorista), apesar do nome
+// parecer uma view sobre `motoristas`.
+export type MotoristaAtivo = Database['public']['Tables']['motoristas_ativos']['Row'];
 
 /**
  * A ficha do motorista com sessão iniciada, para o portal dele.

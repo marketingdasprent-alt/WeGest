@@ -14,7 +14,7 @@ interface FuelTransaction {
   amount: number;
   quantity: number;
   type: 'bp' | 'repsol' | 'edp';
-  fuelType?: string;
+  fuelType?: string | null;
 }
 
 interface MotoristaCombustivelCardProps {

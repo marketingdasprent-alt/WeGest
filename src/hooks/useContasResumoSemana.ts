@@ -33,7 +33,7 @@ export function useContasResumoSemana(
   const [desativadoEmMap, setDesativadoEmMap] = useState<Record<string, string>>({});
   // motorista_id → a ficha do CRM é a própria empresa ("PREMIUM RIDE"), não uma
   // pessoa. Complementa o `contasFrota` das contas de plataforma mais abaixo:
-  // aquele apanha a conta Uber marcada, este apanha a ficha — ver 20260917110000.
+  // aquele apanha a conta Uber marcada, este apanha a ficha — ver 20260917110001.
   const [contaFrotaMap, setContaFrotaMap] = useState<Record<string, boolean>>({});
   const [aluguerEstimadoMap, setAluguerEstimadoMap] = useState<Record<string, boolean>>({});
 

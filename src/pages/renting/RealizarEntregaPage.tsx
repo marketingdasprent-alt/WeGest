@@ -45,7 +45,6 @@ const paraUpload = (lista: NovoDano[]) =>
       files: d.files.map((f) => f.file),
     }));
 
-
 // ── Componente principal ─────────────────────────────────────────────────────
 
 const RealizarEntregaPage = () => {

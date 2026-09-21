@@ -18,7 +18,7 @@ export interface DanoExistente {
   id: string;
   descricao: string;
   localizacao: string | null;
-  estado: string;
+  estado: string | null;
   data_registo: string | null;
   observacoes: string | null;
   fotos: DanoExistenteFoto[];

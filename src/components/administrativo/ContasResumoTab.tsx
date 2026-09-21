@@ -297,7 +297,7 @@ export function ContasResumoTab() {
     let result = resumos.filter((r) => {
       if (isCompanyName(r.driver_name)) return false;
       // A ficha do CRM que É a própria empresa (ex.: "PREMIUM RIDE", sem sufixo
-      // para a regex apanhar) vem marcada da base — migração 20260917110000.
+      // para a regex apanhar) vem marcada da base — migração 20260917110001.
       if (r.motorista_id && contaFrotaMap[r.motorista_id]) return false;
       // Mantenha inativos nas semanas anteriores à desativação para fechar saldos.
       if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) {

@@ -227,7 +227,9 @@ export function MotoristaTabDocumentos({
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setDocumentos(data || []);
+      // `status` é `text` na base, com CHECK nos três valores — o cast só
+      // estreita o tipo para o union que o CHECK garante.
+      setDocumentos((data || []) as MotoristDocumento[]);
     } catch (error) {
       console.error('Erro ao carregar documentos:', error);
       toast.error('Erro ao carregar documentos');

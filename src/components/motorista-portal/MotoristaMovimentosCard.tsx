@@ -7,16 +7,9 @@ import { cn } from '@/lib/utils';
 import { Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import type { Database } from '@/integrations/supabase/types';
 
-interface Movimento {
-  id: string;
-  tipo: string;
-  descricao: string;
-  valor: number;
-  data_movimento: string;
-  status: string;
-  categoria: string;
-}
+type Movimento = Database['public']['Tables']['motorista_financeiro']['Row'];
 
 interface MotoristaMovimentosCardProps {
   motoristaId: string;
@@ -123,9 +116,11 @@ export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCard
                     />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{m.descricao}</p>
+                    <p className="truncate text-sm font-medium">{m.descricao ?? 'Movimento'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {format(new Date(m.data_movimento), 'd MMM yyyy', { locale: pt })}
+                      {m.data_movimento
+                        ? format(new Date(m.data_movimento), 'd MMM yyyy', { locale: pt })
+                        : '—'}
                       {m.status && <> · {m.status}</>}
                     </p>
                   </div>

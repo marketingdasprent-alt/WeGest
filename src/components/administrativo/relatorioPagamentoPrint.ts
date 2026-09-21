@@ -30,8 +30,7 @@ const fmtEur = (v: number) =>
 
 /** Zero imprime-se como travessão, tal como no ecrã: uma folha cheia de
  *  "0,00 €" esconde as células que têm mesmo valor. */
-const cel = (v: number) =>
-  v ? `<td class="r">${fmtEur(v)}</td>` : '<td class="r z">—</td>';
+const cel = (v: number) => (v ? `<td class="r">${fmtEur(v)}</td>` : '<td class="r z">—</td>');
 
 export async function gerarRelatorioPagamentoPrint(params: {
   linhas: LinhaImpressao[];

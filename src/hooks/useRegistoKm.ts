@@ -91,7 +91,7 @@ export function useRegistoKm() {
     setAGravar(true);
     try {
       const { data: auth } = await supabase.auth.getUser();
-      // A viatura é actualizada por gatilho (ver migração 20260918120000) —
+      // A viatura é actualizada por gatilho (ver migração 20260918120001) —
       // aqui só se grava a leitura.
       const { error } = await supabase.from('viatura_km_leituras').insert({
         viatura_id: p.viaturaId,
