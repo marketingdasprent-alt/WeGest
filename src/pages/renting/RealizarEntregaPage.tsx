@@ -22,6 +22,7 @@ import {
   type RascunhoCache,
 } from '@/utils/entrega';
 import { gerarFolhaBloco, uploadDanos } from './entrega/entregaOperations';
+import { validarDanos, type NovoDano } from '@/components/renting/danos/DanosEditor';
 import {
   StepDadosIniciais,
   StepKmCombustivelFotos,
@@ -32,28 +33,17 @@ import type { AssinaturasHandoverHandle } from '@/components/assinatura/Assinatu
 
 // ── Helpers de ficheiros (puros, extraídos para reuso) ──────────────────────
 
-const makeFileHandlers = (setter: React.Dispatch<React.SetStateAction<FilePreview[]>>) => ({
-  addFiles(list: FileList | null) {
-    if (!list) return;
-    setter((prev) => [
-      ...prev,
-      ...Array.from(list).map((file) => ({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        file,
-        url: URL.createObjectURL(file),
-        localizacao: '',
-        descricao: '',
-        valor: '',
-      })),
-    ]);
-  },
-  updateFoto(id: string, campo: 'localizacao' | 'descricao' | 'valor', valor: string) {
-    setter((prev) => prev.map((f) => (f.id === id ? { ...f, [campo]: valor } : f)));
-  },
-  removeFile(id: string) {
-    setter((prev) => prev.filter((f) => f.id !== id));
-  },
-});
+/** Despe o dano do que só serve à interface (ids locais, previews) antes de
+ *  o mandar gravar. */
+const paraUpload = (lista: NovoDano[]) =>
+  lista
+    .filter((d) => d.descricao.trim())
+    .map((d) => ({
+      descricao: d.descricao,
+      localizacao: d.localizacao,
+      valor: d.valor,
+      files: d.files.map((f) => f.file),
+    }));
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
@@ -79,14 +69,18 @@ const RealizarEntregaPage = () => {
   const [combustivelAntiga, setCombustivelAntiga] = useState<string>('');
   const [eletricoAntiga, setEletricoAntiga] = useState<string>('');
   const [filesAntiga, setFilesAntiga] = useState<FilePreview[]>([]);
+  // Danos concretos, no modelo partilhado. Separados das fotos: uma foto é o
+  // retrato do estado, um dano é algo com localização e valor. Antes os campos
+  // viviam presos a cada foto — sem foto não havia dano, e um dano com três
+  // fotos virava três danos na tabela.
+  const [danos, setDanos] = useState<NovoDano[]>([]);
+  const [danosAntiga, setDanosAntiga] = useState<NovoDano[]>([]);
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
   const [gerandoFolha, setGerandoFolha] = useState(false);
   const restauradoRef = useRef(false);
   const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
 
-  const filesH = makeFileHandlers(setFiles);
-  const filesAntigaH = makeFileHandlers(setFilesAntiga);
   const isTroca = info?.tipo === 'troca';
   const isDevolucao = info?.tipo === 'recolha';
 
@@ -187,19 +181,6 @@ const RealizarEntregaPage = () => {
   const { data: tipoCombustivel } = useTipoCombustivel(contexto?.viaturaId);
   const { data: tipoCombustivelAntiga } = useTipoCombustivel(isTroca ? viaturaAntigaId : null);
 
-  // DUA: verificar se viatura tem documentos associados
-  const { data: viaturaTemDua = false } = useQuery({
-    queryKey: ['viatura-tem-dua', contexto?.viaturaId],
-    enabled: isDevolucao && !!contexto?.viaturaId,
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('viatura_documentos')
-        .select('id', { count: 'exact', head: true })
-        .eq('viatura_id', contexto!.viaturaId!)
-        .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua']);
-      return (count ?? 0) > 0;
-    },
-  });
   const [duaDevolvido, setDuaDevolvido] = useState(false);
   // Entrega: o gestor marca se o motorista leva a DUA ORIGINAL consigo.
   const [duaOriginalLevada, setDuaOriginalLevada] = useState(false);
@@ -217,7 +198,17 @@ const RealizarEntregaPage = () => {
       return !!data?.dua_original_com_motorista && !data?.dua_devolvida_em;
     },
   });
-  const exigeDua = isDevolucao && (viaturaTemDua || duaOriginalContrato);
+  // Só se pede a devolução da DUA a quem a levou.
+  //
+  // Tinha aqui um `viaturaTemDua ||`: bastava a viatura ter o DUA digitalizado
+  // em viatura_documentos para a devolução exigir a confirmação. Como quase
+  // todas têm, o pedido aparecia quase sempre — incluindo quando ninguém levou
+  // papel nenhum — e, como bloqueia o botão de confirmar, a saída era pôr o
+  // visto à mesma. Isso transforma a prova legal num carimbo automático.
+  //
+  // `dua_original_com_motorista` (a caixa marcada na ENTREGA) é o único sinal
+  // de que o original saiu com o motorista. Mesma regra do fecho de contrato.
+  const exigeDua = isDevolucao && duaOriginalContrato;
 
   // Restaurar rascunho do cache
   useEffect(() => {
@@ -290,6 +281,13 @@ const RealizarEntregaPage = () => {
       toast({ title: err, variant: 'destructive' });
       return;
     }
+    // Mesma regra dos outros ecrãs: um dano sem descrição não diz nada a quem
+    // o ler depois, e um valor que não é número não se grava.
+    const errDanos = validarDanos(danos) ?? validarDanos(danosAntiga);
+    if (errDanos) {
+      toast({ title: errDanos, variant: 'destructive' });
+      return;
+    }
     setGerandoFolha(true);
     try {
       const matricula = formatMatricula(info.matricula);
@@ -358,6 +356,13 @@ const RealizarEntregaPage = () => {
       toast({ title: err, variant: 'destructive' });
       return;
     }
+    // Mesma regra dos outros ecrãs: um dano sem descrição não diz nada a quem
+    // o ler depois, e um valor que não é número não se grava.
+    const errDanos = validarDanos(danos) ?? validarDanos(danosAntiga);
+    if (errDanos) {
+      toast({ title: errDanos, variant: 'destructive' });
+      return;
+    }
 
     setUploading(true);
     const uploadedPaths: string[] = [];
@@ -378,6 +383,8 @@ const RealizarEntregaPage = () => {
       const allPaths = await uploadDanos({
         files,
         filesAntiga,
+        danos: paraUpload(danos),
+        danosAntiga: paraUpload(danosAntiga),
         viaturaId: vNovaId,
         viaturaAntigaId: viaturaAntigaId ?? null,
         observacoes,
@@ -492,12 +499,21 @@ const RealizarEntregaPage = () => {
       toast({ title: err, variant: 'destructive' });
       return;
     }
+    // Mesma regra dos outros ecrãs: um dano sem descrição não diz nada a quem
+    // o ler depois, e um valor que não é número não se grava.
+    const errDanos = validarDanos(danos) ?? validarDanos(danosAntiga);
+    if (errDanos) {
+      toast({ title: errDanos, variant: 'destructive' });
+      return;
+    }
     setUploading(true);
     const uploadedPaths: string[] = [];
     try {
       const allPaths = await uploadDanos({
         files,
         filesAntiga,
+        danos: paraUpload(danos),
+        danosAntiga: paraUpload(danosAntiga),
         viaturaId: contexto.viaturaId,
         viaturaAntigaId,
         observacoes,
@@ -678,10 +694,11 @@ const RealizarEntregaPage = () => {
             eletricidade={eletricoAntiga}
             onEletricidadeChange={setEletricoAntiga}
             tipoCombustivel={tipoCombustivelAntiga}
-            files={filesAntiga}
-            onAddFiles={filesAntigaH.addFiles}
-            onUpdateFoto={filesAntigaH.updateFoto}
-            onRemoveFile={filesAntigaH.removeFile}
+            danos={danosAntiga}
+            onDanosChange={setDanosAntiga}
+            viaturaId={viaturaAntigaId}
+            contratoId={info?.contrato_id}
+            kmMinimo={viaturaAntigaKmAtual ?? 0}
           />
         )}
 
@@ -694,10 +711,11 @@ const RealizarEntregaPage = () => {
           eletricidade={eletrico}
           onEletricidadeChange={setEletrico}
           tipoCombustivel={tipoCombustivel}
-          files={files}
-          onAddFiles={filesH.addFiles}
-          onUpdateFoto={filesH.updateFoto}
-          onRemoveFile={filesH.removeFile}
+          danos={danos}
+          onDanosChange={setDanos}
+          viaturaId={contexto?.viaturaId}
+          contratoId={info?.contrato_id}
+          kmMinimo={viaturaKmAtual ?? 0}
         />
 
         <StepCondutorDuaObservacoes

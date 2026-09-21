@@ -13,6 +13,7 @@ export const TIPOS_NOTIFICACAO = [
   'invoice_nao_enviada_ao_cliente',
   'motorista_candidatura_parada',
   'motorista_carta_expirando',
+  'motorista_documento_pendente',
   'motorista_ficha_incompleta',
   'motorista_licenca_tvde_expirando',
   'motorista_pendente',
@@ -79,6 +80,9 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
   },
   motorista_carta_expirando: { label: 'Ver motorista', rota: '/motoristas' },
   motorista_licenca_tvde_expirando: { label: 'Ver motorista', rota: '/motoristas' },
+  // O trigger preenche `link` com /motoristas/<id>?tab=documentos; a rota base
+  // é só rede de segurança para linhas sem link.
+  motorista_documento_pendente: { label: 'Ver documentos', rota: '/motoristas' },
   // Notificações do motorista seguem para o portal, não para uma rota de staff.
   motorista_ficha_incompleta: { label: 'Completar ficha', rota: '/motorista/painel' },
   motorista_reparacao_cobranca: { label: 'Ver conta', rota: '/motorista/painel' },

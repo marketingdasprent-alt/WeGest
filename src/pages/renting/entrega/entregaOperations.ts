@@ -9,6 +9,16 @@ import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTempla
 import { emailFolhaDanos } from '@/lib/emailFolhaDanos';
 import { guardarFolhaDanos } from '@/lib/guardarFolhaDanos';
 import { fileToDataUrl, type FilePreview } from '@/utils/entrega';
+
+/** Um dano a gravar: o NovoDano do editor partilhado, já sem o que é só UI
+ *  (ids locais, previews). Tipado aqui para este módulo não depender de um
+ *  componente React. */
+interface NovoDanoUpload {
+  descricao: string;
+  localizacao: string;
+  valor: string;
+  files: File[];
+}
 import type { AssinaturasHandoverHandle } from '@/components/assinatura/AssinaturasHandoverSection';
 
 interface BlocoFolha {
@@ -169,6 +179,10 @@ export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
 interface UploadDanosParams {
   files: FilePreview[];
   filesAntiga: FilePreview[];
+  /** Danos concretos (descrição, onde, quanto), cada um com as suas fotos —
+   *  modelo partilhado com o fecho de contrato e o calendário. */
+  danos?: NovoDanoUpload[];
+  danosAntiga?: NovoDanoUpload[];
   viaturaId: string | null;
   viaturaAntigaId: string | null;
   observacoes: string;
@@ -186,10 +200,40 @@ interface UploadDanosParams {
  * de erro.
  */
 export async function uploadDanos(params: UploadDanosParams): Promise<string[]> {
-  const { files, filesAntiga, viaturaId, viaturaAntigaId, observacoes, info, userId, token } =
-    params;
+  const {
+    files,
+    filesAntiga,
+    danos = [],
+    danosAntiga = [],
+    viaturaId,
+    viaturaAntigaId,
+    observacoes,
+    info,
+    userId,
+    token,
+  } = params;
   const uploadedPaths: string[] = [];
   const isEntrega = info.tipo === 'entrega';
+
+  /** Sobe um ficheiro para o dano e regista a foto. Partilhado pelos dois
+   *  caminhos abaixo (danos concretos e registo genérico). */
+  const subirFoto = async (danoId: string, file: File, descricao?: string | null) => {
+    const ext = file.name.split('.').pop() || 'bin';
+    const path = `${danoId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from('viatura-danos')
+      .upload(path, file, { contentType: file.type });
+    if (upErr) throw upErr;
+    uploadedPaths.push(path);
+    const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
+      dano_id: danoId,
+      ficheiro_url: path,
+      nome_ficheiro: file.name,
+      descricao: descricao?.trim() || null,
+      uploaded_by: userId,
+    });
+    if (fErr) throw fErr;
+  };
 
   // Limpa danos/fotos duma tentativa anterior falhada deste mesmo token —
   // tem de correr ANTES de confirmar (o token ainda não está usado aqui).
@@ -203,6 +247,41 @@ export async function uploadDanos(params: UploadDanosParams): Promise<string[]> 
     console.warn('Falha a limpar danos de tentativa anterior:', err);
   }
 
+  // ── Danos concretos: um registo por dano, com as suas fotos ──────────────
+  // Antes isto vinha dos campos presos a cada foto: um dano fotografado de
+  // três ângulos virava três danos na tabela, e um dano sem foto não existia.
+  const gruposDeDanos = [
+    ...(viaturaId ? [{ vId: viaturaId, lista: danos }] : []),
+    ...(viaturaAntigaId ? [{ vId: viaturaAntigaId, lista: danosAntiga }] : []),
+  ];
+  for (const { vId, lista } of gruposDeDanos) {
+    for (const dano of lista) {
+      if (!dano.descricao.trim()) continue;
+      const valorNum = dano.valor.trim() ? Number(dano.valor) : null;
+      const { data: novoDano, error: dErr } = await supabase
+        .from('viatura_danos')
+        .insert({
+          viatura_id: vId,
+          descricao: dano.descricao.trim(),
+          localizacao: dano.localizacao.trim() || null,
+          // null = por avaliar; não é o mesmo que "não custa nada".
+          valor: valorNum != null && !Number.isNaN(valorNum) ? valorNum : null,
+          observacoes: observacoes.trim() || null,
+          estado: 'existente',
+          contrato_renting_id: info.contrato_id,
+          registado_por: userId,
+          realizacao_token_id: token,
+        })
+        .select('id')
+        .single();
+      if (dErr) throw dErr;
+      for (const file of dano.files) {
+        await subirFoto(novoDano.id, file);
+      }
+    }
+  }
+
+  // ── Fotos soltas: o retrato do estado da viatura ─────────────────────────
   // Agrupa todos os files (viatura actual + antiga, se troca)
   const allFiles = [...(viaturaId ? [files] : []), ...(viaturaAntigaId ? [filesAntiga] : [])];
 

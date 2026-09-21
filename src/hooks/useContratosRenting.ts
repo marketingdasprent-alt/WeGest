@@ -364,9 +364,24 @@ export function useUpdateContratoRenting() {
 export interface FecharContratoRecolhaInfo {
   km: string;
   combustivel: string;
-  /** Cada ficheiro leva a descrição escrita no fecho — é ela que vira legenda
-   *  da imagem na Folha de Danos (viatura_dano_fotos.descricao). */
-  fotos: { file: File; descricao?: string }[];
+  /** Carga da bateria ("73%") nos eléctricos/híbridos. Vai para
+   *  contratos_renting.eletricidade_entrada, a par do combustivel_entrada. */
+  eletricidade?: string;
+  /** Anexo geral da recolha: fotos sem dano associado, agrupadas num registo
+   *  "Registo recolha". O fecho de contrato já não o preenche — as fotos vão
+   *  agora presas ao dano a que pertencem (`danos`, abaixo). Continua aqui
+   *  para os caminhos que ainda o usem. */
+  fotos?: { file: File; descricao?: string }[];
+  /** Danos encontrados na recolha, um registo por dano. Distinto de `fotos`,
+   *  que é o retrato geral do estado da viatura: aqui cada linha tem onde foi
+   *  e quanto custa, e é o valor que chega à conta do motorista. */
+  danos?: {
+    descricao: string;
+    localizacao: string | null;
+    /** null = ainda por avaliar. Não é o mesmo que 0 €. */
+    valor: number | null;
+    files: File[];
+  }[];
 }
 
 export interface FecharContratoArgs {
@@ -489,6 +504,7 @@ export function useFecharContrato() {
           .update({
             km_entrada: Number.isNaN(kmNum) ? null : kmNum,
             combustivel_entrada: recolha.combustivel,
+            ...(recolha.eletricidade ? { eletricidade_entrada: recolha.eletricidade } : {}),
           })
           .eq('id', contratoId);
         if (errKm) throw errKm;
@@ -499,7 +515,7 @@ export function useFecharContrato() {
 
         // Mesmo modelo viatura_danos/viatura_dano_fotos que RealizarEntregaPage,
         // para a Folha de Danos apanhar as fotos automaticamente.
-        if (recolha.fotos.length > 0 && viaturaId) {
+        if (recolha.fotos?.length && viaturaId) {
           const { data: dano, error: dErr } = await supabase
             .from('viatura_danos')
             .insert({
@@ -529,6 +545,53 @@ export function useFecharContrato() {
               uploaded_by: userId,
             });
             if (fErr) throw fErr;
+          }
+        }
+
+        // Danos encontrados na recolha: um registo POR DANO, com localização e
+        // valor. O contrato_id_origem é o que permite saber depois em que
+        // contrato o dano apareceu, mesmo que a viatura mude de mãos.
+        //
+        // Estado 'existente' e não 'pendente': a lista de estados que o
+        // separador Danos da viatura conhece é existente/em_reparacao/
+        // reparado/irreparavel. O caminho do calendário grava 'pendente', que
+        // não está lá — são 144 danos em produção a aparecer sem estado
+        // reconhecido nesse ecrã. Não replico o problema; uniformizar os 144
+        // fica para decisão à parte.
+        if (recolha.danos?.length && viaturaId) {
+          for (const dano of recolha.danos) {
+            const { data: novoDano, error: danoErr } = await supabase
+              .from('viatura_danos')
+              .insert({
+                viatura_id: viaturaId,
+                descricao: dano.descricao,
+                localizacao: dano.localizacao,
+                valor: dano.valor,
+                estado: 'pendente',
+                registado_por: userId,
+                contrato_renting_id: contratoId,
+                contrato_id_origem: contratoId,
+                motorista_id: motoristaId || null,
+              })
+              .select('id')
+              .single();
+            if (danoErr) throw danoErr;
+
+            for (const file of dano.files) {
+              const ext = file.name.split('.').pop() || 'bin';
+              const path = `${novoDano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+              const { error: upErr } = await supabase.storage
+                .from('viatura-danos')
+                .upload(path, file, { contentType: file.type });
+              if (upErr) throw upErr;
+              const { error: fotoErr } = await supabase.from('viatura_dano_fotos').insert({
+                dano_id: novoDano.id,
+                ficheiro_url: path,
+                nome_ficheiro: file.name,
+                uploaded_by: userId,
+              });
+              if (fotoErr) throw fotoErr;
+            }
           }
         }
       }

@@ -13,10 +13,13 @@ import {
   ChevronDown,
   ChevronsUpDown,
   AlertTriangle,
+  Gauge,
+  Printer,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { format } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { colunaDoMovimento, type ColunaFinanceira } from './relatorioPagamentoCategorias';
+import { gerarRelatorioPagamentoPrint } from './relatorioPagamentoPrint';
 
 interface ResumoBase {
   motorista_id?: string;
@@ -25,6 +28,9 @@ interface ResumoBase {
   _uid?: string;
   driver_uuid?: string;
   driver_name: string;
+  /** Passa recibo verde. `false` = "vermelho" — o nome sai a vermelho e o
+   *  filtro do cabeçalho separa uns dos outros. */
+  recibo_verde?: boolean;
   liquido: number;
   aluguer: number;
   combustivel: number;
@@ -52,6 +58,7 @@ interface LinhaRelatorio {
   motorista_id: string | null;
   nome: string;
   iban: string;
+  reciboVerde: boolean;
   liquido: number;
   viatura: number;
   combustivel: number;
@@ -101,6 +108,11 @@ export function RelatorioPagamentoDialog({
   // Motoristas marcados como "já pago" (só visual, ajuda a acompanhar os
   // pagamentos durante a sessão — risca a linha; não persiste).
   const [pagos, setPagos] = useState<Set<string>>(new Set());
+  // Motoristas que já entregaram o KM desta semana. Quem não está aqui aparece
+  // assinalado — não bloqueia o pagamento, porque há faltas legítimas (baixa,
+  // viatura na oficina) e travar o acerto por isso fazia mais estragos do que
+  // resolvia. Quem decide é o gestor, com a informação à frente.
+  const [comKmSemana, setComKmSemana] = useState<Set<string>>(new Set());
   // Ordem manual (array de motorista_id). Vazio = ordem alfabética.
   // Arrastar uma linha preenche esta ordem e passa a sobrepor a alfabética.
   const [ordemManual, setOrdemManual] = useState<string[]>([]);
@@ -109,6 +121,10 @@ export function RelatorioPagamentoDialog({
   // ordem manual; arrastar uma linha limpa a ordenação (ver handleDrop).
   const [sortCol, setSortCol] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Recibo verde: 'verde' = passa recibo, 'vermelho' = não passa. O filtro
+  // mexe também nos totais e no que vai para a impressão e para o Excel — é
+  // deliberado: quem filtra quer o total daquele grupo, não o da lista toda.
+  const [filtroRecibo, setFiltroRecibo] = useState<'todos' | 'verde' | 'vermelho'>('todos');
 
   // Reset da ordenação ao fechar (os "pagos" são recarregados da BD ao abrir).
   useEffect(() => {
@@ -118,6 +134,7 @@ export function RelatorioPagamentoDialog({
       setDragId(null);
       setSortCol(null);
       setSortDir('asc');
+      setFiltroRecibo('todos');
     }
   }, [open]);
 
@@ -234,7 +251,7 @@ export function RelatorioPagamentoDialog({
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
         const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
-        const [ibanResult, financeiroResult] = await Promise.all([
+        const [ibanResult, financeiroResult, kmResult] = await Promise.all([
           supabase.from('motoristas_ativos').select('id, iban').in('id', ids),
           supabase
             .from('motorista_financeiro')
@@ -248,6 +265,18 @@ export function RelatorioPagamentoDialog({
             // detalhe. Desde 01/08 eram 46 movimentos, 7.168,59 €.
             .neq('status', 'cancelado')
             .in('motorista_id', ids),
+          // Quem entregou os quilómetros desta semana. O KM é condição para o
+          // acerto ser processado — sem ele não se sabe quanto a viatura andou
+          // — por isso a falta aparece aqui, ao lado do valor a pagar, e não
+          // num ecrã que ninguém abre na hora de pagar.
+          supabase
+            .from('viatura_km_leituras')
+            .select('motorista_id')
+            .gte('created_at', weekStartStr + 'T00:00:00')
+            // Limite exclusivo: `created_at` é timestamptz e um `lte` pela data
+            // do domingo cortaria fora o domingo inteiro.
+            .lt('created_at', format(addDays(weekEnd, 1), 'yyyy-MM-dd') + 'T00:00:00')
+            .in('motorista_id', ids),
         ]);
 
         if (cancelled) return;
@@ -257,6 +286,10 @@ export function RelatorioPagamentoDialog({
           if (m.iban) ibans[m.id] = m.iban;
         });
         setIbanMap(ibans);
+
+        setComKmSemana(
+          new Set((kmResult.data || []).map((r: any) => r.motorista_id).filter(Boolean))
+        );
 
         const fin: Record<string, Partial<Record<ColunaFinanceira, number>>> = {};
         (financeiroResult.data || []).forEach((m: any) => {
@@ -289,6 +322,11 @@ export function RelatorioPagamentoDialog({
           motorista_id: motoristaId,
           nome: r.driver_name,
           iban: (motoristaId && ibanMap[motoristaId]) || '',
+          // Por omissão VERDE. O campo vem dos Resumos, que já o resolvem a
+          // partir da ficha; só fica indefinido em linhas sem ficha no CRM, e
+          // aí não há como saber — melhor não acusar ninguém de não passar
+          // recibo por falta de dados.
+          reciboVerde: r.recibo_verde !== false,
           liquido: r.liquido,
           viatura: r.aluguer,
           combustivel: r.combustivel,
@@ -312,7 +350,9 @@ export function RelatorioPagamentoDialog({
   // Motoristas fora da ordem manual (ex.: dados que carregaram depois) vão para
   // o fim, alfabéticos.
   const linhasOrdenadas = useMemo(() => {
-    const arr = [...linhas];
+    const arr = linhas.filter((l) =>
+      filtroRecibo === 'todos' ? true : filtroRecibo === 'verde' ? l.reciboVerde : !l.reciboVerde
+    );
 
     if (sortCol) {
       arr.sort((a, b) => {
@@ -335,7 +375,7 @@ export function RelatorioPagamentoDialog({
       const pb = pos.has(b.key) ? pos.get(b.key)! : Number.MAX_SAFE_INTEGER;
       return pa - pb;
     });
-  }, [linhas, ordemManual, sortCol, sortDir]);
+  }, [linhas, ordemManual, sortCol, sortDir, filtroRecibo]);
 
   // Drag-n-drop (HTML5 nativo — mesmo padrão do kanban-board do projeto).
   const handleDrop = (targetId: string) => {
@@ -382,10 +422,44 @@ export function RelatorioPagamentoDialog({
     return t;
   }, [linhasOrdenadas]);
 
+  // Contadores dos botões — sobre a lista INTEIRA, para continuarem a fazer
+  // sentido com um filtro activo.
+  const nVerdes = useMemo(() => linhas.filter((l) => l.reciboVerde).length, [linhas]);
+  const nVermelhos = linhas.length - nVerdes;
+  // Quantos faltam entregar o KM desta semana. Vai ao cabeçalho para o gestor
+  // ver de relance, sem ter de percorrer a lista à procura das etiquetas.
+  const nSemKm = useMemo(
+    () => linhas.filter((l) => l.motorista_id && !comKmSemana.has(l.motorista_id)).length,
+    [linhas, comKmSemana]
+  );
+
+  // Só descritivo — o que sai no cabeçalho do papel, para uma folha filtrada
+  // não se fazer passar pela lista completa.
+  const filtroLabel =
+    filtroRecibo === 'verde'
+      ? 'Apenas com recibo verde'
+      : filtroRecibo === 'vermelho'
+        ? 'Apenas sem recibo verde'
+        : undefined;
+
+  const handlePrint = () =>
+    gerarRelatorioPagamentoPrint({
+      // A MESMA lista do ecrã, na mesma ordem e com o mesmo filtro: a
+      // impressão não recalcula nada.
+      linhas: linhasOrdenadas.map((l) => ({
+        ...l,
+        pago: !!l.motorista_id && pagos.has(l.motorista_id),
+      })),
+      weekLabel,
+      filtroLabel,
+    });
+
   const handleExport = () => {
     const rows = linhasOrdenadas.map((l) => ({
       Nome: l.nome,
       IBAN: l.iban,
+      'Recibo Verde': l.reciboVerde ? 'Sim' : 'Não',
+      'KM da semana': l.motorista_id && comKmSemana.has(l.motorista_id) ? 'Sim' : 'Não',
       Semana: weekLabel,
       Pago: l.motorista_id && pagos.has(l.motorista_id) ? 'Sim' : '',
       'Valor a Pagar (€)': l.liquido,
@@ -477,12 +551,71 @@ export function RelatorioPagamentoDialog({
                   Ordem alfabética
                 </Button>
               )}
+              {/* Verdes/Vermelhos = passa ou não passa recibo verde. Os
+                  contadores vêm de `linhas` (a lista toda), não de
+                  `linhasOrdenadas`, senão o grupo activo mostrava o seu
+                  próprio número e o outro ficava a zero. */}
+              <div className="flex items-center rounded-md border p-0.5">
+                {(
+                  [
+                    ['todos', `Todos (${linhas.length})`, ''],
+                    ['verde', `Verdes (${nVerdes})`, 'text-emerald-700 dark:text-emerald-400'],
+                    ['vermelho', `Vermelhos (${nVermelhos})`, 'text-red-600 dark:text-red-400'],
+                  ] as const
+                ).map(([valor, rotulo, cor]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => setFiltroRecibo(valor)}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                      filtroRecibo === valor
+                        ? 'bg-primary text-primary-foreground'
+                        : `hover:bg-muted ${cor}`
+                    }`}
+                    title={
+                      valor === 'vermelho'
+                        ? 'Motoristas que não passam recibo verde'
+                        : valor === 'verde'
+                          ? 'Motoristas que passam recibo verde'
+                          : 'Sem filtro de recibo'
+                    }
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                disabled={loading || linhasOrdenadas.length === 0}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir
+              </Button>
               <Button variant="outline" size="sm" onClick={handleExport} disabled={loading}>
                 <FileDown className="h-4 w-4 mr-2" />
                 Exportar Excel
               </Button>
             </div>
           </div>
+
+          {nSemKm > 0 && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-900 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200">
+              <Gauge className="mt-px h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {nSemKm} {nSemKm === 1 ? 'motorista não registou' : 'motoristas não registaram'}{' '}
+                  os quilómetros desta semana.
+                </p>
+                <p>
+                  Estão assinalados com <strong>sem KM</strong> na lista. Não impede o pagamento —
+                  há faltas legítimas (baixa, viatura na oficina) — mas sem a leitura não se sabe
+                  quanto a viatura andou.
+                </p>
+              </div>
+            </div>
+          )}
 
           {semFicha.length > 0 && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
@@ -567,6 +700,9 @@ export function RelatorioPagamentoDialog({
                 {linhasOrdenadas.map((l, idx) => {
                   const negativo = l.liquido < 0;
                   const semFichaCrm = !l.motorista_id;
+                  // Só se assinala quem TEM ficha: sem ela não há como saber
+                  // se entregou, e a marca seria ruído em cima do "sem ficha".
+                  const semKm = !!l.motorista_id && !comKmSemana.has(l.motorista_id);
                   const pago = !!l.motorista_id && pagos.has(l.motorista_id);
                   // O tom da linha vai na <tr>; a classe rp-linha-* repõe o mesmo
                   // tom, já opaco, na célula fixa do nome (ver index.css).
@@ -614,10 +750,18 @@ export function RelatorioPagamentoDialog({
                                 : undefined
                             }
                           />
+                          {/* Nome a vermelho = não passa recibo verde. O verde
+                              do "pago" ganha-lhe: uma linha já paga deixa de
+                              ser um aviso. */}
                           <span
                             className={
-                              pago ? 'font-semibold text-emerald-800 dark:text-emerald-200' : ''
+                              pago
+                                ? 'font-semibold text-emerald-800 dark:text-emerald-200'
+                                : !l.reciboVerde
+                                  ? 'font-semibold text-red-600 dark:text-red-400'
+                                  : ''
                             }
+                            title={l.reciboVerde ? undefined : 'Não passa recibo verde'}
                           >
                             {l.nome}
                           </span>
@@ -628,6 +772,15 @@ export function RelatorioPagamentoDialog({
                             >
                               <AlertTriangle className="h-3 w-3" />
                               sem ficha
+                            </span>
+                          )}
+                          {semKm && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-900 dark:bg-orange-900/50 dark:text-orange-200"
+                              title="Não registou os quilómetros da viatura nesta semana. Sem KM não se sabe quanto a viatura andou — confirme antes de pagar."
+                            >
+                              <Gauge className="h-3 w-3" />
+                              sem KM
                             </span>
                           )}
                         </div>

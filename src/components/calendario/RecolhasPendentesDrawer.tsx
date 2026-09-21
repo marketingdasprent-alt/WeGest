@@ -467,6 +467,7 @@ export const RecolhasPendentesDrawer: React.FC<RecolhasPendentesDrawerProps> = (
               matricula={formatMatricula(viatura.matricula)}
               dataEvento={new Date().toISOString().slice(0, 10)}
               contratoNumero={selected.contratoNumero}
+              contratoId={selected.contratoId}
               accentClass="border-orange-200 dark:border-orange-800"
             />
 

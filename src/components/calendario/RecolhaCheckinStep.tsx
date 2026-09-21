@@ -550,6 +550,7 @@ export const RecolhaCheckinStep: React.FC<RecolhaCheckinStepProps> = ({
                 matricula={formatMatricula(viatura.matricula)}
                 dataEvento={data}
                 contratoNumero={contrato?.numero_contrato}
+                contratoId={contrato?.id}
                 accentClass={
                   isDevolucao
                     ? 'border-orange-200 dark:border-orange-800'

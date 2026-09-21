@@ -340,6 +340,7 @@ export const CheckOutPendentesDrawer: React.FC<CheckOutPendentesDrawerProps> = (
               matricula={formatMatricula(viatura.matricula)}
               dataEvento={new Date().toISOString().slice(0, 10)}
               contratoNumero={selected.numero_contrato}
+              contratoId={selected.id}
               accentClass="border-green-200 dark:border-green-800"
             />
 

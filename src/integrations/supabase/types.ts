@@ -7220,10 +7220,14 @@ export type Database = {
           data_validade: string | null
           ficheiro_url: string
           id: string
+          motivo_rejeicao: string | null
           motorista_id: string
           nome_ficheiro: string | null
           observacoes: string | null
           org_id: string | null
+          revisto_em: string | null
+          revisto_por: string | null
+          status: string
           tipo_documento: string
           updated_at: string | null
           uploaded_by: string | null
@@ -7233,10 +7237,14 @@ export type Database = {
           data_validade?: string | null
           ficheiro_url: string
           id?: string
+          motivo_rejeicao?: string | null
           motorista_id: string
           nome_ficheiro?: string | null
           observacoes?: string | null
           org_id?: string | null
+          revisto_em?: string | null
+          revisto_por?: string | null
+          status?: string
           tipo_documento: string
           updated_at?: string | null
           uploaded_by?: string | null
@@ -7246,10 +7254,14 @@ export type Database = {
           data_validade?: string | null
           ficheiro_url?: string
           id?: string
+          motivo_rejeicao?: string | null
           motorista_id?: string
           nome_ficheiro?: string | null
           observacoes?: string | null
           org_id?: string | null
+          revisto_em?: string | null
+          revisto_por?: string | null
+          status?: string
           tipo_documento?: string
           updated_at?: string | null
           uploaded_by?: string | null
@@ -13605,6 +13617,77 @@ export type Database = {
           },
         ]
       }
+      viatura_km_leituras: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          foto_url: string | null
+          id: string
+          km_anterior: number | null
+          km_confirmado: number
+          km_lido: number | null
+          motorista_id: string | null
+          org_id: string
+          origem: string
+          viatura_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          foto_url?: string | null
+          id?: string
+          km_anterior?: number | null
+          km_confirmado: number
+          km_lido?: number | null
+          motorista_id?: string | null
+          org_id?: string
+          origem?: string
+          viatura_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          foto_url?: string | null
+          id?: string
+          km_anterior?: number | null
+          km_confirmado?: number
+          km_lido?: number | null
+          motorista_id?: string | null
+          org_id?: string
+          origem?: string
+          viatura_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viatura_km_leituras_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "dividas_motorista_abertas"
+            referencedColumns: ["motorista_id"]
+          },
+          {
+            foreignKeyName: "viatura_km_leituras_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viatura_km_leituras_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viatura_km_leituras_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       viatura_marcas: {
         Row: {
           ativa: boolean
@@ -14578,7 +14661,11 @@ export type Database = {
       acordos_manutencao_diaria: { Args: { p_hoje: string }; Returns: Json }
       aprovar_candidatura_motorista: {
         Args: { p_candidatura_id: string }
-        Returns: string
+        Returns: Json
+      }
+      aprovar_documento_motorista: {
+        Args: { p_documento_id: string }
+        Returns: Json
       }
       assign_gestors_from_history: {
         Args: never
@@ -14701,6 +14788,21 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      avisar_staff_envio_motorista: {
+        Args: {
+          p_entity_id: string
+          p_entity_table: string
+          p_janela?: string
+          p_link: string
+          p_mensagem: string
+          p_motorista_id: string
+          p_org_id: string
+          p_payload: Json
+          p_template_codigo: string
+          p_titulo: string
+        }
+        Returns: number
       }
       bolt_actualizar_bolt_id_recente: {
         Args: { p_integracao_id?: string }
@@ -14920,6 +15022,11 @@ export type Database = {
         }
         Returns: string
       }
+      documento_motorista_coluna: {
+        Args: { p_tipo: string }
+        Returns: Record<string, unknown>
+      }
+      documento_motorista_label: { Args: { p_tipo: string }; Returns: string }
       domain_events_claim: {
         Args: { p_max?: number }
         Returns: {
@@ -15054,6 +15161,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      fechar_aviso_documentos_pendentes: {
+        Args: { p_motorista_id: string }
+        Returns: undefined
       }
       ficha_e_conta_frota: {
         Args: { p_motorista_id: string }
@@ -15404,6 +15515,7 @@ export type Database = {
       is_storage_admin: { Args: never; Returns: boolean }
       is_suporte_ti_decada: { Args: never; Returns: boolean }
       limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
+      limpar_links_curtos_expirados: { Args: never; Returns: number }
       limpar_notificacoes_antigas: {
         Args: { p_dias_resolvidas?: number }
         Returns: Json
@@ -15570,6 +15682,7 @@ export type Database = {
       org_por_codigo: { Args: { p_codigo: string }; Returns: Json }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
       org_sistema: { Args: never; Returns: string }
+      pode_rever_documentos_motorista: { Args: never; Returns: boolean }
       primavera_jobs_claim: {
         Args: { p_max: number; p_org_id: string }
         Returns: {
@@ -15645,6 +15758,10 @@ export type Database = {
       rejeitar_candidatura_motorista: {
         Args: { p_candidatura_id: string; p_motivo?: string }
         Returns: boolean
+      }
+      rejeitar_documento_motorista: {
+        Args: { p_documento_id: string; p_motivo: string }
+        Returns: Json
       }
       renovar_contrato_renting: {
         Args: { p_contrato_id: string; p_km_fim?: number; p_km_inicio?: number }

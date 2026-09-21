@@ -66,16 +66,16 @@ export function MotoristaHistoricoViaturasCard({ motoristaId }: Props) {
 
   if (loading) {
     return (
-      <Card className="bg-card border-border shadow-sm rounded-[1.5rem] md:rounded-[2rem] overflow-hidden">
-        <CardHeader className="p-5 md:p-8 pb-3 md:pb-4">
-          <CardTitle className="text-base md:text-lg font-black text-foreground flex items-center gap-2 md:gap-3">
-            <div className="p-2 bg-muted rounded-xl">
-              <History className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+      <Card className="bg-card border-border shadow-sm overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <div className="rounded-md bg-muted p-1.5">
+              <History className="h-4 w-4 text-muted-foreground" />
             </div>
             Histórico de Viaturas
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-5 md:p-8 pt-0">
+        <CardContent className="pt-0">
           <Skeleton className="h-16 w-full" />
         </CardContent>
       </Card>
@@ -86,11 +86,11 @@ export function MotoristaHistoricoViaturasCard({ motoristaId }: Props) {
   if (linhas.length === 0) return null;
 
   return (
-    <Card className="bg-card border-border shadow-sm rounded-[1.5rem] md:rounded-[2rem] overflow-hidden leading-relaxed">
-      <CardHeader className="p-5 md:p-8 pb-3 md:pb-4 border-b border-border/50">
-        <CardTitle className="text-base md:text-lg font-black text-foreground flex items-center gap-2 md:gap-3">
-          <div className="p-2 bg-muted rounded-xl">
-            <History className="w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+    <Card className="bg-card border-border shadow-sm overflow-hidden leading-relaxed">
+      <CardHeader className="pb-2 border-b border-border/50">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <div className="rounded-md bg-muted p-1.5">
+            <History className="h-4 w-4 text-muted-foreground" />
           </div>
           Histórico de Viaturas
           <span className="ml-auto text-[10px] md:text-xs font-bold text-muted-foreground">
@@ -103,10 +103,10 @@ export function MotoristaHistoricoViaturasCard({ motoristaId }: Props) {
           {linhas.map((l) => (
             <div
               key={l.id}
-              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 md:gap-4 p-5 md:p-6"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 md:gap-4 px-4 py-3"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2 bg-muted rounded-xl shrink-0">
+                <div className="shrink-0 rounded-md bg-muted p-1.5">
                   <Car className="w-4 h-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">

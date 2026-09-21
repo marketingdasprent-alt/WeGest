@@ -466,6 +466,7 @@ export const TrocaCheckinStep: React.FC<{
               matricula={formatMatricula(viaturaAtual.matricula)}
               dataEvento={data}
               contratoNumero={contratoAtual?.numero_contrato}
+              contratoId={contratoAtual?.id}
               accentClass="border-blue-200 dark:border-blue-800"
             />
 
