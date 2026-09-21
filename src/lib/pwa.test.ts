@@ -58,6 +58,7 @@ describe('deveBloquearNoPwa', () => {
     loading: false,
     temSessao: true,
     perfilResolvido: true,
+    ehMotorista: false,
   } as const;
 
   it('deixa passar o motorista — é para ele que a app existe', () => {
@@ -96,6 +97,22 @@ describe('deveBloquearNoPwa', () => {
     // causa de uma falha de rede.
     expect(
       deveBloquearNoPwa({ ...base, perfilResolvido: false, tipoUtilizador: 'colaborador' })
+    ).toBe(false);
+  });
+
+  it('conta dupla — colaborador no perfil mas com ficha de motorista — entra', () => {
+    // Caso real: administrador que também conduz (tipo_utilizador =
+    // 'colaborador', 1 ficha em motoristas_ativos). Era barrado.
+    expect(deveBloquearNoPwa({ ...base, tipoUtilizador: 'colaborador', ehMotorista: true })).toBe(
+      false
+    );
+  });
+
+  it('colaborador sem resposta da BD ainda: não bloqueia', () => {
+    // `undefined` = a RPC não respondeu (ou falhou). Na dúvida deixa passar —
+    // o engano barato é um BO ver o painel, o caro é um motorista fechado fora.
+    expect(
+      deveBloquearNoPwa({ ...base, tipoUtilizador: 'colaborador', ehMotorista: undefined })
     ).toBe(false);
   });
 });

@@ -32,6 +32,12 @@ interface AcessoNoPwa {
    */
   perfilResolvido: boolean;
   tipoUtilizador: 'motorista' | 'colaborador';
+  /**
+   * Tem ficha de motorista em alguma org (RPC `get_minha_org_motorista`)?
+   * Cobre as contas duplas — staff que também conduz — cujo `tipoUtilizador`
+   * diz `colaborador`. `undefined` = ainda não se sabe: não se bloqueia.
+   */
+  ehMotorista: boolean | undefined;
 }
 
 /**
@@ -52,7 +58,11 @@ export function deveBloquearNoPwa({
   temSessao,
   perfilResolvido,
   tipoUtilizador,
+  ehMotorista,
 }: AcessoNoPwa): boolean {
   if (!instalado || loading || !temSessao || !perfilResolvido) return false;
-  return tipoUtilizador !== 'motorista';
+  if (tipoUtilizador === 'motorista') return false;
+  // Colaborador no perfil, mas só se bloqueia quando a BD CONFIRMA que não
+  // tem ficha de motorista. Um administrador que também conduz entra.
+  return ehMotorista === false;
 }

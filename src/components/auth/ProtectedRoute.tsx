@@ -2,6 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { estaInstaladoComoApp, deveBloquearNoPwa } from '@/lib/pwa';
+import { useEhMotorista } from '@/hooks/useEhMotorista';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTenant } from '@/contexts/TenantContext';
@@ -52,7 +53,19 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // para o login da equipa (/equipa); o portal do motorista vai para /login.
   const unauthenticatedRoute = getUnauthenticatedRoute(location.pathname);
 
-  const loading = authLoading || tenantLoading || permissionsLoading || modulesLoading;
+  const loadingBase = authLoading || tenantLoading || permissionsLoading || modulesLoading;
+
+  // Com a app instalada e um perfil que não é de motorista, pergunta-se à BD
+  // se há ficha de motorista (contas duplas: staff que também conduz). Só
+  // nessa combinação — no browser o gate nunca dispara e a chamada seria um
+  // pedido a mais em todas as rotas. Enquanto responde, a rota fica em
+  // "a carregar": mostrar o painel a um colaborador e trocá-lo pelo aviso um
+  // instante depois era um pisca-pisca.
+  const instalado = estaInstaladoComoApp();
+  const ehMotoristaQuery = useEhMotorista(user?.id, {
+    enabled: instalado && !loadingBase && !!user && tipoUtilizador !== 'motorista',
+  });
+  const loading = loadingBase || ehMotoristaQuery.isLoading;
 
   // Redirecionar para seleção de org se user tem múltiplas orgs sem seleção
   useEffect(() => {
@@ -91,11 +104,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   //
   // O critério está em `deveBloquearNoPwa` (ver a razão de ser lá).
   const noPwaSemAcessoAoPainel = deveBloquearNoPwa({
-    instalado: estaInstaladoComoApp(),
+    instalado,
     loading,
     temSessao: !!user,
     perfilResolvido: !!orgId,
     tipoUtilizador,
+    ehMotorista: ehMotoristaQuery.data,
   });
 
   useEffect(() => {
