@@ -10,6 +10,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -89,6 +99,13 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
     estacaoNome,
   } = eventoData;
   const fazerDepois = eventoData.fazerDepois ?? false;
+  // "Não tenho os dados": quem já está no check-in descobre que não tem o km /
+  // combustível da viatura (ex.: entrega feita sem folha de danos). Em vez de
+  // travar a entrega, cai no mesmo caminho do "fazer depois" — contrato criado,
+  // check-out pendente na lista, folha de danos por preencher.
+  const [semDadosConfirmado, setSemDadosConfirmado] = useState(false);
+  const [confirmarSemDados, setConfirmarSemDados] = useState(false);
+  const semFolha = fazerDepois || semDadosConfirmado;
 
   const queryClient = useQueryClient();
   const orgId = useOrgId();
@@ -237,7 +254,8 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
     }
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (semDados = false) => {
+    const semFolhaAgora = semFolha || semDados;
     const sigs = assinaturasRef.current?.getAssinaturas() ?? { motorista: null, responsavel: null };
     const falta = papeisEmFalta(sigs);
     if (falta.length > 0) {
@@ -246,7 +264,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       if (!ok) return;
     }
 
-    if (!fazerDepois) {
+    if (!semFolhaAgora) {
       if (files.length === 0 && checkinDados.novosDanos.length === 0) {
         toast.error('Adicione pelo menos uma foto/vídeo ou registe um dano com foto');
         return;
@@ -293,8 +311,8 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
         // As listas (Fase 3) leem realizado_em IS NULL, e o contrato fica
         // sempre 'ativo' na entrega — sem isto, entregas imediatas apareceriam
         // como pendentes.
-        realizado_em: fazerDepois ? null : dataISO,
-        realizado_por_id: fazerDepois ? null : userId,
+        realizado_em: semFolhaAgora ? null : dataISO,
+        realizado_por_id: semFolhaAgora ? null : userId,
       };
       if (motoristaId) eventoPayload.motorista_id = motoristaId;
 
@@ -368,7 +386,7 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       const contratoId = ct.id;
       setContratoNumero(ct.numero_contrato);
 
-      if (!fazerDepois) {
+      if (!semFolhaAgora) {
         // 6. KM, combustivel, danos
         await saveCheckinDados({
           dados: checkinDados,
@@ -589,12 +607,12 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
       queryClient.invalidateQueries({ queryKey: ['viaturas-pendentes-recolha'] });
       queryClient.invalidateQueries({ queryKey: ['motorista-viaturas'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', 'checkin-checkout-historico'] });
-      if (fazerDepois) {
+      if (semFolhaAgora) {
         queryClient.invalidateQueries({ queryKey: ['contratos-checkout-pendentes'] });
       }
 
       toast.success(
-        fazerDepois
+        semFolhaAgora
           ? `CT-${String(ct.numero_contrato ?? 0).padStart(4, '0')} criado — check-out pendente`
           : `Contrato CT-${String(ct.numero_contrato ?? 0).padStart(4, '0')} criado`
       );
@@ -642,7 +660,17 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
             {motoristaNome} — {formatMatricula(viatura.matricula)}
           </p>
         </div>
-        <Button onClick={handleConfirm} disabled={saving} className="shrink-0">
+        {!semFolha && (
+          <Button
+            variant="outline"
+            onClick={() => setConfirmarSemDados(true)}
+            disabled={saving}
+            className="shrink-0"
+          >
+            Não tenho os dados
+          </Button>
+        )}
+        <Button onClick={() => handleConfirm()} disabled={saving} className="shrink-0">
           {saving ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />A criar...
@@ -652,6 +680,31 @@ export const ContratoEntregaStep: React.FC<ContratoEntregaStepProps> = ({
           )}
         </Button>
       </div>
+
+      <AlertDialog open={confirmarSemDados} onOpenChange={setConfirmarSemDados}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Criar o contrato sem os dados da viatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contrato é criado na mesma e a viatura fica atribuída, mas o check-out fica pendente
+              até alguém registar o km, o combustível/bateria e as fotos. Não é gerada nem enviada
+              folha de danos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmarSemDados(false);
+                setSemDadosConfirmado(true);
+                void handleConfirm(true);
+              }}
+            >
+              Criar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">

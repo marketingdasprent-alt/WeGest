@@ -36,6 +36,7 @@ import {
 } from '@/components/renting/contratos/contratosUtils';
 import { RenovacoesBanner } from '@/components/renting/contratos/RenovacoesBanner';
 import { AnyRentPendentesBanner } from '@/components/renting/contratos/AnyRentPendentesBanner';
+import { FolhaDanosPendentesBanner } from '@/components/renting/contratos/FolhaDanosPendentesBanner';
 import { ExpiradosSemRenovacaoBanner } from '@/components/renting/contratos/ExpiradosSemRenovacaoBanner';
 import { ContratosTerminamHojeDialog } from '@/components/renting/contratos/ContratosTerminamHojeDialog';
 
@@ -287,6 +288,12 @@ const RentingContratos = () => {
       />
 
       <AnyRentPendentesBanner
+        contratos={contratos}
+        getClienteNome={getClienteNome}
+        getCondutorNome={getCondutorNome}
+      />
+
+      <FolhaDanosPendentesBanner
         contratos={contratos}
         getClienteNome={getClienteNome}
         getCondutorNome={getCondutorNome}

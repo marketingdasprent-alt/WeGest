@@ -5,6 +5,16 @@ import { ArrowLeft, CheckCircle2, Loader2, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useConsumirTokenRealizacao, useRealizarFromToken } from '@/hooks/useRealizacaoToken';
@@ -19,6 +29,7 @@ import {
   fileToDataUrl,
   dataUrlToFile,
   validarDadosObrigatorios,
+  dadosRealizacao,
   type RascunhoCache,
 } from '@/utils/entrega';
 import { gerarFolhaBloco, uploadDanos } from './entrega/entregaOperations';
@@ -80,6 +91,7 @@ const RealizarEntregaPage = () => {
   const [eletricoAntiga, setEletricoAntiga] = useState<string>('');
   const [filesAntiga, setFilesAntiga] = useState<FilePreview[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [confirmarSemDados, setConfirmarSemDados] = useState(false);
   const [done, setDone] = useState(false);
   const [gerandoFolha, setGerandoFolha] = useState(false);
   const restauradoRef = useRef(false);
@@ -469,25 +481,35 @@ const RealizarEntregaPage = () => {
     }
   };
 
-  const handleConfirmar = async () => {
+  /**
+   * `semDados` = quem está no terreno não tem os dados da viatura (o carro já
+   * foi entregue sem folha de danos). A entrega confirma-se à mesma, o
+   * contrato entra em curso e fica marcado com a folha por completar
+   * (FolhaDanosPendenteAlert) — só assim não se trava a empresa à espera de
+   * um km. Não se gera folha de danos nesse caminho: sem km nem níveis, o PDF
+   * sairia falso e não se pode regerar depois.
+   */
+  const handleConfirmar = async (semDados = false) => {
     if (!info || !token || !contexto) return;
     if (isTroca) {
       await handleConfirmarTroca();
       return;
     }
-    const err = validarDadosObrigatorios(
-      km,
-      combustivel,
-      isTroca,
-      kmAntiga,
-      combustivelAntiga,
-      tipoCombustivel,
-      eletrico,
-      tipoCombustivelAntiga,
-      eletricoAntiga,
-      viaturaKmAtual,
-      viaturaAntigaKmAtual
-    );
+    const err = semDados
+      ? null
+      : validarDadosObrigatorios(
+          km,
+          combustivel,
+          isTroca,
+          kmAntiga,
+          combustivelAntiga,
+          tipoCombustivel,
+          eletrico,
+          tipoCombustivelAntiga,
+          eletricoAntiga,
+          viaturaKmAtual,
+          viaturaAntigaKmAtual
+        );
     if (err) {
       toast({ title: err, variant: 'destructive' });
       return;
@@ -528,9 +550,9 @@ const RealizarEntregaPage = () => {
         eventoId: info.evento_id,
         contratoId: info.contrato_id,
         tipo: info.tipo,
-        km: Number(km),
-        combustivel: combustivel || undefined,
-        eletricidade: eletrico || undefined,
+        // Campos vazios ficam de fora — a RPC faz COALESCE, e Number('') é 0
+        // (zerava o odómetro no caminho "Não tenho os dados").
+        ...dadosRealizacao({ km, combustivel, eletricidade: eletrico }),
         // DUA: gravada dentro da RPC SECURITY DEFINER (robusto p/ quem confirma
         // pelo QR sem permissão renting). Entrega: motorista levou a original;
         // recolha: confirmou a devolução (só conta se o contrato a tinha em falta).
@@ -549,6 +571,16 @@ const RealizarEntregaPage = () => {
             info,
             token,
           };
+          if (semDados) {
+            try {
+              localStorage.removeItem(cacheKey(token));
+            } catch {
+              /* ignore */
+            }
+            setDone(true);
+            setUploading(false);
+            return;
+          }
           gerarFolhaBloco({
             ...params,
             bloco: {
@@ -654,9 +686,20 @@ const RealizarEntregaPage = () => {
               <ArrowLeft className="h-4 w-4" />
               Voltar
             </Button>
+            {info.tipo === 'entrega' && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setConfirmarSemDados(true)}
+                disabled={isPending}
+                className="gap-2"
+              >
+                Não tenho os dados
+              </Button>
+            )}
             <Button
               type="button"
-              onClick={handleConfirmar}
+              onClick={() => handleConfirmar()}
               disabled={isPending || (exigeDua && !duaDevolvido)}
               className="gap-2"
             >
@@ -666,6 +709,30 @@ const RealizarEntregaPage = () => {
           </>
         }
       />
+
+      <AlertDialog open={confirmarSemDados} onOpenChange={setConfirmarSemDados}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar sem os dados da viatura?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O contrato entra em curso na mesma, mas fica marcado com a folha de danos por
+              completar até alguém registar o km e o combustível/bateria de saída. Não é gerada nem
+              enviada folha de danos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmarSemDados(false);
+                void handleConfirmar(true);
+              }}
+            >
+              Confirmar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="space-y-4 pb-4 -mt-4">
         {isTroca && matriculaDevolver && (
