@@ -23,6 +23,7 @@ import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
 import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
 import { MotoristasVariasViaturasDialog } from '@/components/motoristas/MotoristasVariasViaturasDialog';
 import { useMotoristasVariasViaturas } from '@/hooks/useMotoristasVariasViaturas';
+import { useMotoristasViaturasAtivas } from '@/hooks/useMotoristasViaturasAtivas';
 import { MotoristasFichaIncompleta } from '@/components/motoristas/MotoristasFichaIncompleta';
 import { CartoesNaoReconhecidos } from '@/components/motoristas/CartoesNaoReconhecidos';
 import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAssociadas';
@@ -32,7 +33,14 @@ import { MotoristaCard } from '@/components/motoristas/MotoristaCard';
 import { AdicionarMotoristaButton } from '@/components/motoristas/AdicionarMotoristaButton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import {
@@ -87,6 +95,8 @@ export default function Motoristas() {
   const statusFilter = searchParams.get('status') || 'todos';
   const cidadeFilter = searchParams.get('cidade') || 'todas';
   const gestorFilter = searchParams.get('gestor') || 'todos';
+  // 'todas' | 'com' | 'sem'
+  const viaturaFilter = searchParams.get('viatura') || 'todas';
   const sortColumn = (searchParams.get('sort') as SortColumn) || 'codigo';
   const sortDirection = (searchParams.get('dir') as 'asc' | 'desc') || 'asc';
 
@@ -129,6 +139,11 @@ export default function Motoristas() {
   const [variasViaturasOpen, setVariasViaturasOpen] = useState(false);
   const variasViaturasQuery = useMotoristasVariasViaturas();
   const variasViaturas = variasViaturasQuery.data ?? [];
+  const viaturasAtivasQuery = useMotoristasViaturasAtivas();
+  const viaturasPorMotorista = useMemo(
+    () => viaturasAtivasQuery.data ?? new Map<string, string[]>(),
+    [viaturasAtivasQuery.data]
+  );
 
   const cartoesCountQuery = useCartoesNaoAssociadosCount();
   const cartoesCount = cartoesCountQuery.data ?? 0;
@@ -201,7 +216,14 @@ export default function Motoristas() {
       // Gestor filter
       const matchesGestor = gestorFilter === 'todos' || m.gestor_responsavel === gestorFilter;
 
-      return matchesSearch && matchesStatus && matchesCidade && matchesGestor;
+      // Viaturas associadas: com ou sem viatura atribuída neste momento
+      const temViatura = (viaturasPorMotorista.get(m.id) ?? []).length > 0;
+      const matchesViatura =
+        viaturaFilter === 'todas' ||
+        (viaturaFilter === 'com' && temViatura) ||
+        (viaturaFilter === 'sem' && !temViatura);
+
+      return matchesSearch && matchesStatus && matchesCidade && matchesGestor && matchesViatura;
     });
 
     // Apply sorting
@@ -235,13 +257,23 @@ export default function Motoristas() {
     });
 
     return result;
-  }, [motoristas, searchTerm, statusFilter, cidadeFilter, gestorFilter, sortColumn, sortDirection]);
+  }, [
+    motoristas,
+    searchTerm,
+    statusFilter,
+    cidadeFilter,
+    gestorFilter,
+    viaturaFilter,
+    viaturasPorMotorista,
+    sortColumn,
+    sortDirection,
+  ]);
 
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
     usePagination(
       filteredMotoristas,
       50,
-      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`,
+      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}|${viaturaFilter}`,
       'page'
     );
 
@@ -481,7 +513,7 @@ export default function Motoristas() {
             </div>
           </div>
 
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Estado</label>
               <Select value={statusFilter} onValueChange={(v) => updateFilters({ status: v })}>
@@ -529,6 +561,20 @@ export default function Motoristas() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Viatura associada</label>
+              <Select value={viaturaFilter} onValueChange={(v) => updateFilters({ viatura: v })}>
+                <SelectTrigger className="h-10 bg-background">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas</SelectItem>
+                  <SelectItem value="com">Com viatura</SelectItem>
+                  <SelectItem value="sem">Sem viatura</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>
@@ -564,7 +610,8 @@ export default function Motoristas() {
             !!searchTerm ||
             statusFilter !== 'todos' ||
             cidadeFilter !== 'todas' ||
-            gestorFilter !== 'todos';
+            gestorFilter !== 'todos' ||
+            viaturaFilter !== 'todas';
           return (
             <EmptyState
               icon={Users}
@@ -588,6 +635,7 @@ export default function Motoristas() {
                         status: 'todos',
                         cidade: 'todas',
                         gestor: 'todos',
+                        viatura: 'todas',
                       })
                     }
                   >
@@ -655,6 +703,7 @@ export default function Motoristas() {
                 >
                   Gestor
                 </SortableTableHead>
+                <TableHead className="w-[110px] hidden lg:table-cell">Viatura</TableHead>
                 <SortableTableHead
                   field="bolt_id"
                   sortField={sortColumn}
@@ -700,6 +749,11 @@ export default function Motoristas() {
                   </TableCell>
                   <TableCell className="py-2 text-muted-foreground hidden md:table-cell">
                     {motorista.gestor_responsavel || '-'}
+                  </TableCell>
+                  <TableCell className="py-2 text-sm font-mono hidden lg:table-cell">
+                    {(viaturasPorMotorista.get(motorista.id) ?? []).join(', ') || (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="py-2 text-xs font-mono hidden xl:table-cell">
                     {motorista.bolt_id ? (

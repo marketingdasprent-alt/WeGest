@@ -6,6 +6,7 @@ import {
   LOCALIZACAO_LABEL,
   validarDadosObrigatorios,
   validarKmContraViatura,
+  dadosRealizacao,
 } from './entrega';
 
 describe('tipoLabel', () => {
@@ -125,5 +126,31 @@ describe('validarKmContraViatura', () => {
   it('não bloqueia quando km não é número (a obrigatoriedade é validada antes)', () => {
     expect(validarKmContraViatura('', 350000)).toBeNull();
     expect(validarKmContraViatura('abc', 350000)).toBeNull();
+  });
+});
+
+describe('dadosRealizacao', () => {
+  it('devolve km, combustível e electricidade preenchidos', () => {
+    expect(dadosRealizacao({ km: '45120', combustivel: 'Cheio', eletricidade: '80%' })).toEqual({
+      km: 45120,
+      combustivel: 'Cheio',
+      eletricidade: '80%',
+    });
+  });
+
+  it('omite o km quando está vazio — nunca envia 0 para o odómetro', () => {
+    const dados = dadosRealizacao({ km: '', combustivel: '', eletricidade: '' });
+    expect(dados.km).toBeUndefined();
+    expect('km' in dados).toBe(false);
+  });
+
+  it('omite os níveis vazios em vez de os enviar como string vazia', () => {
+    expect(dadosRealizacao({ km: '45120', combustivel: '', eletricidade: '' })).toEqual({
+      km: 45120,
+    });
+  });
+
+  it('omite o km quando não é um número', () => {
+    expect(dadosRealizacao({ km: 'abc', combustivel: '', eletricidade: '' })).toEqual({});
   });
 });

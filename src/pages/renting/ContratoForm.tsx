@@ -32,6 +32,7 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { AnyRentDadosSaidaAlert } from '@/components/renting/contratos/AnyRentDadosSaidaAlert';
+import { FolhaDanosPendenteAlert } from '@/components/renting/contratos/FolhaDanosPendenteAlert';
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
 import { ContratoDocumentosDialog } from '@/components/renting/contratos/ContratoDocumentosDialog';
@@ -352,6 +353,7 @@ const ContratoForm = () => {
       )}
 
       {contrato && <AnyRentDadosSaidaAlert contrato={contrato} />}
+      {contrato && <FolhaDanosPendenteAlert contrato={contrato} />}
 
       {realizacaoPendente && (
         <div className="mb-3 flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">

@@ -108,6 +108,26 @@ export function validarKmContraViatura(km: string, kmMinimo?: number | null): st
   return null;
 }
 
+/**
+ * Monta os dados físicos a enviar à RPC de realização. Cada campo só entra se
+ * estiver mesmo preenchido — o caminho "Não tenho os dados" confirma a entrega
+ * com os campos vazios, e `Number('')` é 0: sem isto, zerava o odómetro da
+ * viatura em vez de deixar o km por registar. A RPC faz COALESCE, logo o que
+ * não vai fica como está.
+ */
+export function dadosRealizacao(campos: {
+  km: string;
+  combustivel: string;
+  eletricidade: string;
+}): { km?: number; combustivel?: string; eletricidade?: string } {
+  const dados: { km?: number; combustivel?: string; eletricidade?: string } = {};
+  const km = Number(campos.km);
+  if (campos.km.trim() !== '' && Number.isFinite(km)) dados.km = km;
+  if (campos.combustivel) dados.combustivel = campos.combustivel;
+  if (campos.eletricidade) dados.eletricidade = campos.eletricidade;
+  return dados;
+}
+
 export function validarDadosObrigatorios(
   km: string,
   combustivel: string,
