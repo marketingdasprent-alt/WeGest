@@ -157,9 +157,11 @@ export async function gerarFolhaBloco(params: GerarFolhaParams): Promise<void> {
       matricula,
       momento: isEntrega ? 'ENTREGA' : 'RECOLHA',
       // Fluxo por token, sem sessão — sem org_id disponível aqui; a Edge
-      // Function deriva a org a partir de viaturaId (viaturas.org_id).
+      // Function deriva a org a partir de viaturaId (viaturas.org_id) e
+      // autoriza pelo token de realização.
       orgId: null,
       viaturaId,
+      token,
     });
     // Arquiva esta mesma cópia nos anexos do contrato — é a única forma de a
     // voltar a descarregar: a folha só se gera aqui, e regerá-la mais tarde

@@ -7,35 +7,12 @@ import { MonitorizacaoView } from '@/components/admin/automacao/monitorizacao/Mo
 import { EditorAutomacaoProvider } from '@/components/admin/automacao/builder/EditorAutomacaoProvider';
 import { BarraAccoes } from '@/components/admin/automacao/builder/BarraAccoes';
 
-/**
- * Duas vistas, uma barra.
- *
- * As acções do editor vivem na MESMA linha das tabs — antes havia três
- * cabeçalhos empilhados (título da página, tabs, e um terceiro "Construtor de
- * automações") que comiam a altura útil toda. O terceiro desapareceu: a tab já
- * diz em que contexto se está.
- *
- * "Correr agora" saiu daqui. Não dispara a automação aberta: chama
- * `executar_jobs_automacao_manualmente`, que corre TODOS os scans e o motor de
- * regras inteiro, com rate limit de 5 minutos no servidor. É uma acção de
- * operação, não de edição — passou para Monitorização.
- */
 function Conteudo() {
   const [tab, setTab] = useState('editor');
 
   return (
-    // `min-h-0` em toda a cadeia: sem isto o filho de altura calculada estica o
-    // pai e aparece a barra de scroll da página por cima da do canvas.
-    //
-    // `h-full` SÓ funciona porque a rota monta esta página com
-    // `<DashboardLayout fullBleed>`, que dá ao <main> uma altura definida. Sem
-    // isso, cada nível cresce até caber o conteúdo, o contentor de scroll fica
-    // tão alto como aquilo que devia limitar — e, por ser na mesma um contentor
-    // de scroll, o `overscroll-behavior-y: contain` global impede a roda de
-    // passar para a janela. A monitorização ficava sem scroll nenhum.
-    //
-    // O padding e a largura máxima vivem aqui porque o `fullBleed` os tira do
-    // <main>; sem eles a página encostava às margens.
+    // `fullBleed` define a altura do canvas e remove o espaçamento padrão;
+    // esta cadeia evita scroll duplo e restitui as margens do conteúdo.
     <div className="mx-auto flex h-full min-h-0 w-full max-w-[1920px] flex-col gap-4 p-4 md:p-8">
       <StickyPageHeader
         title="Automação"

@@ -5,26 +5,10 @@ import type { Modulo, OrganizacaoModulo } from '@/types/modulo';
 
 type ModulesQueryResult = {
   modulos: OrganizacaoModulo[];
-  /** true se a tabela não existe (migração ainda não aplicada). */
   tabelaAusente: boolean;
 };
 
-/**
- * Lê os módulos activos da organização actual.
- *
- * RLS filtra automaticamente por `org_id = get_current_org_id()` — não é
- * preciso passar org_id na query.
- *
- * **Política fail-open:** se a tabela `organizacao_modulos` ainda não existir
- * (migração nova por aplicar), `has(modulo)` devolve `true` para todos os
- * módulos. Evita bloquear o produto enquanto a Fase 1 não é exercida em
- * produção. Quando a tabela passar a existir e tiver linhas, o
- * comportamento estrito ressurge automaticamente.
- *
- * Uso típico:
- *   const { has, isLoading } = useModules();
- *   if (!isLoading && !has('tvde')) return <NotEnabled module="tvde" />;
- */
+// Enquanto a migração não existe, falhe aberto para não bloquear funcionalidades.
 export function useModules() {
   const query = useQuery<ModulesQueryResult>({
     queryKey: ['organizacao_modulos'],
@@ -35,7 +19,6 @@ export function useModules() {
         .eq('ativo', true);
 
       if (error) {
-        // 42P01 = undefined_table → migração ainda não aplicada → fail-open
         const code = (error as { code?: string }).code;
         const message = error instanceof Error ? error.message : String(error);
         if (code === '42P01' || message.includes('organizacao_modulos')) {
@@ -56,7 +39,6 @@ export function useModules() {
 
   const tabelaAusente = query.data?.tabelaAusente ?? false;
 
-  // fail-open: se a tabela não existe, todos os módulos contam como activos.
   const has = (modulo: Modulo) => tabelaAusente || activos.has(modulo);
 
   return {

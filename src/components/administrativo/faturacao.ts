@@ -40,11 +40,7 @@ export const ORIGEM_CLASS: Record<string, string> = {
   ajuste: 'bg-muted text-muted-foreground',
 };
 
-/**
- * Tipo de documento (o que se mostra ao utilizador no descritivo).
- * Uma Fatura-Recibo é um único documento, mesmo gerando 2 movimentos
- * (débito da cobrança + crédito do recibo) — ver `mergeMovimentosToRows`.
- */
+/** Tipo de documento mostrado ao utilizador. Fatura-Recibo é 1 documento mesmo gerando 2 movimentos — ver `mergeMovimentosToRows`. */
 export type DocTipo =
   | 'fatura'
   | 'fatura_recibo'
@@ -95,12 +91,7 @@ function singleDocTipo(m: MovimentoRaw): DocTipo {
   return 'ajuste';
 }
 
-/**
- * Nº "NC-{codigo}" extraído do descritivo do movimento de nota de crédito.
- * Só usado como ÚLTIMO recurso — quando a NC não chegou a ser emitida no
- * provider (ou a emissão falhou), `notaCredito.documento_externo_ref` fica
- * null e cai-se aqui. Ver `numeroDoc` em `mapMovimentoToRow`.
- */
+/** Fallback "NC-{codigo}" quando a NC não chegou a ser emitida no provider. Ver `numeroDoc` em `mapMovimentoToRow`. */
 function ncNumeroFromDesc(m: MovimentoRaw): string {
   if (m.origem !== 'nota_credito') return '';
   const match = (m.descricao ?? '').match(/Nº\s*(\d+)/);
@@ -211,11 +202,7 @@ export function mapMovimentoToRow(
   const isCredito = m.tipo === 'credito';
   const valor = Number(m.valor) || 0;
   const numeroDoc =
-    // a NC tem numeração própria — não pode herdar a ref. da fatura original (mesmo
-    // cobranca_id). Prioriza o nº real emitido no provider (documento_externo_ref);
-    // só cai para o código interno "NC-{codigo}" quando a NC nunca chegou a ser
-    // emitida fiscalmente (ou a emissão falhou) — mesma prioridade que já existia
-    // para o Recibo logo abaixo.
+    // NC tem numeração própria — não herda a ref. da fatura original (mesmo cobranca_id).
     (m.origem === 'nota_credito'
       ? m.notaCredito?.documento_externo_ref || ncNumeroFromDesc(m)
       : '') ||
@@ -261,19 +248,9 @@ export function mapMovimentoToRow(
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 /**
- * Consolida os movimentos em documentos apresentáveis.
- *
- * Uma **Fatura-Recibo** gera 2 movimentos na conta-corrente — o débito da
- * cobrança e o crédito do recibo (necessários para o saldo) — mas é UM só
- * documento. Aqui emparelhamos esses dois movimentos numa única linha
- * (com crédito E débito), para não aparecer a dobrar na listagem.
- *
- * Emparelhamento (do mais fiável para o menos):
- *   1) `recibo.referencia === cobranca_id` (ligação explícita, criada ao faturar);
- *   2) mesmo contrato + mesmo valor (fallback p/ dados antigos sem `referencia`).
- *
- * A consolidação tem de correr sobre a janela COMPLETA (antes de paginar),
- * senão o par poderia ficar partido entre páginas.
+ * Consolida os movimentos em documentos apresentáveis: uma Fatura-Recibo gera 2 movimentos
+ * (débito da cobrança + crédito do recibo) mas é 1 documento só, por isso emparelham-se aqui.
+ * Tem de correr sobre a janela COMPLETA (antes de paginar), senão o par fica partido entre páginas.
  */
 export function mergeMovimentosToRows(
   raw: MovimentoRaw[],
@@ -285,11 +262,7 @@ export function mergeMovimentosToRows(
     .map((m, i) => ({ m, i }))
     .filter(({ m }) => m.origem === 'recibo' && m.tipo === 'credito');
 
-  // Pré-indexação dos recibos para emparelhar em O(1)/O(k) em vez de O(n²):
-  //   byRef           → por recibo.referencia (match primário = cobranca_id)
-  //   byContratoValor → por contrato_id + valor arredondado (fallback)
-  // Ambos preservam a ordem de reciboCreditos → o "primeiro não-usado" fica
-  // idêntico ao .find() original (ver faturacao.merge.test.ts).
+  // Pré-indexado para emparelhar em O(1)/O(k) em vez de O(n²); preserva ordem p/ "primeiro não-usado" (ver faturacao.merge.test.ts).
   type ReciboEntry = { m: MovimentoRaw; i: number };
   const byRef = new Map<string, ReciboEntry[]>();
   const byContratoValor = new Map<string, ReciboEntry[]>();
@@ -333,8 +306,7 @@ export function mergeMovimentosToRows(
         rows.push({
           ...base,
           docTipo: 'fatura_recibo',
-          // Fatura-Recibo é liquidação imediata → mostra-se como crédito (recebido),
-          // NÃO como débito (não há dívida em aberto). `valor` mantém o valor faturado.
+          // liquidação imediata → mostra-se como crédito, não como dívida em aberto
           credito: recRow.credito,
           debito: null,
           metodoRaw: recRow.metodoRaw,
@@ -366,12 +338,7 @@ export function mergeMovimentosToRows(
   return rows;
 }
 
-/**
- * Constrói o `select` completo de conta_movimentos com embeds.
- * - `contratoInner`: usa `!inner` no contrato (filtro por estação).
- * - `reciboInner`: usa `!inner` no recibo (filtro por método de pagamento).
- * Os hints de FK são explícitos porque contrato_id partilha a FK com a view de totais.
- */
+/** `select` completo de conta_movimentos com embeds; hints de FK explícitos porque contrato_id partilha a FK com a view de totais. */
 export function movimentoSelect(
   opts: { contratoInner?: boolean; reciboInner?: boolean } = {}
 ): string {

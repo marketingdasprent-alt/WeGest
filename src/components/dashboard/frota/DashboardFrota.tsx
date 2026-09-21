@@ -48,7 +48,7 @@ import { fetchViaturasFrota, fetchAlertasFrota } from '@/hooks/dashboardFrotaQue
 import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
 import { useContasAReceber } from '@/hooks/useContasAReceber';
 import { CheckinCheckoutHistoricoCard } from '@/components/dashboard/CheckinCheckoutHistoricoCard';
-import { CartrackMapCard } from '@/components/dashboard/CartrackMapCard';
+import { MotoristasSemanaCard } from '@/components/dashboard/motoristas/MotoristasSemanaCard';
 import { cn } from '@/lib/utils';
 import type { ChartPoint } from '@/components/dashboard/ReceitaChart';
 import type { FrotaDonutData } from '@/components/dashboard/FrotaDonutChart';
@@ -555,10 +555,13 @@ export function DashboardFrota() {
             </Card>
           </div>
 
-          {/* ── Histórico de check-in/check-out + mapa Car Track (posições reais). ─ */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* ── Histórico de check-in/check-out + motoristas da semana. ─────────
+              Altura fixa, e não "o que o conteúdo pedir": é a última linha da
+              homepage, a única página desenhada para caber num ecrã. Quem
+              tiver mais conteúdo do que isto rola dentro do próprio cartão. */}
+          <div className="grid grid-cols-1 lg:h-[21.5rem] lg:grid-cols-2 gap-4">
             <CheckinCheckoutHistoricoCard enabled />
-            <CartrackMapCard />
+            <MotoristasSemanaCard />
           </div>
         </>
       )}

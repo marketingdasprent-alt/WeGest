@@ -33,16 +33,13 @@ import { ContasResumoStats } from './ContasResumoStats';
 import { ContasResumoTabela } from './ContasResumoTabela';
 import { ContasResumoBulkBar } from './ContasResumoBulkBar';
 
-// Semana: Segunda (1) a Domingo (0)
 const WEEK_STARTS_ON = 1;
 
 export async function fecharSemanaFinanceiro(
   client: Pick<typeof supabase, 'functions'>,
   periodoInicio: Date,
   periodoFim: Date,
-  // A organização a fechar. Sem isto, a edge function usava a organização
-  // activa do utilizador — e, antes de 2026-08-19, nem sequer filtrava por
-  // organização nenhuma: fechar numa fechava em todas.
+  // A organização é explícita para impedir fechos cruzados entre tenants.
   orgId?: string | null
 ) {
   const { data, error } = await client.functions.invoke('fechar-semana-financeiro', {
@@ -53,9 +50,7 @@ export async function fecharSemanaFinanceiro(
     },
   });
   if (error) throw new Error(error.message);
-  // A edge function devolve sempre HTTP 200 (mesmo em falha lógica, ex:
-  // período no futuro) — invoke() só popula `error` em falha de transporte,
-  // por isso o success:false do corpo tem de ser verificado à parte.
+  // A função usa HTTP 200 para falhas lógicas; valide `success` no corpo.
   if (!data?.success) throw new Error(data?.error || 'Falha ao fechar o período.');
   return data as {
     success: boolean;
@@ -65,13 +60,8 @@ export async function fecharSemanaFinanceiro(
   };
 }
 
-// Coluna Gorjeta: dados sensíveis (gorjeta é rendimento do motorista, não da
-// org) — gate por recurso RBAC (administrativo_ver_gorjeta), não por
-// org_id fixo. Cada organização decide, via Permissões, quem na sua
-// própria equipa vê isto; admins continuam a ver sempre (bypass em
-// PermissionsContext).
+// Gorjetas são rendimento sensível do motorista; aplique RBAC, não um tenant fixo.
 
-// Atalhos rápidos para seleção de semanas
 const getWeekShortcuts = () => [
   { label: 'Esta semana', date: new Date() },
   { label: 'Semana passada', date: subWeeks(new Date(), 1) },
@@ -87,7 +77,6 @@ export function ContasResumoTab() {
   const showGorjeta = hasAccessToResource(RECURSOS.ADMINISTRATIVO_VER_GORJETA);
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
-  // Estado: data dentro da semana selecionada
   const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
   const [selectedMotorista, setSelectedMotorista] = useState<MotoristaResumo | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -96,14 +85,11 @@ export function ContasResumoTab() {
   const [importarWizardOpen, setImportarWizardOpen] = useState(false);
   const [relatorioPagamentoOpen, setRelatorioPagamentoOpen] = useState(false);
   const [fechandoSemana, setFechandoSemana] = useState(false);
-  // Período a fechar (independente da semana visualizada na tabela) — null =
-  // segue a semana selecionada (weekStart/weekEnd); só passa a fixo quando o
-  // utilizador escolhe um período custom no popover "Fechar Período".
+  // `null` acompanha a semana visível; um período personalizado fica fixo.
   const [fecharRange, setFecharRange] = useState<{ from: Date; to: Date } | null>(null);
   const [fecharPopoverOpen, setFecharPopoverOpen] = useState(false);
   const logoSrc = useThemedLogo();
 
-  // Print settings (persisted)
   const PRINT_KEY = 'contas_print_settings';
   const [printSettings, setPrintSettings] = useState(() => {
     try {
@@ -122,7 +108,6 @@ export function ContasResumoTab() {
     localStorage.setItem(PRINT_KEY, JSON.stringify(next));
   };
 
-  // Sorting
   type SortField =
     | 'driver_name'
     | 'total_faturado'
@@ -137,11 +122,8 @@ export function ContasResumoTab() {
   const [sortField, setSortField] = useState<SortField>('total_faturado');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // Filter: recibo verde
   const [filterRecibo, setFilterRecibo] = useState<'todos' | 'verde' | 'nao_verde'>('todos');
-  // Filter: saldo
   const [filterSaldo, setFilterSaldo] = useState<'todos' | 'negativos' | 'positivos'>('todos');
-  // Filter: gestor
   const [filterGestor, setFilterGestor] = useState<string>('todos');
 
   const handleSort = (field: SortField) => {
@@ -170,21 +152,15 @@ export function ContasResumoTab() {
     toast.info('Funcionalidade de envio em massa por email em desenvolvimento.');
   };
 
-  // Calcular início e fim da semana (Segunda a Domingo)
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
 
   const weekShortcuts = getWeekShortcuts();
 
-  // Navegação de semanas
   const goToPreviousWeek = () => setSelectedWeek(subWeeks(selectedWeek, 1));
   const goToNextWeek = () => setSelectedWeek(addWeeks(selectedWeek, 1));
 
-  // Segue a semana visualizada por omissão; fica fixo assim que o
-  // utilizador escolhe um período custom no popover. Não dá pra fechar dias
-  // que ainda não aconteceram — se a semana visualizada avança até domingo
-  // futuro (ex: "Semana Actual" a meio da semana), o fim por omissão fica
-  // preso a hoje, não ao domingo.
+  // Nunca feche dias futuros: o período por omissão termina hoje.
   const hoje = new Date();
   const weekEndClamped = weekEnd > hoje ? hoje : weekEnd;
   const rangeParaFechar = fecharRange ?? { from: weekStart, to: weekEndClamped };
@@ -201,8 +177,6 @@ export function ContasResumoTab() {
       toast.success(
         `Período fechado: ${resultado.viaturasAtualizadas} viaturas, ${resultado.motoristasAtualizados} motoristas atualizados.`
       );
-      // Destranca o resumo: é o fecho que o faz existir. O efeito que observa
-      // `periodoFechado` encarrega-se de carregar os valores a seguir.
       setPeriodoFechado(true);
       recarregar();
     } catch (error) {
@@ -213,7 +187,6 @@ export function ContasResumoTab() {
     }
   };
 
-  // Verificar se é a semana actual
   const isCurrentWeek = isThisWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
 
   const handleRowClick = (resumo: MotoristaResumo) => {
@@ -254,26 +227,11 @@ export function ContasResumoTab() {
     return label;
   };
 
-  // O resumo só existe depois de o período ser FECHADO.
-  //
-  // Antes, abrir o separador calculava tudo ao vivo a partir das tabelas de
-  // origem — e isso dava a impressão de um número final quando ainda faltavam
-  // importações e o valor mudava sozinho de um dia para o outro. Agora a
-  // conta faz-se uma vez, no fecho, e é esse retrato que se mostra.
-  //
-  // `motorista_resumo_semanal` é o que o fechar-semana-financeiro grava; a
-  // existência de linhas que cubram esta semana é o sinal de que foi fechada.
-  //
-  // SOBREPOSIÇÃO, não igualdade. O botão deixa escolher um intervalo qualquer
-  // no calendário e a função grava-o tal e qual — em produção há fechos de
-  // 8 dias a começar a um domingo (02/08→09/08), de 3 dias e até de 1 dia.
-  // Comparar `semana_inicio` com a segunda-feira da semana vista deixaria
-  // trancadas semanas que já tinham sido fechadas por um período que as cobre.
+  // Mostre o retrato gravado no fecho e compare períodos por sobreposição,
+  // porque os fechos podem cobrir intervalos personalizados.
   const [periodoFechado, setPeriodoFechado] = useState<boolean | null>(null);
 
-  // As datas em TEXTO, não os Date. weekStart/weekEnd são objectos novos a cada
-  // render; postos nas dependências de um efeito que muda estado, davam um
-  // ciclo infinito (efeito → setState → render → Date novos → efeito).
+  // Dependências em texto evitam ciclos causados por novas instâncias de Date.
   const semanaInicioStr = format(weekStart, 'yyyy-MM-dd');
   const semanaFimStr = format(weekEnd, 'yyyy-MM-dd');
 
@@ -287,8 +245,7 @@ export function ContasResumoTab() {
         .lte('semana_inicio', semanaFimStr)
         .gte('semana_fim', semanaInicioStr);
       if (cancelado) return;
-      // Em caso de erro assume-se fechado: melhor mostrar o que há do que
-      // esconder o resumo todo por causa de uma falha de rede.
+      // Em falha de rede, mantenha o resumo visível.
       setPeriodoFechado(error ? true : (count ?? 0) > 0);
     };
     verificar();
@@ -297,8 +254,7 @@ export function ContasResumoTab() {
     };
   }, [semanaInicioStr, semanaFimStr]);
 
-  // Navegar de semana reseta o período custom — evita fechar sem querer um
-  // período de outra semana que ficou escolhido no popover.
+  // Trocar de semana descarta o período personalizado para evitar fechos acidentais.
   useEffect(() => {
     setFecharRange(null);
   }, [selectedWeek]);
@@ -318,10 +274,7 @@ export function ContasResumoTab() {
     recarregar,
   } = useContasResumoSemana(weekStart, weekEnd, periodoFechado);
 
-  // Chegada por link — `/administrativo?motorista=<uuid>`, que é como a
-  // dashboard Financeiro manda abrir as contas de um motorista. Só corre
-  // depois de os resumos carregarem (é aí que o motorista existe) e limpa o
-  // parâmetro a seguir, para um refresh não voltar a abrir o diálogo.
+  // O deep link espera os resumos e limpa o parâmetro para não reabrir no refresh.
   const motoristaParam = searchParams.get('motorista');
   useEffect(() => {
     if (!motoristaParam || resumos.length === 0) return;
@@ -340,30 +293,15 @@ export function ContasResumoTab() {
     );
   }, [motoristaParam, resumos, setSearchParams]);
 
-  // Filtrar + ordenar
   const filteredResumos = useMemo(() => {
     let result = resumos.filter((r) => {
       if (isCompanyName(r.driver_name)) return false;
-      // A própria empresa não é um motorista. isCompanyName() acima é uma
-      // regex por sufixo ("Lda", "S.A.", "Unipessoal") e apanha as contas que
-      // vêm da Uber com o nome completo ("Década Ousada, Lda."), mas não
-      // apanha a ficha "PREMIUM RIDE" do CRM, que tem o nome da organização e
-      // sufixo nenhum. Essa vem marcada da base de dados — ver a migração
-      // 20260917110000.
+      // A ficha do CRM que É a própria empresa (ex.: "PREMIUM RIDE", sem sufixo
+      // para a regex apanhar) vem marcada da base — migração 20260917110000.
       if (r.motorista_id && contaFrotaMap[r.motorista_id]) return false;
-      // Motorista inativo: fora do ecrã, EXCEPTO se essa semana tiver valores.
-      //
-      // Não é possível escondê-lo sempre: fechar um contrato TVDE desativa o
-      // motorista automaticamente (useContratosRenting), e recolher a viatura
-      // fazia desaparecer dinheiro real do ecrã onde se fazem os acertos —
-      // caso do motorista #252. Por isso a linha sobrevive enquanto houver
-      // alguma coisa por acertar; assim que a semana está a zeros, é ruído e
-      // sai. Nas semanas que começam DEPOIS da desativação sai sempre.
+      // Mantenha inativos nas semanas anteriores à desativação para fechar saldos.
       if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) {
         const desativadoEm = desativadoEmMap[r.motorista_id];
-        // Sem data conhecida (inativo de antes desta funcionalidade): mantém o
-        // comportamento antigo de esconder, para não ressuscitar histórico
-        // antigo sem querer.
         if (!desativadoEm || new Date(desativadoEm) < weekStart) return false;
         const temValores =
           r.liquido !== 0 || r.total_faturado !== 0 || (r.saldoPendente ?? 0) !== 0;
@@ -374,9 +312,7 @@ export function ContasResumoTab() {
       if (filterRecibo === 'nao_verde' && r.recibo_verde) return false;
       if (filterSaldo === 'negativos') {
         if (r.liquido >= 0) return false;
-        // Sem receitas = novo ou sem viagens esta semana, não é um "negativo real"
         if (r.total_faturado === 0) return false;
-        // Entrou esta semana = ainda não tem semana completa
         if (r.motorista_id && dataContratacaoMap[r.motorista_id]) {
           const dc = new Date(dataContratacaoMap[r.motorista_id]);
           if (dc >= weekStart && dc <= weekEnd) return false;
@@ -426,8 +362,6 @@ export function ContasResumoTab() {
     sortDir,
   ]);
 
-  // Paginação (render): só corta as linhas mostradas — totais, select-all e
-  // export continuam a usar filteredResumos completo.
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
     usePagination(
       filteredResumos,
@@ -435,7 +369,6 @@ export function ContasResumoTab() {
       `${searchTerm}|${filterRecibo}|${filterSaldo}|${filterGestor}|${weekStart?.getTime?.() ?? ''}`
     );
 
-  // Totais gerais
   const totais = useMemo(() => {
     return filteredResumos.reduce(
       (acc, r) => ({
@@ -524,10 +457,7 @@ export function ContasResumoTab() {
             <p className="text-xs font-medium text-muted-foreground mb-2">Período a fechar</p>
             <Calendar
               mode="range"
-              // day_today do Calendar partilhado usa bg-accent preenchido —
-              // visualmente igual à seleção, confunde "hoje" com "escolhido".
-              // Override só aqui (não no componente partilhado, usado
-              // noutras páginas): contorno em vez de preenchimento.
+              // Preserve a distinção visual entre hoje e a data selecionada.
               classNames={{ day_today: 'border border-primary text-foreground' }}
               selected={{ from: rangeParaFechar.from, to: rangeParaFechar.to }}
               onSelect={(r) => {

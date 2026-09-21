@@ -4,25 +4,10 @@ import type { LucideIcon } from 'lucide-react';
 /**
  * A identidade dos módulos de automação: nome, cor e ícone, num sítio só.
  *
- * ── PORQUE ISTO É UMA COISA SÓ E NÃO TRÊS ───────────────────────────────────
- *
- * Havia dois vocabulários para o mesmo conceito. Este ficheiro sabia o NOME
- * ('Renting'); o catálogo do construtor sabia a COR e o ÍCONE, indexados pela
- * CHAVE ('contrato_renting'). A lista via cinzento, o canvas via cores, e nada
- * garantia que falassem do mesmo módulo.
- *
- * Pior: o filtro guardava o nome e passava-o ao painel de blocos, que compara
- * com a chave. Nunca coincidiam — filtrar por módulo e abrir o canvas deixava
- * a paleta sem um único gatilho, sem erro nenhum a dizê-lo.
- *
- * ── CHAVE E NOME SÃO COISAS DIFERENTES ──────────────────────────────────────
- *
- *   chave   'viatura'    o que o event_type e o catálogo usam. Não muda.
- *   nome    'Viaturas'   o que o utilizador lê. Pode mudar sem partir nada.
- *
- * O `event_type` não é humanizado de propósito. Traduzir mecanicamente
- * (`_` → espaço + maiúscula inicial) dava "Iuc a pagar" e "Licenca tvde
- * expirando" — os acrónimos e os acentos não existem na coluna.
+ * Antes havia dois vocabulários (nome aqui, cor/ícone no catálogo, indexados
+ * por chaves diferentes) e o filtro comparava nome com chave — nunca coincidia.
+ * `chave` é o que `event_type`/catálogo usam (estável); `nome` é o que se lê.
+ * `event_type` não é humanizado por tradução mecânica: dava "Iuc a pagar".
  */
 
 export interface ModuloIdentidade {

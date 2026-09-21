@@ -10,10 +10,13 @@ const corsHeaders = {
 
 const OWN_FLEET_OWNER = 'Década Ousada';
 
+// Já não aceita uma URL de ficheiro: a função fazia fetch() de uma URL
+// arbitrária e carregava a resposta inteira em memória — SSRF a partir do
+// nosso IP e consumo sem limite (auditoria 2026-09-16). A UI nunca usou esse
+// campo; o ficheiro é lido no browser e chegam aqui só as linhas já parseadas.
 interface ImportRequest {
   rows?: Record<string, unknown>[];
   rawMarkdown?: string;
-  fileUrl?: string;
   dryRun?: boolean;
 }
 
@@ -168,21 +171,6 @@ const parseMarkdownTable = (rawMarkdown: string) => {
   return rows;
 };
 
-const parseRowsFromFile = async (fileUrl: string) => {
-  const response = await fetch(fileUrl);
-  if (!response.ok) {
-    throw new Error(`Não foi possível obter o ficheiro em ${fileUrl}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
-    defval: '',
-    raw: false,
-  });
-};
-
 const resolveOwnerName = (row: Record<string, unknown>) => {
   const explicitOwner = String(getCell(row, 'Ent. Proprietária')).trim();
   if (explicitOwner) return explicitOwner;
@@ -267,9 +255,6 @@ serve(async (req) => {
     let rawRows = body.rows || [];
     if (!rawRows.length && body.rawMarkdown) {
       rawRows = parseMarkdownTable(body.rawMarkdown);
-    }
-    if (!rawRows.length && body.fileUrl) {
-      rawRows = await parseRowsFromFile(body.fileUrl);
     }
 
     if (!rawRows.length) {

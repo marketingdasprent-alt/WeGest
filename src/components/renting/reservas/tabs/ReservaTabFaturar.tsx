@@ -37,7 +37,7 @@ import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
-import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import {
   FaturacaoActionsToolbar,
   type ToolbarCobranca,

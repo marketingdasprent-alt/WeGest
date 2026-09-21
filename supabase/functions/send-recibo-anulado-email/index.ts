@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { EmailService } from '../_shared/email/services/EmailService.ts';
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,10 +9,8 @@ const corsHeaders = {
 };
 
 /**
- * Avisa por email o motorista (e o gestor responsável) de que um recibo foi
- * anulado. Chamada pelo trigger SQL `trg_recibo_anulado_avisos` via pg_net —
- * o corpo traz já os emails e nomes resolvidos (a função não faz DB lookups
- * de negócio, só resolve a integração de email da org via EmailService).
+ * Aviso de recibo anulado (motorista + gestor). Chamada só pelo pg_net do
+ * trigger SQL — exclusivamente interna (auditoria 2026-09-16).
  */
 interface ReciboAnuladoRequest {
   orgId: string;
@@ -30,6 +29,10 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    requireInternalRequest(req, serviceRoleKey);
+
     const p: ReciboAnuladoRequest = await req.json();
     if (!p.reciboCodigo || !p.orgId) {
       return new Response(JSON.stringify({ error: 'reciboCodigo e orgId são obrigatórios' }), {
@@ -38,8 +41,6 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
     const emailService = new EmailService(supabase);
 
@@ -92,6 +93,12 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: error.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     const message = error instanceof Error ? error.message : 'Erro inesperado';
     console.error('send-recibo-anulado-email:', message);
     return new Response(JSON.stringify({ success: false, error: message }), {

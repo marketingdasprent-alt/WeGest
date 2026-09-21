@@ -5,18 +5,9 @@ import { useLocation } from 'react-router-dom';
 const MAX_FRAMES = 20;
 
 /**
- * Ao mudar de rota, volta ao topo — exceto quando o URL traz uma âncora, caso
- * em que salta para o elemento indicado.
- *
- * O tratamento da âncora não é um extra: o React Router não faz scroll para
- * `#hash` por si, e este componente fazia `scrollTo(0, 0)` em qualquer mudança
- * de rota. Resultado: links como `/#contacto` — usados pelos CTA das páginas
- * institucionais para chegar ao formulário da landing — aterravam no topo da
- * página inicial, e o visitante tinha de procurar o formulário à mão.
- *
- * As páginas são carregadas em lazy, portanto o elemento de destino pode ainda
- * não existir no primeiro frame depois da navegação — daí a tentativa repetida
- * durante alguns frames, com recurso ao topo se nunca aparecer.
+ * Ao mudar de rota, volta ao topo — exceto com âncora no URL, caso em que salta
+ * para o elemento. O React Router não faz scroll para `#hash` sozinho, e como as
+ * páginas carregam em lazy, o elemento pode não existir ainda no primeiro frame.
  */
 export const ScrollToTop = () => {
   const { pathname, hash } = useLocation();

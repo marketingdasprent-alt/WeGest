@@ -1,18 +1,8 @@
 /**
- * Conta-corrente de UM cliente (entidade).
+ * Conta-corrente de UM cliente (entidade), a partir do livro-razão
+ * `conta_movimentos` (não `invoices`, que é só o espelho fiscal p/ PDF).
  *
- * A conta-corrente é o livro-razão `conta_movimentos` (append-only), alimentado
- * por triggers a partir de cobranças (débito), recibos (crédito), notas de
- * crédito (crédito) e respetivos estornos. NÃO é a tabela `invoices` — essa é só
- * o espelho fiscal (para obter o PDF do documento no provider/KeyInvoice).
- *
- * Este hook é, na prática, a `FaturacaoTab` do Administrativo filtrada por
- * `entidade_id`: reutiliza `movimentoSelect` + `mergeMovimentosToRows` (que já
- * consolidam a Fatura-Recibo numa única linha e derivam débito/crédito por tipo)
- * e junta o mapa cobrança→documento fiscal para o download do PDF.
- *
- * `entidade_id` cobre tanto o titular como o condutor (ambos são registos em
- * `clientes`), por isso é a chave correta — melhor do que filtrar por
+ * Filtra por `entidade_id` (cobre titular e condutor) em vez de
  * `contratos_renting.cliente_id`, que só apanharia o titular.
  */
 import { useQuery } from '@tanstack/react-query';
@@ -41,27 +31,13 @@ export interface ContaCorrenteCliente {
 const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 /**
- * Totais a partir dos movimentos crus (antes da consolidação de linhas).
+ * Totais a partir dos movimentos crus, não das linhas consolidadas: a
+ * Fatura-Recibo é 1 linha mas 2 movimentos que se anulam no saldo.
  *
- * Trabalhamos sobre os movimentos brutos — e não sobre as linhas consolidadas —
- * porque o saldo tem de somar TODOS os débitos e créditos individualmente
- * (a Fatura-Recibo, por ex., é 1 linha mas 2 movimentos que se anulam no saldo).
- *
- * Convenção (coerente com conta_corrente_saldo = Σdébito − Σcrédito, onde
- * positivo = o cliente deve). Cada movimento vai para o lado da sua ORIGEM,
- * em valor LÍQUIDO (o movimento e o seu estorno cancelam-se dentro do mesmo
- * cartão):
- *
- *   faturado (o que o cliente deve) = origens de dívida: cobrança, dano, ajuste
- *              → débito soma, crédito (estorno de cobrança anulada) subtrai.
- *   recebido (o que abateu a dívida) = origens de pagamento: recibo, nota_credito
- *              → crédito soma, débito (estorno de recibo/NC anulado) subtrai.
- *   saldo = faturado − recebido = Σ débitos − Σ créditos → por receber.
- *
- * Agrupar por origem (e não só pelo lado débito/crédito) garante que o estorno
- * de uma cobrança anulada abate o FATURADO (em vez de inflar o RECEBIDO) e que
- * um dano a débito entra no FATURADO (em vez de tornar o RECEBIDO negativo).
- * A identidade do saldo mantém-se em qualquer caso.
+ * Agrupa por ORIGEM (não só por débito/crédito): cobrança/dano/ajuste contam
+ * para `faturado`, recibo/nota_credito para `recebido` — assim o estorno de
+ * uma cobrança anulada abate o faturado em vez de inflar o recebido.
+ * saldo = faturado − recebido = Σ débitos − Σ créditos.
  */
 const ORIGENS_RECEBIDO = new Set(['recibo', 'nota_credito']);
 

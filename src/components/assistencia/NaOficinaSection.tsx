@@ -16,25 +16,10 @@ function fmt(data: string): string {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-PT');
 }
 
-/**
- * "Na oficina" — viaturas com entrada registada e sem saída.
- *
- * As reparações viviam só dentro da ficha de cada viatura, o que obrigava a
- * abrir carro a carro para saber quem estava parado. Fica no topo da página
- * de Assistência para a pergunta "que viaturas estão fora de serviço?" ter
- * resposta num sítio.
- *
- * Secção própria e não misturada na lista de tickets: uma reparação tem
- * oficina, entrada, saída e custo, e um ticket tem número, categoria,
- * prioridade e responsável. Metê-las na mesma lista obrigava a inventar
- * campos vazios de um lado e do outro.
- */
 export function NaOficinaSection() {
   const navigate = useNavigate();
   const { data: naOficina = [], isLoading } = useViaturasNaOficina();
 
-  // Nada na oficina é o caso normal — não se ocupa o topo da página com um
-  // cartão vazio.
   if (isLoading || naOficina.length === 0) return null;
 
   return (
@@ -72,8 +57,6 @@ export function NaOficinaSection() {
                 <span className="ml-auto flex items-center gap-1 whitespace-nowrap text-sm text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
                   {fmt(r.data_entrada)}
-                  {/* Os dias parados são a leitura que interessa — uma data
-                      sozinha obriga a fazer a conta de cabeça. */}
                   <span
                     className={dias >= 7 ? 'font-medium text-amber-700 dark:text-amber-300' : ''}
                   >

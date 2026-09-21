@@ -1,18 +1,9 @@
 import type { TipoDeCampo } from '@/hooks/automacao/useAutomationCatalogo';
 
 /**
- * A ponte entre a caixa de texto e o JSON que fica gravado.
- *
- * Existe por causa de uma limitação concreta: até aqui o editor serializava
- * TUDO como string, e o avaliador de condições compara por tipo — não faz
- * coerção. Uma condição sobre um campo numérico escrita como `"500"` nunca
- * casava com um payload que traz `500`, e não havia erro nenhum a dizê-lo: a
- * automação simplesmente não disparava.
- *
- * A correcção é aqui e não no servidor. Pôr coerção no avaliador traria de
- * volta as ambiguidades que a Fase 4 fechou — `10` deixaria de ser distinto de
- * `"10"`, e `"false"` passaria a valer como `false`. O tipo é conhecido: o
- * catálogo declara-o. É só usá-lo.
+ * Ponte entre a caixa de texto e o JSON gravado: o avaliador de condições
+ * compara por tipo, sem coerção, e `"500"` nunca casava com `500`.
+ * Corrige-se aqui, não no avaliador, para não reabrir as ambiguidades que a Fase 4 fechou.
  */
 
 /**

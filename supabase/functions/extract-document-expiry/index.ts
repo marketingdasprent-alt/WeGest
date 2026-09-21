@@ -1,9 +1,29 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { authenticateUser, AuthorizationError } from '../_shared/auth/edgeAuthorization.ts';
+
+// Extrai a validade de um documento com o Gemini. Só descarrega se a sessão
+// do chamador puder ver esse documento via RLS (auditoria 2026-09-16).
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const MAX_BYTES = 10 * 1024 * 1024;
+const ALLOWED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/webp']);
+
+// Campos de motoristas_ativos que guardam caminhos no bucket motorista-documentos
+// (espelha TIPOS_DOCUMENTO em MotoristaTabDocumentos.tsx).
+const CAMPOS_FICHEIRO_MOTORISTA = [
+  'documento_ficheiro_url',
+  'documento_identificacao_verso_url',
+  'carta_ficheiro_url',
+  'carta_conducao_verso_url',
+  'licenca_tvde_ficheiro_url',
+  'registo_criminal_url',
+  'comprovativo_morada_url',
+  'comprovativo_iban_url',
+];
 
 // Os nomes dos modelos do Gemini caducam sem aviso. Esta função pedia
 // `gemini-2.0-flash`, que em 09/2026 passou a devolver 404 ("no longer
@@ -22,41 +42,95 @@ const MODELOS = [
   'gemini-flash-latest',
 ];
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'content-type': 'application/json' },
+  });
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const { filePath, mimeType } = await req.json();
-    if (!filePath) {
-      return new Response(JSON.stringify({ date: null, error: 'filePath is required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'content-type': 'application/json' },
-      });
+    if (!filePath || typeof filePath !== 'string') {
+      return json({ date: null, error: 'filePath is required' }, 400);
     }
+    if (filePath.includes('..') || filePath.startsWith('/')) {
+      return json({ date: null, error: 'filePath inválido' }, 400);
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // ── Quem chama ──────────────────────────────────────────────────────────
+    const authClient = createClient(supabaseUrl, anonKey);
+    const user = await authenticateUser(req, {
+      getUser: async (token) => {
+        const { data, error } = await authClient.auth.getUser(token);
+        return { user: error || !data.user ? null : { id: data.user.id } };
+      },
+    });
+
+    // ── Pode ver este documento? (RLS com a sessão do chamador) ─────────────
+    let autorizado = filePath.startsWith(`${user.id}/`);
+
+    if (!autorizado) {
+      const caller = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+      });
+
+      const { data: docExtra } = await caller
+        .from('motorista_documentos')
+        .select('id')
+        .eq('ficheiro_url', filePath)
+        .limit(1)
+        .maybeSingle();
+      autorizado = !!docExtra;
+
+      if (!autorizado) {
+        const orFilter = CAMPOS_FICHEIRO_MOTORISTA.map((c) => `${c}.eq.${filePath}`).join(',');
+        const { data: motorista } = await caller
+          .from('motoristas_ativos')
+          .select('id')
+          .or(orFilter)
+          .limit(1)
+          .maybeSingle();
+        autorizado = !!motorista;
+      }
+    }
+
+    if (!autorizado) throw new AuthorizationError('Sem acesso a este documento.', 403);
 
     const geminiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiKey) {
-      return new Response(JSON.stringify({ date: null, error: 'GEMINI_API_KEY not configured' }), {
-        headers: { ...corsHeaders, 'content-type': 'application/json' },
-      });
+      return json({ date: null, error: 'GEMINI_API_KEY not configured' });
     }
 
     // Download file from storage
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: fileData, error: dlError } = await supabase.storage
       .from('motorista-documentos')
       .download(filePath);
 
     if (dlError || !fileData) {
-      return new Response(JSON.stringify({ date: null, error: dlError?.message }), {
-        status: 400,
-        headers: { ...corsHeaders, 'content-type': 'application/json' },
-      });
+      return json({ date: null, error: dlError?.message }, 400);
     }
+
+    if (fileData.size > MAX_BYTES) {
+      return json({ date: null, error: 'Ficheiro demasiado grande para análise' }, 413);
+    }
+
+    // Determine media type
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+    const resolvedMime =
+      (typeof mimeType === 'string' && ALLOWED_MIME.has(mimeType) ? mimeType : null) ??
+      (ext === 'pdf' ? 'application/pdf' :
+       ext === 'png' ? 'image/png' :
+       ext === 'webp' ? 'image/webp' :
+       'image/jpeg');
 
     // Convert to base64 (chunk to avoid stack overflow)
     const bytes = new Uint8Array(await fileData.arrayBuffer());
@@ -67,13 +141,6 @@ Deno.serve(async (req) => {
     }
     const base64Data = btoa(binary);
 
-    // Determine media type
-    const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
-    const resolvedMime = mimeType ||
-      (ext === 'pdf' ? 'application/pdf' :
-       ext === 'png' ? 'image/png' :
-       'image/jpeg');
-
     // Build Gemini content part
     const inlinePart = {
       inline_data: {
@@ -83,11 +150,11 @@ Deno.serve(async (req) => {
     };
 
     const corpoPedido = JSON.stringify({
-          contents: [{
-            parts: [
-              inlinePart,
-              {
-                text: `Analisa este documento e encontra a data de VALIDADE/EXPIRAÇÃO.
+      contents: [{
+        parts: [
+          inlinePart,
+          {
+            text: `Analisa este documento e encontra a data de VALIDADE/EXPIRAÇÃO.
 REGRAS IMPORTANTES:
 - Procura especificamente por campos como "Validade", "Válido até", "Data de validade", "Expiry", "Valid until", "CÓDIGO VIGENTE ATÉ", "ACCESS CODE VALID UNTIL", "Válido até", "Válidade"
 - IGNORA completamente números de referência, números de certificado, números de processo, NIFs, NISPs e qualquer número que não esteja explicitamente identificado como data de validade
@@ -96,15 +163,16 @@ REGRAS IMPORTANTES:
 - A data de validade é normalmente uma data futura (vários anos no futuro)
 - Responde SOMENTE com a data no formato YYYY-MM-DD (ex: 2031-03-19)
 - Se não encontrares nenhuma data de validade explícita, responde apenas com a palavra: null`,
-              },
-            ],
-          }],
-          // Folga grande para uma data, de propósito: estes modelos pensam
-          // antes de responder e o raciocínio conta para o limite. Com 30
-          // tokens gastavam-no todo a pensar e devolviam vazio.
-          generationConfig: { maxOutputTokens: 512, temperature: 0 },
+          },
+        ],
+      }],
+      // Folga grande para uma data, de propósito: estes modelos pensam
+      // antes de responder e o raciocínio conta para o limite. Com 30
+      // tokens gastavam-no todo a pensar e devolviam vazio.
+      generationConfig: { maxOutputTokens: 512, temperature: 0 },
     });
 
+    // deno-lint-ignore no-explicit-any
     let aiResult: any = null;
     let modeloUsado = '';
     let ultimoErro = '';
@@ -148,9 +216,7 @@ REGRAS IMPORTANTES:
     }
 
     if (!aiResult) {
-      return new Response(JSON.stringify({ date: null, error: `AI API error (${ultimoErro})` }), {
-        headers: { ...corsHeaders, 'content-type': 'application/json' },
-      });
+      return json({ date: null, error: `AI API error (${ultimoErro})` });
     }
     console.log('extract-document-expiry, modelo:', modeloUsado);
     console.log('Gemini full response:', JSON.stringify(aiResult).substring(0, 500));
@@ -158,9 +224,7 @@ REGRAS IMPORTANTES:
     // Verificar erro da API
     if (aiResult.error) {
       console.error('Gemini API error:', aiResult.error);
-      return new Response(JSON.stringify({ date: null, debug: `Gemini error: ${aiResult.error.message}` }), {
-        headers: { ...corsHeaders, 'content-type': 'application/json' },
-      });
+      return json({ date: null, debug: `Gemini error: ${aiResult.error.message}` });
     }
 
     const rawText = (aiResult.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim();
@@ -204,14 +268,12 @@ REGRAS IMPORTANTES:
       if (year < 2000 || year > 2099) date = null;
     }
 
-    return new Response(JSON.stringify({ date, debug: date ? undefined : `rawText: "${rawText}"` }), {
-      headers: { ...corsHeaders, 'content-type': 'application/json' },
-    });
+    return json({ date, debug: date ? undefined : `rawText: "${rawText}"` });
   } catch (err: any) {
+    if (err instanceof AuthorizationError) {
+      return json({ date: null, error: err.message }, err.status);
+    }
     console.error('extract-document-expiry error:', err);
-    return new Response(JSON.stringify({ date: null, error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'content-type': 'application/json' },
-    });
+    return json({ date: null, error: err.message }, 500);
   }
 });

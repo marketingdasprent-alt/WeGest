@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
+
+// Callback de eventos de entrega da Brevo. Exige o Bearer configurado no
+// webhook (BREVO_WEBHOOK_SECRET) antes de ler o corpo — sem isso era falso
+// em massa via message-id (auditoria 2026-09-16).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,6 +19,16 @@ serve(async (req) => {
   }
 
   try {
+    const webhookSecret = Deno.env.get("BREVO_WEBHOOK_SECRET") ?? "";
+    if (!webhookSecret) {
+      console.error("brevo-webhook: BREVO_WEBHOOK_SECRET não configurado — pedido recusado");
+      return new Response(JSON.stringify({ error: "Webhook não configurado" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    requireInternalRequest(req, webhookSecret);
+
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -159,6 +174,12 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
+    if (error instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: error.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Brevo webhook error:", message);
     return new Response(JSON.stringify({ error: message }), {

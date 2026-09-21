@@ -11,18 +11,6 @@ import {
 } from '@/hooks/automacao/useAutomationRulesConfig';
 import { Campo, Seccao } from './CamposDoPasso';
 
-/**
- * Quem recebe e por onde.
- *
- * Absorveu a Sheet separada que existia antes: ter dois ecrãs a escrever os
- * mesmos campos era a duplicação que este redesenho veio eliminar.
- *
- * O CANAL DEIXOU DE SER UMA ESCOLHA. Até à divisão entre notificação e email
- * (2026-09-01), esta secção tinha um interruptor: a notificação na app era
- * sempre criada, e o email era opcional por cima dela. Agora são duas acções
- * diferentes — quem quer as duas cria dois blocos — e o canal de cada uma é
- * fixo. O que era um `Switch` passa a um selo informativo.
- */
 export function Destinatarios({
   noId,
   dados,
@@ -32,14 +20,12 @@ export function Destinatarios({
   noId: string;
   dados: Record<string, unknown>;
   onAlterar: (alteracao: Record<string, unknown>) => void;
-  /** 'notificacao' → só na aplicação. 'email' → só por correio. */
   canal: 'notificacao' | 'email';
 }) {
   const { data: cargos = [] } = useCargosDisponiveis();
   const escolhidos = (dados.cargoIds as string[]) ?? [];
   const userIds = (dados.userIds as string[]) ?? [];
   const individual = dados.modo === 'individual';
-  // Só faz sentido escolher pessoas DENTRO dos cargos já marcados.
   const { data: pessoas = [] } = useUtilizadoresPorCargo(escolhidos);
 
   const alternarCargo = (id: string) =>
@@ -51,8 +37,7 @@ export function Destinatarios({
   const [novoEmail, setNovoEmail] = useState('');
   const [erroEmail, setErroEmail] = useState<string | null>(null);
 
-  // Sanidade de formato — a mesma que fn_validar_acao_config usa no servidor.
-  // O servidor continua a ser a autoridade; isto é só feedback imediato.
+  // A validação local antecipa a do servidor, que continua a ser a autoridade.
   const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/i;
 
   const acrescentarEmail = () => {
@@ -77,9 +62,6 @@ export function Destinatarios({
         titulo="Destinatários"
         icone={Users}
         extra={
-          // Estado, não interruptor: o canal é o que a acção É, não uma opção
-          // dentro dela. Duas automações separadas cobrem quem precisa das
-          // duas — ver o cabeçalho deste ficheiro.
           canal === 'email' ? (
             <Badge variant="secondary" className="gap-1.5">
               <Mail className="h-3.5 w-3.5" />

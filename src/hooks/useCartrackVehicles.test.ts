@@ -34,10 +34,9 @@ describe('useCartrackVehicles — intervalo do modo "Ao vivo"', () => {
 });
 
 describe('useCartrackVehicles — sem intervalos escritos à mão nos consumidores', () => {
-  const ficheiros = [
-    'src/components/dashboard/CartrackMapCard.tsx',
-    'src/components/viaturas/tabs/ViaturaTabGeolocalizacao.tsx',
-  ];
+  // O cartão do dashboard saiu (o Car Track vive na ficha da viatura, onde é
+  // accionável); resta o único consumidor do hook.
+  const ficheiros = ['src/components/viaturas/tabs/ViaturaTabGeolocalizacao.tsx'];
 
   it.each(ficheiros)('%s não passa intervalMs literal ao useCartrackLive', (caminho) => {
     const src = readFileSync(resolve(process.cwd(), caminho), 'utf8');

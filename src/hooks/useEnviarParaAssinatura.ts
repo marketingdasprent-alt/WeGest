@@ -17,16 +17,10 @@ export interface EnviarParaAssinaturaArgs {
 }
 
 /**
- * Envia documentos para assinatura.
- *
- * O trabalho que interessa acontece aqui: para cada documento congela-se uma
- * fotografia — o desenho do template e os dados que o produziram — e é dela que
- * o documento assinado vai nascer mais tarde, no browser de quem assina. Sem
- * isso, uma alteração ao contrato ou ao template entre o envio e a assinatura
- * poria a pessoa a assinar coisa diferente da que recebeu.
- *
- * O acesso à base de dados vive neste hook, e não no componente, por regra do
- * projecto.
+ * Envia documentos para assinatura. Para cada um congela-se uma fotografia
+ * (template + dados) de onde o documento assinado nasce mais tarde — sem
+ * isso, editar o contrato/template entre o envio e a assinatura mudaria o
+ * que a pessoa assina.
  */
 export function useEnviarParaAssinatura() {
   return useMutation({

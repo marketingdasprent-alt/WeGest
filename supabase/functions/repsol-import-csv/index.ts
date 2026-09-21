@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { stripAcc, parseNumber, findField, findNumericField } from '../_shared/repsol/campos.ts';
+import { temHora, transactionKey } from '../_shared/repsol/chave.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -216,22 +217,6 @@ function normalizeName(name: string): string {
     .replace(/\s+/g, ' ');
 }
 
-function stableRowSignature(row: Record<string, string>): string {
-  return Object.keys(row)
-    .sort()
-    .map((key) => `${key}:${(row[key] || '').trim()}`)
-    .join('|');
-}
-
-function hashString(input: string): string {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -390,13 +375,16 @@ Deno.serve(async (req) => {
 
       const amount = parseNumber(amountStr);
       const qty = parseNumber(qtyStr);
-      const safeStation = (station || '').replace(/\W/g, '').toLowerCase();
-      const safeMatricula = (matriculaRaw || '').replace(/\W/g, '').toLowerCase();
-      const safeProduct = (product || '').replace(/\W/g, '').toLowerCase();
-      const safeDriver = (driverName || '').replace(/\W/g, '').toLowerCase();
-      const txId = `repsol-${hashString(stableRowSignature(row))}`;
 
       const sanitized = sanitizeCard(cardNumber);
+      const txId = transactionKey({
+        card: sanitized,
+        txDate,
+        amount,
+        qty,
+        station,
+        hasTime: temHora(timeStr, txDate),
+      });
       let motoristaId = sanitized ? cardMap.get(sanitized) : null;
       if (!motoristaId && sanitized.length >= 4) motoristaId = cardMap.get(sanitized.slice(-4));
       if (!motoristaId && driverName) motoristaId = nameMap.get(normalizeName(driverName));

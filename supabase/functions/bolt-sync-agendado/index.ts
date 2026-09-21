@@ -1,17 +1,4 @@
-// supabase/functions/bolt-sync-agendado/index.ts
-//
-// Enfileira o sync semanal da Bolt para TODAS as integrações já convertidas
-// para a API oficial. Chamada pelo cron (segunda e quinta de manhã) e também
-// pelo botão "Atualizar" quando o utilizador quer forçar uma passagem.
-//
-// NÃO sincroniza nada: só põe linhas em bolt_sync_queue. Quem faz o trabalho
-// é o bolt-sync-drain, a cada 5 minutos, com concorrência limitada. Assim
-// esta função responde em milissegundos e nunca fica pendurada à espera de
-// seis empresas.
-//
-// AS INTEGRAÇÕES AINDA EM MODO ROBÔ SÃO IGNORADAS, de propósito: sem
-// credenciais de API o bolt-sync-semana só devolveria erro. Enquanto uma
-// conta não for convertida, continua a ser servida pelo robô/CSV.
+// Só enfileira integrações OAuth; o worker executa o sync com concorrência limitada.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import {
   analisarData,
@@ -33,9 +20,7 @@ const json = (corpo: unknown, status = 200) =>
   });
 
 interface Pedido {
-  /** Só esta integração. Sem isto, todas as que estiverem em modo API. */
   integracao_id?: string;
-  /** Semana a sincronizar. Sem isto, a semana passada (2ª a Dom, Lisboa). */
   periodo_inicio?: string;
   periodo_fim?: string;
   formula_id?: string;
@@ -51,10 +36,7 @@ Deno.serve(async (req) => {
     const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // Dois chamadores, como em bolt-import-csv: o cron (service-role) e o
-    // utilizador autenticado a carregar em "Atualizar" (tem de ser admin da
-    // org dona da integração — a service-role bypassa RLS, por isso valida-se
-    // à mão mais abaixo).
+    // A service-role ignora RLS; pedidos manuais exigem admin em cada organização.
     const authHeader = req.headers.get('Authorization') ?? '';
     const bearer = authHeader.replace(/^Bearer\s+/i, '');
     const ehCron = bearer === SERVICE_ROLE_KEY;
@@ -70,11 +52,7 @@ Deno.serve(async (req) => {
         error: erroAuth,
       } = await anon.auth.getUser();
       if (erroAuth || !user) {
-        // A chave anon é um JWT válido sem utilizador por trás. Quem chega
-        // aqui com ela não é um browser com sessão expirada — é o cron a
-        // invocar com o segredo errado. Durante dez dias este ramo devolveu
-        // "Sessão inválida." às segundas às 06:00 e ninguém percebeu que a
-        // sync semanal do Bolt tinha parado. Vale a pena distinguir.
+        // Distingue cron com chave anon de uma sessão de utilizador inválida.
         const ehChaveAnon = bearer === ANON_KEY;
         return json(
           {
@@ -84,7 +62,7 @@ Deno.serve(async (req) => {
                 'Falta o segredo cron_service_role_jwt no Vault.'
               : 'Sessão inválida.',
           },
-          401,
+          401
         );
       }
       callerUserId = user.id;
@@ -92,13 +70,15 @@ Deno.serve(async (req) => {
 
     const corpo: Pedido = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
 
-    // Semana: a indicada, ou a passada. analisarData devolve null em formatos
-    // inválidos — melhor recusar do que enfileirar uma semana errada.
+    // Datas inválidas são rejeitadas para não enfileirar outra semana.
     let semana;
     if (corpo.periodo_inicio) {
       const inicio = analisarData(corpo.periodo_inicio);
       if (!inicio) {
-        return json({ success: false, error: `periodo_inicio inválido: ${corpo.periodo_inicio}` }, 400);
+        return json(
+          { success: false, error: `periodo_inicio inválido: ${corpo.periodo_inicio}` },
+          400
+        );
       }
       const fim = corpo.periodo_fim ? analisarData(corpo.periodo_fim) : null;
       if (corpo.periodo_fim && !fim) {
@@ -107,9 +87,7 @@ Deno.serve(async (req) => {
       if (fim) {
         semana = semanaEntre(inicio, fim);
       } else {
-        // Só a data de início: encaixa-se na semana Segunda–Domingo que a
-        // contém, igual ao que o seletor da UI faz. Sem isto, um dia solto
-        // gerava um "período" de 24h e o resumo não batia com nada.
+        // Uma data isolada representa a semana completa que a contém.
         const segunda = segundaDaSemana(inicio);
         semana = semanaEntre(segunda, somarDias(segunda, 6));
       }
@@ -117,13 +95,10 @@ Deno.serve(async (req) => {
       semana = semanaPassada();
     }
 
-    // Semana.inicio/.fim já são 'YYYY-MM-DD'.
     const periodoInicio = semana.inicio;
     const periodoFim = semana.fim;
 
-    // Só as que já falam API. plataforma='bolt' é o formato novo;
-    // robot_target_platform='bolt' são as 6 convertidas no lugar, que mantêm
-    // plataforma='robot' para o histórico não perder o integracao_id.
+    // Inclui integrações convertidas que preservam `plataforma='robot'` por histórico.
     let query = supabase
       .from('plataformas_configuracao')
       .select('id, nome, org_id, plataforma, robot_target_platform, auth_mode, ativo, company_id')
@@ -134,12 +109,12 @@ Deno.serve(async (req) => {
     if (corpo.integracao_id) query = query.eq('id', corpo.integracao_id);
 
     const { data: integracoes, error: erroLer } = await query;
-    if (erroLer) return json({ success: false, error: `Falha a ler integrações: ${erroLer.message}` }, 500);
+    if (erroLer)
+      return json({ success: false, error: `Falha a ler integrações: ${erroLer.message}` }, 500);
 
     const candidatas = integracoes ?? [];
 
     if (callerUserId) {
-      // Pedido de utilizador: tem de ser admin de TODAS as orgs envolvidas.
       const orgs = [...new Set(candidatas.map((i) => i.org_id))];
       for (const orgId of orgs) {
         const { data: membership } = await supabase
@@ -149,7 +124,10 @@ Deno.serve(async (req) => {
           .eq('org_id', orgId)
           .maybeSingle();
         if (!membership?.is_admin) {
-          return json({ success: false, error: 'Sem permissão de administrador nesta organização.' }, 403);
+          return json(
+            { success: false, error: 'Sem permissão de administrador nesta organização.' },
+            403
+          );
         }
       }
     }
@@ -175,10 +153,7 @@ Deno.serve(async (req) => {
         origem: ehCron ? 'cron' : (corpo.origem ?? 'manual'),
       });
 
-      // 23505 = já existe uma linha activa para esta integração e semana. É o
-      // dedupe a funcionar (índice parcial único), não um erro: acontece
-      // sempre que a quinta-feira apanha uma semana que a segunda deixou por
-      // processar, ou quando alguém carrega em "Atualizar" duas vezes.
+      // O índice único trata pedidos repetidos como deduplicação, não erro.
       if (error && (error as { code?: string }).code === '23505') {
         jaEmFila++;
         continue;
@@ -192,7 +167,7 @@ Deno.serve(async (req) => {
 
     console.log(
       `[bolt-sync-agendado] semana ${periodoInicio}..${periodoFim} · ` +
-        `enfileiradas ${enfileiradas} · já em fila ${jaEmFila} · erros ${erros.length}`,
+        `enfileiradas ${enfileiradas} · já em fila ${jaEmFila} · erros ${erros.length}`
     );
 
     return json({
