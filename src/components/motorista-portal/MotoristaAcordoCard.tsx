@@ -24,11 +24,11 @@ export function MotoristaAcordoCard() {
   if (isLoading || !acordos || acordos.length === 0) return null;
 
   return (
-    <Card className="rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border-border bg-background">
-      <CardHeader className="p-6 md:p-8 pb-2 md:pb-4">
-        <CardTitle className="text-lg font-black flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-xl">
-            <Wallet className="h-5 w-5 text-primary" />
+    <Card className=" overflow-hidden border-border bg-background">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <div className="rounded-md bg-primary/10 p-1.5">
+            <Wallet className="h-4 w-4 text-primary" />
           </div>
           Plano{acordos.length > 1 ? 's' : ''} de pagamento
         </CardTitle>
@@ -40,7 +40,7 @@ export function MotoristaAcordoCard() {
               key={a.id}
               type="button"
               onClick={() => navigate(`/motorista/painel/acordos/${a.id}`)}
-              className="w-full flex items-center justify-between gap-4 p-6 md:p-8 pt-4 md:pt-4 text-left hover:bg-muted/30 transition-all group"
+              className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left hover:bg-muted/30 transition-all group"
             >
               <div>
                 <p className="font-bold text-foreground group-hover:text-primary transition-colors">
