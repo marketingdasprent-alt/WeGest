@@ -13,10 +13,11 @@ import {
   ChevronDown,
   ChevronsUpDown,
   AlertTriangle,
+  Gauge,
   Printer,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { format } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { colunaDoMovimento, type ColunaFinanceira } from './relatorioPagamentoCategorias';
 import { gerarRelatorioPagamentoPrint } from './relatorioPagamentoPrint';
 
@@ -107,6 +108,11 @@ export function RelatorioPagamentoDialog({
   // Motoristas marcados como "já pago" (só visual, ajuda a acompanhar os
   // pagamentos durante a sessão — risca a linha; não persiste).
   const [pagos, setPagos] = useState<Set<string>>(new Set());
+  // Motoristas que já entregaram o KM desta semana. Quem não está aqui aparece
+  // assinalado — não bloqueia o pagamento, porque há faltas legítimas (baixa,
+  // viatura na oficina) e travar o acerto por isso fazia mais estragos do que
+  // resolvia. Quem decide é o gestor, com a informação à frente.
+  const [comKmSemana, setComKmSemana] = useState<Set<string>>(new Set());
   // Ordem manual (array de motorista_id). Vazio = ordem alfabética.
   // Arrastar uma linha preenche esta ordem e passa a sobrepor a alfabética.
   const [ordemManual, setOrdemManual] = useState<string[]>([]);
@@ -245,7 +251,7 @@ export function RelatorioPagamentoDialog({
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
         const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
-        const [ibanResult, financeiroResult] = await Promise.all([
+        const [ibanResult, financeiroResult, kmResult] = await Promise.all([
           supabase.from('motoristas_ativos').select('id, iban').in('id', ids),
           supabase
             .from('motorista_financeiro')
@@ -259,6 +265,18 @@ export function RelatorioPagamentoDialog({
             // detalhe. Desde 01/08 eram 46 movimentos, 7.168,59 €.
             .neq('status', 'cancelado')
             .in('motorista_id', ids),
+          // Quem entregou os quilómetros desta semana. O KM é condição para o
+          // acerto ser processado — sem ele não se sabe quanto a viatura andou
+          // — por isso a falta aparece aqui, ao lado do valor a pagar, e não
+          // num ecrã que ninguém abre na hora de pagar.
+          supabase
+            .from('viatura_km_leituras')
+            .select('motorista_id')
+            .gte('created_at', weekStartStr + 'T00:00:00')
+            // Limite exclusivo: `created_at` é timestamptz e um `lte` pela data
+            // do domingo cortaria fora o domingo inteiro.
+            .lt('created_at', format(addDays(weekEnd, 1), 'yyyy-MM-dd') + 'T00:00:00')
+            .in('motorista_id', ids),
         ]);
 
         if (cancelled) return;
@@ -268,6 +286,10 @@ export function RelatorioPagamentoDialog({
           if (m.iban) ibans[m.id] = m.iban;
         });
         setIbanMap(ibans);
+
+        setComKmSemana(
+          new Set((kmResult.data || []).map((r: any) => r.motorista_id).filter(Boolean))
+        );
 
         const fin: Record<string, Partial<Record<ColunaFinanceira, number>>> = {};
         (financeiroResult.data || []).forEach((m: any) => {
@@ -329,11 +351,7 @@ export function RelatorioPagamentoDialog({
   // o fim, alfabéticos.
   const linhasOrdenadas = useMemo(() => {
     const arr = linhas.filter((l) =>
-      filtroRecibo === 'todos'
-        ? true
-        : filtroRecibo === 'verde'
-          ? l.reciboVerde
-          : !l.reciboVerde
+      filtroRecibo === 'todos' ? true : filtroRecibo === 'verde' ? l.reciboVerde : !l.reciboVerde
     );
 
     if (sortCol) {
@@ -408,6 +426,12 @@ export function RelatorioPagamentoDialog({
   // sentido com um filtro activo.
   const nVerdes = useMemo(() => linhas.filter((l) => l.reciboVerde).length, [linhas]);
   const nVermelhos = linhas.length - nVerdes;
+  // Quantos faltam entregar o KM desta semana. Vai ao cabeçalho para o gestor
+  // ver de relance, sem ter de percorrer a lista à procura das etiquetas.
+  const nSemKm = useMemo(
+    () => linhas.filter((l) => l.motorista_id && !comKmSemana.has(l.motorista_id)).length,
+    [linhas, comKmSemana]
+  );
 
   // Só descritivo — o que sai no cabeçalho do papel, para uma folha filtrada
   // não se fazer passar pela lista completa.
@@ -435,6 +459,7 @@ export function RelatorioPagamentoDialog({
       Nome: l.nome,
       IBAN: l.iban,
       'Recibo Verde': l.reciboVerde ? 'Sim' : 'Não',
+      'KM da semana': l.motorista_id && comKmSemana.has(l.motorista_id) ? 'Sim' : 'Não',
       Semana: weekLabel,
       Pago: l.motorista_id && pagos.has(l.motorista_id) ? 'Sim' : '',
       'Valor a Pagar (€)': l.liquido,
@@ -575,6 +600,23 @@ export function RelatorioPagamentoDialog({
             </div>
           </div>
 
+          {nSemKm > 0 && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-900 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200">
+              <Gauge className="mt-px h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {nSemKm} {nSemKm === 1 ? 'motorista não registou' : 'motoristas não registaram'}{' '}
+                  os quilómetros desta semana.
+                </p>
+                <p>
+                  Estão assinalados com <strong>sem KM</strong> na lista. Não impede o pagamento —
+                  há faltas legítimas (baixa, viatura na oficina) — mas sem a leitura não se sabe
+                  quanto a viatura andou.
+                </p>
+              </div>
+            </div>
+          )}
+
           {semFicha.length > 0 && (
             <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
               <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
@@ -658,6 +700,9 @@ export function RelatorioPagamentoDialog({
                 {linhasOrdenadas.map((l, idx) => {
                   const negativo = l.liquido < 0;
                   const semFichaCrm = !l.motorista_id;
+                  // Só se assinala quem TEM ficha: sem ela não há como saber
+                  // se entregou, e a marca seria ruído em cima do "sem ficha".
+                  const semKm = !!l.motorista_id && !comKmSemana.has(l.motorista_id);
                   const pago = !!l.motorista_id && pagos.has(l.motorista_id);
                   // O tom da linha vai na <tr>; a classe rp-linha-* repõe o mesmo
                   // tom, já opaco, na célula fixa do nome (ver index.css).
@@ -727,6 +772,15 @@ export function RelatorioPagamentoDialog({
                             >
                               <AlertTriangle className="h-3 w-3" />
                               sem ficha
+                            </span>
+                          )}
+                          {semKm && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-900 dark:bg-orange-900/50 dark:text-orange-200"
+                              title="Não registou os quilómetros da viatura nesta semana. Sem KM não se sabe quanto a viatura andou — confirme antes de pagar."
+                            >
+                              <Gauge className="h-3 w-3" />
+                              sem KM
                             </span>
                           )}
                         </div>

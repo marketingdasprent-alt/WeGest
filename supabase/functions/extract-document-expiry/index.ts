@@ -5,6 +5,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Os nomes dos modelos do Gemini caducam sem aviso. Esta função pedia
+// `gemini-2.0-flash`, que em 09/2026 passou a devolver 404 ("no longer
+// available to new users") — a leitura da validade deixou de funcionar e
+// falhava em silêncio, como se o documento é que fosse ilegível. Ninguém deu
+// por isso porque o ecrã só diz "não foi encontrada a data".
+//
+// Tenta-se uma lista por ordem e fica-se pelo primeiro que responde: o
+// substituto que a própria API indicou, e os `-latest` no fim, que não caducam.
+// Mesma lista da ler-km-odometro — se um dia isto crescer, vale a pena mudá-la
+// para _shared.
+const MODELOS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-flash-lite-latest',
+  'gemini-flash-latest',
+];
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -65,12 +82,7 @@ Deno.serve(async (req) => {
       },
     };
 
-    const geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+    const corpoPedido = JSON.stringify({
           contents: [{
             parts: [
               inlinePart,
@@ -87,20 +99,60 @@ REGRAS IMPORTANTES:
               },
             ],
           }],
-          generationConfig: { maxOutputTokens: 30, temperature: 0 },
-        }),
-      }
-    );
+          // Folga grande para uma data, de propósito: estes modelos pensam
+          // antes de responder e o raciocínio conta para o limite. Com 30
+          // tokens gastavam-no todo a pensar e devolviam vazio.
+          generationConfig: { maxOutputTokens: 512, temperature: 0 },
+    });
 
-    if (!geminiResp.ok) {
-      const errText = await geminiResp.text();
-      console.error('Gemini error:', geminiResp.status, errText);
-      return new Response(JSON.stringify({ date: null, error: `AI API error (${geminiResp.status}): ${errText.substring(0, 200)}` }), {
+    let aiResult: any = null;
+    let modeloUsado = '';
+    let ultimoErro = '';
+
+    for (const modelo of MODELOS) {
+      // Timeout por modelo: a edge function morre aos 150s e, sem isto, um
+      // modelo lento consumia o orçamento todo e os seguintes nem chegavam a
+      // ser tentados.
+      const controlador = new AbortController();
+      const alarme = setTimeout(() => controlador.abort(), 25_000);
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: corpoPedido,
+            signal: controlador.signal,
+          }
+        );
+
+        if (resp.ok) {
+          aiResult = await resp.json();
+          modeloUsado = modelo;
+          break;
+        }
+
+        const errText = await resp.text();
+        ultimoErro = `${resp.status} ${errText.substring(0, 200)}`;
+        console.error(`Gemini ${modelo}:`, ultimoErro);
+
+        // 404 = nome caducado, tenta o seguinte; outro erro é real e repetir
+        // dá a mesma resposta.
+        if (resp.status !== 404) break;
+      } catch (err) {
+        ultimoErro = `${modelo}: ${err instanceof Error ? err.message : String(err)}`;
+        console.error('Gemini timeout/rede:', ultimoErro);
+      } finally {
+        clearTimeout(alarme);
+      }
+    }
+
+    if (!aiResult) {
+      return new Response(JSON.stringify({ date: null, error: `AI API error (${ultimoErro})` }), {
         headers: { ...corsHeaders, 'content-type': 'application/json' },
       });
     }
-
-    const aiResult = await geminiResp.json();
+    console.log('extract-document-expiry, modelo:', modeloUsado);
     console.log('Gemini full response:', JSON.stringify(aiResult).substring(0, 500));
 
     // Verificar erro da API
