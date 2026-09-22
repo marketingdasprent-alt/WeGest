@@ -1,5 +1,13 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
-import { stripAcc, parseNumber, findField, findNumericField } from '../_shared/repsol/campos.ts';
+import {
+  stripAcc,
+  parseNumber,
+  findField,
+  findFieldAny,
+  findNumericField,
+} from '../_shared/repsol/campos.ts';
+import { temHora, transactionKey } from '../_shared/repsol/chave.ts';
+import { chaveMatricula, parseMatricula } from '../_shared/repsol/matricula.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -216,22 +224,6 @@ function normalizeName(name: string): string {
     .replace(/\s+/g, ' ');
 }
 
-function stableRowSignature(row: Record<string, string>): string {
-  return Object.keys(row)
-    .sort()
-    .map((key) => `${key}:${(row[key] || '').trim()}`)
-    .join('|');
-}
-
-function hashString(input: string): string {
-  let hash = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0');
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -317,7 +309,9 @@ Deno.serve(async (req) => {
     }
 
     for (const v of viaturas || []) {
-      if (v.matricula) matriculaMap.set(v.matricula.toUpperCase().replace(/\s/g, ''), v.id);
+      // chaveMatricula dos dois lados: a frota guarda "BI-93-IV" e o export
+      // escreve "BI93IV". Sem normalizar os hífens, nunca casavam.
+      if (v.matricula) matriculaMap.set(chaveMatricula(v.matricula), v.id);
     }
 
     let imported = 0,
@@ -370,8 +364,14 @@ Deno.serve(async (req) => {
         'quantidade',
         'volume',
       ]);
+      // 'nome prod' antes dos genéricos: o export português escreve
+      // `NOME PROD.` e `CÓD. PROD.`, e "prod." não casa com "produ" — o
+      // fuel_type vinha NULL em todas as linhas deste formato. Queremos o
+      // nome ("DSL"), não o código ("134"), e `CÓD. PROD.` vem primeiro no
+      // ficheiro, por isso o candidato tem de ser explícito.
       const product = findField(row, [
         'des_produ',
+        'nome prod',
         'cod_produ',
         'produ',
         'producto',
@@ -380,7 +380,9 @@ Deno.serve(async (req) => {
       ]);
       const station = findField(row, ['nom_estab', 'estab', 'estacion', 'posto', 'station']);
       const driverName = findField(row, ['conductor', 'motorista', 'driver', 'nombre']);
-      const matriculaRaw = findField(row, ['matricula', 'viatura', 'vehicle']);
+      // findFieldAny e não findField: a coluna `MATRÍCULA` vem sempre vazia
+      // neste export e a matrícula real está em `MATRÍCULA/CONDUTOR TICKET`.
+      const matriculaRaw = findFieldAny(row, ['matricula', 'viatura', 'vehicle']);
 
       const txDate = parseRepsolDate(dateStr, timeStr);
       if (!txDate) {
@@ -390,18 +392,24 @@ Deno.serve(async (req) => {
 
       const amount = parseNumber(amountStr);
       const qty = parseNumber(qtyStr);
-      const safeStation = (station || '').replace(/\W/g, '').toLowerCase();
-      const safeMatricula = (matriculaRaw || '').replace(/\W/g, '').toLowerCase();
-      const safeProduct = (product || '').replace(/\W/g, '').toLowerCase();
-      const safeDriver = (driverName || '').replace(/\W/g, '').toLowerCase();
-      const txId = `repsol-${hashString(stableRowSignature(row))}`;
 
       const sanitized = sanitizeCard(cardNumber);
+      const txId = transactionKey({
+        card: sanitized,
+        txDate,
+        amount,
+        qty,
+        station,
+        hasTime: temHora(timeStr, txDate),
+      });
       let motoristaId = sanitized ? cardMap.get(sanitized) : null;
       if (!motoristaId && sanitized.length >= 4) motoristaId = cardMap.get(sanitized.slice(-4));
       if (!motoristaId && driverName) motoristaId = nameMap.get(normalizeName(driverName));
 
-      const matriculaNorm = matriculaRaw ? matriculaRaw.toUpperCase().replace(/\s/g, '') : null;
+      // parseMatricula filtra o lixo digitado na bomba ("0", "1", "-", "P"):
+      // sem ele, um "1" casaria com qualquer matrícula que o contivesse e o
+      // consumo ia parar à viatura errada.
+      const matriculaNorm = parseMatricula(matriculaRaw);
       const viaturaId = matriculaNorm ? matriculaMap.get(matriculaNorm) : null;
 
       if (motoristaId) matched++;

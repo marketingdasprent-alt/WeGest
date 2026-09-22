@@ -126,6 +126,13 @@ export function useMotoristaResumoData(
             .lte('data_inicio', format(dateRange.to, 'yyyy-MM-dd'))
             .or(`data_fim.is.null,data_fim.gte.${format(dateRange.from, 'yyyy-MM-dd')}`)
             .order('data_inicio', { ascending: false })
+            // Numa troca no mesmo dia há empate no `data_inicio` (o elo antigo
+            // fecha e o novo abre na mesma data) e a matrícula do cabeçalho
+            // saía à sorte — o resumo do Josué mostrava uma associação de 0
+            // dias. Quem ainda está aberto ganha; `viatura_id` desempata o
+            // resto para a escolha não depender da ordem de leitura da BD.
+            .order('data_fim', { ascending: false, nullsFirst: true })
+            .order('viatura_id', { ascending: true })
             .limit(1)
             .maybeSingle(),
           supabase
@@ -149,7 +156,7 @@ export function useMotoristaResumoData(
           supabase
             .from('contratos_renting')
             .select(
-              'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
+              'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
             )
             .eq('contrato_condutores.motorista_id', resolvedMotoristaId)
             .is('deleted_at', null)

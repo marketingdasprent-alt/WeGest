@@ -12,6 +12,7 @@ import {
   useRentingTarifasMin,
   useRentingTarifaPrecosModelo,
   calcularFaturacaoRenting,
+  descricaoFaturarAoCliente,
   resolverValorTotalManualAoMudarTarifa,
 } from '@/hooks/useRentingGruposTarifas';
 import { diferencaDias } from '@/utils/reserva-formatters';
@@ -406,8 +407,11 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                     Faturar ao cliente
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {faturacao.modo} · {faturacao.descricao}
-                    {form.watch('valor_total_manual') != null && ' · substituído por valor manual'}
+                    {descricaoFaturarAoCliente(
+                      faturacao,
+                      form.watch('valor_total_manual'),
+                      isLongaDuracao
+                    )}
                   </p>
                 </div>
                 <p className="shrink-0 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">

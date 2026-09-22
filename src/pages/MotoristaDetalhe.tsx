@@ -33,6 +33,7 @@ import { MotoristaTabContratos } from '@/components/motoristas/tabs/MotoristaTab
 import { MotoristaTabDanos } from '@/components/motoristas/tabs/MotoristaTabDanos';
 import type { Motorista } from '@/pages/Motoristas';
 import { supabase } from '@/integrations/supabase/client';
+import { filtroDataFimViva } from '@/utils/associacaoViatura';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -180,7 +181,7 @@ export default function MotoristaDetalhe() {
       .select('data_inicio, viaturas(matricula, marca, modelo, ano, cor, categoria)')
       .eq('motorista_id', id)
       .eq('status', 'ativo')
-      .is('data_fim', null)
+      .or(filtroDataFimViva())
       .order('data_inicio', { ascending: false })
       .limit(1)
       .maybeSingle();
