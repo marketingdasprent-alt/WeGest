@@ -186,13 +186,21 @@ update public.cartoes_frota
 select public.process_domain_events();
 select public.execute_automation_runs();
 
+-- O motor não o suprimiu (sem link não há «aviso em aberto»); quem o junta ao
+-- primeiro é fn_notificacoes_agrupar — mesmo dia, tipo e destinatário dão UMA
+-- linha no sino com os dois factos em `itens`. Isto foi o que o CI mostrou na
+-- primeira corrida: esperava-se 2 linhas e vinha 1 com agrupadas = 2.
 select is(
-  (select count(*)::int from public.notificacoes
+  (select itens from public.notificacoes
     where org_id = '00000000-0000-0000-0000-000000180000'
       and tipo = 'cartao_frota_alterado'
-      and destinatario_id = '00000000-0000-0000-0000-000000180a01'),
-  2,
-  'devolver o cartão com o primeiro aviso ainda por resolver gera um segundo aviso'
+      and destinatario_id = '00000000-0000-0000-0000-000000180a01')
+    @> jsonb_build_array(
+         jsonb_build_object('mensagem', 'Cartão Repsol nº 1006 — titular: sem titular → Motorista Cartao; estado: disponivel → em_uso; data de entrega: — → 22/09/2026'),
+         jsonb_build_object('mensagem', 'Cartão Repsol nº 1006 — titular: Motorista Cartao → sem titular; estado: em_uso → disponivel; data de devolução: — → 22/09/2026')
+       ),
+  true,
+  'devolver o cartão com o primeiro aviso por resolver junta o segundo facto ao mesmo aviso no sino (não é suprimido)'
 );
 
 -- 10. Visível pela RLS — exactamente o que useNotificacoes.ts lê.
@@ -205,10 +213,10 @@ select set_config(
 );
 
 select is(
-  (select count(*)::int from public.notificacoes
+  (select agrupadas::int from public.notificacoes
     where resolvida = false and tipo = 'cartao_frota_alterado'),
   2,
-  'o destinatário vê as duas notificações através da RLS'
+  'o destinatário vê o aviso através da RLS, com os dois factos agrupados'
 );
 
 reset role;
