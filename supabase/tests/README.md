@@ -50,6 +50,7 @@ sempre que se cria uma tabela nova com `org_id`.
 | `automation_runs_complete_duracao.test.sql` | Motor de Automação: `automation_runs_complete()`/`_fail()` passam a gravar `duracao_ms` real (a partir de `started_at`) e o `detalhe` jsonb recebido (contagens de notificações/emails); uma falha com retry intermédio não grava `duracao_ms` (a execução ainda não terminou). |
 | `automacao_timeline_views.test.sql` | Motor de Automação: views `automacao_timeline_recente` (junta `domain_events`+`automation_runs`+`automation_rules`+último `automation_logs`, incluindo eventos ainda sem run) e `automacao_estatisticas_por_regra` (execuções/falhas/última execução/duração média agregados por regra) para o dashboard admin. |
 | `automacao_saude_ignorar_failed_job.test.sql` | Motor de Automação: view `automacao_saude_canais` (falhas/envios na última hora e tempo médio de resposta por canal) e `ignorar_failed_job()` — marca `failed_jobs` como resolvido sem reexecutar, bloqueia quem não é admin nem tem o recurso `automacoes`. |
+| `cartao_frota_alterado.test.sql` | Motor de Automação: um UPDATE em `cartoes_frota` (titular/estado/plafond/número/datas) publica `cartao_frota.alterado` com a lista das alterações e uma mensagem legível; notas não publicam; a organização nova nasce com as regras gémeas notificação+email; a cadeia chega ao sino e à fila de email do Administrador; uma segunda alteração ao mesmo cartão não é suprimida como «aviso em aberto». |
 
 ## Convenção
 
