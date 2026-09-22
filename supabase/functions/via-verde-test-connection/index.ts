@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.9';
 import { Client as FtpClient } from 'npm:basic-ftp@5.2.1';
 import SftpClient from 'npm:ssh2-sftp-client@12.0.1';
+import { resolverDnsDeno, validarDestinoFtp } from '../_shared/http/ftpDestination.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -299,6 +300,13 @@ serve(async (req) => {
 
     const body = await req.json();
     const payload = validatePayload(body);
+
+    // O host e a porta vêm do utilizador: sem isto o botão serve para varrer
+    // a rede interna da Edge Function a partir de qualquer org.
+    const destino = await validarDestinoFtp(payload.ftp_host, payload.ftp_porta, resolverDnsDeno);
+    if (!destino.permitido) {
+      return json({ success: false, error: destino.motivo }, 400);
+    }
 
     const [ftp, portal] = await Promise.allSettled([
       testFtpConnection(payload),

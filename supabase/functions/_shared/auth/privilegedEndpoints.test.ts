@@ -44,6 +44,8 @@ Deno.test("endpoints mistos autenticam utilizadores e validam admin da organiza�
       "uber-rescue-apify",
       "robot-execute",
       "robot-schedule",
+      // Auditoria 2026-09-22: aceitava qualquer integracao_id com service role.
+      "uber-sync",
     ]
   ) {
     const source = await readFunction(endpoint);
@@ -51,6 +53,27 @@ Deno.test("endpoints mistos autenticam utilizadores e validam admin da organiza�
     assertStringIncludes(source, "isInternalRequest(req,");
     assertStringIncludes(source, "requireOrgAdmin(");
   }
+});
+
+Deno.test("testes de credenciais sem organização exigem sessão de admin", async () => {
+  // Auditoria 2026-09-22: eram relays anónimos para os providers.
+  for (const endpoint of ["bp-test-connection", "brevo-test-connection"]) {
+    const source = await readFunction(endpoint);
+    assertStringIncludes(source, "authenticateUser(req,");
+    assertStringIncludes(source, "requireAnyOrgAdmin(");
+  }
+});
+
+Deno.test("o teste Via Verde valida o destino FTP antes de ligar", async () => {
+  // Auditoria 2026-09-22: host e porta do utilizador iam directos ao cliente FTP.
+  const source = await readFunction("via-verde-test-connection");
+  assertStringIncludes(source, "validarDestinoFtp(payload.ftp_host, payload.ftp_porta");
+});
+
+Deno.test("send-webhook não regista URLs nem corpos de resposta", async () => {
+  const source = await readFunction("send-webhook");
+  assert(!source.includes("${webhook.url}"), "a URL completa não pode ir para os logs");
+  assert(!source.includes("responseText.substring"), "o corpo da resposta não pode ir para os logs");
 });
 
 Deno.test("endpoints mistos de utilizador exigem membro da organização", async () => {

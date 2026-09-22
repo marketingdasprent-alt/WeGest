@@ -129,8 +129,10 @@ verify_jwt = true
 [functions.sync-driver-ids]
 verify_jwt = true
 
+# Teste de credenciais antes de gravar a integração. Sessão obrigatória e
+# admin de alguma organização, validados dentro da função (auditoria 2026-09-22).
 [functions.brevo-test-connection]
-verify_jwt = false
+verify_jwt = true
 
 [functions.via-verde-test-connection]
 verify_jwt = false
@@ -138,6 +140,8 @@ verify_jwt = false
 [functions.uber-test-connection]
 verify_jwt = false
 
+# Botão da UI (sessão → admin da org da integração) ou chamada interna
+# (service role). A autorização vive dentro da função.
 [functions.uber-sync]
 verify_jwt = false
 
@@ -153,8 +157,10 @@ verify_jwt = false
 [functions.uber-import-reports]
 verify_jwt = false
 
+# Teste de credenciais antes de gravar a integração. Sessão obrigatória e
+# admin de alguma organização, validados dentro da função (auditoria 2026-09-22).
 [functions.bp-test-connection]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bp-sync-cards]
 verify_jwt = false

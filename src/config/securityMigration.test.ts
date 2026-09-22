@@ -94,3 +94,47 @@ describe('segredos das integrações robot', () => {
     expect(sql).toContain("notify pgrst, 'reload schema'");
   });
 });
+
+describe('fecho das exposições da auditoria de 2026-09-22', () => {
+  const sql = readFileSync(
+    resolve(
+      process.cwd(),
+      'supabase/migrations/20260922150000_fechar_exposicoes_auditoria_seguranca.sql'
+    ),
+    'utf8'
+  ).toLowerCase();
+
+  it('reserva os segredos Uber à service role', () => {
+    expect(sql).toMatch(
+      /revoke all on function public\.get_uber_platform_config\(uuid\)\s+from public, anon, authenticated/
+    );
+    expect(sql).toContain(
+      'grant execute on function public.get_uber_platform_config(uuid) to service_role'
+    );
+    expect(sql).not.toMatch(/grant [^\n]*get_uber_platform_config[^\n]*to authenticated/);
+  });
+
+  it('devolve o cálculo de saldos à RLS e liga security_invoker na view financeira', () => {
+    expect(sql).toContain(
+      'alter function public.motoristas_saldo_pendente_lote(uuid[], date, date) security invoker'
+    );
+    expect(sql).toContain('alter view public.v_dinheiro_sem_dono set (security_invoker = true)');
+    expect(sql).toMatch(
+      /revoke all on table public\.v_dinheiro_sem_dono\s+from public, anon, authenticated/
+    );
+  });
+
+  it('limita get_gestores e get_viaturas_motorista_atual à organização activa', () => {
+    const gestores = sql.slice(
+      sql.indexOf('function public.get_gestores()'),
+      sql.indexOf('comment on function public.get_gestores()')
+    );
+    expect(gestores).toContain('uo.org_id = public.get_current_org_id()');
+    expect(gestores).toContain('membro.user_id = auth.uid()');
+
+    const viaturas = sql.slice(sql.indexOf('function public.get_viaturas_motorista_atual('));
+    expect(viaturas).toContain('p_org_id is distinct from public.get_current_org_id()');
+    expect(viaturas).toContain("errcode = 'insufficient_privilege'");
+    expect(sql).toContain("notify pgrst, 'reload schema'");
+  });
+});
