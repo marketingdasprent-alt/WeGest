@@ -35,13 +35,18 @@
 -- Ficou em função separada de propósito: o seed_automacao_defaults() tem quase
 -- 14 000 caracteres e reescrevê-lo por inteiro para acrescentar uma regra é um
 -- risco de transcrição maior do que o problema que resolve.
+--
+-- ── 21.ª regra (2026-09-22) ─────────────────────────────────────────────────
+-- 'cartao_frota.alterado' vem da seed_alerta_cartao_frota_alterado() (migração
+-- 20260922130000), pelo mesmo padrão. Semeia duas linhas gémeas; só a
+-- 'notificacao' entra nesta contagem, a 'email' fica fora pelo filtro abaixo.
 -- ============================================================
 
 begin;
 select plan(6);
 
 -- Actualizar ao acrescentar/remover uma regra semeada na criação da organização.
-create temp table _esperado as select 20::int as regras_esperadas;
+create temp table _esperado as select 21::int as regras_esperadas;
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org Seed A', 'seed-automacao-a');
