@@ -169,6 +169,26 @@ export function calcularFaturacaoRenting(
   };
 }
 
+/**
+ * Legenda da caixa "Faturar ao cliente".
+ *
+ * O número mostrado é `valor_total_manual ?? faturacao.valor`, mas a descrição
+ * vinha sempre do cálculo automático: um contrato com valor acordado aparecia
+ * com 1400,00 € por cima de "Preço semanal do modelo · renova a cada semana",
+ * que descreve os 300 € da tabela. E `calcularFaturacaoRenting` testa o regime
+ * TVDE antes da longa duração, por isso um contrato de renovação mensal nunca
+ * chegava ao modo 'Mensal'.
+ */
+export function descricaoFaturarAoCliente(
+  faturacao: Pick<FaturacaoRenting, 'modo' | 'descricao'>,
+  valorTotalManual: number | null | undefined,
+  isLongaDuracao: boolean
+): string {
+  if (valorTotalManual == null) return `${faturacao.modo} · ${faturacao.descricao}`;
+  const modo = isLongaDuracao ? 'Mensal' : faturacao.modo;
+  return `${modo} · Valor acordado no contrato`;
+}
+
 // `null` preserva o valor manual quando a nova combinação não tem preço.
 export function resolverValorTotalManualAoMudarTarifa(
   regime: string,

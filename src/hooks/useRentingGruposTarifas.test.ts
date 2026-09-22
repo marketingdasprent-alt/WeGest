@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calcularBaseAluguerRenting,
   calcularFaturacaoRenting,
+  descricaoFaturarAoCliente,
   resolverValorTotalManualAoMudarTarifa,
 } from './useRentingGruposTarifas';
 
@@ -337,5 +338,44 @@ describe('resolverValorTotalManualAoMudarTarifa', () => {
       null
     );
     expect(novo).toBeNull();
+  });
+});
+
+describe('descricaoFaturarAoCliente', () => {
+  const semanalTvde = {
+    valor: 300,
+    modo: 'Semanal' as const,
+    descricao: 'Preço semanal do modelo · renova a cada semana',
+    semanalCondutor: 300,
+  };
+
+  it('sem valor manual, descreve o cálculo automático', () => {
+    expect(descricaoFaturarAoCliente(semanalTvde, null, false)).toBe(
+      'Semanal · Preço semanal do modelo · renova a cada semana'
+    );
+  });
+
+  it('com valor manual, não finge que o número saiu da tabela', () => {
+    // O cartão mostrava "1400,00 €" por cima de "Preço semanal do modelo ·
+    // renova a cada semana" — a descrição do cálculo automático (300 €) a
+    // legendar um número que não é esse.
+    expect(descricaoFaturarAoCliente(semanalTvde, 1400, false)).not.toContain(
+      'Preço semanal do modelo'
+    );
+  });
+
+  it('num contrato de longa duração o valor manual é do mês, e diz-se', () => {
+    // Caso real do contrato #736: 1400 € por período de 30 dias, com o cartão
+    // a chamar-lhe "Semanal". calcularFaturacaoRenting testa o regime TVDE
+    // antes da longa duração, por isso o modo nunca chegava a 'Mensal'.
+    expect(descricaoFaturarAoCliente(semanalTvde, 1400, true)).toBe(
+      'Mensal · Valor acordado no contrato'
+    );
+  });
+
+  it('sem longa duração, o valor manual segue a cadência do cálculo', () => {
+    expect(descricaoFaturarAoCliente(semanalTvde, 1400, false)).toBe(
+      'Semanal · Valor acordado no contrato'
+    );
   });
 });

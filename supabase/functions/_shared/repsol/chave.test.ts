@@ -1,9 +1,14 @@
 import { assertEquals, assertNotEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
 import { temHora, transactionKey } from './chave.ts';
 
-// A abastecida real que deu o alarme: cartão Repsol 1006, 04/09/2026 às 13:30,
-// 46,97 litros, 100 €. Veio duas vezes — uma no export de 45 colunas e outra no
-// reduzido de 8 — e ficou duplicada na base.
+// Dois conjuntos, de dois casos reais distintos, sobre a mesma `chave.ts`:
+// o duplicado de Beja (04/09, exports de 45 e de 8 colunas) e o do Parchal
+// (06/09, linha idêntica exportada duas vezes). Vieram de ramos diferentes e
+// cobrem coisas diferentes — ficam os dois.
+
+// ── Caso Beja: a mesma abastecida em dois formatos de export ───────────────
+// Cartão Repsol 1006, 04/09/2026 às 13:30, 46,97 litros, 100 €. Veio uma vez
+// no export de 45 colunas e outra no reduzido de 8, e ficou duplicada na base.
 const COMPLETO = {
   card: '9724998589691006',
   txDate: '2026-09-04T13:30:00Z',
@@ -87,4 +92,55 @@ Deno.test('temHora: a hora pode vir na coluna ou colada à data', () => {
   assertEquals(temHora('', '2026-06-23T00:00:00Z'), false);
   // A coluna existe e diz meia-noite — é hora declarada, conta como tal.
   assertEquals(temHora('00:00', '2026-06-23T00:00:00Z'), true);
+});
+
+// ── Caso Parchal: a chave fixada por extenso ───────────────────────────────
+// A mesma compra exportada duas vezes, linha inteira idêntica, chaves
+// diferentes. Aqui as chaves vão escritas por extenso de propósito: mudar o
+// formato muda todas as chaves em produção e volta a duplicar tudo.
+const COMPRA = {
+  card: '9724998589692509',
+  txDate: '2026-09-06T15:02:00Z',
+  amount: 40,
+  qty: 19.06,
+  station: 'E.S. PARCHAL ZONA INDUSTR',
+  hasTime: true,
+};
+
+Deno.test('cartão, instante, valor e litros identificam a compra', () => {
+  assertEquals(transactionKey(COMPRA), 'repsol-9724998589692509-20260906150200-40.00-19.06');
+});
+
+Deno.test('o posto truncado pelo export curto não muda a chave quando há hora', () => {
+  assertEquals(transactionKey(COMPRA), transactionKey({ ...COMPRA, station: 'E.S. PARCHAL Z' }));
+});
+
+// ATENÇÃO: o corte a 15 NÃO absorve a truncatura do export curto, ao
+// contrário do que o comentário de chave.ts promete. O slice(0, 15) corre
+// DEPOIS de tirar espaços e pontos, por isso conta 15 caracteres
+// alfanuméricos, não 15 do texto original: "E.S. LEIRIA SUL" (o que o export
+// curto escreve) dá `esleiriasul`, e "E.S. LEIRIA SUL QT TABORD" (o longo) dá
+// `esleiriasulqtta`. Chaves diferentes → a mesma compra volta a duplicar.
+// Só afecta linhas SEM hora (exports até 2026-07-06); as com hora não usam o
+// posto. Fica fixado aqui como está em produção — mudá-lo muda chaves.
+Deno.test(
+  'sem hora, o corte a 15 conta caracteres já normalizados (não absorve a truncatura)',
+  () => {
+    const semHora = { ...COMPRA, txDate: '2026-09-06T00:00:00Z', hasTime: false };
+    assertEquals(
+      transactionKey({ ...semHora, station: 'E.S. LEIRIA SUL' }),
+      'repsol-9724998589692509-20260906000000-40.00-19.06-esleiriasul'
+    );
+    assertEquals(
+      transactionKey({ ...semHora, station: 'E.S. LEIRIA SUL QT TABORD' }),
+      'repsol-9724998589692509-20260906000000-40.00-19.06-esleiriasulqtta'
+    );
+  }
+);
+
+Deno.test('valor e litros ausentes não rebentam a chave', () => {
+  assertEquals(
+    transactionKey({ ...COMPRA, amount: null, qty: null }),
+    'repsol-9724998589692509-20260906150200--'
+  );
 });

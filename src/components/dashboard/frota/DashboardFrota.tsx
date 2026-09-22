@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { associacaoViaturaAtiva } from '@/utils/associacaoViatura';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRange as DayPickerRange } from 'react-day-picker';
@@ -208,7 +209,9 @@ export function DashboardFrota() {
 
       // ── Extintores ────────────────────────────────────────────────────
       const extintoresComMotorista = (extintoresData || []).map((v) => {
-        const motoristaAtivo = (v.motorista_viaturas as any[])?.find((mv) => mv.status === 'ativo');
+        const motoristaAtivo = (v.motorista_viaturas as any[])?.find((mv) =>
+          associacaoViaturaAtiva(mv)
+        );
         return {
           id: v.id,
           extintor_validade: v.extintor_validade,

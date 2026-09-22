@@ -274,6 +274,8 @@
     "src/utils/fetchAnexoDanos.ts",
     "src/utils/notificacoes.ts",
     "src/utils/quadroLeaderboard.test.ts",
+    "src/utils/associacaoViatura.test.ts",
+    "src/utils/associacaoViatura.ts",
     "src/utils/quadroLeaderboard.ts",
     "src/utils/quadroLive.types.ts",
     "src/utils/viaVerdePeriod.ts",

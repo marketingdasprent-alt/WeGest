@@ -54,6 +54,7 @@ export async function fetchAlertasFrota(
           extintor_validade,
           motorista_viaturas(
             status,
+            data_fim,
             motoristas_ativos(nome)
           )
         `

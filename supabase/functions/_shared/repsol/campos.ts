@@ -1,5 +1,14 @@
-// Os CSV Repsol usam vários conjuntos de cabeçalhos; procure candidatos, não
-// um nome fixo.
+// supabase/functions/_shared/repsol/campos.ts
+//
+// Leitura de campos dos CSV da Repsol. Vivia dentro de repsol-import-csv,
+// onde não dava para testar — e é onde estava o defeito que deu 16.229,98 EUR
+// de gasóleo por 0,00 EUR.
+//
+// Nota: os exports da Repsol não têm um formato só. Em produção coexistem
+// pelo menos quatro conjuntos de cabeçalhos (espanhol `NUM_TARJET/IMPORTE`,
+// dois portugueses `NÚM. CARTÃO/VALOR` e `ID. OPERAÇÃO/VALOR FINAL`, e um
+// normalizado em minúsculas `cartao_dispositivo/montante`). É por isso que a
+// leitura é por lista de candidatos e não por nome fixo.
 
 export const stripAcc = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
@@ -40,8 +49,46 @@ export function findField(row: Record<string, string>, candidates: string[]): st
   return '';
 }
 
-// Para valores, prefira o primeiro candidato não-zero mas preserve zero quando
-// todos o forem: exports podem trazer um total faturado a zero antes da emissão.
+/**
+ * Como findField, mas olha para TODAS as colunas que combinam com cada
+ * candidato, não só para a primeira.
+ *
+ * Porquê: o export português traz `MATRÍCULA` (sempre vazia) e
+ * `MATRÍCULA/CONDUTOR TICKET` (o que o condutor escreveu na bomba). As duas
+ * combinam com "matricula"; o findField encontrava a vazia, dava-a por não
+ * preenchida e passava ao candidato seguinte — sem nunca ver a segunda coluna.
+ * Resultado: `viatura_id` NULL em 100% das linhas de Setembro/2026.
+ *
+ * Não substitui o findField: para a data, o desempate certo é a ordem dos
+ * candidatos (`data operacao` antes do genérico `data`, que apanharia
+ * `DATA FATURA`), e varrer todas as colunas ali só aumentaria o risco.
+ */
+export function findFieldAny(row: Record<string, string>, candidates: string[]): string {
+  for (const c of candidates) {
+    const cNorm = stripAcc(c);
+    for (const k of Object.keys(row)) {
+      if (stripAcc(k).includes(cNorm) && row[k]) return row[k];
+    }
+  }
+  return '';
+}
+
+/**
+ * Como findField, mas para colunas de DINHEIRO ou QUANTIDADE: entre os
+ * candidatos presentes, prefere o primeiro cujo valor NÃO seja zero.
+ *
+ * Porquê: os exports trazem `IMP_TOTAL` (o valor já facturado) e `IMPORTE` (o
+ * valor da operação). Enquanto a factura não é emitida, `IMP_TOTAL` vem a
+ * `"0.00"` — que em JavaScript é uma string *truthy*, portanto o findField
+ * aceitava-a e dava a operação por gratuita. Linha real: IMPORTE 106,72,
+ * IMP_TOTAL 0.00, 58,19 litros, gravada a 0 EUR.
+ *
+ * Em produção a 2026-08-19: **336 linhas, 16.229,98 EUR e 9.674,58 litros**
+ * de gasóleo gravados a zero, entre 20/06 e 06/07/2026.
+ *
+ * Se TODOS os candidatos forem zero devolve o primeiro — uma operação de
+ * 0 EUR existe (estorno, teste de bomba) e não deve virar nulo.
+ */
 export function findNumericField(row: Record<string, string>, candidates: string[]): string {
   let primeiroPresente = '';
   for (const c of candidates) {

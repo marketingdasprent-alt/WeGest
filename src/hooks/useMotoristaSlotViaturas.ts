@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { filtroDataFimViva } from '@/utils/associacaoViatura';
 import type { ViaturaBasic } from './useViaturas';
 
 /**
@@ -23,7 +24,8 @@ export function useMotoristaSlotViaturas(motoristaId: string | null | undefined)
            )`
         )
         .eq('motorista_id', motoristaId)
-        .is('data_fim', null);
+        .eq('status', 'ativo')
+        .or(filtroDataFimViva());
 
       if (error) throw error;
 
