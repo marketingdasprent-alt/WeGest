@@ -3,7 +3,11 @@ import { format, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import type { MotoristaResumoProps, SlotPeriodo } from '../MotoristaResumoDialog';
 import { buildSlotPeriodos } from './slotPeriodos';
-import { periodosDeContratos, type ContratoParaPeriodo } from './periodosDoContrato';
+import {
+  COLUNAS_CONTRATO_PARA_PERIODO,
+  periodosDeContratos,
+  type ContratoParaPeriodo,
+} from './periodosDoContrato';
 import { buildTvdeModeloPrecoMap, buildPrecoPorTarifaModelo } from './tvdeModeloPreco';
 import { formatCartoesFrota, type CartaoFrotaResumo } from './cartoesFrota';
 import { agregarMovimentos, DEBITOS_QUE_O_CONTRATO_COBRE } from '@shared/movimentosMotorista';
@@ -155,9 +159,7 @@ export function useMotoristaResumoData(
           // contrato à frente dos olhos. Ver periodosDoContrato.ts.
           supabase
             .from('contratos_renting')
-            .select(
-              'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
-            )
+            .select(COLUNAS_CONTRATO_PARA_PERIODO)
             .eq('contrato_condutores.motorista_id', resolvedMotoristaId)
             .is('deleted_at', null)
             // `data_inicio` é timestamptz: com `.lte(data)` perde-se um

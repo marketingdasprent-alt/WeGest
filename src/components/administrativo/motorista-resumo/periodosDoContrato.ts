@@ -1,5 +1,14 @@
 import type { ViaturaPeriodoInput } from './slotPeriodos';
 
+/**
+ * Colunas de `contratos_renting` que `periodosDeContratos` precisa. Os dois
+ * ecrãs (Contas/Resumo e o dialog do motorista) têm de pedir exactamente isto:
+ * faltou `regime` num deles e um contrato TVDE de 1400 €/mês foi rateado como
+ * rent-a-car (316,13 € em vez dos 300 € da tarifa).
+ */
+export const COLUNAS_CONTRATO_PARA_PERIODO =
+  'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)';
+
 export interface ContratoParaPeriodo {
   viatura_id: string | null;
 

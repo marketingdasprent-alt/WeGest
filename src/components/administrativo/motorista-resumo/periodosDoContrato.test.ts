@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { periodosDeContratos, type ContratoParaPeriodo } from './periodosDoContrato';
+import {
+  COLUNAS_CONTRATO_PARA_PERIODO,
+  periodosDeContratos,
+  type ContratoParaPeriodo,
+} from './periodosDoContrato';
 import { buildSlotPeriodos } from './slotPeriodos';
 
 const contratoBase: ContratoParaPeriodo = {
@@ -140,5 +144,27 @@ describe('periodosDeContratos', () => {
     expect(slots[0].dias).toBe(6);
     expect(slots[0].custo).toBeCloseTo((275 / 7) * 6, 2);
     expect(slots[0].matricula).toBe('BT-21-UN');
+  });
+});
+
+describe('COLUNAS_CONTRATO_PARA_PERIODO', () => {
+  it('pede todas as colunas que periodosDeContratos lê do contrato', () => {
+    // Caso real (Ricardo, BN-30-SE, semana 14–20/09): o select de Contas/Resumo
+    // não trazia `regime`, o contrato TVDE de 1400 €/mês caiu no ramo
+    // rent-a-car e saiu 1400 / 31 × 7 = 316,13 € em vez dos 300 € da tarifa.
+    const colunas = COLUNAS_CONTRATO_PARA_PERIODO.split(/,\s*(?![^()]*\))/);
+    for (const coluna of [
+      'viatura_id',
+      'data_inicio',
+      'data_fim',
+      'valor_total_manual',
+      'tarifa_id',
+      'regime',
+      'estado_operacional',
+      'substituido_em',
+      'viaturas(matricula, grupo_id, modelo_id)',
+    ]) {
+      expect(colunas).toContain(coluna);
+    }
   });
 });
