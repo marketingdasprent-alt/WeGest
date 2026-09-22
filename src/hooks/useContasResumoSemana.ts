@@ -6,7 +6,10 @@ import {
   buildSlotPeriodos,
   type ViaturaPeriodoInput,
 } from '@/components/administrativo/motorista-resumo/slotPeriodos';
-import { periodosDeContratos } from '@/components/administrativo/motorista-resumo/periodosDoContrato';
+import {
+  COLUNAS_CONTRATO_PARA_PERIODO,
+  periodosDeContratos,
+} from '@/components/administrativo/motorista-resumo/periodosDoContrato';
 import {
   buildTvdeModeloPrecoMap,
   buildPrecoPorTarifaModelo,
@@ -159,9 +162,7 @@ export function useContasResumoSemana(
 
       const viaturasQuery = supabase
         .from('contratos_renting')
-        .select(
-          'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
-        )
+        .select(COLUNAS_CONTRATO_PARA_PERIODO)
         .is('deleted_at', null)
         .lt('data_inicio', format(addDays(weekEnd, 1), 'yyyy-MM-dd'))
         .or(`data_fim.is.null,data_fim.gte.${format(weekStart, 'yyyy-MM-dd')}`);
