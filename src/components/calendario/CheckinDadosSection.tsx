@@ -1,42 +1,22 @@
-import React, { useRef, useState } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { NivelBateriaInput } from '@/components/viaturas/NivelBateriaInput';
-import {
-  AlertTriangle,
-  Battery,
-  Camera,
-  Film,
-  Gauge,
-  Plus,
-  Printer,
-  Trash2,
-  Upload,
-  X,
-  Zap,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { validarDanos, type NovoDano } from '@/components/renting/danos/DanosEditor';
+import { RegistoViaturaSection } from '@/components/entrega/RegistoViaturaSection';
+import { Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
-import {
-  precisaCombustivel,
-  precisaEletrico,
-  precisaGpl,
-  GPL_OPTS,
-  COMBUSTIVEL_NIVEL_OPTS as COMBUSTIVEL_OPTS,
-} from '@/utils/combustivel';
+import { precisaCombustivel, precisaEletrico, precisaGpl } from '@/utils/combustivel';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export interface NovoDanoState {
-  id: string;
-  descricao: string;
-  localizacao: string;
-  files: { id: string; file: File; preview: string | null }[];
-}
+/** O modelo de dano é partilhado com o fecho de contrato — ver DanosEditor.
+ *  Era um tipo próprio, sem campo de valor: TODOS os danos registados pelo
+ *  calendário ficavam gravados a 0 € e nunca chegavam a ser cobrados a
+ *  ninguém (536 danos em produção, 0,00 € no total). A localização também era
+ *  texto livre, fora da lista que os outros ecrãs sabem traduzir. */
+export type NovoDanoState = NovoDano;
 
 export interface CheckinDadosState {
   km: string;
@@ -86,10 +66,7 @@ export function validateCheckinDados(
   if (precisaEletrico(tipoCombustivel) && !dados.nivelEletrico)
     return 'Nível de bateria elétrica é obrigatório';
   if (precisaGpl(tipoCombustivel) && !dados.nivelGpl) return 'Nível de GPL é obrigatório';
-  for (const d of dados.novosDanos) {
-    if (!d.descricao.trim()) return 'Todos os danos adicionados devem ter descrição';
-  }
-  return null;
+  return validarDanos(dados.novosDanos);
 }
 
 interface SaveParams {
@@ -140,7 +117,13 @@ export async function saveCheckinDados({
         viatura_id: viaturaId,
         descricao: dano.descricao.trim(),
         localizacao: dano.localizacao.trim() || null,
-        estado: 'pendente',
+        // null = por avaliar; não é o mesmo que "não custa nada".
+        valor: dano.valor.trim() ? Number(dano.valor) : null,
+        // 'existente' e não 'pendente': a lista de estados que a ficha da
+        // viatura conhece é existente/em_reparacao/reparado/irreparavel.
+        // 'pendente' não está lá — eram 144 danos a aparecer sem estado
+        // reconhecido nesse ecrã, todos vindos daqui.
+        estado: 'existente',
         registado_por: userId,
         contrato_id: contratoId,
         contrato_id_origem: contratoId,
@@ -431,6 +414,9 @@ interface CheckinDadosSectionProps {
   matricula?: string;
   dataEvento?: string;
   contratoNumero?: number | null;
+  /** Contrato em curso — os danos que ele já registou não contam como "já
+   *  existentes". Opcional: nem todos os ecrãs o têm à mão. */
+  contratoId?: string | null;
   accentClass?: string;
 }
 
@@ -445,17 +431,9 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
   matricula = '',
   dataEvento = '',
   contratoNumero,
+  contratoId,
   accentClass = 'border-gray-200 dark:border-gray-700',
 }) => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const [activeDanoId, setActiveDanoId] = useState<string | null>(null);
-
-  const tc = tipoCombustivel.toLowerCase();
-  const mostraCombustivel = precisaCombustivel(tc);
-  const mostraEletrico = precisaEletrico(tc);
-  const mostraGpl = precisaGpl(tc);
-
   const { data: danosExistentes = [] } = useQuery({
     queryKey: ['viatura-danos-ativos', viaturaId],
     queryFn: async () => {
@@ -479,45 +457,6 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
 
   const set = (partial: Partial<CheckinDadosState>) => onChange({ ...dados, ...partial });
 
-  const addDano = () => {
-    const novo: NovoDanoState = {
-      id: Math.random().toString(36).slice(2),
-      descricao: '',
-      localizacao: '',
-      files: [],
-    };
-    set({ novosDanos: [...dados.novosDanos, novo] });
-    setActiveDanoId(novo.id);
-  };
-
-  const updateDano = (id: string, partial: Partial<NovoDanoState>) => {
-    set({ novosDanos: dados.novosDanos.map((d) => (d.id === id ? { ...d, ...partial } : d)) });
-  };
-
-  const removeDano = (id: string) => {
-    set({ novosDanos: dados.novosDanos.filter((d) => d.id !== id) });
-  };
-
-  const addFilesToDano = (id: string, newFiles: FileList | null) => {
-    if (!newFiles) return;
-    const mapped = Array.from(newFiles).map((f) => ({
-      id: Math.random().toString(36).slice(2),
-      file: f,
-      preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
-    }));
-    updateDano(id, {
-      files: [...(dados.novosDanos.find((d) => d.id === id)?.files || []), ...mapped],
-    });
-  };
-
-  const removeFileFromDano = (danoId: string, fileId: string) => {
-    const dano = dados.novosDanos.find((d) => d.id === danoId);
-    if (!dano) return;
-    const f = dano.files.find((x) => x.id === fileId);
-    if (f?.preview) URL.revokeObjectURL(f.preview);
-    updateDano(danoId, { files: dano.files.filter((x) => x.id !== fileId) });
-  };
-
   const handlePrintFolha = () => {
     const error = validateCheckinDados(dados, kmMinimo, tipoCombustivel);
     if (error) {
@@ -540,301 +479,40 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
     });
   };
 
-  const kmNum = Number(dados.km);
-  const kmInvalid = dados.km !== '' && !isNaN(kmNum) && kmNum < kmMinimo;
-
-  // Reusable button-group selector
-  const LevelSelector = ({
-    label,
-    icon,
-    opts,
-    value,
-    onSelect,
-    required,
-  }: {
-    label: string;
-    icon: React.ReactNode;
-    opts: readonly string[];
-    value: string;
-    onSelect: (v: string) => void;
-    required?: boolean;
-  }) => (
-    <div className="space-y-1.5">
-      <Label className="text-xs flex items-center gap-1">
-        {icon}
-        {label} {required && <span className="text-destructive">*</span>}
-      </Label>
-      <div className="flex rounded-md border border-input overflow-hidden h-9">
-        {opts.map((opt) => (
-          <button
-            key={opt}
-            type="button"
-            onClick={() => onSelect(opt)}
-            title={opt}
-            className={cn(
-              'flex-1 text-[10px] font-medium transition-colors border-r border-input last:border-r-0',
-              value === opt
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-background hover:bg-muted text-foreground'
-            )}
-          >
-            {/* "Vazio"/"Reserva" por extenso não cabem na célula — ícone + title. */}
-            {opt === 'Vazio' || opt === 'Reserva' ? (
-              <Zap className="h-3 w-3 mx-auto opacity-50" />
-            ) : (
-              opt
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
-    <div className={cn('rounded-lg border p-4 space-y-4', accentClass)}>
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold flex items-center gap-2">
-          <Gauge className="h-4 w-4 text-muted-foreground" />
-          Condição da Viatura
-          {tipo === 'checkout' ? ' — Checkout' : ' — Checkin'}
-        </p>
+    // Painel, cores e campos vêm todos do RegistoViaturaSection — o MESMO
+    // componente do fecho de contrato e do /realizar. O invólucro (cartão
+    // cinzento próprio, cabeçalho) vivia aqui, e era por isso que este ecrã
+    // parecia outro apesar de já partilhar os campos.
+    <RegistoViaturaSection
+      titulo={`Condição da Viatura${tipo === 'checkout' ? ' — Checkout' : ' — Checkin'}`}
+      accaoHeader={
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="gap-1.5 text-xs"
+          className="ml-auto gap-1.5 text-xs"
           onClick={handlePrintFolha}
         >
           <Printer className="h-3.5 w-3.5" />
           Folha de Danos
         </Button>
-      </div>
-
-      {/* KM */}
-      <div className="space-y-1.5">
-        <Label className="text-xs flex items-center gap-1">
-          KM Atual <span className="text-destructive">*</span>
-          {kmMinimo > 0 && (
-            <span className="text-muted-foreground font-normal">
-              (mín. {kmMinimo.toLocaleString()})
-            </span>
-          )}
-        </Label>
-        <Input
-          type="number"
-          min={kmMinimo}
-          value={dados.km}
-          onChange={(e) => set({ km: e.target.value })}
-          placeholder={kmMinimo > 0 ? String(kmMinimo) : '0'}
-          className={cn(
-            'h-9 text-sm',
-            kmInvalid && 'border-destructive focus-visible:ring-destructive'
-          )}
-        />
-        {kmInvalid && (
-          <p className="text-xs text-destructive flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> KM inferior ao registo da viatura (
-            {kmMinimo.toLocaleString()})
-          </p>
-        )}
-      </div>
-
-      {/* Energy levels based on fuel type */}
-      <div
-        className={cn(
-          'grid gap-3',
-          (mostraCombustivel && mostraEletrico) || (mostraCombustivel && mostraGpl)
-            ? 'grid-cols-1'
-            : 'grid-cols-1'
-        )}
-      >
-        {mostraCombustivel && (
-          <LevelSelector
-            label="Combustível"
-            icon={<Gauge className="h-3 w-3" />}
-            opts={COMBUSTIVEL_OPTS}
-            value={dados.combustivel}
-            onSelect={(v) => set({ combustivel: v })}
-            required
-          />
-        )}
-        {mostraGpl && (
-          <LevelSelector
-            label="Nível GPL"
-            icon={<Zap className="h-3 w-3 text-orange-500" />}
-            opts={GPL_OPTS}
-            value={dados.nivelGpl}
-            onSelect={(v) => set({ nivelGpl: v })}
-            required
-          />
-        )}
-        {mostraEletrico && (
-          <div className="space-y-1.5">
-            <Label className="text-xs flex items-center gap-1">
-              <Battery className="h-3 w-3 text-green-500" />
-              Bateria Elétrica <span className="text-destructive">*</span>
-            </Label>
-            <NivelBateriaInput
-              valor={dados.nivelEletrico}
-              onChange={(v) => set({ nivelEletrico: v })}
-              compacto
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Danos existentes */}
-      {danosExistentes.length > 0 && (
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-amber-500" />
-            Danos existentes na viatura ({danosExistentes.length})
-          </Label>
-          <div className="rounded-md border border-amber-200 dark:border-amber-800 divide-y divide-amber-100 dark:divide-amber-900">
-            {danosExistentes.map((d) => (
-              <div key={d.id} className="px-3 py-2 text-xs bg-amber-50/50 dark:bg-amber-950/20">
-                <span className="font-medium text-amber-800 dark:text-amber-300">
-                  {d.descricao}
-                </span>
-                {d.localizacao && (
-                  <span className="text-muted-foreground ml-2">— {d.localizacao}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Novos danos */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs">Registar Novos Danos</Label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={addDano}
-          >
-            <Plus className="h-3.5 w-3.5" /> Adicionar Dano
-          </Button>
-        </div>
-
-        {dados.novosDanos.length === 0 && (
-          <p className="text-xs text-muted-foreground italic">
-            Nenhum novo dano. Clique em "Adicionar Dano" se encontrar algum.
-          </p>
-        )}
-
-        {dados.novosDanos.map((dano) => (
-          <div
-            key={dano.id}
-            className="rounded-md border border-destructive/30 bg-destructive/5 p-3 space-y-2"
-          >
-            <div className="flex items-center gap-2">
-              <Input
-                value={dano.descricao}
-                onChange={(e) => updateDano(dano.id, { descricao: e.target.value })}
-                placeholder="Descrição do dano *"
-                className="h-8 text-xs flex-1"
-              />
-              <Input
-                value={dano.localizacao}
-                onChange={(e) => updateDano(dano.id, { localizacao: e.target.value })}
-                placeholder="Localização (ex: para-choque)"
-                className="h-8 text-xs flex-1"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 text-destructive"
-                onClick={() => removeDano(dano.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-
-            <div>
-              <input
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                className="hidden"
-                ref={activeDanoId === dano.id ? fileInputRef : undefined}
-                onChange={(e) => {
-                  addFilesToDano(dano.id, e.target.files);
-                  e.target.value = '';
-                }}
-              />
-              <input
-                type="file"
-                accept="image/*,video/*"
-                capture="environment"
-                className="hidden"
-                ref={activeDanoId === dano.id ? cameraInputRef : undefined}
-                onChange={(e) => {
-                  addFilesToDano(dano.id, e.target.files);
-                  e.target.value = '';
-                }}
-              />
-              <p className="text-[10px] text-muted-foreground mb-1">Fotos e vídeos (opcional)</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveDanoId(dano.id);
-                    setTimeout(() => cameraInputRef.current?.click(), 50);
-                  }}
-                  className="rounded border border-dashed border-destructive/40 py-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:bg-destructive/5 transition-colors"
-                >
-                  <Camera className="h-3.5 w-3.5" /> Câmara
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveDanoId(dano.id);
-                    setTimeout(() => fileInputRef.current?.click(), 50);
-                  }}
-                  className="rounded border border-dashed border-destructive/40 py-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:bg-destructive/5 transition-colors"
-                >
-                  <Upload className="h-3.5 w-3.5" /> Galeria
-                </button>
-              </div>
-
-              {dano.files.length > 0 && (
-                <div className="grid grid-cols-4 gap-1.5 mt-1.5">
-                  {dano.files.map((f) => (
-                    <div
-                      key={f.id}
-                      className="relative rounded overflow-hidden border border-border aspect-square bg-muted"
-                    >
-                      {f.preview ? (
-                        <img
-                          src={f.preview}
-                          alt={f.file.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center w-full h-full">
-                          <Film className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => removeFileFromDano(dano.id, f.id)}
-                        className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 text-white"
-                      >
-                        <X className="h-2.5 w-2.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      }
+      className={accentClass}
+      viaturaId={viaturaId}
+      contratoId={contratoId}
+      tipoCombustivel={tipoCombustivel}
+      km={dados.km}
+      onKmChange={(km) => set({ km })}
+      kmMinimo={kmMinimo}
+      combustivel={dados.combustivel}
+      onCombustivelChange={(combustivel) => set({ combustivel })}
+      nivelEletrico={dados.nivelEletrico}
+      onNivelEletricoChange={(nivelEletrico) => set({ nivelEletrico })}
+      nivelGpl={dados.nivelGpl}
+      onNivelGplChange={(nivelGpl) => set({ nivelGpl })}
+      danos={dados.novosDanos}
+      onDanosChange={(novosDanos) => set({ novosDanos })}
+    />
   );
 };

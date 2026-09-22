@@ -7,17 +7,12 @@ import {
   ArrowRightLeft,
   Calendar,
   CalendarClock,
-  Camera,
   Car,
   Euro,
   Eye,
   FileText,
-  Film,
   Loader2,
   MessageSquareText,
-  Sparkles,
-  Upload,
-  X,
   XCircle,
 } from 'lucide-react';
 
@@ -41,9 +36,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
-import { COMBUSTIVEL_NIVEL_OPTS } from '@/utils/combustivel';
+import { precisaCombustivel, precisaEletrico } from '@/utils/combustivel';
+import { validarDanos, type NovoDano } from '@/components/renting/danos/DanosEditor';
+import { RegistoViaturaSection } from '@/components/entrega/RegistoViaturaSection';
 import { useFecharContrato } from '@/hooks/useContratosRenting';
 import { computeFechoRapidoDefaults } from './fecharContratoDefaults';
 import { useEstacoes } from '@/hooks/useEstacoes';
@@ -75,16 +71,6 @@ const schema = z.object({
 
 type FormInput = z.input<typeof schema>;
 type FormOutput = z.output<typeof schema>;
-
-interface SelectedFile {
-  id: string;
-  file: File;
-  preview: string | null;
-  /** Descrição do que se está a ver. Vai para viatura_dano_fotos.descricao e
-   *  passa a ser a legenda da imagem na Folha de Danos — sem ela a legenda
-   *  só dizia de onde a foto veio, não o que mostra. */
-  descricao: string;
-}
 
 export interface AlteracaoMaterial {
   label: string;
@@ -139,41 +125,57 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   const responsavelNome =
     (user?.user_metadata?.nome as string | undefined) ?? user?.email ?? 'Responsável';
 
-  // A viatura tem DUA registado? Na devolução exige-se confirmar que veio com a
-  // viatura (documento DUA frente/verso/único em viatura_documentos).
-  const { data: viaturaTemDua = false } = useQuery({
-    queryKey: ['viatura-tem-dua', viaturaId],
-    enabled: open && !!viaturaId,
-    queryFn: async () => {
-      const { count } = await supabase
-        .from('viatura_documentos')
-        .select('id', { count: 'exact', head: true })
-        .eq('viatura_id', viaturaId!)
-        .in('tipo_documento', ['dua_frente', 'dua_verso', 'dua']);
-      return (count ?? 0) > 0;
-    },
-  });
   const [duaDevolvido, setDuaDevolvido] = useState(false);
-  // Exige confirmar a devolução da DUA quer a viatura tenha DUA registado, quer
-  // o contrato tenha marcado que o motorista levou a DUA original.
-  const duaAplicavel = viaturaTemDua || duaOriginalComMotorista;
+
+  // Só se pede a devolução da DUA a quem a levou.
+  //
+  // Antes bastava a viatura TER DUA digitalizado em viatura_documentos
+  // (`viaturaTemDua`) para o fecho exigir a confirmação. Mas ter o documento
+  // arquivado não quer dizer que o original foi para a mão do motorista — e
+  // quase todas as viaturas têm o DUA digitalizado. Resultado: o fecho ficava
+  // bloqueado à espera da devolução de um papel que ninguém levou, e a saída
+  // era pôr o visto na mesma, o que torna o campo inútil como prova.
+  //
+  // `dua_original_com_motorista` é o campo que o contrato preenche quando o
+  // original vai mesmo com ele. É esse, e só esse, que manda aqui.
+  //
+  // Numa RENOVAÇÃO (troca sem mudança de viatura) não se pergunta: o motorista
+  // continua com o carro e com os documentos dele. Só quando a troca envolve
+  // outra viatura é que há papel a voltar.
+  const trocaDeViatura = motivoObrigatorioTroca;
+  const renovacaoSemTrocarViatura = emModoTroca && !trocaDeViatura;
+  const duaAplicavel = duaOriginalComMotorista && !renovacaoSemTrocarViatura;
 
   // Viaturas slot: o motorista é dono do "slot", não há recolha física pela
   // empresa nem estação/DUA a confirmar — o fecho pede só data e motivo
   // (opcional). Tipo/estação continuam a ser gravados (a mutation precisa
   // deles) com defaults silenciosos, só deixam de ser pedidos ao gestor.
-  const { data: viaturaEhSlot = false } = useQuery({
-    queryKey: ['viatura-is-slot', viaturaId],
+  //
+  // Traz também o `combustivel` da viatura: é ele que decide se se pede
+  // depósito (oitavos), bateria (%) ou GPL. Antes pedia-se sempre o depósito,
+  // mesmo a um eléctrico — o gestor tinha de escolher "1/2 depósito" para uma
+  // viatura que não tem depósito nenhum.
+  const { data: viaturaInfo } = useQuery({
+    queryKey: ['viatura-fecho-info', viaturaId],
     enabled: open && !!viaturaId,
     queryFn: async () => {
       const { data } = await supabase
         .from('viaturas')
-        .select('is_slot')
+        .select('is_slot, combustivel')
         .eq('id', viaturaId!)
         .maybeSingle();
-      return !!data?.is_slot;
+      return {
+        isSlot: !!data?.is_slot,
+        combustivel: (data?.combustivel as string | null) ?? null,
+      };
     },
   });
+  const viaturaEhSlot = viaturaInfo?.isSlot ?? false;
+  const tipoCombustivel = viaturaInfo?.combustivel ?? null;
+  // Tipo desconhecido cai em combustão (precisaCombustivel devolve true) — é o
+  // caso mais comum e mostrar campo nenhum era pior do que mostrar o errado.
+  const mostraCombustivel = precisaCombustivel(tipoCombustivel);
+  const mostraEletrico = precisaEletrico(tipoCombustivel);
 
   const form = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -198,10 +200,16 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   const registarAgora = emModoTroca ? true : registarAgoraEscolhido;
   const [km, setKm] = useState('');
   const [combustivel, setCombustivel] = useState('');
-  const [files, setFiles] = useState<SelectedFile[]>([]);
-  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  // Só bateria. O GPL chegou a estar neste ecrã mas era um campo fantasma: o
+  // gestor escolhia o nível e ele nunca ia no payload, porque
+  // `contratos_renting` não tem coluna para GPL (só `combustivel_*` e
+  // `eletricidade_*`). O calendário mostra-o porque grava noutra tabela
+  // (`contratos.gpl_checkout/_checkin`). Para o voltar a mostrar aqui é preciso
+  // primeiro criar a coluna e passá-la no payload da recolha.
+  const [nivelEletrico, setNivelEletrico] = useState('');
+  // Danos encontrados na recolha. Entidade própria (descrição, onde, quanto),
+  // não uma legenda de foto — o valor é o que chega à conta do motorista.
+  const [novosDanos, setNovosDanos] = useState<NovoDano[]>([]);
   const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
   const [gerandoFolha, setGerandoFolha] = useState(false);
 
@@ -363,42 +371,14 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, contexto?.kmSaida]);
 
-  const addFiles = (list: FileList | null) => {
-    if (!list) return;
-    const novos: SelectedFile[] = Array.from(list).map((f) => ({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      file: f,
-      preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
-      descricao: '',
-    }));
-    setFiles((prev) => [...prev, ...novos]);
-  };
-
-  const setDescricaoFicheiro = (id: string, descricao: string) =>
-    setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, descricao } : f)));
-
-  const handleDropFiles = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingFiles(false);
-    addFiles(e.dataTransfer.files);
-  };
-
-  const removeFile = (id: string) => {
-    setFiles((prev) => {
-      const found = prev.find((f) => f.id === id);
-      if (found?.preview) URL.revokeObjectURL(found.preview);
-      return prev.filter((f) => f.id !== id);
-    });
-  };
-
   const resetRecolhaState = () => {
     setRegistarAgora(true);
     setKm('');
     setCombustivel('');
+    setNivelEletrico('');
     setDuaDevolvido(false);
-    files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview));
-    setFiles([]);
+    novosDanos.forEach((d) => d.files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)));
+    setNovosDanos([]);
   };
 
   // Gera a Folha de Danos da recolha — mesmo fluxo do RealizarEntregaPage.
@@ -430,12 +410,15 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       };
       const hoje = new Date().toISOString().slice(0, 10);
       const motivo = form.getValues('motivo');
-      // Na pré-visualização as fotos ainda não estão gravadas — passa-as
-      // como data URLs para aparecerem na folha (mesmo padrão de RealizarEntregaPage).
+      // Na pré-visualização os danos ainda não estão gravados — as fotos deles
+      // passam como data URLs para aparecerem na folha (mesmo padrão de
+      // RealizarEntregaPage). Vinham do anexo geral de fotos, que deixou de
+      // existir: agora a folha mostra as fotos dos próprios danos.
+      const fotosDosDanos = novosDanos.flatMap((d) => d.files);
       const fotosMomento =
-        modo === 'preview' && files.length
+        modo === 'preview' && fotosDosDanos.length
           ? await Promise.all(
-              files.map(
+              fotosDosDanos.map(
                 (f) =>
                   new Promise<string>((resolve, reject) => {
                     const reader = new FileReader();
@@ -550,12 +533,23 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         toast.error('Indica o KM actual para registar a recolha.');
         return;
       }
-      if (!combustivel) {
+      // Cada tipo exige o SEU nível — pedir depósito a um eléctrico era o que
+      // acontecia antes, e não havia forma de registar a carga da bateria.
+      if (mostraCombustivel && !combustivel) {
         toast.error('Indica o nível de combustível para registar a recolha.');
         return;
       }
-      if (files.length > 0 && !viaturaId) {
-        toast.error('Este contrato não tem viatura associada — não é possível anexar fotos.');
+      if (mostraEletrico && !nivelEletrico) {
+        toast.error('Indica a carga da bateria para registar a recolha.');
+        return;
+      }
+      const erroDanos = validarDanos(novosDanos);
+      if (erroDanos) {
+        toast.error(erroDanos);
+        return;
+      }
+      if (novosDanos.length > 0 && !viaturaId) {
+        toast.error('Este contrato não tem viatura associada — não é possível registar danos.');
         return;
       }
     }
@@ -583,7 +577,17 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
           ? {
               km,
               combustivel,
-              fotos: files.map((f) => ({ file: f.file, descricao: f.descricao })),
+              eletricidade: nivelEletrico || undefined,
+              danos: novosDanos
+                .filter((d) => d.descricao.trim())
+                .map((d) => ({
+                  descricao: d.descricao.trim(),
+                  localizacao: d.localizacao.trim() || null,
+                  // Vazio fica a null, não a 0: "ainda não avaliado" e "não
+                  // custa nada" são coisas diferentes para quem cobra.
+                  valor: d.valor.trim() ? Number(d.valor) : null,
+                  files: d.files.map((f) => f.file),
+                })),
             }
           : undefined,
       // Se o motorista tinha levado a DUA original e o gestor confirma a
@@ -623,7 +627,10 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-6xl w-[96vw] h-[92vh] p-0 gap-0 flex flex-col overflow-hidden">
+      {/* Ecrã inteiro: são duas colunas com danos, fotos e assinaturas — a
+          largura fixa obrigava a fazer o trabalho dentro de uma coluna estreita
+          com scroll interminável. */}
+      <DialogContent className="max-w-none w-screen h-screen sm:w-[98vw] sm:h-[96vh] sm:max-w-[1800px] rounded-none sm:rounded-lg p-0 gap-0 flex flex-col overflow-hidden">
         {/* Header — muda consoante "Registar a recolha agora": só fecha o
             contrato de facto quando a recolha é confirmada já aqui; caso
             contrário isto agenda a recolha e o contrato mantém-se em curso
@@ -895,235 +902,71 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
             {/* Coluna direita: registar recolha agora (não aplicável a slot) */}
             {!viaturaEhSlot && (
               <div>
-                {/* ── Secção esmeralda: registar recolha agora ── */}
-                <section
-                  className={cn(
-                    'rounded-xl border p-4 space-y-3 transition-colors',
-                    registarAgora
-                      ? 'border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/25'
-                      : 'border-border bg-muted/30'
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <h3
-                      className={cn(
-                        'text-sm font-semibold flex items-center gap-2',
-                        registarAgora ? 'text-emerald-900 dark:text-emerald-300' : 'text-foreground'
-                      )}
-                    >
-                      <Sparkles className="h-4 w-4" />
-                      Registar a recolha agora
-                    </h3>
-                    <Switch
-                      id="registar-agora"
-                      checked={registarAgora}
-                      onCheckedChange={setRegistarAgora}
-                      disabled={emModoTroca}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {emModoTroca
+                {/* Painel esmeralda + campos: tudo vem do RegistoViaturaSection,
+                    o MESMO componente que o /realizar e o calendário usam. O
+                    invólucro (cor, cabeçalho, interruptor) vivia aqui, e era
+                    por isso que os ecrãs pareciam diferentes mesmo já
+                    partilhando os campos. */}
+                <RegistoViaturaSection
+                  titulo="Registar a recolha agora"
+                  descricao={
+                    emModoTroca
                       ? 'Obrigatório numa troca: é a folha de danos de devolução da viatura que sai. Depois de o contrato fechar já não é possível registá-la.'
-                      : 'KM, combustível e fotos — sem precisar de ir depois ao Calendário.'}
-                  </p>
+                      : 'KM, combustível e danos — sem precisar de ir depois ao Calendário.'
+                  }
+                  activo={registarAgora}
+                  onActivoChange={setRegistarAgora}
+                  toggleBloqueado={emModoTroca}
+                  viaturaId={viaturaId}
+                  contratoId={contratoId}
+                  tipoCombustivel={tipoCombustivel}
+                  km={km}
+                  onKmChange={setKm}
+                  combustivel={combustivel}
+                  onCombustivelChange={setCombustivel}
+                  nivelEletrico={nivelEletrico}
+                  onNivelEletricoChange={setNivelEletrico}
+                  danos={novosDanos}
+                  onDanosChange={setNovosDanos}
+                />
 
-                  {registarAgora && (
-                    <div className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="km-recolha" className="text-xs">
-                            KM Actual <span className="text-destructive">*</span>
-                          </Label>
-                          <Input
-                            id="km-recolha"
-                            type="number"
-                            inputMode="numeric"
-                            value={km}
-                            onChange={(e) => setKm(e.target.value)}
-                            placeholder="Ex: 45120"
-                            className="bg-background"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">
-                            Combustível <span className="text-destructive">*</span>
-                          </Label>
-                          <div className="grid grid-cols-4 gap-1">
-                            {COMBUSTIVEL_NIVEL_OPTS.map((nivel) => (
-                              <button
-                                key={nivel}
-                                type="button"
-                                onClick={() => setCombustivel(nivel)}
-                                title={nivel}
-                                className={cn(
-                                  'rounded-md border-2 py-1.5 text-[10px] font-medium transition-colors',
-                                  combustivel === nivel
-                                    ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                                    : 'border-border bg-background hover:border-emerald-400/50'
-                                )}
-                              >
-                                {nivel}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Fotos / Vídeos / PDF (opcional)</Label>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          // PDF entra para peritagens e orçamentos de oficina. Não
-                          // se desenha na grelha da folha (o jsPDF não rasteriza
-                          // PDFs) — sai como moldura "PDF" e vê-se pelo QR.
-                          accept="image/*,video/*,application/pdf"
-                          multiple
-                          hidden
-                          onChange={(e) => addFiles(e.target.files)}
-                        />
-                        <input
-                          ref={cameraInputRef}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          multiple
-                          hidden
-                          onChange={(e) => addFiles(e.target.files)}
-                        />
-                        <div
-                          onDragEnter={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setIsDraggingFiles(true);
-                          }}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-                            setIsDraggingFiles(true);
-                          }}
-                          onDragLeave={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setIsDraggingFiles(false);
-                          }}
-                          onDrop={handleDropFiles}
-                          className={cn(
-                            'rounded-md border-2 border-dashed transition-colors p-1.5 space-y-1.5',
-                            isDraggingFiles
-                              ? 'border-emerald-500 bg-emerald-500/10'
-                              : 'border-transparent'
-                          )}
-                        >
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => cameraInputRef.current?.click()}
-                              className="rounded-md border-2 border-dashed border-emerald-300 dark:border-emerald-800 hover:bg-emerald-500/10 transition-colors py-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
-                            >
-                              <Camera className="h-3.5 w-3.5" /> Câmara
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => fileInputRef.current?.click()}
-                              className="rounded-md border-2 border-dashed border-emerald-300 dark:border-emerald-800 hover:bg-emerald-500/10 transition-colors py-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground"
-                            >
-                              <Upload className="h-3.5 w-3.5" /> Ficheiros
-                            </button>
-                          </div>
-                          <p className="text-center text-[10px] text-muted-foreground">
-                            ou arrasta fotos, vídeos ou PDF para aqui
-                          </p>
-                          {/* Lista, não grelha de quadrados: cada ficheiro leva
-                              a sua descrição ao lado, e é ela que fica como
-                              legenda na Folha de Danos. Em quadrados de 6
-                              colunas não cabia campo nenhum. */}
-                          {files.length > 0 && (
-                            <div className="mt-1.5 space-y-1.5">
-                              {files.map((f) => (
-                                <div key={f.id} className="flex items-center gap-2">
-                                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded border border-border bg-muted">
-                                    {f.preview ? (
-                                      <img
-                                        src={f.preview}
-                                        alt={f.file.name}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center">
-                                        {f.file.type === 'application/pdf' ? (
-                                          <FileText className="h-4 w-4 text-muted-foreground" />
-                                        ) : (
-                                          <Film className="h-4 w-4 text-muted-foreground" />
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <Input
-                                    value={f.descricao}
-                                    onChange={(e) => setDescricaoFicheiro(f.id, e.target.value)}
-                                    placeholder={
-                                      f.preview
-                                        ? 'Descrição da foto (ex: risco no para-choques)'
-                                        : f.file.type === 'application/pdf'
-                                          ? 'Descrição do documento (ex: peritagem)'
-                                          : 'Descrição do vídeo'
-                                    }
-                                    className="h-8 text-xs"
-                                    aria-label={`Descrição de ${f.file.name}`}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => removeFile(f.id)}
-                                    aria-label={`Remover ${f.file.name}`}
-                                    className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:text-destructive"
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50">
-                        <AssinaturasHandoverSection
-                          ref={assinaturasRef}
-                          motoristaNome={contexto?.condutorNome ?? ''}
-                          responsavelNome={responsavelNome}
-                        />
-                      </div>
-
-                      <div className="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50 space-y-2">
-                        <h4 className="text-xs font-semibold flex items-center gap-1.5 text-emerald-900 dark:text-emerald-300">
-                          <FileText className="h-3.5 w-3.5" />
-                          Folha de Danos (Recolha)
-                        </h4>
-                        <p className="text-xs text-muted-foreground">
-                          Ao fechar o contrato a folha é gerada, impressa e enviada por email ao
-                          condutor automaticamente.
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => gerarFolha('preview')}
-                          disabled={gerandoFolha}
-                          className="gap-2"
-                        >
-                          {gerandoFolha ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                          Pré-visualizar folha
-                        </Button>
-                      </div>
+                {registarAgora && (
+                  <div className="mt-3 space-y-3">
+                    <div className="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50">
+                      <AssinaturasHandoverSection
+                        ref={assinaturasRef}
+                        motoristaNome={contexto?.condutorNome ?? ''}
+                        responsavelNome={responsavelNome}
+                      />
                     </div>
-                  )}
-                </section>
+
+                    <div className="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50 space-y-2">
+                      <h4 className="text-xs font-semibold flex items-center gap-1.5 text-emerald-900 dark:text-emerald-300">
+                        <FileText className="h-3.5 w-3.5" />
+                        Folha de Danos (Recolha)
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        Ao fechar o contrato a folha é gerada, impressa e enviada por email ao
+                        condutor automaticamente.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => gerarFolha('preview')}
+                        disabled={gerandoFolha}
+                        className="gap-2"
+                      >
+                        {gerandoFolha ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                        Pré-visualizar folha
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

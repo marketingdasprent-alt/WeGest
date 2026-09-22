@@ -61,6 +61,7 @@ import { ViaVerdeContaDialog } from './via-verde/ViaVerdeContaDialog';
 import { ImportUberCsvDialog } from '../administrativo/ImportUberCsvDialog';
 import type { IntegracaoConfig } from './integracoes/types';
 import { temCredenciaisPortal } from './integracoes/boltIntegracao';
+import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import type { ViaVerdeConta } from './via-verde/types';
 
 interface IntegracaoWebhook {
@@ -154,9 +155,24 @@ export const IntegracoesTab: React.FC = () => {
     ativo: true,
   });
 
+  // Nome da empresa emissora de cada integração de faturação. Vem de um hook
+  // com cache própria, que pode chegar DEPOIS do fetch das integrações — daí
+  // reconstruir os cartões quando chega, senão ficavam com "empresa
+  // desconhecida" até ao refresh seguinte.
+  const { empresas: empresasEmissoras } = useClientesEmpresas();
+  const empresasPorId = React.useMemo(
+    () => new Map(empresasEmissoras.map((e) => [e.id, e.nome])),
+    [empresasEmissoras]
+  );
+
   useEffect(() => {
     fetchAll();
   }, []);
+
+  useEffect(() => {
+    if (rawIntegracoes.length > 0) buildCards(rawIntegracoes, rawViaVerdeContas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresasPorId]);
 
   const fetchAll = async () => {
     try {
@@ -371,25 +387,31 @@ export const IntegracoesTab: React.FC = () => {
         });
       });
 
-    // Faturação fiscal — KeyInvoice e Primavera (e futuros providers) são
-    // integrações independentes: uma linha e um cartão por provider, nunca
-    // uma linha só partilhada. Só a que estiver `ativo=true` é a que emite
-    // de facto (garantido por índice único na BD — ver migração
-    // 20260807150000_faturacao_unica_ativa_por_org.sql); as outras ficam
-    // configuradas/testáveis mas inativas.
+    // Faturação fiscal — uma linha e um cartão por integração. Cada uma
+    // pertence a UMA empresa emissora (`emissor_id`) e é por empresa que a
+    // exclusividade do `ativo` vale (índice uq_faturacao_ativa_por_emissor,
+    // migração 20260917150000_faturacao_por_empresa_emissora.sql). Várias
+    // empresas coexistem na mesma organização, cada uma com a sua conta.
     (integracoes as any[])
       .filter((i) => i.plataforma === 'faturacao')
       .forEach((fatRow) => {
+        const empresa = fatRow.emissor_id ? empresasPorId.get(fatRow.emissor_id) : null;
         result.push({
           id: fatRow.id,
           type: 'faturacao',
-          nome: faturacaoProviderLabel(fatRow.config?.provider),
+          nome: fatRow.nome || faturacaoProviderLabel(fatRow.config?.provider),
           ativo: !!fatRow.ativo,
           ultimoSync: null,
           username: null,
           password: null,
           connectionMode: 'api',
-          subLabel: fatRow.ativo ? 'A emitir documentos' : 'Configurado, inativo',
+          // Sem empresa a integração não emite nada — dizê-lo no cartão evita
+          // que fique lá configurada a parecer que está a funcionar.
+          subLabel: !fatRow.emissor_id
+            ? 'Sem empresa — não emite'
+            : fatRow.ativo
+              ? `A emitir por ${empresa ?? 'empresa desconhecida'}`
+              : `Configurado (inativo) · ${empresa ?? 'empresa desconhecida'}`,
           rawData: fatRow,
           logoUrl: null,
         });
@@ -988,14 +1010,13 @@ export const IntegracoesTab: React.FC = () => {
         onOpenChange={setNewIntegracaoDialogOpen}
         onSuccess={fetchAll}
         onOpenFaturacao={(provider) => {
-          // A linha desse provider pode já existir (voltar a abrir "Primavera"
-          // quando já foi configurada antes) — reencontra-se por config.provider,
-          // nunca a primeira linha de faturação que aparecer.
-          const existing =
-            (rawIntegracoes as any[]).find(
-              (i) => i.plataforma === 'faturacao' && i.config?.provider === provider
-            ) ?? null;
-          setFaturacaoRow(existing as FaturacaoConfigRow | null);
+          // SEMPRE uma integração NOVA. Cada empresa emissora fatura pela sua
+          // própria conta, portanto a mesma organização tem várias integrações
+          // do mesmo provider — uma por empresa, cada uma com a sua chave.
+          // Até 2026-09-17 isto reabria a linha existente desse provider, e por
+          // isso só dava para ter uma KeyInvoice. Editar uma já configurada
+          // faz-se pelo lápis do cartão dela (handleCardEdit).
+          setFaturacaoRow(null);
           setFaturacaoProvider(provider);
           setFaturacaoDialogOpen(true);
         }}
@@ -1025,12 +1046,16 @@ export const IntegracoesTab: React.FC = () => {
         onOpenChange={setFaturacaoDialogOpen}
         provider={faturacaoProvider}
         row={faturacaoRow}
-        // Existe outra integração de faturação já activa (a emitir a sério)
-        // além desta? Determina o valor por omissão do interruptor "activar" —
-        // nunca activar sozinho por omissão quando isso ia desligar outra que
-        // já está em produção.
+        // Outra integração activa DA MESMA EMPRESA. Só isso é conflito:
+        // activar a de uma empresa não desliga a das outras. Serve para avisar
+        // que guardar vai substituir a que essa empresa já tinha.
         existeOutraIntegracaoAtiva={(rawIntegracoes as any[]).some(
-          (i) => i.plataforma === 'faturacao' && i.ativo && i.id !== faturacaoRow?.id
+          (i) =>
+            i.plataforma === 'faturacao' &&
+            i.ativo &&
+            i.id !== faturacaoRow?.id &&
+            i.emissor_id &&
+            i.emissor_id === faturacaoRow?.emissor_id
         )}
         onSuccess={fetchAll}
       />

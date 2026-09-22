@@ -50,6 +50,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { SectionCard } from '@/components/ui/section-card';
+import { DocumentosPendentesSection } from './DocumentosPendentesSection';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesUpdate } from '@/integrations/supabase/types';
 import { toast } from 'sonner';
@@ -64,6 +65,11 @@ interface MotoristDocumento {
   data_validade: string | null;
   observacoes: string | null;
   created_at: string;
+  /**
+   * 'pendente' = enviado pelo motorista pelo portal, à espera de aprovação
+   * (ver DocumentosPendentesSection). Só os 'aprovado' contam como documento.
+   */
+  status?: 'pendente' | 'aprovado' | 'rejeitado';
 }
 
 const TIPOS_DOCUMENTO = [
@@ -221,7 +227,9 @@ export function MotoristaTabDocumentos({
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setDocumentos(data || []);
+      // `status` é `text` na base, com CHECK nos três valores — o cast só
+      // estreita o tipo para o union que o CHECK garante.
+      setDocumentos((data || []) as MotoristDocumento[]);
     } catch (error) {
       console.error('Erro ao carregar documentos:', error);
       toast.error('Erro ao carregar documentos');
@@ -245,8 +253,9 @@ export function MotoristaTabDocumentos({
       };
     }
 
-    // Se não encontrar no motorista, busca na tabela de documentos extras
-    const extra = documentos.find((d) => d.tipo_documento === tipoValue);
+    // Se não encontrar no motorista, busca na tabela de documentos extras.
+    // Só os aprovados: um pendente ainda não é o documento do motorista.
+    const extra = documentos.find((d) => d.tipo_documento === tipoValue && d.status === 'aprovado');
     if (extra) return { ...extra, is_official: false };
 
     return undefined;
@@ -323,7 +332,11 @@ export function MotoristaTabDocumentos({
       } else {
         // Tipos extras guardados em motorista_documentos
         // Caso contrário, trata como documento extra na tabela secundária
-        const existente = documentos.find((d) => d.tipo_documento === tipo);
+        // O gestor é quem aprova: o que ele carrega nasce `aprovado` (default
+        // da coluna) e substitui só o aprovado anterior, nunca um pendente.
+        const existente = documentos.find(
+          (d) => d.tipo_documento === tipo && d.status === 'aprovado'
+        );
 
         if (existente) {
           const { error: updateError } = await supabase
@@ -609,7 +622,7 @@ export function MotoristaTabDocumentos({
   const anexados = tiposObrigatorios.filter((t) => getDocumentoByTipo(t.value, t.field)).length;
   const emFalta = totalTipos - anexados;
   const aExpirar = documentos.filter((d) => {
-    if (!d.data_validade) return false;
+    if (d.status !== 'aprovado' || !d.data_validade) return false;
     const dias = differenceInDays(new Date(d.data_validade), new Date());
     return dias >= 0 && dias <= 30;
   }).length;
@@ -655,6 +668,16 @@ export function MotoristaTabDocumentos({
 
   return (
     <div className="space-y-6">
+      {/* O que o motorista enviou pelo portal e espera validação. Aprovar
+          escreve na ficha, por isso recarrega-se o motorista a seguir. */}
+      <DocumentosPendentesSection
+        motoristaId={motorista.id}
+        onAlterado={() => {
+          loadDocumentos();
+          onMotoristaUpdated?.();
+        }}
+      />
+
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {statsCards.map((card) => (

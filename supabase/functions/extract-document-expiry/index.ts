@@ -25,6 +25,23 @@ const CAMPOS_FICHEIRO_MOTORISTA = [
   'comprovativo_iban_url',
 ];
 
+// Os nomes dos modelos do Gemini caducam sem aviso. Esta função pedia
+// `gemini-2.0-flash`, que em 09/2026 passou a devolver 404 ("no longer
+// available to new users") — a leitura da validade deixou de funcionar e
+// falhava em silêncio, como se o documento é que fosse ilegível. Ninguém deu
+// por isso porque o ecrã só diz "não foi encontrada a data".
+//
+// Tenta-se uma lista por ordem e fica-se pelo primeiro que responde: o
+// substituto que a própria API indicou, e os `-latest` no fim, que não caducam.
+// Mesma lista da ler-km-odometro — se um dia isto crescer, vale a pena mudá-la
+// para _shared.
+const MODELOS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-flash-lite-latest',
+  'gemini-flash-latest',
+];
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -132,17 +149,12 @@ Deno.serve(async (req) => {
       },
     };
 
-    const geminiResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              inlinePart,
-              {
-                text: `Analisa este documento e encontra a data de VALIDADE/EXPIRAÇÃO.
+    const corpoPedido = JSON.stringify({
+      contents: [{
+        parts: [
+          inlinePart,
+          {
+            text: `Analisa este documento e encontra a data de VALIDADE/EXPIRAÇÃO.
 REGRAS IMPORTANTES:
 - Procura especificamente por campos como "Validade", "Válido até", "Data de validade", "Expiry", "Valid until", "CÓDIGO VIGENTE ATÉ", "ACCESS CODE VALID UNTIL", "Válido até", "Válidade"
 - IGNORA completamente números de referência, números de certificado, números de processo, NIFs, NISPs e qualquer número que não esteja explicitamente identificado como data de validade
@@ -151,21 +163,62 @@ REGRAS IMPORTANTES:
 - A data de validade é normalmente uma data futura (vários anos no futuro)
 - Responde SOMENTE com a data no formato YYYY-MM-DD (ex: 2031-03-19)
 - Se não encontrares nenhuma data de validade explícita, responde apenas com a palavra: null`,
-              },
-            ],
-          }],
-          generationConfig: { maxOutputTokens: 30, temperature: 0 },
-        }),
-      }
-    );
+          },
+        ],
+      }],
+      // Folga grande para uma data, de propósito: estes modelos pensam
+      // antes de responder e o raciocínio conta para o limite. Com 30
+      // tokens gastavam-no todo a pensar e devolviam vazio.
+      generationConfig: { maxOutputTokens: 512, temperature: 0 },
+    });
 
-    if (!geminiResp.ok) {
-      const errText = await geminiResp.text();
-      console.error('Gemini error:', geminiResp.status, errText);
-      return json({ date: null, error: `AI API error (${geminiResp.status}): ${errText.substring(0, 200)}` });
+    // deno-lint-ignore no-explicit-any
+    let aiResult: any = null;
+    let modeloUsado = '';
+    let ultimoErro = '';
+
+    for (const modelo of MODELOS) {
+      // Timeout por modelo: a edge function morre aos 150s e, sem isto, um
+      // modelo lento consumia o orçamento todo e os seguintes nem chegavam a
+      // ser tentados.
+      const controlador = new AbortController();
+      const alarme = setTimeout(() => controlador.abort(), 25_000);
+      try {
+        const resp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: corpoPedido,
+            signal: controlador.signal,
+          }
+        );
+
+        if (resp.ok) {
+          aiResult = await resp.json();
+          modeloUsado = modelo;
+          break;
+        }
+
+        const errText = await resp.text();
+        ultimoErro = `${resp.status} ${errText.substring(0, 200)}`;
+        console.error(`Gemini ${modelo}:`, ultimoErro);
+
+        // 404 = nome caducado, tenta o seguinte; outro erro é real e repetir
+        // dá a mesma resposta.
+        if (resp.status !== 404) break;
+      } catch (err) {
+        ultimoErro = `${modelo}: ${err instanceof Error ? err.message : String(err)}`;
+        console.error('Gemini timeout/rede:', ultimoErro);
+      } finally {
+        clearTimeout(alarme);
+      }
     }
 
-    const aiResult = await geminiResp.json();
+    if (!aiResult) {
+      return json({ date: null, error: `AI API error (${ultimoErro})` });
+    }
+    console.log('extract-document-expiry, modelo:', modeloUsado);
     console.log('Gemini full response:', JSON.stringify(aiResult).substring(0, 500));
 
     // Verificar erro da API

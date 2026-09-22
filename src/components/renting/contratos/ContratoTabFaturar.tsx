@@ -53,7 +53,7 @@ import { DocumentoPreviewDialog } from '@/components/faturacao/acordo/DocumentoP
 import { estadoCobrancaDisplay } from '@/lib/estadoCobranca';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
-import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import {
   ContratoFaturarDialog,
   type FaturaCalculo,

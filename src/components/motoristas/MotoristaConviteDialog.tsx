@@ -6,8 +6,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Copy, Share2 } from 'lucide-react';
+import { Copy, MessageCircle, Share2 } from 'lucide-react';
 import { useMotoristaInviteLink } from '@/hooks/useMotoristaInviteLink';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface MotoristaConviteDialogProps {
   open: boolean;
@@ -21,7 +22,34 @@ interface MotoristaConviteDialogProps {
  */
 export const MotoristaConviteDialog = ({ open, onOpenChange }: MotoristaConviteDialogProps) => {
   const { link, copiar } = useMotoristaInviteLink();
+  const { orgId, orgs } = useTenant();
   const podePartilhar = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  // WhatsApp sem número: abre a lista de conversas com a mensagem pronta, e o
+  // gestor escolhe a quem manda. É como isto se usa na prática — o link é o
+  // mesmo para toda a gente, não é personalizado por motorista.
+  //
+  // `wa.me` e não `web.whatsapp.com` de propósito: no telemóvel abre a app,
+  // no computador reencaminha para o WhatsApp Web. Um link só serve os dois.
+  const enviarWhatsApp = () => {
+    if (!link) return;
+    const empresa = orgs.find((o) => o.id === orgId)?.nome ?? 'a nossa frota';
+    // Sem emojis: o texto viaja pela query string até ao WhatsApp e os
+    // caracteres fora do plano básico (4 bytes em UTF-8, como 👋) chegavam
+    // partidos ao destinatário. Acentos passam bem; emojis não valem o risco.
+    //
+    // Pede-se o NIF e não o email: é pelo NIF que a aprovação encontra a ficha
+    // que o motorista já tem no sistema (ver aprovar_candidatura_motorista).
+    // Dizer-lhe "usa o mesmo email que já tens connosco" era mandá-lo adivinhar
+    // — a maioria não sabe qual registámos, e ao escrever outro acabava com
+    // ficha duplicada. O email pode ser o que ele quiser; o NIF é que liga.
+    const mensagem =
+      `Olá!\n\n` +
+      `Convite para te registares como motorista em *${empresa}*.\n\n` +
+      `Abre este link e preenche a tua ficha:\n${link}\n\n` +
+      `Podes usar o email que preferires. Preenche o NIF com atenção: é por ele que ficas ligado ao teu registo, se já trabalhaste connosco.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensagem)}`, '_blank', 'noopener');
+  };
 
   const partilhar = async () => {
     if (!link) return;
@@ -51,8 +79,15 @@ export const MotoristaConviteDialog = ({ open, onOpenChange }: MotoristaConviteD
             <div className="rounded-lg border bg-muted/50 p-3">
               <p className="break-all font-mono text-sm text-primary">{link}</p>
             </div>
+            <Button
+              onClick={enviarWhatsApp}
+              className="w-full bg-[#25D366] text-white hover:bg-[#1da851]"
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              Enviar convite por WhatsApp
+            </Button>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button onClick={copiar} className="flex-1">
+              <Button variant="outline" onClick={copiar} className="flex-1">
                 <Copy className="mr-2 h-4 w-4" />
                 Copiar link
               </Button>
