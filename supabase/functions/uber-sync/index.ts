@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import {
+  authenticateUser,
+  AuthorizationError,
+  isInternalRequest,
+  requireOrgAdmin,
+} from "../_shared/auth/edgeAuthorization.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,22 +33,14 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
   });
 
 const requireUserId = async (req: Request, supabaseUrl: string, anonKey: string) => {
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    throw new UberSyncError("Sessão inválida. Inicie sessão novamente.", 401, "unauthorized");
-  }
-
-  const token = authHeader.replace("Bearer ", "");
-  const authClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
+  const authClient = createClient(supabaseUrl, anonKey);
+  const user = await authenticateUser(req, {
+    getUser: async (token) => {
+      const { data, error } = await authClient.auth.getUser(token);
+      return { user: error || !data.user ? null : { id: data.user.id } };
+    },
   });
-
-  const { data, error } = await authClient.auth.getClaims(token);
-  if (error || !data?.claims?.sub) {
-    throw new UberSyncError("Sessão inválida. Inicie sessão novamente.", 401, "unauthorized", error?.message);
-  }
-
-  return data.claims.sub;
+  return user.id;
 };
 
 serve(async (req) => {
@@ -61,9 +59,15 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   let integracaoId: string | null = null;
   let executadoPor: string | null = null;
+  // Só se escreve em uber_sync_logs depois de provar que o chamador manda
+  // nesta integração; antes disso um erro não pode deixar rasto na org alheia.
+  let autorizado = false;
 
   try {
-    executadoPor = await requireUserId(req, supabaseUrl, anonKey);
+    const isInternal = isInternalRequest(req, serviceRoleKey);
+    if (!isInternal) {
+      executadoPor = await requireUserId(req, supabaseUrl, anonKey);
+    }
 
     const body = await req.json().catch(() => ({}));
     integracaoId = typeof body.integracao_id === "string" ? body.integracao_id : null;
@@ -74,7 +78,7 @@ serve(async (req) => {
 
     const { data: integracao, error: integracaoError } = await supabase
       .from("plataformas_configuracao")
-      .select("id, nome, plataforma, ativo, client_secret, last_webhook_at")
+      .select("id, nome, plataforma, ativo, client_secret, last_webhook_at, org_id")
       .eq("id", integracaoId)
       .eq("plataforma", "uber")
       .maybeSingle();
@@ -86,6 +90,22 @@ serve(async (req) => {
     if (!integracao) {
       throw new UberSyncError("Integração Uber não encontrada.", 404, "integration_not_found");
     }
+
+    if (executadoPor) {
+      if (!integracao.org_id) {
+        throw new UberSyncError("Integração sem organização associada.", 400, "integration_without_org");
+      }
+      await requireOrgAdmin(executadoPor, integracao.org_id, async (userId, orgId) => {
+        const { data, error } = await supabase
+          .from("user_organizacoes")
+          .select("is_admin")
+          .eq("user_id", userId)
+          .eq("org_id", orgId)
+          .maybeSingle();
+        return error ? null : data;
+      });
+    }
+    autorizado = true;
 
     if (!integracao.ativo) {
       throw new UberSyncError("A integração Uber está inactiva.", 400, "integration_inactive");
@@ -134,12 +154,16 @@ serve(async (req) => {
       replay_hint: "Use a função uber-webhook com replay_pending=true para reprocessar eventos já recebidos.",
     });
   } catch (error) {
+    if (error instanceof AuthorizationError) {
+      return jsonResponse({ success: false, error: error.message, code: "unauthorized" }, error.status);
+    }
+
     const message = error instanceof Error ? error.message : "Erro inesperado";
     const status = error instanceof UberSyncError ? error.status : 500;
     const code = error instanceof UberSyncError ? error.code : "uber_sync_unexpected_error";
     const details = error instanceof UberSyncError ? error.details : null;
 
-    if (integracaoId) {
+    if (integracaoId && autorizado) {
       await supabase.from("uber_sync_logs").insert({
         integracao_id: integracaoId,
         executado_por: executadoPor,

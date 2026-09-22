@@ -72,6 +72,19 @@ export async function requireOrgMember(
   if (!membership) throw new AuthorizationError('Sem acesso a esta organização', 403);
 }
 
+export type AnyOrgAdminLookup = (userId: string) => Promise<boolean>;
+
+// Para endpoints sem org no pedido (testes de credenciais antes de gravar a
+// integração): basta ser admin de alguma organização para poder usar o relay.
+export async function requireAnyOrgAdmin(
+  userId: string,
+  lookup: AnyOrgAdminLookup,
+): Promise<void> {
+  if (!(await lookup(userId))) {
+    throw new AuthorizationError('Sem permissão de administrador', 403);
+  }
+}
+
 export function isInternalRequest(req: Request, serviceRoleKey: string): boolean {
   const token = readBearerToken(req);
   return Boolean(serviceRoleKey && token && token === serviceRoleKey);

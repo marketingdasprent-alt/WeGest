@@ -104,7 +104,10 @@ WHERE cc.id = a.cc_id;
 -- imputar — ou que imputa a alguém mas nenhum ecrã mostra. Uma linha aqui é
 -- sempre um erro por resolver.
 
-CREATE OR REPLACE VIEW public.v_dinheiro_sem_dono AS
+-- security_invoker: junta tabelas com RLS por organização e só pode mostrar o
+-- que o chamador vê (auditoria 2026-09-22).
+CREATE OR REPLACE VIEW public.v_dinheiro_sem_dono
+WITH (security_invoker = true) AS
 
 -- Ganhos de plataforma sem motorista resolvido: ninguém os vê, ninguém os
 -- cobra, e o fecho não os apanha.
@@ -184,5 +187,10 @@ WHERE f.categoria = 'renda_viatura'
       AND (ct.data_fim IS NULL OR ct.data_fim::date >= f.data_movimento)
   );
 
+REVOKE ALL ON TABLE public.v_dinheiro_sem_dono FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.v_dinheiro_sem_dono TO authenticated, service_role;
+
 COMMENT ON VIEW public.v_dinheiro_sem_dono IS
   'Dinheiro que o sistema não sabe a quem imputar, ou que imputa mas nenhum ecrã mostra. Uma linha aqui é um erro por resolver — rever antes de fechar o período.';
+
+NOTIFY pgrst, 'reload schema';

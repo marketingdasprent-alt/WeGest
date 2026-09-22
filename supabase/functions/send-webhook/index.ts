@@ -114,7 +114,15 @@ Deno.serve(async (req) => {
     const resultados = await Promise.all(
       webhooks.map(async (webhook) => {
         try {
-          console.log(`Enviando para webhook: ${webhook.nome} (${webhook.url})`);
+          // Só o host: a URL pode levar tokens na query e os logs persistem.
+          const destino = (() => {
+            try {
+              return new URL(webhook.url).host;
+            } catch {
+              return 'url inválida';
+            }
+          })();
+          console.log(`Enviando para webhook: ${webhook.nome} (${destino})`);
 
           const headers: Record<string, string> = {
             'Content-Type': 'application/json',
@@ -135,8 +143,9 @@ Deno.serve(async (req) => {
             }),
           });
 
-          const responseText = await response.text();
-          console.log(`Resposta de ${webhook.nome}: ${response.status} - ${responseText.substring(0, 200)}`);
+          // Consome o corpo sem o registar: pode trazer PII do sistema de destino.
+          await response.text().catch(() => undefined);
+          console.log(`Resposta de ${webhook.nome}: ${response.status}`);
 
           return {
             webhook: webhook.nome,
