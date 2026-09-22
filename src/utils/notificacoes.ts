@@ -3,6 +3,7 @@ import type { Notificacao } from '@/types/notificacao';
 // O mapa mantém cada tipo com um destino honesto; tipos novos usam o fallback.
 export const TIPOS_NOTIFICACAO = [
   'assistencia_ticket_aberto_demasiado_tempo',
+  'cartao_frota_alterado',
   'cobranca_em_atraso',
   'cobranca_gerada',
   'custo_sem_viatura',
@@ -98,6 +99,9 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
   cobranca_em_atraso: { label: 'Ver cobrança', rota: '/administrativo/faturacao' },
   motorista_recibo_por_validar: { label: 'Ver recibos', rota: '/administrativo' },
   custo_sem_viatura: { label: 'Ver importações', rota: '/administrativo' },
+  // Sem link do motor de propósito (a supressão por «aviso em aberto» esconderia
+  // a devolução atrás da atribuição); a mensagem diz qual é o cartão.
+  cartao_frota_alterado: { label: 'Ver cartões', rota: '/administrativo/cartoes' },
   invoice_nao_enviada_ao_cliente: { label: 'Ver fatura', rota: '/administrativo/faturacao' },
   recibo_anulado: { label: 'Ver recibos', rota: '/administrativo' },
 

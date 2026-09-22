@@ -111,6 +111,8 @@ const EVENTOS_POR_MODULO: Record<string, string[]> = {
   assistencia_ticket: ['assistencia_ticket.aberto_demasiado_tempo'],
   cobranca: [
     'cobranca.em_atraso',
+    // O cartão de combustível é um instrumento de despesa: quem muda de titular muda de quem paga.
+    'cartao_frota.alterado',
     'custo.sem_viatura',
     'cobranca.gerada',
     'invoice.nao_enviada_ao_cliente',
@@ -200,6 +202,7 @@ export function moduloDoEventType(eventType: string): string {
 // Rótulos manuais preservam acentos e acrónimos que o identificador não contém.
 const ROTULOS: Record<string, string> = {
   'assistencia_ticket.aberto_demasiado_tempo': 'Ticket aberto há demasiado tempo',
+  'cartao_frota.alterado': 'Cartão de frota alterado',
   'cobranca.em_atraso': 'Cobrança em atraso',
   'cobranca.gerada': 'Cobrança gerada',
   'custo.sem_viatura': 'Custo importado sem viatura atribuída',

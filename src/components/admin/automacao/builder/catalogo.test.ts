@@ -74,6 +74,8 @@ describe('CATALOGO', () => {
     expect(eventosDoModulo('cobranca')).toContain('cobranca.em_atraso');
     expect(eventosDoModulo('cobranca')).toContain('motorista_recibo.por_validar');
     expect(eventosDoModulo('cobranca')).toContain('custo.sem_viatura');
+    // O cartão de combustível muda quem paga — vive com o dinheiro, não com a viatura.
+    expect(eventosDoModulo('cobranca')).toContain('cartao_frota.alterado');
   });
 
   it('módulo desconhecido devolve lista vazia em vez de rebentar', () => {

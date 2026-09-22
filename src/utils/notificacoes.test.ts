@@ -280,3 +280,17 @@ describe('motorista_documento_pendente', () => {
     expect(TIPOS_NOTIFICACAO).toContain('motorista_documento_pendente');
   });
 });
+
+describe('cartao_frota_alterado', () => {
+  it('sem link cai na lista de cartões de frota', () => {
+    // O motor não preenche link para este tipo: a supressão por «aviso em
+    // aberto» (tipo + link) esconderia a devolução atrás da atribuição.
+    const n = fixture({ tipo: 'cartao_frota_alterado', link: null });
+    expect(notificacaoLink(n)).toBe('/administrativo/cartoes');
+    expect(notificacaoLabel(n)).toBe('Ver cartões');
+  });
+
+  it('está registado na lista de tipos', () => {
+    expect(TIPOS_NOTIFICACAO).toContain('cartao_frota_alterado');
+  });
+});

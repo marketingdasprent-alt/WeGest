@@ -131,4 +131,10 @@ describe('identidadeDoModulo', () => {
     expect(chaveDoEvento('motorista_recibo.por_validar')).toBe('cobranca');
     expect(identidadeDoEvento('motorista_recibo.por_validar').nome).toBe('Financeiro');
   });
+
+  it('o cartao de frota e filtrado no Financeiro', () => {
+    // Mudar o titular do cartao muda quem paga o combustivel. Sem alias caia em "Outros".
+    expect(chaveDoEvento('cartao_frota.alterado')).toBe('cobranca');
+    expect(identidadeDoEvento('cartao_frota.alterado').nome).toBe('Financeiro');
+  });
 });

@@ -46,8 +46,11 @@ select is(
 -- 3. As 4 regras de expiração ganham um template de email.
 select is(
   (
+    -- Restrito aos códigos de expiração: outras migrações semeiam os seus
+    -- próprios templates por organização (semana em falta, cartão de frota).
     select array_agg(codigo order by codigo) from public.notification_templates
     where org_id = '00000000-0000-0000-0000-0000000c0000' and canal = 'email'
+      and codigo like any (array['viatura.%_expirando', 'motorista.%_expirando'])
   ),
   array['motorista.carta_expirando', 'motorista.licenca_tvde_expirando', 'viatura.inspecao_expirando', 'viatura.seguro_expirando'],
   'seed_automacao_defaults() cria os 4 templates de email esperados'
@@ -62,7 +65,8 @@ select is(
 
 -- 5. Os templates estão ativos e no canal certo (o que o worker efetivamente procura).
 select is(
-  (select count(*)::int from public.notification_templates where org_id = '00000000-0000-0000-0000-0000000c0000' and canal = 'email' and ativo = true and idioma = 'pt-PT'),
+  (select count(*)::int from public.notification_templates where org_id = '00000000-0000-0000-0000-0000000c0000' and canal = 'email' and ativo = true and idioma = 'pt-PT'
+     and codigo like any (array['viatura.%_expirando', 'motorista.%_expirando'])),
   4,
   'os 4 templates estão ativos, canal email, idioma pt-PT'
 );
@@ -77,7 +81,8 @@ select ok(
 select public.seed_automacao_defaults('00000000-0000-0000-0000-0000000c0000');
 
 select is(
-  (select count(*)::int from public.notification_templates where org_id = '00000000-0000-0000-0000-0000000c0000' and canal = 'email'),
+  (select count(*)::int from public.notification_templates where org_id = '00000000-0000-0000-0000-0000000c0000' and canal = 'email'
+     and codigo like any (array['viatura.%_expirando', 'motorista.%_expirando'])),
   4,
   'chamar seed_automacao_defaults() outra vez não duplica os templates'
 );
