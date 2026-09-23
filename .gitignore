@@ -76,3 +76,4 @@ security-audit/
 
 # Dump one-off AnyRent (dados de clientes, NIFs) - nunca commitar
 anyrent-export/
+.maestri/
