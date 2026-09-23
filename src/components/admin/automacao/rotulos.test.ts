@@ -137,4 +137,9 @@ describe('identidadeDoModulo', () => {
     expect(chaveDoEvento('cartao_frota.alterado')).toBe('cobranca');
     expect(identidadeDoEvento('cartao_frota.alterado').nome).toBe('Financeiro');
   });
+
+  it('o contrato de motorista e filtrado nos contratos', () => {
+    expect(chaveDoEvento('contrato.alterado')).toBe('contrato_renting');
+    expect(identidadeDoEvento('contrato.alterado').nome).toBe('Renting');
+  });
 });

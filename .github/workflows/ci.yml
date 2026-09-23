@@ -282,7 +282,8 @@ jobs:
             automacao_saude_ignorar_failed_job \
             automacao_timeline_views \
             retry_failed_job \
-            cartao_frota_alterado
+            cartao_frota_alterado \
+            contrato_alterado
 
       # ── Gate 2: notificações ──────────────────────────────────────────
       - name: pgTAP — notificações

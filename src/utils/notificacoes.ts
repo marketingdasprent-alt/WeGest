@@ -4,6 +4,7 @@ import type { Notificacao } from '@/types/notificacao';
 export const TIPOS_NOTIFICACAO = [
   'assistencia_ticket_aberto_demasiado_tempo',
   'cartao_frota_alterado',
+  'contrato_alterado',
   'cobranca_em_atraso',
   'cobranca_gerada',
   'custo_sem_viatura',
@@ -89,6 +90,9 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
   motorista_reparacao_cobranca: { label: 'Ver conta', rota: '/motorista/painel' },
 
   // ── Contratos e reservas ────────────────────────────────────────────────
+  // Sem link do motor de propósito (a supressão por «aviso em aberto» esconderia
+  // a 2.ª alteração atrás da 1.ª); a mensagem diz qual é o contrato.
+  contrato_alterado: { label: 'Ver contratos', rota: '/contratos' },
   contrato_renting_criado: { label: 'Ver contrato', rota: '/renting/contratos' },
   contrato_renting_renovacao_proxima: { label: 'Ver contrato', rota: '/renting/contratos' },
   contrato_renting_sem_checkin: { label: 'Ver contrato', rota: '/renting/contratos' },

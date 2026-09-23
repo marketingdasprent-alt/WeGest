@@ -66,6 +66,8 @@ const ALIAS: Record<string, string> = {
   custo: 'cobranca',
   // O cartao de combustivel decide a quem e imputado o gasto: e financeiro.
   cartao_frota: 'cobranca',
+  // O contrato de motorista e um contrato: filtra-se com os de renting.
+  contrato: 'contrato_renting',
 };
 
 const POR_CHAVE = new Map(MODULOS.map((m) => [m.chave, m]));

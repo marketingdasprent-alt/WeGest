@@ -281,6 +281,18 @@ describe('motorista_documento_pendente', () => {
   });
 });
 
+describe('contrato_alterado', () => {
+  it('sem link cai na lista de contratos', () => {
+    const n = fixture({ tipo: 'contrato_alterado', link: null });
+    expect(notificacaoLink(n)).toBe('/contratos');
+    expect(notificacaoLabel(n)).toBe('Ver contratos');
+  });
+
+  it('está registado na lista de tipos', () => {
+    expect(TIPOS_NOTIFICACAO).toContain('contrato_alterado');
+  });
+});
+
 describe('cartao_frota_alterado', () => {
   it('sem link cai na lista de cartões de frota', () => {
     // O motor não preenche link para este tipo: a supressão por «aviso em

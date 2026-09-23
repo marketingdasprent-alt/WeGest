@@ -120,6 +120,8 @@ const EVENTOS_POR_MODULO: Record<string, string[]> = {
     'motorista_recibo.por_validar',
   ],
   contrato_renting: [
+    // Contrato de motorista (TVDE): vive com os contratos, não com a ficha.
+    'contrato.alterado',
     'contrato_renting.criado',
     'contrato_renting.fechado_com_danos',
     'contrato_renting.renovacao_proxima',
@@ -207,6 +209,7 @@ const ROTULOS: Record<string, string> = {
   'cobranca.gerada': 'Cobrança gerada',
   'custo.sem_viatura': 'Custo importado sem viatura atribuída',
   'invoice.nao_enviada_ao_cliente': 'Fatura emitida sem ser enviada',
+  'contrato.alterado': 'Contrato alterado',
   'contrato_renting.criado': 'Contrato criado',
   'contrato_renting.fechado_com_danos': 'Contrato fechado com danos',
   'contrato_renting.renovacao_proxima': 'Renovação a aproximar-se',

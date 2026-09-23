@@ -78,6 +78,10 @@ describe('CATALOGO', () => {
     expect(eventosDoModulo('cobranca')).toContain('cartao_frota.alterado');
   });
 
+  it('o contrato de motorista alterado aparece com os contratos', () => {
+    expect(eventosDoModulo('contrato_renting')).toContain('contrato.alterado');
+  });
+
   it('módulo desconhecido devolve lista vazia em vez de rebentar', () => {
     expect(eventosDoModulo('inexistente')).toEqual([]);
   });
