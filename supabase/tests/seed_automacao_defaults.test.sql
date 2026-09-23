@@ -40,13 +40,17 @@
 -- 'cartao_frota.alterado' vem da seed_alerta_cartao_frota_alterado() (migração
 -- 20260922130000), pelo mesmo padrão. Semeia duas linhas gémeas; só a
 -- 'notificacao' entra nesta contagem, a 'email' fica fora pelo filtro abaixo.
+--
+-- ── 22.ª regra (2026-09-23) ─────────────────────────────────────────────────
+-- 'contrato.alterado' vem da seed_alerta_contrato_alterado() (migração
+-- 20260923100000), pelo mesmo padrão das duas anteriores.
 -- ============================================================
 
 begin;
 select plan(6);
 
 -- Actualizar ao acrescentar/remover uma regra semeada na criação da organização.
-create temp table _esperado as select 21::int as regras_esperadas;
+create temp table _esperado as select 22::int as regras_esperadas;
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org Seed A', 'seed-automacao-a');
