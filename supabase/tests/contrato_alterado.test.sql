@@ -201,7 +201,8 @@ select is(
   (select payload->>'alteracao' from public.domain_events
     where event_type = 'contrato.alterado'
       and entity_id = '00000000-0000-0000-0000-000000190001'
-    order by created_at desc limit 1),
+      -- Mesma transacção = mesmo now(); ordenar por created_at empata.
+      and payload->>'status' = 'encerrado'),
   'estado',
   'encerrar o contrato classifica-se como "estado"'
 );
