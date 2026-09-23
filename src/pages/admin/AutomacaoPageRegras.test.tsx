@@ -337,7 +337,7 @@ describe('AutomacaoPage — Regras e permissões', () => {
 
     await waitFor(() => {
       expect(mockToastFn).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'Regra desligada' })
+        expect.objectContaining({ title: 'Automação desligada' })
       );
     });
   });

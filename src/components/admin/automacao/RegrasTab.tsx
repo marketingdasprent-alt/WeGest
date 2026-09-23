@@ -9,7 +9,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { useEditorAutomacao } from './builder/editorAutomacao.contexto';
 import { RegrasTabela } from './RegrasTabela';
-import { agruparPorModulo, outrasAccoesDoGrupo } from './agrupamento';
+import { agruparPorModulo, colapsarPorGrupo } from './agrupamento';
 import { chaveDoEvento, TODOS_OS_MODULOS } from './rotulos';
 
 /**
@@ -31,10 +31,11 @@ export function RegrasTab() {
   const { toast } = useToast();
   const { vista, moduloFiltro, abrirRegra } = useEditorAutomacao();
 
-  const handleToggle = async (id: string, ativo: boolean) => {
+  // Uma automação são N regras-irmãs; o interruptor liga/desliga todas.
+  const handleToggle = async (ids: string[], ativo: boolean) => {
     try {
-      await toggleRule.mutateAsync({ id, ativo });
-      toast({ title: ativo ? 'Regra ligada' : 'Regra desligada' });
+      await Promise.all(ids.map((id) => toggleRule.mutateAsync({ id, ativo })));
+      toast({ title: ativo ? 'Automação ligada' : 'Automação desligada' });
     } catch (error) {
       toast({
         title: 'Erro',
@@ -56,16 +57,16 @@ export function RegrasTab() {
   // o nome, e o painel de blocos do construtor — que recebe o mesmo valor —
   // compara-o com a chave: nunca coincidiam, e filtrar por módulo deixava a
   // paleta do canvas sem um único gatilho.
+  // Uma linha por automação (grupo_id), não por acção: sino + email do mesmo
+  // gatilho apareciam como duas automações iguais.
+  const automacoes = colapsarPorGrupo(regras);
   const regrasFiltradas =
     moduloFiltro === TODOS_OS_MODULOS
-      ? regras
-      : regras.filter((r) => chaveDoEvento(r.event_type) === moduloFiltro);
+      ? automacoes
+      : automacoes.filter((r) => chaveDoEvento(r.event_type) === moduloFiltro);
 
   // Com um módulo escolhido sobra um grupo, e a tabela não desenha cabeçalhos.
   const grupos = agruparPorModulo(regrasFiltradas);
-  // Sobre TODAS as regras, não só as filtradas: uma acção-irmã pode ter
-  // ficado fora do módulo escolhido, mas o badge continua a fazer sentido.
-  const outrasAccoes = outrasAccoesDoGrupo(regras);
 
   return (
     // Só esta vista tem scroll próprio: é uma lista. O canvas não scrolla.
@@ -83,7 +84,6 @@ export function RegrasTab() {
           toggleEmCurso={toggleRule.isPending ? toggleRule.variables?.id : undefined}
           onToggle={handleToggle}
           onAbrir={(regra) => abrirRegra(regra.id)}
-          outrasAccoes={outrasAccoes}
         />
       )}
     </div>
