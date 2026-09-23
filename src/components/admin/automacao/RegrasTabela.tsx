@@ -55,14 +55,12 @@ export function RegrasTabela({
   toggleEmCurso,
   onToggle,
   onAbrir,
-  outrasAccoes,
 }: {
   grupos: GrupoDeRegras[];
   podeGerir: boolean;
   toggleEmCurso?: string;
-  onToggle: (id: string, ativo: boolean) => void;
+  onToggle: (ids: string[], ativo: boolean) => void;
   onAbrir: (regra: { id: string; nome: string }) => void;
-  outrasAccoes: Map<string, string[]>;
 }) {
   const comSeccoes = grupos.length > 1;
 
@@ -119,15 +117,10 @@ export function RegrasTabela({
                 </TableCell>
                 <TableCell className="font-medium">
                   {regra.nome}
-                  {/* Mostra as ações irmãs sem obrigar a abrir o construtor. */}
-                  {(outrasAccoes.get(regra.rule_id) ?? []).length > 0 && (
-                    <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
-                      +{' '}
-                      {(outrasAccoes.get(regra.rule_id) ?? [])
-                        .map((tipo) => ROTULO_DA_ACCAO[tipo] ?? tipo)
-                        .join(', ')}
-                    </span>
-                  )}
+                  {/* As acções da automação, sem obrigar a abrir o construtor. */}
+                  <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
+                    {regra.acoes.map((tipo) => ROTULO_DA_ACCAO[tipo] ?? tipo).join(' + ')}
+                  </span>
                   <span
                     className="block text-[11px] md:hidden"
                     style={{ color: `hsl(var(${identidadeDoEvento(regra.event_type).token}))` }}
@@ -184,8 +177,11 @@ export function RegrasTabela({
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <Switch
                     checked={regra.ativo}
-                    onCheckedChange={(checked) => onToggle(regra.rule_id, checked)}
-                    disabled={!podeGerir || toggleEmCurso === regra.rule_id}
+                    onCheckedChange={(checked) => onToggle(regra.rule_ids, checked)}
+                    disabled={
+                      !podeGerir ||
+                      (toggleEmCurso != null && regra.rule_ids.includes(toggleEmCurso))
+                    }
                   />
                 </TableCell>
               </TableRow>
