@@ -429,6 +429,7 @@ const ContratoForm = () => {
                       onCriarNovoCliente={() => setClienteDialogOpen(true)}
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                       travado={camposTravados}
+                      proximaRenovacaoEm={contrato?.proxima_renovacao_em ?? null}
                     />
                   </TabsContent>
 

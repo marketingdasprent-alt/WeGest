@@ -48,6 +48,127 @@ export function calcularDataFimLongaDuracao(
   return proximaDataRenovacao(dataInicio, renovacaoOpcao, renovacaoIntervaloDias);
 }
 
+/** Dias antes do prazo a partir dos quais a BD aceita renovar um TVDE. */
+export const JANELA_RENOVACAO_DIAS = 7;
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+type CicloOpcao = string | null | undefined;
+type CicloIntervalo = number | null | undefined;
+
+export type CicloRenovacaoInput = Pick<
+  ContratoRenovavelInput,
+  'data_inicio' | 'renovacao_opcao' | 'renovacao_intervalo_dias' | 'proxima_renovacao_em'
+>;
+
+function diasNoMes(ano: number, mes: number): number {
+  return new Date(ano, mes + 1, 0).getDate();
+}
+
+// Âncora + n meses no relógio local, dia preso ao último do mês como o
+// `+ interval '1 month'` do Postgres. Conta sempre da âncora: o 31 não escorrega.
+function somarMeses(ancora: Date, n: number): Date {
+  const ano = ancora.getFullYear();
+  const mes = ancora.getMonth() + n;
+  const dia = Math.min(ancora.getDate(), diasNoMes(ano, mes));
+  return new Date(
+    ano,
+    mes,
+    dia,
+    ancora.getHours(),
+    ancora.getMinutes(),
+    ancora.getSeconds(),
+    ancora.getMilliseconds()
+  );
+}
+
+// Dias de calendário, não 24 h: a hora da âncora mantém-se na mudança de hora.
+function somarDias(ancora: Date, n: number): Date {
+  return new Date(
+    ancora.getFullYear(),
+    ancora.getMonth(),
+    ancora.getDate() + n,
+    ancora.getHours(),
+    ancora.getMinutes(),
+    ancora.getSeconds(),
+    ancora.getMilliseconds()
+  );
+}
+
+function diasDeCalendario(de: Date, ate: Date): number {
+  const a = Date.UTC(de.getFullYear(), de.getMonth(), de.getDate());
+  const b = Date.UTC(ate.getFullYear(), ate.getMonth(), ate.getDate());
+  return Math.round((b - a) / DIA_MS);
+}
+
+/**
+ * Espelha `public.proxima_renovacao_no_ciclo`: a data mais cedo da série do
+ * ciclo que fica ESTRITAMENTE depois de `depoisDe`. Hora local do browser
+ * (Lisboa na prática); a BD faz a mesma conta em Europe/Lisbon.
+ */
+export function proximaRenovacaoNoCiclo(
+  ancora: string | Date,
+  opcao: CicloOpcao,
+  intervalo: CicloIntervalo,
+  depoisDe: string | Date
+): Date {
+  const a = new Date(ancora);
+  const ref = new Date(depoisDe);
+
+  if (opcao === 'mesmo_dia_cada_mes') {
+    const meses = (ref.getFullYear() - a.getFullYear()) * 12 + ref.getMonth() - a.getMonth();
+    if (meses < 0) return new Date(a);
+    const candidato = somarMeses(a, meses);
+    return candidato.getTime() > ref.getTime() ? candidato : somarMeses(a, meses + 1);
+  }
+
+  if (opcao === 'primeiro_dia_mes') {
+    return new Date(ref.getFullYear(), ref.getMonth() + 1, 1);
+  }
+
+  const passo = intervalo && intervalo > 0 ? intervalo : 30;
+  const dias = diasDeCalendario(a, ref);
+  if (dias < 0) return new Date(a);
+  const n = Math.floor(dias / passo);
+  const candidato = somarDias(a, n * passo);
+  return candidato.getTime() > ref.getTime() ? candidato : somarDias(a, (n + 1) * passo);
+}
+
+/** O prazo que a próxima renovação fecha — o mesmo `v_ancora` da RPC. */
+export function ancoraRenovacao(c: CicloRenovacaoInput): Date {
+  if (c.proxima_renovacao_em) return new Date(c.proxima_renovacao_em);
+  return proximaDataRenovacao(c.data_inicio, c.renovacao_opcao, c.renovacao_intervalo_dias);
+}
+
+export interface JanelaRenovacao {
+  ancora: Date;
+  /** Primeiro dia (00:00) em que a BD aceita a renovação. */
+  abreEm: Date;
+  podeRenovar: boolean;
+}
+
+/** Comparação ao dia, como a guarda da RPC: renova-se de 7 dias antes em diante. */
+export function janelaRenovacaoTvde(
+  c: CicloRenovacaoInput,
+  agora: Date = new Date()
+): JanelaRenovacao {
+  const ancora = ancoraRenovacao(c);
+  const abreEm = new Date(
+    ancora.getFullYear(),
+    ancora.getMonth(),
+    ancora.getDate() - JANELA_RENOVACAO_DIAS
+  );
+  return { ancora, abreEm, podeRenovar: inicioDoDia(agora).getTime() >= abreEm.getTime() };
+}
+
+/** Nova proxima_renovacao_em de um TVDE: segue o ciclo a partir do prazo, e
+ *  quem renova atrasado salta logo para a ocorrência seguinte a hoje. */
+export function proximaRenovacaoTvde(c: CicloRenovacaoInput, agora: Date = new Date()): Date {
+  const ancora = ancoraRenovacao(c);
+  const depoisDe = agora.getTime() > ancora.getTime() ? agora : ancora;
+  return proximaRenovacaoNoCiclo(ancora, c.renovacao_opcao, c.renovacao_intervalo_dias, depoisDe);
+}
+
 export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
   return (
     (c.regime === 'rent_a_car' || c.regime === 'tvde') &&

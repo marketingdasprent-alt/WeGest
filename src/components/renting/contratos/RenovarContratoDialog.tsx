@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, RefreshCw, AlertTriangle, Gauge } from 'lucide-react';
+import { Loader2, RefreshCw, AlertTriangle, Gauge, CalendarClock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -17,7 +17,11 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/utils/formatters';
 import { useRenovarContrato } from '@/hooks/useContratosRenting';
-import { prazoRenovacao, proximaDataRenovacao } from '@/lib/renovacaoContrato';
+import {
+  janelaRenovacaoTvde,
+  proximaDataRenovacao,
+  proximaRenovacaoTvde,
+} from '@/lib/renovacaoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 interface Props {
@@ -65,15 +69,20 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
   const kmInicio = parseKm(kmInicioStr);
   const kmFim = parseKm(kmFimStr);
 
-  // TVDE: renovar não cria versão nem fecha o contrato — só avança
-  // proxima_renovacao_em, calculada a partir de HOJE (espelha a RPC,
-  // 20260908093000). Rent-a-car: fecha e abre o mês seguinte a partir da data_fim.
+  // TVDE: renovar não cria versão nem fecha o contrato — avança
+  // proxima_renovacao_em no ciclo escolhido, contado do prazo, e a BD só aceita
+  // de 7 dias antes em diante (espelha a RPC). Rent-a-car: fecha e abre o mês
+  // seguinte a partir da data_fim.
   const isTvde = contrato.regime === 'tvde';
+  const agora = new Date();
+  const janela = isTvde ? janelaRenovacaoTvde(contrato, agora) : null;
+  const proximaTvde = isTvde ? proximaRenovacaoTvde(contrato, agora) : null;
+  const tvdeEmAtraso = !!janela && janela.ancora.getTime() < new Date(agora).setHours(0, 0, 0, 0);
+  const foraDaJanela = !!janela && !janela.podeRenovar;
 
   const novoPeriodo = useMemo(() => {
-    // Rent-a-car sem data_fim não chega aqui (contratoRenovavel exige-a); o
-    // fallback para now() fica pelo TVDE, que a RPC renova sempre a partir de hoje.
-    const baseFim = (isTvde ? null : contrato.data_fim) ?? new Date().toISOString();
+    // Rent-a-car sem data_fim não chega aqui (contratoRenovavel exige-a).
+    const baseFim = contrato.data_fim ?? new Date().toISOString();
     const inicio = new Date(baseFim);
     const fim = proximaDataRenovacao(
       baseFim,
@@ -81,7 +90,7 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
       contrato.renovacao_intervalo_dias
     );
     return { inicio, fim };
-  }, [isTvde, contrato.data_fim, contrato.renovacao_opcao, contrato.renovacao_intervalo_dias]);
+  }, [contrato.data_fim, contrato.renovacao_opcao, contrato.renovacao_intervalo_dias]);
 
   // Cálculo do excesso de km (espelha a RPC; aqui só para pré-visualizar).
   // Só há excesso quando existe um limite mensal DEFINIDO (kms_incluidos != null);
@@ -109,8 +118,8 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
         kmFim,
       });
       toast.success(
-        isTvde
-          ? `Renovação registada — próxima a ${formatDate(novoPeriodo.fim.toISOString())}.`
+        proximaTvde
+          ? `Contrato renovado — versão ${(contrato.versao ?? 1) + 1}, próxima renovação a ${formatDate(proximaTvde)}.`
           : 'Contrato renovado — aberto o novo mês por faturar.'
       );
       onOpenChange(false);
@@ -129,24 +138,32 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
           </DialogTitle>
           <DialogDescription>
             {isTvde
-              ? 'Regista a renovação e marca a próxima. O contrato e a data de início mantêm-se.'
+              ? `Fecha este período — fica no histórico como versão ${contrato.versao ?? 1}, para consultar e imprimir — e continua o mesmo contrato na versão ${(contrato.versao ?? 1) + 1}, a partir de agora.`
               : 'Fecha o contrato atual (passa ao histórico) e abre um novo mês, por faturar, com o código mais recente.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1 text-sm">
-          <div className="rounded-md border divide-y">
-            {isTvde ? (
+          {janela && proximaTvde ? (
+            <div className="rounded-md border divide-y">
               <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-muted-foreground text-xs">Renovação prevista</span>
                 <span className="tabular-nums">
-                  {(() => {
-                    const prazo = prazoRenovacao(contrato);
-                    return prazo ? formatDate(prazo.toISOString()) : '—';
-                  })()}
+                  {formatDate(janela.ancora)}
+                  {tvdeEmAtraso && (
+                    <span className="ml-1.5 text-xs text-amber-700 dark:text-amber-300">
+                      (em atraso)
+                    </span>
+                  )}
                 </span>
               </div>
-            ) : (
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-muted-foreground text-xs">Próxima renovação</span>
+                <span className="tabular-nums font-medium">{formatDate(proximaTvde)}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-md border divide-y">
               <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-muted-foreground text-xs">Período atual</span>
                 <span className="tabular-nums">
@@ -154,20 +171,26 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
                   {contrato.data_fim ? formatDate(contrato.data_fim) : 'em aberto (fecha hoje)'}
                 </span>
               </div>
-            )}
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-muted-foreground text-xs">
-                {isTvde ? 'Próxima renovação' : 'Novo período'}
-              </span>
-              <span className="tabular-nums font-medium">
-                {novoPeriodo
-                  ? `${formatDate(novoPeriodo.inicio.toISOString())} → ${formatDate(
-                      novoPeriodo.fim.toISOString()
-                    )}`
-                  : '—'}
-              </span>
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-muted-foreground text-xs">Novo período</span>
+                <span className="tabular-nums font-medium">
+                  {formatDate(novoPeriodo.inicio)} → {formatDate(novoPeriodo.fim)}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
+
+          {janela && foraDaJanela && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700 dark:text-amber-300"
+            >
+              <CalendarClock className="h-4 w-4 mt-0.5 shrink-0" />
+              <p className="text-xs">
+                {`Próxima renovação só a ${formatDate(janela.ancora)} — pode renovar a partir de ${formatDate(janela.abreEm)}.`}
+              </p>
+            </div>
+          )}
 
           {/* ── Quilómetros ── */}
           <div className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3 space-y-3">
@@ -269,7 +292,7 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
           </Button>
           <Button
             onClick={handleRenovar}
-            disabled={renovarMut.isPending || !novoPeriodo || kmFimInvalido}
+            disabled={renovarMut.isPending || kmFimInvalido || foraDaJanela}
           >
             {renovarMut.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

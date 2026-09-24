@@ -91,6 +91,8 @@ interface ContratoFormSecoesProps {
    * deixar um campo de fora é ele não estar lá dentro.
    */
   travado?: boolean;
+  /** proxima_renovacao_em do contrato (edição) — mostrada na Recolha dos TVDE. */
+  proximaRenovacaoEm?: string | null;
 }
 
 /**
@@ -114,6 +116,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   onCriarNovoMotorista,
   contratoId,
   travado,
+  proximaRenovacaoEm,
 }) => {
   // pointer-events-none é o reforço do `disabled`: o Select da Radix decide
   // se abre pelo seu próprio estado em JS, não pelo atributo nativo. min-w-0
@@ -264,7 +267,11 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         <SectionRegime form={form} />
         <SectionEmpresaEmissora form={form} />
         <SectionCliente form={form} clientes={clientes} />
-        <SectionEntregaRecolha form={form} estacoes={estacoes} />
+        <SectionEntregaRecolha
+          form={form}
+          estacoes={estacoes}
+          proximaRenovacaoEm={proximaRenovacaoEm}
+        />
         {/* Numa troca a Data Início é herdada do elo anterior — mostra-se aqui
             quando esta viatura entrou, que é a data que faltava. */}
         <TrocaViaturaInfo contratoId={contratoId} />

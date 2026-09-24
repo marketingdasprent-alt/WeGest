@@ -23,6 +23,7 @@ interface ContratoTabGeralProps {
   onCriarNovoMotorista?: () => void;
   /** Contrato já aberto: bloqueia tudo menos a secção da Viatura. */
   travado?: boolean;
+  proximaRenovacaoEm?: string | null;
 }
 
 /**
@@ -45,6 +46,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
   onCriarNovoCliente,
   onCriarNovoMotorista,
   travado,
+  proximaRenovacaoEm,
 }) => {
   return (
     <ContratoFormSecoes
@@ -62,6 +64,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
       onCriarNovoCliente={onCriarNovoCliente}
       onCriarNovoMotorista={onCriarNovoMotorista}
       travado={travado}
+      proximaRenovacaoEm={proximaRenovacaoEm}
     />
   );
 };
