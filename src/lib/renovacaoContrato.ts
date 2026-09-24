@@ -13,6 +13,7 @@ export type ContratoRenovavelInput = Pick<
   | 'renovacao_opcao'
   | 'renovacao_intervalo_dias'
   | 'deleted_at'
+  | 'proxima_renovacao_em'
 >;
 
 function inicioDoDia(d: Date): Date {
@@ -59,6 +60,9 @@ export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
 }
 
 export function prazoRenovacao(c: ContratoRenovavelInput): Date | null {
+  // TVDE: renovar avança proxima_renovacao_em no mesmo contrato (ver
+  // 20260908093000); um data_fim que lá esteja é legado das versões de 30 dias.
+  if (c.regime === 'tvde' && c.proxima_renovacao_em) return new Date(c.proxima_renovacao_em);
   if (c.data_fim) return new Date(c.data_fim);
   if (c.regime === 'tvde' && c.is_longa_duracao && c.data_inicio) {
     return proximaDataRenovacao(c.data_inicio, c.renovacao_opcao, c.renovacao_intervalo_dias);

@@ -166,6 +166,40 @@ describe('estadoRenovacaoContrato', () => {
       )
     ).toBeNull();
   });
+  // Desde 20260908093000 renovar um TVDE não cria versão: avança
+  // proxima_renovacao_em no mesmo contrato. Um data_fim de legado (versão de
+  // 30 dias anterior a essa migração) não pode continuar a mandar.
+  it('TVDE já renovado (proxima_renovacao_em futura) deixa de estar por renovar', () => {
+    const renovado = {
+      ...base,
+      regime: 'tvde' as const,
+      data_fim: '2026-07-13T08:00:00',
+      proxima_renovacao_em: '2026-08-12T08:00:00',
+    };
+    expect(estadoRenovacaoContrato(renovado, hoje)).toBeNull();
+    expect(estadoRenovacaoContrato(renovado, new Date('2026-07-14T12:00:00'))).toBeNull();
+  });
+  it('TVDE com proxima_renovacao_em vencida fica em atraso', () => {
+    expect(
+      estadoRenovacaoContrato(
+        {
+          ...base,
+          regime: 'tvde',
+          data_fim: '2026-09-01T08:00:00',
+          proxima_renovacao_em: '2026-07-10T08:00:00',
+        },
+        hoje
+      )
+    ).toBe('atraso');
+  });
+  it('rent-a-car ignora proxima_renovacao_em: manda a data_fim', () => {
+    expect(
+      estadoRenovacaoContrato(
+        { ...base, data_fim: '2026-07-13T08:00:00', proxima_renovacao_em: '2026-08-12T08:00:00' },
+        hoje
+      )
+    ).toBe('hoje');
+  });
 });
 
 describe('prazoRenovacao', () => {
@@ -183,6 +217,21 @@ describe('prazoRenovacao', () => {
     });
     expect(prazo?.getUTCMonth()).toBe(6); // Julho
     expect(prazo?.getUTCDate()).toBe(1);
+  });
+  it('TVDE com proxima_renovacao_em: é esse o prazo, não a data_fim de legado', () => {
+    expect(
+      prazoRenovacao({
+        ...base,
+        regime: 'tvde',
+        data_fim: '2026-09-24T20:24:00Z',
+        proxima_renovacao_em: '2026-10-24T13:41:00Z',
+      })?.toISOString()
+    ).toBe('2026-10-24T13:41:00.000Z');
+  });
+  it('TVDE sem proxima_renovacao_em mantém o comportamento actual (data_fim)', () => {
+    expect(
+      prazoRenovacao({ ...base, regime: 'tvde', proxima_renovacao_em: null })?.toISOString()
+    ).toBe(new Date(base.data_fim!).toISOString());
   });
   it('rent-a-car sem data_fim não tem prazo', () => {
     expect(prazoRenovacao({ ...base, data_fim: null })).toBeNull();
