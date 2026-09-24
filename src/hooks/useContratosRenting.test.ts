@@ -474,6 +474,42 @@ describe('useFecharContrato', () => {
     expect(fechouAgora).toBe(true);
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
   });
+
+  // Um TVDE vivo não tem data_fim (20260924100000) e o aluguer só pára por ela:
+  // fechar sem a gravar deixava o contrato fechado a cobrar para sempre. Tem de
+  // ir no MESMO update que põe 'fechado' — com o contrato ainda em_curso, a
+  // trigger desviava a data para proxima_renovacao_em.
+  const fecharCom = async (contrato: { regime: string; data_fim: string | null }) => {
+    const chains = setupSupabase({
+      estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
+      contratos_renting: { data: contrato, error: null },
+    });
+    const { result } = renderHook(() => useFecharContrato(), { wrapper: createWrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        contratoId: 'c1',
+        contratoCodigo: 821,
+        tipoEvento: 'devolvido',
+        estacaoId: 'est-1',
+        dataEvento: '2026-09-24T15:00:00.000Z',
+      });
+    });
+    // O update do fecho é o que põe 'fechado'.
+    return chains.contratos_renting.update.mock.calls
+      .map(([payload]) => payload as Record<string, unknown>)
+      .find((p) => p.estado_operacional === 'fechado');
+  };
+
+  it('TVDE sem data_fim → grava data_fim = dataEvento no mesmo update do fecho', async () => {
+    const fecho = await fecharCom({ regime: 'tvde', data_fim: null });
+    expect(fecho).toHaveProperty('data_fim', '2026-09-24T15:00:00.000Z');
+  });
+
+  it('rent-a-car → o update do fecho não escreve data_fim', async () => {
+    const fecho = await fecharCom({ regime: 'rent_a_car', data_fim: '2026-09-30T10:00:00.000Z' });
+    expect(fecho).toBeDefined();
+    expect(fecho).not.toHaveProperty('data_fim');
+  });
 });
 
 // ─── usePreencherDadosSaidaAnyRent: preenchimento manual (Any Rent) ────

@@ -40,7 +40,7 @@ const SELECT_COLUMNS = `
   estado_operacional, estado_financeiro, origem, regime,
   tarifa_diaria, tarifa_id, desconto_percentagem, taxa_iva, valor_total_manual,
   total_subtotal, total_iva, total_final, facturado_em,
-  is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
+  is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias, proxima_renovacao_em,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
   km_saida, km_entrada,
   combustivel_saida, eletricidade_saida,
@@ -418,6 +418,23 @@ export function resolveFechoContratoToast(fechouAgora: boolean): {
       };
 }
 
+/** data_fim a gravar no fecho, ou `undefined` para não a tocar.
+ *
+ *  Só TVDE: um TVDE vivo não tem data_fim (20260924100000) e é ela que pára o
+ *  aluguer — fechar sem a gravar deixava o contrato a cobrar para sempre. Fica
+ *  a data do fecho, excepto se já houver uma data_fim de legado ANTERIOR: essa
+ *  mantém-se, porque trocá-la cobrava as semanas do intervalo.
+ *  Rent-a-car nunca é tocado: lá data_fim é o fim contratado. */
+export function dataFimNoFecho(
+  contrato: { regime: string | null; data_fim: string | null } | null | undefined,
+  dataEvento: string
+): string | undefined {
+  if (contrato?.regime !== 'tvde') return undefined;
+  if (contrato.data_fim && new Date(contrato.data_fim).getTime() <= new Date(dataEvento).getTime())
+    return undefined;
+  return dataEvento;
+}
+
 export function useFecharContrato() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -446,6 +463,14 @@ export function useFecharContrato() {
       if (errEstacao) throw errEstacao;
       const cidadeEvento = estacao.cidade?.trim() || estacao.nome;
 
+      const { data: atual, error: errAtual } = await supabase
+        .from('contratos_renting')
+        .select('regime, data_fim')
+        .eq('id', contratoId)
+        .single();
+      if (errAtual) throw errAtual;
+      const dataFim = dataFimNoFecho(atual, dataEvento);
+
       // Fecha sempre para 'fechado', com ou sem `recolha` já registada — antes,
       // sem `recolha`, o estado não mudava e o contrato ficava preso à espera
       // de confirmação. Fechar NÃO é cancelar (ver useCancelarContratoRenting).
@@ -456,6 +481,10 @@ export function useFecharContrato() {
           estado_operacional: 'fechado' as const,
           // Como o contrato acabou: 'devolvido' ou 'recolhido' — informação sobre o motorista.
           tipo_fecho: tipoEvento,
+          // TVDE: no MESMO update que o 'fechado' — com o contrato ainda
+          // em_curso, a trigger fn_tvde_nasce_sem_data_fim desviava a data
+          // para proxima_renovacao_em.
+          ...(dataFim ? { data_fim: dataFim } : {}),
           // Fecha o ciclo da DUA original, se o gestor confirmou a devolução.
           ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),
         })

@@ -125,6 +125,9 @@ export type ContratoRenting = {
   is_longa_duracao: boolean;
   renovacao_opcao: ContratoRenovacaoOpcao | null;
   renovacao_intervalo_dias: number | null;
+  /** TVDE: próxima renovação — é o que renovar avança (não cria versão nem
+   *  mexe na data de início). Opcional: nem todas as queries a seleccionam. */
+  proxima_renovacao_em?: string | null;
 
   franquia_valor: number | null;
   caucao_valor: number | null;
