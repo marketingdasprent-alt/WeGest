@@ -10,8 +10,8 @@
 --     cobrava o retroactivo;
 --   * escrever uma data_fim num TVDE vivo vai para proxima_renovacao_em;
 --   * fechar/substituir continua a gravar data_fim (é o fim real);
---   * renovar um TVDE com legado antigo reabre numa versão nova a partir de
---     hoje, com a data antiga intacta na versão que sai.
+--   * renovar fecha o período numa versão (20260924180000); com legado antigo
+--     a versão que sai guarda a data antiga e a nova começa hoje.
 --
 -- Nada aqui depende do dia da semana: o legado "antigo" é de Janeiro de 2026
 -- e o "corrente" é now() + 2 horas, sempre depois da segunda-feira corrente.
@@ -217,16 +217,19 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000d0a01
 select set_config('request.jwt.claims',
   '{"sub":"00000000-0000-0000-0000-0000000d0a01","role":"authenticated"}', true);
 
-select is(
-  public.renovar_contrato_renting('00000000-0000-0000-0000-0000000d0004'),
-  '00000000-0000-0000-0000-0000000d0004'::uuid,
-  'renovar um TVDE com legado corrente devolve o mesmo contrato'
-);
+create temp table renovado_corrente on commit drop as
+  select public.renovar_contrato_renting('00000000-0000-0000-0000-0000000d0004') as novo_id;
 
 select is(
   (select data_fim from public.contratos_renting where id = '00000000-0000-0000-0000-0000000d0004'),
+  now(),
+  'renovar um TVDE com legado corrente fecha o período agora — antes do legado, sem cobrar a mais'
+);
+
+select is(
+  (select n.data_fim from public.contratos_renting n where n.id = (select novo_id from renovado_corrente)),
   null,
-  'e limpa-lhe a data_fim'
+  'e a versão nova não tem data_fim'
 );
 
 create temp table renovado on commit drop as
@@ -267,7 +270,7 @@ select ok(
 select ok(
   (select n.proxima_renovacao_em > now()
      from public.contratos_renting n where n.id = (select novo_id from renovado)),
-  'a próxima renovação conta a partir de hoje'
+  'a próxima renovação fica no futuro'
 );
 
 select throws_like(

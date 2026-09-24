@@ -1047,6 +1047,8 @@ export function useRenovarContrato() {
       invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['renting'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      qc.invalidateQueries({ queryKey: ['contrato-renovacoes'] });
+      qc.invalidateQueries({ queryKey: ['contrato-historico'] });
     },
   });
 }

@@ -126,7 +126,11 @@ export const ContratoEstadoActions: React.FC<ContratoEstadoActionsProps> = ({
             variant={renovacaoEstado ? 'default' : 'outline'}
             onClick={() => setRenovarAberto(true)}
             className="gap-2"
-            title="Fecha o mês atual e abre o mês seguinte (por faturar), com código novo."
+            title={
+              contrato.regime === 'tvde'
+                ? 'Fecha o período atual numa versão (fica no histórico) e continua o contrato na versão seguinte.'
+                : 'Fecha o mês atual e abre o mês seguinte (por faturar), com código novo.'
+            }
           >
             <RefreshCw className="h-4 w-4" />
             {renovacaoEstado === 'atraso' ? 'Renovar (em atraso)' : 'Renovar contrato'}
