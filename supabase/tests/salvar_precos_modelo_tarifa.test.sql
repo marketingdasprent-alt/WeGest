@@ -79,22 +79,35 @@ insert into public.renting_tarifa_precos_modelo (org_id, tarifa_id, modelo_id, p
   ('00000000-0000-0000-0000-00000007a000', '00000000-0000-0000-0000-00000007b102', '00000000-0000-0000-0000-00000007d002', null, 40, 900),
   ('00000000-0000-0000-0000-00000007b000', '00000000-0000-0000-0000-00000007bb01', '00000000-0000-0000-0000-00000007db01', 300, null, null);
 
+-- reserva_id é NOT NULL: cada contrato precisa da sua reserva. 'concluida'
+-- porque já virou contrato — activa, chocava no overbooking da viatura PR-02.
+insert into public.reservas (id, org_id, codigo, data_inicio, viatura_id, cliente_id, estado) values
+  ('00000000-0000-0000-0000-00000007c401', '00000000-0000-0000-0000-00000007a000', 970001,
+   '2026-09-01T10:00:00Z', '00000000-0000-0000-0000-00000007e001', '00000000-0000-0000-0000-00000007f001', 'concluida'),
+  ('00000000-0000-0000-0000-00000007c402', '00000000-0000-0000-0000-00000007a000', 970002,
+   '2026-08-01T10:00:00Z', '00000000-0000-0000-0000-00000007e002', '00000000-0000-0000-0000-00000007f001', 'concluida'),
+  ('00000000-0000-0000-0000-00000007c403', '00000000-0000-0000-0000-00000007a000', 970003,
+   '2026-09-01T10:00:00Z', '00000000-0000-0000-0000-00000007e002', '00000000-0000-0000-0000-00000007f001', 'concluida');
+
 insert into public.contratos_renting
-  (id, org_id, cliente_id, viatura_id, matricula, tarifa_id, data_inicio, data_fim,
+  (id, org_id, reserva_id, cliente_id, viatura_id, matricula, tarifa_id, data_inicio, data_fim,
    estado_operacional, estado_financeiro, regime, taxa_iva, is_longa_duracao)
 values
   -- C1: TVDE aberto com o Astra — é o contrato que ficava sem preço.
   ('00000000-0000-0000-0000-00000007c001', '00000000-0000-0000-0000-00000007a000',
+   '00000000-0000-0000-0000-00000007c401',
    '00000000-0000-0000-0000-00000007f001', '00000000-0000-0000-0000-00000007e001', 'PR-01-AA',
    '00000000-0000-0000-0000-00000007b101', '2026-09-01T10:00:00Z', null,
    'em_curso', 'pendente', 'tvde', 23, false),
   -- C2: TVDE já fechado com o Panda — não trava nada.
   ('00000000-0000-0000-0000-00000007c002', '00000000-0000-0000-0000-00000007a000',
+   '00000000-0000-0000-0000-00000007c402',
    '00000000-0000-0000-0000-00000007f001', '00000000-0000-0000-0000-00000007e002', 'PR-02-AA',
    '00000000-0000-0000-0000-00000007b101', '2026-08-01T10:00:00Z', '2026-08-20T10:00:00Z',
    'fechado', 'pendente', 'tvde', 23, false),
   -- C3: rent-a-car de longa duração com o Panda — lê o preço mensal.
   ('00000000-0000-0000-0000-00000007c003', '00000000-0000-0000-0000-00000007a000',
+   '00000000-0000-0000-0000-00000007c403',
    '00000000-0000-0000-0000-00000007f001', '00000000-0000-0000-0000-00000007e002', 'PR-02-AA',
    '00000000-0000-0000-0000-00000007b102', '2026-09-01T10:00:00Z', '2027-09-01T10:00:00Z',
    'em_curso', 'pendente', 'rent_a_car', 23, true);
