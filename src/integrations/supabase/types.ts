@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _backup_viaturas_20260710: {
@@ -6385,6 +6410,7 @@ export type Database = {
           enviado_em: string | null
           erro_msg: string | null
           id: string
+          integracao_id: string | null
           numero: string | null
           observacoes: string | null
           org_id: string
@@ -6409,6 +6435,7 @@ export type Database = {
           enviado_em?: string | null
           erro_msg?: string | null
           id?: string
+          integracao_id?: string | null
           numero?: string | null
           observacoes?: string | null
           org_id: string
@@ -6433,6 +6460,7 @@ export type Database = {
           enviado_em?: string | null
           erro_msg?: string | null
           id?: string
+          integracao_id?: string | null
           numero?: string | null
           observacoes?: string | null
           org_id?: string
@@ -6467,6 +6495,13 @@ export type Database = {
             columns: ["contrato_id"]
             isOneToOne: false
             referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
             referencedColumns: ["id"]
           },
           {
@@ -10714,6 +10749,72 @@ export type Database = {
         }
         Relationships: []
       }
+      repsol_duplicados_removidos_20260921: {
+        Row: {
+          amount: number | null
+          antigo: boolean | null
+          card_number: string | null
+          cliente_id: string | null
+          created_at: string | null
+          devedor_cliente_id: string | null
+          fuel_type: string | null
+          id: string | null
+          integracao_id: string | null
+          motorista_id: string | null
+          org_id: string | null
+          quantity: number | null
+          raw_data: Json | null
+          station_location: string | null
+          station_name: string | null
+          transaction_date: string | null
+          transaction_id: string | null
+          updated_at: string | null
+          viatura_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          antigo?: boolean | null
+          card_number?: string | null
+          cliente_id?: string | null
+          created_at?: string | null
+          devedor_cliente_id?: string | null
+          fuel_type?: string | null
+          id?: string | null
+          integracao_id?: string | null
+          motorista_id?: string | null
+          org_id?: string | null
+          quantity?: number | null
+          raw_data?: Json | null
+          station_location?: string | null
+          station_name?: string | null
+          transaction_date?: string | null
+          transaction_id?: string | null
+          updated_at?: string | null
+          viatura_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          antigo?: boolean | null
+          card_number?: string | null
+          cliente_id?: string | null
+          created_at?: string | null
+          devedor_cliente_id?: string | null
+          fuel_type?: string | null
+          id?: string | null
+          integracao_id?: string | null
+          motorista_id?: string | null
+          org_id?: string | null
+          quantity?: number | null
+          raw_data?: Json | null
+          station_location?: string | null
+          station_name?: string | null
+          transaction_date?: string | null
+          transaction_id?: string | null
+          updated_at?: string | null
+          viatura_id?: string | null
+        }
+        Relationships: []
+      }
       repsol_transacoes: {
         Row: {
           amount: number | null
@@ -14902,6 +15003,11 @@ export type Database = {
         Returns: boolean
       }
       can_view_financeiro: { Args: never; Returns: boolean }
+      cartao_frota_tipo_label: { Args: { p_tipo: string }; Returns: string }
+      cartao_frota_titular_nome: {
+        Args: { p_cliente_id: string; p_motorista_id: string }
+        Returns: string
+      }
       cobranca_ceder_a_motorista: {
         Args: { p_cobranca_id: string; p_motorista_id: string }
         Returns: undefined
@@ -14951,6 +15057,7 @@ export type Database = {
           viatura_id: string
         }[]
       }
+      contrato_empresa_nome: { Args: { p_empresa_id: string }; Returns: string }
       contrato_historico_resumo: {
         Args: { p_contrato_id: string }
         Returns: {
@@ -14961,6 +15068,10 @@ export type Database = {
           evento_tipo: string
         }[]
       }
+      contrato_motorista_nome: {
+        Args: { p_motorista_id: string }
+        Returns: string
+      }
       contrato_tem_conflito: {
         Args: {
           p_data_fim: string
@@ -14970,6 +15081,10 @@ export type Database = {
           p_viatura_id: string
         }
         Returns: boolean
+      }
+      contrato_viatura_matricula: {
+        Args: { p_viatura_id: string }
+        Returns: string
       }
       criar_versao_contrato_renting:
         | { Args: { p_contrato_id: string; p_motivo: string }; Returns: string }
@@ -15721,6 +15836,15 @@ export type Database = {
         Args: { p_inicio: string; p_intervalo: number; p_opcao: string }
         Returns: string
       }
+      proxima_renovacao_no_ciclo: {
+        Args: {
+          p_ancora: string
+          p_depois_de: string
+          p_intervalo: number
+          p_opcao: string
+        }
+        Returns: string
+      }
       realizar_token_realizacao: {
         Args: {
           p_combustivel: string
@@ -15829,7 +15953,19 @@ export type Database = {
       }
       retry_failed_job: { Args: { p_id: string }; Returns: undefined }
       salvar_precos_modelo_tarifa: {
-        Args: { p_linhas: Json; p_tarifa_id: string }
+        Args: {
+          p_confirmar_remocao?: boolean
+          p_linhas: Json
+          p_tarifa_id: string
+        }
+        Returns: undefined
+      }
+      seed_alerta_cartao_frota_alterado: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
+      seed_alerta_contrato_alterado: {
+        Args: { p_org_id: string }
         Returns: undefined
       }
       seed_alerta_semana_em_falta: {
@@ -16108,6 +16244,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "gestor_tvde", "gestor_comercial", "colaborador"],
