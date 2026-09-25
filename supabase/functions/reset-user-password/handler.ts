@@ -4,8 +4,15 @@ import {
   accountCorsHeaders, accountErrorResponse, accountResponse,
   authenticateAccountRequest, requireAccountAdmin,
 } from '../_shared/auth/accountRequests.ts';
+import { consumeRateLimit, rateLimitResponse } from '../_shared/rate-limit/rateLimit.ts';
 
 const recoverySchema = z.object({ userId: z.string().uuid(), org_id: z.string().uuid() }).strict();
+
+// Por alvo primeiro: um pedido barrado para aquele titular não gasta a quota do admin.
+const quotasDeRecuperacao = (alvo: string, admin: string) => [
+  { operation: 'reset-password-alvo', identity: alvo, limit: 3, windowSeconds: 3600 },
+  { operation: 'reset-password-admin', identity: admin, limit: 20, windowSeconds: 3600 },
+];
 
 export async function handlePasswordRecovery(req: Request, client: SupabaseClient): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { headers: accountCorsHeaders });
@@ -18,6 +25,11 @@ export async function handlePasswordRecovery(req: Request, client: SupabaseClien
       .eq('user_id', input.userId).eq('org_id', input.org_id).maybeSingle();
     if (memberError) throw memberError;
     if (!member) return accountResponse({ error: 'Sem acesso ao utilizador nesta organização' }, 403);
+
+    for (const quota of quotasDeRecuperacao(input.userId, user.id)) {
+      const limitada = rateLimitResponse(await consumeRateLimit(client, quota), accountCorsHeaders);
+      if (limitada) return limitada;
+    }
 
     const { data, error } = await client.auth.admin.getUserById(input.userId);
     if (error) throw error;

@@ -24,6 +24,7 @@ describe('entrada por convite sem sessão', () => {
           cargo_nome: 'Gestor',
           org_id: 'org-a',
           expires_at: '2030-01-01T00:00:00Z',
+          org_nome: 'Premium Ride',
         },
       ],
       error: null,
@@ -36,8 +37,11 @@ describe('entrada por convite sem sessão', () => {
         <Register />
       </MemoryRouter>
     );
+    // Quem abre o link vê logo quem o convida, antes de criar conta ou entrar.
+    expect(await screen.findByText(/Premium Ride/)).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Entrar para aceitar convite' }));
     expect(await screen.findByLabelText('Palavra-passe da sua conta')).toBeInTheDocument();
+    expect(screen.getAllByText(/Premium Ride/).length).toBeGreaterThan(0);
     expect(supabase.from).not.toHaveBeenCalled();
     expect(supabase.rpc).toHaveBeenCalledWith('validar_convite_token', {
       p_token: 'convite-valido',

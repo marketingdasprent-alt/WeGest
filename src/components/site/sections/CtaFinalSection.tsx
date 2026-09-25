@@ -6,6 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { TurnstileCaptcha } from '@/components/auth/TurnstileCaptcha';
+import { turnstileSiteKey } from '@/lib/turnstile';
 import { Section, SectionLabel, SectionTitle, SectionLead } from '../primitives/Section';
 import { CTA_FINAL, OPCOES_VIATURAS } from '../content/landingContent';
 
@@ -28,6 +30,10 @@ import { CTA_FINAL, OPCOES_VIATURAS } from '../content/landingContent';
 export const CtaFinalSection = forwardRef<HTMLDivElement>((_props, ref) => {
   const [submitting, setSubmitting] = useState(false);
   const [enviado, setEnviado] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Cada token só serve uma vez: depois de um envio o widget é remontado.
+  const [captchaVersao, setCaptchaVersao] = useState(0);
+  const captchaEmFalta = !!turnstileSiteKey() && !captchaToken;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -42,6 +48,7 @@ export const CtaFinalSection = forwardRef<HTMLDivElement>((_props, ref) => {
       viaturas: String(formData.get('viaturas') ?? ''),
       mensagem: String(formData.get('mensagem') ?? ''),
       website: String(formData.get('website') ?? ''),
+      ...(captchaToken ? { captcha_token: captchaToken } : {}),
     };
 
     setSubmitting(true);
@@ -56,6 +63,8 @@ export const CtaFinalSection = forwardRef<HTMLDivElement>((_props, ref) => {
       toast.error(err instanceof Error ? err.message : 'Não foi possível enviar o pedido.');
     } finally {
       setSubmitting(false);
+      setCaptchaToken(null);
+      setCaptchaVersao((v) => v + 1);
     }
   };
 
@@ -176,9 +185,13 @@ export const CtaFinalSection = forwardRef<HTMLDivElement>((_props, ref) => {
                 </p>
               </div>
 
+              <div className="mt-6">
+                <TurnstileCaptcha key={captchaVersao} onToken={setCaptchaToken} />
+              </div>
+
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || captchaEmFalta}
                 className="mt-6 w-full rounded-lg bg-primary px-6 py-3 text-base font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-60 md:w-auto"
               >
                 {submitting ? CTA_FINAL.botaoAEnviar : CTA_FINAL.botao}

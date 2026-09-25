@@ -10,7 +10,7 @@
 -- ============================================================
 
 begin;
-select plan(15);
+select plan(17);
 
 -- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes das
 -- organizações, para o trigger de signup não tratar o titular como o primeiro.
@@ -133,6 +133,17 @@ reset role;
 
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claims', '', true);
+
+-- ── Quem convida (20260925160000) ───────────────────────────
+-- Quem abre o link tem de ver que organização o está a convidar antes de
+-- aceitar; o convite legítimo acima ainda não foi usado.
+select is(
+  (select org_nome from public.validar_convite_token('convite-legitimo-f02')),
+  'Convite A',
+  'validar_convite_token devolve o nome da organização que convida'
+);
+select ok(has_function_privilege('anon', 'public.validar_convite_token(text)', 'execute'),
+  'o link de convite continua a validar-se sem sessão');
 
 -- ── Grants ──────────────────────────────────────────────────
 

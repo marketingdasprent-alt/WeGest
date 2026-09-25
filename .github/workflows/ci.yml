@@ -323,7 +323,8 @@ jobs:
             rls_anon_exposure \
             signup_nao_confia_na_metadata \
             salvar_precos_modelo_tarifa \
-            aceitar_convite_pelo_titular
+            aceitar_convite_pelo_titular \
+            buckets_viaturas_fase0
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TurnstileCaptcha } from '@/components/auth/TurnstileCaptcha';
+import { turnstileSiteKey } from '@/lib/turnstile';
 import {
   Building2,
   User,
@@ -42,6 +44,11 @@ const RegistarOrg = () => {
   const [adminNome, setAdminNome] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Cada token só serve uma vez: depois de um envio o widget é remontado.
+  const [captchaVersao, setCaptchaVersao] = useState(0);
+  const captchaEmFalta = !!turnstileSiteKey() && !captchaToken;
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -101,6 +108,7 @@ const RegistarOrg = () => {
           admin_nome: adminNome,
           admin_email: adminEmail,
           admin_password: adminPassword,
+          ...(captchaToken ? { captcha_token: captchaToken } : {}),
         },
       });
 
@@ -146,6 +154,8 @@ const RegistarOrg = () => {
       });
     } finally {
       setLoading(false);
+      setCaptchaToken(null);
+      setCaptchaVersao((v) => v + 1);
     }
   };
 
@@ -394,9 +404,11 @@ const RegistarOrg = () => {
                 </div>
               </div>
 
+              <TurnstileCaptcha key={captchaVersao} onToken={setCaptchaToken} />
+
               <Button
                 type="submit"
-                disabled={loading || codigoDisponivel === false}
+                disabled={loading || codigoDisponivel === false || captchaEmFalta}
                 className="w-full"
               >
                 {loading ? (

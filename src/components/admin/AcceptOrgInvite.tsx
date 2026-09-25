@@ -8,6 +8,8 @@ import { useAcceptOrgInvite, useSignInForInvite } from '@/hooks/useAcceptOrgInvi
 interface AcceptOrgInviteProps {
   readonly token: string;
   readonly email: string;
+  /** Quem convida — aceitar associa a conta a esta organização. */
+  readonly orgNome?: string | null;
   readonly currentEmail?: string;
   readonly cargoNome?: string | null;
   readonly onAccepted: () => void;
@@ -16,6 +18,7 @@ interface AcceptOrgInviteProps {
 export const AcceptOrgInvite = ({
   token,
   email,
+  orgNome,
   currentEmail,
   cargoNome,
   onAccepted,
@@ -49,7 +52,14 @@ export const AcceptOrgInvite = ({
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Ao aceitar, a sua conta fica associada à organização que emitiu este convite
+        Ao aceitar, a sua conta fica associada{' '}
+        {orgNome ? (
+          <>
+            à organização <strong className="text-foreground">{orgNome}</strong>
+          </>
+        ) : (
+          'à organização que emitiu este convite'
+        )}
         {cargoNome ? `, com o grupo ${cargoNome}` : ''}.
       </p>
       <p className="font-medium break-all">{email}</p>

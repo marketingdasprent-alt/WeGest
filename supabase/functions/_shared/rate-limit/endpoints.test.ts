@@ -42,6 +42,10 @@ async function databaseFetch(input: RequestInfo | URL, init?: RequestInit): Prom
       rate_limit_per_minute: primaveraLimit,
     });
   }
+  if (url.hostname === 'challenges.cloudflare.com') {
+    const campos = new URLSearchParams(await request.text());
+    return reply({ success: campos.get('response') === 'captcha-ok' });
+  }
   if (url.pathname.endsWith('/auth/v1/user')) return reply({ id: 'user-a', aud: 'authenticated' });
   if (url.pathname.endsWith('/ti_tokens')) return reply({ org_id: 'org-a' });
   effects.push(`${request.method} ${url.pathname}`);
@@ -258,6 +262,60 @@ Deno.test(
           effects.some((effect) => effect === 'POST /rest/v1/motoristas_ativos'),
           false
         );
+      });
+
+      // Com TURNSTILE_SECRET_KEY o CAPTCHA fica obrigatório, antes de gastar
+      // quota ou tocar na BD — e as quotas globais sobem (500/h e 300/h).
+      await t.step('com CAPTCHA ligado, sem token é recusado antes da quota', async () => {
+        Deno.env.set('TURNSTILE_SECRET_KEY', 'turnstile-test');
+        try {
+          for (const [url, body] of [
+            [contactUrl, contact],
+            [ticketUrl, ticket],
+            [registerA, {}],
+          ] as const) {
+            for (const captcha of [undefined, 'captcha-mau']) {
+              reset();
+              const response = await post(url, { ...body, captcha_token: captcha });
+              assertEquals(response.status, 400);
+              await response.text();
+              assertEquals(rpcCalls.length, 0);
+              assertEquals(effects, []);
+            }
+          }
+        } finally {
+          Deno.env.delete('TURNSTILE_SECRET_KEY');
+        }
+      });
+
+      await t.step('com CAPTCHA válido passa e as quotas globais sobem', async () => {
+        Deno.env.set('TURNSTILE_SECRET_KEY', 'turnstile-test');
+        try {
+          for (const [url, body, operacao, limite] of [
+            [contactUrl, contact, 'contact-inquiry-global', 500],
+            [ticketUrl, ticket, 'ti-ticket-org', 300],
+          ] as const) {
+            reset();
+            const response = await post(url, { ...body, captcha_token: 'captcha-ok' });
+            assertEquals(response.status, 200);
+            await response.text();
+            assertEquals(rpcCalls.find((call) => call.p_operation === operacao)?.p_limit, limite);
+          }
+        } finally {
+          Deno.env.delete('TURNSTILE_SECRET_KEY');
+        }
+      });
+
+      await t.step('sem CAPTCHA configurado as quotas globais ficam em 100/h', async () => {
+        for (const [url, body, operacao] of [
+          [contactUrl, contact, 'contact-inquiry-global'],
+          [ticketUrl, ticket, 'ti-ticket-org'],
+        ] as const) {
+          reset();
+          const response = await post(url, body);
+          await response.text();
+          assertEquals(rpcCalls.find((call) => call.p_operation === operacao)?.p_limit, 100);
+        }
       });
 
       await t.step(

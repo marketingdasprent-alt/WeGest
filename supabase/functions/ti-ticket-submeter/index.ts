@@ -11,6 +11,7 @@ import {
   trustedRequestIp,
 } from '../_shared/rate-limit/rateLimit.ts';
 import { validarAnexosSubmissao } from '../_shared/ti-tickets/anexos.ts';
+import { captchaResponse, verificarCaptcha } from '../_shared/captcha/turnstile.ts';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -40,7 +41,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
   try {
-    const { token, nome, email, descricao, anexos } = await readBoundedObject(
+    const { token, nome, email, descricao, anexos, captcha_token } = await readBoundedObject(
       req,
       21 * 1024 * 1024
     );
@@ -57,6 +58,10 @@ Deno.serve(async (req) => {
     // criar um ticket órfão de anexo.
     const anexosValidados = validarAnexosSubmissao(anexos);
     if (!anexosValidados.ok) return json({ success: false, error: anexosValidados.error }, 400);
+
+    const captcha = await verificarCaptcha(captcha_token, trustedRequestIp(req));
+    const recusado = captchaResponse(captcha, cors);
+    if (recusado) return recusado;
 
     const sb = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -118,7 +123,8 @@ Deno.serve(async (req) => {
     quotas.push({
       operation: 'ti-ticket-org',
       identity: linha.org_id,
-      limit: 100,
+      // Com CAPTCHA os robôs ficam de fora e o tecto da org pode subir.
+      limit: captcha.ok && captcha.ativo ? 300 : 100,
       windowSeconds: 3600,
     });
     for (const quota of quotas) {

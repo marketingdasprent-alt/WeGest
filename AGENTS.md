@@ -498,6 +498,7 @@ if (admins.find(a => a.id === user.id)) { /* ... */ }
 
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — públicos, bundled no client.
 - `SUPABASE_SERVICE_ROLE_KEY` — **nunca** prefixar com `VITE_`. Só em Edge Functions e CI.
+- `VITE_TURNSTILE_SITE_KEY` (Vercel) / `TURNSTILE_SECRET_KEY` (segredos das Edge Functions) — CAPTCHA Cloudflare Turnstile no registo, contacto e tickets TI. Sem o segredo o servidor não exige CAPTCHA e as quotas globais ficam em 100/h; as duas têm de ser configuradas juntas.
 - `.env.local` git-ignored.
 
 ### Permissões granulares

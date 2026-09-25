@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Loader2, Paperclip, X } from 'lucide-react';
+import { TurnstileCaptcha } from '@/components/auth/TurnstileCaptcha';
+import { turnstileSiteKey } from '@/lib/turnstile';
 import {
   TI_ANEXO_MAX_FICHEIROS,
   ficheiroParaBase64,
@@ -26,6 +28,10 @@ export function TiTicketFormulario({ token }: { token: string }) {
   const [aEnviar, setAEnviar] = useState(false);
   const [numero, setNumero] = useState<number | null>(null);
   const [anexosFalhou, setAnexosFalhou] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Cada token só serve uma vez: depois de um envio o widget é remontado.
+  const [captchaVersao, setCaptchaVersao] = useState(0);
+  const captchaEmFalta = !!turnstileSiteKey() && !captchaToken;
 
   const escolherFicheiros = (novos: FileList | null) => {
     if (!novos || novos.length === 0) return;
@@ -60,7 +66,14 @@ export function TiTicketFormulario({ token }: { token: string }) {
       );
 
       const { data, error } = await supabase.functions.invoke('ti-ticket-submeter', {
-        body: { token, nome, email, descricao, anexos },
+        body: {
+          token,
+          nome,
+          email,
+          descricao,
+          anexos,
+          ...(captchaToken ? { captcha_token: captchaToken } : {}),
+        },
       });
 
       if (error || !data?.success) {
@@ -75,6 +88,8 @@ export function TiTicketFormulario({ token }: { token: string }) {
       setErro('Não foi possível ler os ficheiros anexados.');
     } finally {
       setAEnviar(false);
+      setCaptchaToken(null);
+      setCaptchaVersao((v) => v + 1);
     }
   };
 
@@ -174,7 +189,9 @@ export function TiTicketFormulario({ token }: { token: string }) {
 
       {erro && <p className="text-sm text-destructive">{erro}</p>}
 
-      <Button onClick={submeter} disabled={aEnviar} className="w-full gap-2">
+      <TurnstileCaptcha key={captchaVersao} onToken={setCaptchaToken} />
+
+      <Button onClick={submeter} disabled={aEnviar || captchaEmFalta} className="w-full gap-2">
         {aEnviar && <Loader2 className="h-4 w-4 animate-spin" />}
         Enviar pedido
       </Button>

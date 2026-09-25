@@ -25,6 +25,7 @@ const Register = () => {
   const [isFirstUser, setIsFirstUser] = useState(false);
   const [cargoId, setCargoId] = useState<string | null>(null);
   const [cargoNome, setCargoNome] = useState<string | null>(null);
+  const [orgNome, setOrgNome] = useState<string | null>(null);
   const [hasExistingAccount, setHasExistingAccount] = useState(false);
 
   const { user } = useAuth();
@@ -69,6 +70,7 @@ const Register = () => {
         setEmail(convite.email);
         setCargoId(convite.cargo_id);
         setCargoNome(convite.cargo_nome || null);
+        setOrgNome(convite.org_nome || null);
         setIsFirstUser(false);
         setTokenValid(true);
         setValidatingToken(false);
@@ -228,6 +230,7 @@ const Register = () => {
             <CardTitle className="text-2xl font-bold">
               {isFirstUser ? 'Primeiro Admin - WeGest' : 'Registro WeGest'}
             </CardTitle>
+            {orgNome && <p className="mt-2 font-medium text-foreground">Convite de {orgNome}</p>}
             <p className="text-muted-foreground mt-2">
               {isFirstUser
                 ? 'Configure a primeira conta de administrador'
@@ -242,6 +245,7 @@ const Register = () => {
               <AcceptOrgInvite
                 token={token}
                 email={email}
+                orgNome={orgNome}
                 currentEmail={user?.email}
                 cargoNome={cargoNome}
                 onAccepted={() => {

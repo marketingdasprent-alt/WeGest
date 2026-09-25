@@ -8,7 +8,7 @@ const TARGET = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CARGO = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 interface Call { path: string; method: string; body: Record<string, unknown> }
 
-function fixture(options: { admin?: boolean; member?: boolean; existing?: boolean; cargoOrg?: string; cargoNome?: string; authValid?: boolean; mailFailure?: boolean } = {}) {
+function fixture(options: { admin?: boolean; member?: boolean; existing?: boolean; cargoOrg?: string; cargoNome?: string; authValid?: boolean; mailFailure?: boolean; limitada?: string } = {}) {
   const calls: Call[] = [];
   const client = createClient('https://synthetic.test', 'synthetic-service-key', {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -34,6 +34,10 @@ function fixture(options: { admin?: boolean; member?: boolean; existing?: boolea
         data = { id: CARGO, nome: options.cargoNome ?? 'Gestor', org_id: options.cargoOrg ?? ORG_A };
       } else if (url.pathname === '/rest/v1/convites') {
         data = init?.method === 'POST' ? { token: 'convite-sintetico', expires_at: '2026-10-02T00:00:00Z' } : null;
+      } else if (url.pathname === '/rest/v1/rpc/consume_edge_rate_limit') {
+        data = body.p_operation === options.limitada
+          ? { allowed: false, retry_after: 1200 }
+          : { allowed: true, retry_after: 0 };
       } else if (url.pathname === '/functions/v1/send-brevo-email') {
         data = options.mailFailure ? { error: 'Falha' } : { success: true, secretLink: 'must-not-leak' };
         if (options.mailFailure) status = 500;
@@ -78,6 +82,28 @@ Deno.test('recovery não aceita senha nem destinatário do administrador', async
   assertEquals((await handlePasswordRecovery(f.request({ userId: TARGET, org_id: ORG_A, newPassword: 'chosen', email: 'attacker@a.test' }), f.client)).status, 400);
   assertFalse(f.calls.some((call) => call.path.startsWith('/functions/')));
 });
+
+// Sem limite, um admin inundava o titular de emails e anulava os links de
+// recuperação que o próprio titular tinha pedido.
+Deno.test('recovery reserva 3/h por alvo e 20/h por admin antes de enviar', async () => {
+  const f = fixture();
+  assertEquals((await handlePasswordRecovery(f.request({ userId: TARGET, org_id: ORG_A }), f.client)).status, 200);
+  const quotas = f.calls.filter((call) => call.path === '/rest/v1/rpc/consume_edge_rate_limit').map((call) => call.body);
+  assertEquals(quotas.map((q) => [q.p_operation, q.p_limit, q.p_window_seconds]), [
+    ['reset-password-alvo', 3, 3600],
+    ['reset-password-admin', 20, 3600],
+  ]);
+});
+
+for (const limitada of ['reset-password-alvo', 'reset-password-admin']) {
+  Deno.test(`recovery barrada por ${limitada} responde 429 sem enviar email`, async () => {
+    const f = fixture({ limitada });
+    const response = await handlePasswordRecovery(f.request({ userId: TARGET, org_id: ORG_A }), f.client);
+    assertEquals(response.status, 429);
+    assertEquals(response.headers.get('Retry-After'), '1200');
+    assertFalse(f.calls.some((call) => call.path.startsWith('/functions/') || call.path.startsWith('/auth/v1/admin/')));
+  });
+}
 
 Deno.test('recovery propaga falha de entrega sem afirmar sucesso', async () => {
   const f = fixture({ mailFailure: true });
