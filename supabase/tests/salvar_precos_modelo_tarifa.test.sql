@@ -89,28 +89,30 @@ insert into public.reservas (id, org_id, codigo, data_inicio, viatura_id, client
   ('00000000-0000-0000-0000-00000007c403', '00000000-0000-0000-0000-00000007a000', 970003,
    '2026-09-01T10:00:00Z', '00000000-0000-0000-0000-00000007e002', '00000000-0000-0000-0000-00000007f001', 'concluida');
 
+-- created_by: a trigger de abertura cria o evento de entrega com criado_por
+-- NOT NULL, e aqui ainda não há auth.uid().
 insert into public.contratos_renting
   (id, org_id, reserva_id, cliente_id, viatura_id, matricula, tarifa_id, data_inicio, data_fim,
-   estado_operacional, estado_financeiro, regime, taxa_iva, is_longa_duracao)
+   estado_operacional, estado_financeiro, regime, taxa_iva, is_longa_duracao, created_by)
 values
   -- C1: TVDE aberto com o Astra — é o contrato que ficava sem preço.
   ('00000000-0000-0000-0000-00000007c001', '00000000-0000-0000-0000-00000007a000',
    '00000000-0000-0000-0000-00000007c401',
    '00000000-0000-0000-0000-00000007f001', '00000000-0000-0000-0000-00000007e001', 'PR-01-AA',
    '00000000-0000-0000-0000-00000007b101', '2026-09-01T10:00:00Z', null,
-   'em_curso', 'pendente', 'tvde', 23, false),
+   'em_curso', 'pendente', 'tvde', 23, false, '00000000-0000-0000-0000-00000007a101'),
   -- C2: TVDE já fechado com o Panda — não trava nada.
   ('00000000-0000-0000-0000-00000007c002', '00000000-0000-0000-0000-00000007a000',
    '00000000-0000-0000-0000-00000007c402',
    '00000000-0000-0000-0000-00000007f001', '00000000-0000-0000-0000-00000007e002', 'PR-02-AA',
    '00000000-0000-0000-0000-00000007b101', '2026-08-01T10:00:00Z', '2026-08-20T10:00:00Z',
-   'fechado', 'pendente', 'tvde', 23, false),
+   'fechado', 'pendente', 'tvde', 23, false, '00000000-0000-0000-0000-00000007a101'),
   -- C3: rent-a-car de longa duração com o Panda — lê o preço mensal.
   ('00000000-0000-0000-0000-00000007c003', '00000000-0000-0000-0000-00000007a000',
    '00000000-0000-0000-0000-00000007c403',
    '00000000-0000-0000-0000-00000007f001', '00000000-0000-0000-0000-00000007e002', 'PR-02-AA',
    '00000000-0000-0000-0000-00000007b102', '2026-09-01T10:00:00Z', '2027-09-01T10:00:00Z',
-   'em_curso', 'pendente', 'rent_a_car', 23, true);
+   'em_curso', 'pendente', 'rent_a_car', 23, true, '00000000-0000-0000-0000-00000007a101');
 
 -- O HINT é o que o frontend usa para pedir confirmação; o pgTAP não o expõe.
 create function pg_temp.hint_de(p_sql text) returns text language plpgsql as $$
