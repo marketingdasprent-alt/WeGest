@@ -6,8 +6,14 @@ import { supabase } from '@/integrations/supabase/client';
 
 // O widget real carrega um script da Cloudflare; aqui basta entregar um token.
 vi.mock('@/components/auth/TurnstileCaptcha', () => ({
-  TurnstileCaptcha: ({ onToken }: { onToken: (token: string | null) => void }) => (
-    <button type="button" onClick={() => onToken('captcha-ok')}>
+  TurnstileCaptcha: ({
+    acao,
+    onToken,
+  }: {
+    acao: string;
+    onToken: (token: string | null) => void;
+  }) => (
+    <button type="button" data-acao={acao} onClick={() => onToken('captcha-ok')}>
       resolver captcha
     </button>
   ),
@@ -123,6 +129,9 @@ describe('TiTicketFormulario', () => {
       const enviar = screen.getByRole('button', { name: 'Enviar pedido' }) as HTMLButtonElement;
       expect(enviar.disabled).toBe(true);
 
+      expect(screen.getByRole('button', { name: 'resolver captcha' }).dataset.acao).toBe(
+        'ticket_ti'
+      );
       fireEvent.click(screen.getByRole('button', { name: 'resolver captcha' }));
       expect(enviar.disabled).toBe(false);
       fireEvent.click(enviar);

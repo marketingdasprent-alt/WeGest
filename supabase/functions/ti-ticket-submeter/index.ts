@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     const anexosValidados = validarAnexosSubmissao(anexos);
     if (!anexosValidados.ok) return json({ success: false, error: anexosValidados.error }, 400);
 
-    const captcha = await verificarCaptcha(captcha_token, trustedRequestIp(req));
+    const captcha = await verificarCaptcha(captcha_token, trustedRequestIp(req), 'ticket_ti');
     const recusado = captchaResponse(captcha, cors);
     if (recusado) return recusado;
 

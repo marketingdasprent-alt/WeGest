@@ -186,7 +186,7 @@ export const CtaFinalSection = forwardRef<HTMLDivElement>((_props, ref) => {
               </div>
 
               <div className="mt-6">
-                <TurnstileCaptcha key={captchaVersao} onToken={setCaptchaToken} />
+                <TurnstileCaptcha key={captchaVersao} acao="contacto" onToken={setCaptchaToken} />
               </div>
 
               <button

@@ -404,7 +404,7 @@ const RegistarOrg = () => {
                 </div>
               </div>
 
-              <TurnstileCaptcha key={captchaVersao} onToken={setCaptchaToken} />
+              <TurnstileCaptcha key={captchaVersao} acao="registo_org" onToken={setCaptchaToken} />
 
               <Button
                 type="submit"

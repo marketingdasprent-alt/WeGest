@@ -189,7 +189,7 @@ export function TiTicketFormulario({ token }: { token: string }) {
 
       {erro && <p className="text-sm text-destructive">{erro}</p>}
 
-      <TurnstileCaptcha key={captchaVersao} onToken={setCaptchaToken} />
+      <TurnstileCaptcha key={captchaVersao} acao="ticket_ti" onToken={setCaptchaToken} />
 
       <Button onClick={submeter} disabled={aEnviar || captchaEmFalta} className="w-full gap-2">
         {aEnviar && <Loader2 className="h-4 w-4 animate-spin" />}

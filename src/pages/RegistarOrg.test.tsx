@@ -6,8 +6,14 @@ import RegistarOrg from './RegistarOrg';
 
 // O widget real carrega um script da Cloudflare; aqui basta entregar um token.
 vi.mock('@/components/auth/TurnstileCaptcha', () => ({
-  TurnstileCaptcha: ({ onToken }: { onToken: (token: string | null) => void }) => (
-    <button type="button" onClick={() => onToken('captcha-ok')}>
+  TurnstileCaptcha: ({
+    acao,
+    onToken,
+  }: {
+    acao: string;
+    onToken: (token: string | null) => void;
+  }) => (
+    <button type="button" data-acao={acao} onClick={() => onToken('captcha-ok')}>
       resolver captcha
     </button>
   ),
@@ -48,6 +54,9 @@ describe('RegistarOrg', () => {
       (b) => (b as HTMLButtonElement).type === 'submit'
     ) as HTMLButtonElement;
     expect(registar.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'resolver captcha' }).dataset.acao).toBe(
+      'registo_org'
+    );
     fireEvent.click(screen.getByRole('button', { name: 'resolver captcha' }));
     await waitFor(() => expect(registar.disabled).toBe(false));
     fireEvent.click(registar);

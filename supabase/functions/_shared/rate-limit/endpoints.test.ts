@@ -43,8 +43,12 @@ async function databaseFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     });
   }
   if (url.hostname === 'challenges.cloudflare.com') {
-    const campos = new URLSearchParams(await request.text());
-    return reply({ success: campos.get('response') === 'captcha-ok' });
+    // Token de teste "captcha-ok:<action>": a Cloudflare devolve a action e o
+    // hostname onde o widget foi resolvido.
+    const [estado, action] = (
+      new URLSearchParams(await request.text()).get('response') ?? ''
+    ).split(':');
+    return reply({ success: estado === 'captcha-ok', action, hostname: 'wegest.pt' });
   }
   if (url.pathname.endsWith('/auth/v1/user')) return reply({ id: 'user-a', aud: 'authenticated' });
   if (url.pathname.endsWith('/ti_tokens')) return reply({ org_id: 'org-a' });
@@ -266,18 +270,19 @@ Deno.test(
 
       // Com TURNSTILE_SECRET_KEY o CAPTCHA fica obrigatório, antes de gastar
       // quota ou tocar na BD — e as quotas globais sobem (500/h e 300/h).
-      await t.step('com CAPTCHA ligado, sem token é recusado antes da quota', async () => {
+      await t.step('com CAPTCHA ligado, sem token válido é recusado antes da quota', async () => {
         Deno.env.set('TURNSTILE_SECRET_KEY', 'turnstile-test');
         try {
-          for (const [url, body] of [
-            [contactUrl, contact],
-            [ticketUrl, ticket],
-            [registerA, {}],
+          for (const [url, body, outraAcao] of [
+            [contactUrl, contact, 'registo_org'],
+            [ticketUrl, ticket, 'contacto'],
+            [registerA, {}, 'ticket_ti'],
           ] as const) {
-            for (const captcha of [undefined, 'captcha-mau']) {
+            // Sem token, token recusado e token resolvido noutro formulário.
+            for (const captcha of [undefined, 'captcha-mau', `captcha-ok:${outraAcao}`]) {
               reset();
               const response = await post(url, { ...body, captcha_token: captcha });
-              assertEquals(response.status, 400);
+              assertEquals(response.status, 403);
               await response.text();
               assertEquals(rpcCalls.length, 0);
               assertEquals(effects, []);
@@ -291,12 +296,12 @@ Deno.test(
       await t.step('com CAPTCHA válido passa e as quotas globais sobem', async () => {
         Deno.env.set('TURNSTILE_SECRET_KEY', 'turnstile-test');
         try {
-          for (const [url, body, operacao, limite] of [
-            [contactUrl, contact, 'contact-inquiry-global', 500],
-            [ticketUrl, ticket, 'ti-ticket-org', 300],
+          for (const [url, body, operacao, limite, acao] of [
+            [contactUrl, contact, 'contact-inquiry-global', 500, 'contacto'],
+            [ticketUrl, ticket, 'ti-ticket-org', 300, 'ticket_ti'],
           ] as const) {
             reset();
-            const response = await post(url, { ...body, captcha_token: 'captcha-ok' });
+            const response = await post(url, { ...body, captcha_token: `captcha-ok:${acao}` });
             assertEquals(response.status, 200);
             await response.text();
             assertEquals(rpcCalls.find((call) => call.p_operation === operacao)?.p_limit, limite);

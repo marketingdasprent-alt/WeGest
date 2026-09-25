@@ -6,8 +6,14 @@ import { CtaFinalSection } from './CtaFinalSection';
 
 // O widget real carrega um script da Cloudflare; aqui basta entregar um token.
 vi.mock('@/components/auth/TurnstileCaptcha', () => ({
-  TurnstileCaptcha: ({ onToken }: { onToken: (token: string | null) => void }) => (
-    <button type="button" onClick={() => onToken('captcha-ok')}>
+  TurnstileCaptcha: ({
+    acao,
+    onToken,
+  }: {
+    acao: string;
+    onToken: (token: string | null) => void;
+  }) => (
+    <button type="button" data-acao={acao} onClick={() => onToken('captcha-ok')}>
       resolver captcha
     </button>
   ),
@@ -41,6 +47,7 @@ describe('CtaFinalSection — contacto', () => {
       name: 'Marcar os 20 minutos',
     }) as HTMLButtonElement;
     expect(enviar.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'resolver captcha' }).dataset.acao).toBe('contacto');
     fireEvent.click(screen.getByRole('button', { name: 'resolver captcha' }));
     expect(enviar.disabled).toBe(false);
     fireEvent.click(enviar);

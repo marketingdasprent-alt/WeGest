@@ -109,7 +109,10 @@ Deno.serve(async (req) => {
     } = await readBoundedObject(req, 16 * 1024);
 
     const ip = trustedRequestIp(req);
-    const recusado = captchaResponse(await verificarCaptcha(captcha_token, ip), corsHeaders);
+    const recusado = captchaResponse(
+      await verificarCaptcha(captcha_token, ip, 'registo_org'),
+      corsHeaders
+    );
     if (recusado) return recusado;
 
     // A quota conta também pedidos com campos inválidos: vem antes das validações.

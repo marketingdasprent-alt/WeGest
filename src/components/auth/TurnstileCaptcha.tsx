@@ -1,7 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { carregarTurnstile, turnstileSiteKey, type TurnstileApi } from '@/lib/turnstile';
+import {
+  carregarTurnstile,
+  turnstileSiteKey,
+  type AcaoCaptcha,
+  type TurnstileApi,
+} from '@/lib/turnstile';
 
 interface TurnstileCaptchaProps {
+  /** Formulário a que o token fica preso; o servidor recusa-o noutro. */
+  acao: AcaoCaptcha;
   /** Token pronto a enviar, ou null enquanto não há (ou expirou). */
   onToken: (token: string | null) => void;
 }
@@ -10,7 +17,7 @@ interface TurnstileCaptchaProps {
  * Verificação anti-robô dos formulários públicos. Cada token só serve uma vez:
  * depois de um envio, o formulário remonta o componente (prop `key`).
  */
-export const TurnstileCaptcha = ({ onToken }: TurnstileCaptchaProps) => {
+export const TurnstileCaptcha = ({ acao, onToken }: TurnstileCaptchaProps) => {
   const contentor = useRef<HTMLDivElement>(null);
   const onTokenAtual = useRef(onToken);
   onTokenAtual.current = onToken;
@@ -25,6 +32,7 @@ export const TurnstileCaptcha = ({ onToken }: TurnstileCaptchaProps) => {
         if (cancelado || !contentor.current) return;
         const id = turnstile.render(contentor.current, {
           sitekey: siteKey,
+          action: acao,
           language: 'pt',
           callback: (token) => onTokenAtual.current(token),
           'expired-callback': () => onTokenAtual.current(null),
@@ -40,7 +48,7 @@ export const TurnstileCaptcha = ({ onToken }: TurnstileCaptchaProps) => {
       cancelado = true;
       widget?.api.remove(widget.id);
     };
-  }, [siteKey]);
+  }, [siteKey, acao]);
 
   if (!siteKey) return null;
   return <div ref={contentor} className="min-h-[65px]" />;

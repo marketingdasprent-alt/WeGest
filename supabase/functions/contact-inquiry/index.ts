@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
 
   try {
     const { captcha_token, ...payload } = await readBoundedObject(req, 16 * 1024);
-    const captcha = await verificarCaptcha(captcha_token, trustedRequestIp(req));
+    const captcha = await verificarCaptcha(captcha_token, trustedRequestIp(req), 'contacto');
     const recusado = captchaResponse(captcha, corsHeaders);
     if (recusado) return recusado;
 
