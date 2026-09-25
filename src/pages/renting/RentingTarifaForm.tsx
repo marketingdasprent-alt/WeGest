@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaFormValidation';
 import type { Json } from '@/integrations/supabase/types';
 import { buildPrecosModeloLinhas } from './precosModeloBuilder';
+import { pedeConfirmacaoRemocaoPrecos } from './confirmacaoRemocaoPrecos';
 import { Tag, Save, Trash2, ChevronRight, Calendar, Clock, ShieldCheck, Car } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +35,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useTenant } from '@/contexts/TenantContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModelosElegiveisTvde } from '@/hooks/useModelosElegiveisTvde';
+import { ConfirmarRemocaoPrecosDialog } from '@/components/renting/tarifas/ConfirmarRemocaoPrecosDialog';
 
 interface ModeloComMarca {
   id: string;
@@ -104,6 +106,11 @@ const RentingTarifaForm = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   // Mapa modelo_id -> valores desta tarifa para o modelo (strings de input).
   const [precosModelo, setPrecosModelo] = useState<Record<string, PrecoModeloForm>>({});
+  // Gravação recusada por tirar preços em uso — espera confirmação para repetir.
+  const [remocaoPendente, setRemocaoPendente] = useState<{
+    mensagem: string;
+    andClose: boolean;
+  } | null>(null);
 
   // Carregar tarifa existente
   const { data: tarifa, isLoading } = useQuery({
@@ -222,12 +229,15 @@ const RentingTarifaForm = () => {
    * substituídas por lixo). O delete+insert corre atomicamente dentro da RPC
    * `salvar_precos_modelo_tarifa` (uma única transacção de função Postgres),
    * para não repetir esse incidente se o insert falhasse a meio.
+   * Sem `confirmarRemocao`, a RPC recusa tirar o preço de um modelo com
+   * contrato aberto (incidente de 2026-09-21) — ver `remocaoPendente`.
    */
-  const savePrecosModelo = async (tarifaId: string) => {
+  const savePrecosModelo = async (tarifaId: string, confirmarRemocao = false) => {
     const linhas = buildPrecosModeloLinhas(precosModelo, orgId!, tarifaId);
     const { error } = await supabase.rpc('salvar_precos_modelo_tarifa', {
       p_tarifa_id: tarifaId,
       p_linhas: linhas as unknown as Json,
+      p_confirmar_remocao: confirmarRemocao,
     });
     if (error) throw error;
   };
@@ -248,7 +258,7 @@ const RentingTarifaForm = () => {
     return true;
   };
 
-  const handleSave = async (andClose = false) => {
+  const handleSave = async (andClose = false, confirmarRemocao = false) => {
     if (!validate()) return;
     try {
       setSaving(true);
@@ -268,7 +278,7 @@ const RentingTarifaForm = () => {
       } else {
         const { error } = await supabase.from('renting_tarifas').update(payload).eq('id', id!);
         if (error) throw error;
-        await savePrecosModelo(id!);
+        await savePrecosModelo(id!, confirmarRemocao);
         qc.invalidateQueries({ queryKey: ['renting_tarifas'] });
         qc.invalidateQueries({ queryKey: ['renting_tarifa', id] });
         qc.invalidateQueries({ queryKey: ['renting_tarifa_precos_modelo', id] });
@@ -276,6 +286,10 @@ const RentingTarifaForm = () => {
         if (andClose) navigate('/renting/tarifas');
       }
     } catch (e: any) {
+      if (pedeConfirmacaoRemocaoPrecos(e)) {
+        setRemocaoPendente({ mensagem: e.message, andClose });
+        return;
+      }
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     } finally {
       setSaving(false);
@@ -875,6 +889,16 @@ const RentingTarifaForm = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ConfirmarRemocaoPrecosDialog
+        mensagem={remocaoPendente?.mensagem ?? null}
+        onCancelar={() => setRemocaoPendente(null)}
+        onConfirmar={() => {
+          const pendente = remocaoPendente;
+          setRemocaoPendente(null);
+          if (pendente) void handleSave(pendente.andClose, true);
+        }}
+      />
     </div>
   );
 };
