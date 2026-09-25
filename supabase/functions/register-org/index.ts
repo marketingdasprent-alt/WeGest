@@ -9,6 +9,7 @@ import {
   trustedRequestIp,
 } from '../_shared/rate-limit/rateLimit.ts';
 import { EmailService } from '../_shared/email/services/EmailService.ts';
+import { captchaResponse, verificarCaptcha } from '../_shared/captcha/turnstile.ts';
 
 // Registo público de organização (/registar-org). Admin nasce por confirmar
 // (email_confirm: false), resposta não enumerável se o email já existir, e
@@ -95,7 +96,27 @@ Deno.serve(async (req) => {
   });
 
   try {
-    const origem = await hashRateLimitIdentity(trustedRequestIp(req), supabaseServiceKey);
+    const {
+      nome_empresa,
+      codigo,
+      nif,
+      morada,
+      telefone,
+      admin_nome,
+      admin_email,
+      admin_password,
+      captcha_token,
+    } = await readBoundedObject(req, 16 * 1024);
+
+    const ip = trustedRequestIp(req);
+    const recusado = captchaResponse(
+      await verificarCaptcha(captcha_token, ip, 'registo_org'),
+      corsHeaders
+    );
+    if (recusado) return recusado;
+
+    // A quota conta também pedidos com campos inválidos: vem antes das validações.
+    const origem = await hashRateLimitIdentity(ip, supabaseServiceKey);
     const quota = await consumeRateLimit(supabase, {
       operation: 'register-org',
       identity: origem,
@@ -104,9 +125,6 @@ Deno.serve(async (req) => {
     });
     const limitada = rateLimitResponse(quota, corsHeaders);
     if (limitada) return limitada;
-
-    const { nome_empresa, codigo, nif, morada, telefone, admin_nome, admin_email, admin_password } =
-      await readBoundedObject(req, 16 * 1024);
 
     // ========== VALIDAÇÕES ==========
     if (

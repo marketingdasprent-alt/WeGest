@@ -8,6 +8,19 @@ vi.mock('@/hooks/useAcceptOrgInvite', () => ({
 }));
 
 describe('aceitação de convite existente', () => {
+  it('diz que organização convida antes de aceitar', () => {
+    render(
+      <AcceptOrgInvite
+        token="token"
+        email="titular@example.test"
+        orgNome="Premium Ride"
+        currentEmail="titular@example.test"
+        onAccepted={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/Premium Ride/)).toBeTruthy();
+  });
+
   it('não associa automaticamente e requer clique explícito do titular autenticado', async () => {
     accept.mockResolvedValue(undefined);
     const onAccepted = vi.fn();

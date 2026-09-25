@@ -10,6 +10,7 @@ import {
 import { BrevoProvider } from '../_shared/email/providers/BrevoProvider.ts';
 import { contactInquiryTemplate } from '../_shared/email/templates/contactInquiry.ts';
 import { validateContactInquiry } from '../_shared/contact-inquiry/validate.ts';
+import { captchaResponse, verificarCaptcha } from '../_shared/captcha/turnstile.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,7 +29,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const payload = await readBoundedObject(req, 16 * 1024);
+    const { captcha_token, ...payload } = await readBoundedObject(req, 16 * 1024);
+    const captcha = await verificarCaptcha(captcha_token, trustedRequestIp(req), 'contacto');
+    const recusado = captchaResponse(captcha, corsHeaders);
+    if (recusado) return recusado;
+
     const result = validateContactInquiry(payload);
 
     if (!result.ok) {
@@ -43,7 +48,13 @@ Deno.serve(async (req) => {
     const origem = await hashRateLimitIdentity(trustedRequestIp(req), serviceKey);
     for (const quota of [
       { operation: 'contact-inquiry-origin', identity: origem, limit: 3, windowSeconds: 3600 },
-      { operation: 'contact-inquiry-global', identity: 'contact', limit: 100, windowSeconds: 3600 },
+      {
+        operation: 'contact-inquiry-global',
+        identity: 'contact',
+        // Com CAPTCHA os robôs ficam de fora e o tecto global pode subir.
+        limit: captcha.ok && captcha.ativo ? 500 : 100,
+        windowSeconds: 3600,
+      },
     ]) {
       const limitada = rateLimitResponse(await consumeRateLimit(supabase, quota), corsHeaders);
       if (limitada) return limitada;

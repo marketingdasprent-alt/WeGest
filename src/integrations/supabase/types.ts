@@ -16040,6 +16040,7 @@ export type Database = {
           email: string
           expires_at: string
           org_id: string
+          org_nome: string
         }[]
       }
       verificar_lista_espera_disponibilidade: { Args: never; Returns: number }

@@ -1,6 +1,7 @@
 ﻿import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
+import { mensagemDeErroDaFuncao } from '@/lib/erroFuncaoEdge';
 
 const createInputSchema = z.object({
   nome: z.string().trim().min(1),
@@ -42,7 +43,11 @@ export function useRequestAccountRecovery() {
       const { data, error } = await supabase.functions.invoke('reset-user-password', {
         body: { userId: input.userId, org_id: input.org_id },
       });
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          await mensagemDeErroDaFuncao(error, 'Não foi possível enviar a recuperação.')
+        );
+      }
       z.object({ success: z.literal(true) }).parse(data);
     },
     onSuccess: () => {
