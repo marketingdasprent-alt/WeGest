@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SINCRONIZACAO_ATIVA } from '@/config/sync';
-import { useOrgId } from '@/contexts/TenantContext';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesUpdate } from '@/integrations/supabase/types';
 import { cronExpressionToPreset, presetToCronExpression, CRON_PRESETS } from '@/lib/cronPresets';
+import { pedirSyncViaVerde } from '@/lib/viaVerdeSync';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,7 +90,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   onUpdate,
 }) => {
   const { toast } = useToast();
-  const orgId = useOrgId();
   const [saving, setSaving] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -399,30 +398,22 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       // Via Verde: passa pela fila (via_verde_sync_queue) tal como o sync
       // automático — evita que um disparo manual ultrapasse o limite de
       // concorrência do plano Apify dedicado, ou entre em conflito com uma
-      // execução já agendada da mesma integração. via-verde-sync-drain é
-      // invocado de seguida para processar já, sem esperar pelo próximo
-      // tick de 5 min.
+      // execução já agendada da mesma integração. A RPC põe na fila e arranca
+      // o drain no servidor, sem esperar pelo próximo tick de 5 min.
       if (isViaVerde) {
-        const { error: insertError } = await supabase.from('via_verde_sync_queue').insert({
-          integracao_id: integracao.id,
-          org_id: orgId,
-          status: 'pending',
-          periodo_inicio: periodoTipo === 'personalizado' ? periodoInicio : null,
-          periodo_fim: periodoTipo === 'personalizado' ? periodoFim : null,
+        const personalizado = periodoTipo === 'personalizado';
+        const resultado = await pedirSyncViaVerde(integracao.id, {
+          inicio: personalizado ? periodoInicio : null,
+          fim: personalizado ? periodoFim : null,
         });
-
-        if (insertError && insertError.code !== '23505') {
-          throw new Error(insertError.message);
-        }
+        const jaNaFila = resultado === 'ja_na_fila';
 
         toast({
-          title: insertError ? 'Já estava na fila' : 'Adicionado à fila',
-          description: insertError
+          title: jaNaFila ? 'Já estava na fila' : 'Adicionado à fila',
+          description: jaNaFila
             ? 'Esta integração já tem uma execução pendente ou em curso.'
             : 'A processar em breve — respeitando o limite de execuções em simultâneo.',
         });
-
-        await supabase.functions.invoke('via-verde-sync-drain', { body: {} });
         return;
       }
 

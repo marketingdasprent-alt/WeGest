@@ -8,10 +8,14 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/components/admin/AcceptOrgInvite.test.tsx",
+    "src/components/admin/AcceptOrgInvite.tsx",
     "src/components/admin/ConvitesTab.tsx",
     "src/components/admin/MotoristaInviteLink.test.tsx",
     "src/components/admin/MotoristaInviteLink.tsx",
     "src/components/admin/QuadroTvSection.tsx",
+    "src/components/admin/UserRecoveryDialog.test.tsx",
+    "src/components/admin/UserRecoveryDialog.tsx",
     "src/components/admin/automacao/RegrasTab.tsx",
     "src/components/admin/automacao/RegrasTabela.tsx",
     "src/components/admin/automacao/builder/BarraAccoes.tsx",
@@ -174,6 +178,8 @@
     "src/hooks/automacao/useUltimaFalhaDaRegra.ts",
     "src/hooks/automacao/useUltimoPayloadDaRegra.ts",
     "src/hooks/contratoErrorMessage.test.ts",
+    "src/hooks/useAcceptOrgInvite.ts",
+    "src/hooks/useAdminAccountActions.ts",
     "src/hooks/useAprovacaoDocumentosMotorista.ts",
     "src/hooks/useAssinaturasHandover.ts",
     "src/hooks/useAssociarViaturaGrupo.test.tsx",

@@ -1,4 +1,12 @@
-import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
+import { RequestBodyError } from '../_shared/http/boundedJson.ts';
+import { readBoundedObject } from '../_shared/rate-limit/requestBody.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import {
+  consumeRateLimit,
+  hashRateLimitIdentity,
+  rateLimitResponse,
+  trustedRequestIp,
+} from '../_shared/rate-limit/rateLimit.ts';
 import { BrevoProvider } from '../_shared/email/providers/BrevoProvider.ts';
 import { contactInquiryTemplate } from '../_shared/email/templates/contactInquiry.ts';
 import { validateContactInquiry } from '../_shared/contact-inquiry/validate.ts';
@@ -14,13 +22,13 @@ const SENDER = { name: 'WeGest — Site', email: 'noreply@dasprent.pt' };
 // Usa a chave global da Brevo (a mesma que os emails de auth já usam,
 // ver EmailProviderFactory.getLegacyFallback) em vez do EmailService
 // multi-tenant, que exige sempre uma organização para resolver o provider.
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const payload = await req.json();
+    const payload = await readBoundedObject(req, 16 * 1024);
     const result = validateContactInquiry(payload);
 
     if (!result.ok) {
@@ -28,6 +36,17 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', serviceKey);
+    const origem = await hashRateLimitIdentity(trustedRequestIp(req), serviceKey);
+    for (const quota of [
+      { operation: 'contact-inquiry-origin', identity: origem, limit: 3, windowSeconds: 3600 },
+      { operation: 'contact-inquiry-global', identity: 'contact', limit: 100, windowSeconds: 3600 },
+    ]) {
+      const limitada = rateLimitResponse(await consumeRateLimit(supabase, quota), corsHeaders);
+      if (limitada) return limitada;
     }
 
     const apiKey = Deno.env.get('BREVO_API_KEY');
@@ -54,6 +73,11 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    if (error instanceof RequestBodyError)
+      return new Response(JSON.stringify({ success: false, error: error.message }), {
+        status: error.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     console.error('Erro contact-inquiry:', error);
     return new Response(
       JSON.stringify({ success: false, error: (error as Error).message || 'Erro interno' }),

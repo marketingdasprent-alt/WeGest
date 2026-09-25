@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { extname, join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +13,16 @@ function filesUnder(directory: string): string[] {
 }
 
 describe('segredos no repositório ativo', () => {
+  it('não guarda tokens Apify em migrations, incluindo as arquivadas', () => {
+    const trackedFiles = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' });
+    const offenders = trackedFiles
+      .split('\0')
+      .filter((path) => path.endsWith('.sql'))
+      .filter((path) => /apify_api_[A-Za-z0-9_-]{12,}/.test(readFileSync(path, 'utf8')));
+
+    expect(offenders).toEqual([]);
+  });
+
   it('não contém JWTs hardcoded em código executável ou scripts auxiliares', () => {
     const roots = ['src', 'scratch', 'tmp', 'supabase/functions'].map((path) =>
       resolve(process.cwd(), path)

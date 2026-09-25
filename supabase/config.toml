@@ -50,6 +50,19 @@ verify_jwt = true
 [functions.create-user]
 verify_jwt = false
 
+# Workers internos: o gateway valida o JWT e o handler exige a service role exata.
+[functions.via-verde-import]
+verify_jwt = true
+
+[functions.via-verde-sync-drain]
+verify_jwt = true
+
+[functions.send-bulk-settlements]
+verify_jwt = true
+
+[functions.send-weekly-settlements]
+verify_jwt = true
+
 # Onboarding de motorista (fluxo email-first). Aberta pré-login (anon) →
 # verify_jwt=false. Segurança: só age sobre um perfil motoristas_ativos
 # desta org, com este email e sem conta (user_id NULL); envia link seguro.

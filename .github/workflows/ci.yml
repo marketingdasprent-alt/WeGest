@@ -93,7 +93,9 @@ jobs:
         with:
           deno-version: v2.x
 
-      - run: deno test --allow-read supabase/functions/_shared
+      # env: os testes dos handlers definem SUPABASE_URL/chaves falsas; net só em
+      # loopback, para o servidor local dos testes de rate limit.
+      - run: deno test --allow-read --allow-env --allow-net=127.0.0.1 supabase/functions/_shared
 
   build:
     name: 🏗️ Build
@@ -318,7 +320,8 @@ jobs:
             rls_org_isolation \
             rls_anon_exposure \
             signup_nao_confia_na_metadata \
-            salvar_precos_modelo_tarifa
+            salvar_precos_modelo_tarifa \
+            aceitar_convite_pelo_titular
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de
