@@ -94,8 +94,10 @@ jobs:
           deno-version: v2.x
 
       # env: os testes dos handlers definem SUPABASE_URL/chaves falsas; net só em
-      # loopback, para o servidor local dos testes de rate limit.
-      - run: deno test --allow-read --allow-env --allow-net=127.0.0.1 supabase/functions/_shared
+      # loopback, para o servidor local dos testes de rate limit. Este job não
+      # instala node_modules: sem --node-modules-dir=none o Deno vê o package.json
+      # e recusa os imports npm: (ex.: @supabase/supabase-js).
+      - run: deno test --allow-read --allow-env --allow-net=127.0.0.1 --node-modules-dir=none supabase/functions/_shared
 
   build:
     name: 🏗️ Build
