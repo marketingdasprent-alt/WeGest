@@ -49,14 +49,15 @@ select plan(34);
 create temporary table _tabelas_anon(tabela text) on commit drop;
 insert into _tabelas_anon values ('leads_dasprent'), ('login_attempts');
 
--- FUNÇÕES executáveis por anon. As três primeiras são chamadas pelo frontend
+-- FUNÇÕES executáveis por anon. As duas primeiras são chamadas pelo frontend
 -- sem sessão; as duas seguintes são invocadas DENTRO de políticas e defaults
 -- (as expressões de política correm com os privilégios de quem chama) e
 -- devolvem NULL/false ao anónimo; as duas últimas substituem a leitura da
--- tabela organizacoes.
+-- tabela organizacoes. marcar_convite_usado saiu em 20260925120625: aceitar
+-- um convite exige o titular autenticado.
 create temporary table _funcoes_anon(funcao text) on commit drop;
 insert into _funcoes_anon values
-  ('formulario_publico_por_id'), ('validar_convite_token'), ('marcar_convite_usado'),
+  ('formulario_publico_por_id'), ('validar_convite_token'),
   ('get_current_org_id'), ('is_current_user_admin'),
   ('org_por_codigo'), ('org_codigo_disponivel');
 

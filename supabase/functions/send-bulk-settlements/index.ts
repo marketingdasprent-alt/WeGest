@@ -1,55 +1,46 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { RequestBodyError } from '../_shared/http/boundedJson.ts';
+import { readSettlements } from '../_shared/weekly-settlements/requestSchemas.ts';
+import { escapeHtml } from '../_shared/notification-queue/renderTemplate.ts';
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface SettlementData {
-  driver_name: string;
-  email: string;
-  total_faturado: number;
-  faturado_bolt: number;
-  faturado_uber: number;
-  liquido: number;
-  // Nem toda a origem de acerto sabe combustível/reparações por motorista
-  // (ex.: motorista_resumo_semanal não os agrega) — ficam opcionais para
-  // não obrigar quem chama a fingir um valor que não tem.
-  combustivel?: number;
-  aluguer: number;
-  reparacoes?: number;
-  outros_custos?: number;
-  periodo: string;
-}
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method !== 'POST') {
+    return new Response(null, { status: 405, headers: { ...corsHeaders, Allow: 'POST, OPTIONS' } });
+  }
+
   try {
-    const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+    requireInternalRequest(req, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    const brevoApiKey = Deno.env.get('BREVO_API_KEY');
     if (!brevoApiKey) {
-      throw new Error("BREVO_API_KEY not configured");
+      throw new Error('BREVO_API_KEY not configured');
     }
 
-    const { settlements }: { settlements: SettlementData[] } = await req.json();
-
-    if (!settlements || settlements.length === 0) {
-      throw new Error("No settlements provided");
-    }
+    const items = await readSettlements(req);
 
     const results = [];
 
-    for (const s of settlements) {
+    for (const item of items) {
+      if (!item.ok) {
+        results.push({ email: item.label, success: false, error: item.error });
+        continue;
+      }
+      const s = item.settlement;
       if (!s.email) {
-        results.push({ email: s.driver_name, success: false, error: "Email não cadastrado" });
+        results.push({ email: s.driver_name, success: false, error: 'Email não cadastrado' });
         continue;
       }
 
-      const formatCurrency = (val: number) => 
-        new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(val);
+      const formatCurrency = (val: number) =>
+        new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(val);
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -72,11 +63,11 @@ serve(async (req) => {
         <body>
           <div class="header">
             <h1 style="margin:0;">Resumo de Contas</h1>
-            <p style="margin:5px 0 0 0; opacity: 0.8;">${s.periodo}</p>
+            <p style="margin:5px 0 0 0; opacity: 0.8;">${escapeHtml(s.periodo)}</p>
           </div>
           <div class="content">
-            <p>Olá <strong>${s.driver_name}</strong>,</p>
-            <p>Segue abaixo o detalhamento do seu acerto financeiro referente ao período de ${s.periodo}.</p>
+            <p>Olá <strong>${escapeHtml(s.driver_name)}</strong>,</p>
+            <p>Segue abaixo o detalhamento do seu acerto financeiro referente ao período de ${escapeHtml(s.periodo)}.</p>
             
             <table class="summary-table">
               <tr>
@@ -91,21 +82,33 @@ serve(async (req) => {
                 <td>Aluguer de Viatura</td>
                 <td class="text-red">-${formatCurrency(s.aluguer)}</td>
               </tr>
-              ${(s.combustivel ?? 0) > 0 ? `
+              ${
+                (s.combustivel ?? 0) > 0
+                  ? `
               <tr>
                 <td>Custos de Combustível</td>
                 <td class="text-red">-${formatCurrency(s.combustivel!)}</td>
-              </tr>` : ''}
-              ${(s.reparacoes ?? 0) > 0 ? `
+              </tr>`
+                  : ''
+              }
+              ${
+                (s.reparacoes ?? 0) > 0
+                  ? `
               <tr>
                 <td>Reparações</td>
                 <td class="text-red">-${formatCurrency(s.reparacoes!)}</td>
-              </tr>` : ''}
-              ${(s.outros_custos ?? 0) > 0 ? `
+              </tr>`
+                  : ''
+              }
+              ${
+                (s.outros_custos ?? 0) > 0
+                  ? `
               <tr>
                 <td>Outros Custos/Ajustes</td>
                 <td class="text-red">-${formatCurrency(s.outros_custos!)}</td>
-              </tr>` : ''}
+              </tr>`
+                  : ''
+              }
               <tr class="total-row font-bold">
                 <td>VALOR LÍQUIDO A RECEBER</td>
                 <td class="${s.liquido >= 0 ? 'text-green' : 'text-red'}">${formatCurrency(s.liquido)}</td>
@@ -126,12 +129,12 @@ serve(async (req) => {
         const response = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
-            'accept': 'application/json',
+            accept: 'application/json',
             'api-key': brevoApiKey,
             'content-type': 'application/json',
           },
           body: JSON.stringify({
-            sender: { name: "DÉCADA OUSADA", email: "noreply@dasprent.pt" },
+            sender: { name: 'DÉCADA OUSADA', email: 'noreply@dasprent.pt' },
             to: [{ email: s.email, name: s.driver_name }],
             subject: `Resumo Financeiro - ${s.driver_name} - ${s.periodo}`,
             htmlContent: htmlContent,
@@ -144,20 +147,28 @@ serve(async (req) => {
           const err = await response.json();
           results.push({ email: s.email, success: false, error: err.message });
         }
-      } catch (e: any) {
-        results.push({ email: s.email, success: false, error: e.message });
+      } catch (e: unknown) {
+        results.push({
+          email: s.email,
+          success: false,
+          error: e instanceof Error ? e.message : 'Falha no envio',
+        });
       }
     }
 
+    return new Response(JSON.stringify({ success: true, results }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error: unknown) {
+    if (error instanceof AuthorizationError || error instanceof RequestBodyError) {
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: error.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     return new Response(
-      JSON.stringify({ success: true, results }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-
-  } catch (error: any) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro inesperado' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

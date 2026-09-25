@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCreateAdminAccount, useRequestAccountRecovery } from '@/hooks/useAdminAccountActions';
+import { UserRecoveryDialog } from '@/components/admin/UserRecoveryDialog';
+import { GeneratedInviteDisplay } from '@/components/admin/GeneratedInviteDisplay';
 import { useOrgId } from '@/contexts/TenantContext';
 import { Loader2, Pencil, Trash2, Key, Search, Plus } from 'lucide-react';
 import type { Cargo } from '@/hooks/useRBAC';
@@ -76,7 +78,9 @@ export const UsersTab = () => {
 
   // Dialog de criação
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
+  const createAccount = useCreateAdminAccount();
+  const isCreating = createAccount.isPending;
+  const [pendingInviteLink, setPendingInviteLink] = useState('');
   const [newUser, setNewUser] = useState({
     nome: '',
     email: '',
@@ -90,15 +94,12 @@ export const UsersTab = () => {
   const [profileToDelete, setProfileToDelete] = useState<Profile | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Dialog de reset password
+  // Recuperação enviada ao titular
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [resetPasswordProfile, setResetPasswordProfile] = useState<Profile | null>(null);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [resetting, setResetting] = useState(false);
+  const recovery = useRequestAccountRecovery();
 
   const { toast } = useToast();
-  const { user: currentUser } = useAuth();
   const orgId = useOrgId();
 
   useEffect(() => {
@@ -264,52 +265,39 @@ export const UsersTab = () => {
       return;
     }
 
-    setIsCreating(true);
-
+    if (!orgId) return;
     try {
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body: {
-          nome: newUser.nome.trim(),
-          email: newUser.email.trim(),
-          password: newUser.password,
-          cargo_id: newUser.cargo_id || null,
-          org_id: orgId,
-        },
+      const result = await createAccount.mutateAsync({
+        nome: newUser.nome.trim(),
+        email: newUser.email.trim(),
+        password: newUser.password,
+        cargo_id: newUser.cargo_id || null,
+        org_id: orgId,
       });
-
-      if (error) throw error;
-
-      if (data?.error) {
+      if (result.status === 'invited') {
+        setPendingInviteLink(
+          `${window.location.origin}/register?token=${encodeURIComponent(result.invite.token)}`
+        );
         toast({
-          title: 'Erro ao criar utilizador',
-          description: data.error,
-          variant: 'destructive',
+          title: 'Convite pendente',
+          description:
+            'Partilhe o link com o titular. Só será associado após aceitar o convite com a sua conta.',
         });
-        return;
+      } else {
+        setPendingInviteLink('');
+        toast({ title: 'Utilizador criado' });
       }
-
-      toast({
-        title: data?.existing ? 'Utilizador adicionado' : 'Utilizador criado',
-        description: data?.existing
-          ? 'Este email já tinha conta — foi adicionado a esta organização. A password NÃO foi alterada: continua a ser a que a pessoa já usava (é a mesma em todas as organizações).'
-          : 'O utilizador foi criado com sucesso.',
-        duration: 10000,
-      });
-
       setIsCreateDialogOpen(false);
       setNewUser({ nome: '', email: '', password: '', confirmPassword: '', cargo_id: '' });
-      fetchProfiles();
-    } catch (error: any) {
+      void fetchProfiles();
+    } catch (error: unknown) {
       toast({
         title: 'Erro ao criar utilizador',
-        description: error.message,
+        description: error instanceof Error ? error.message : 'Erro inesperado',
         variant: 'destructive',
       });
-    } finally {
-      setIsCreating(false);
     }
   };
-
   const openEditDialog = (profile: Profile) => {
     setEditingProfile(profile);
     setIsEditDialogOpen(true);
@@ -407,120 +395,24 @@ export const UsersTab = () => {
 
   const openResetPasswordDialog = (profile: Profile) => {
     setResetPasswordProfile(profile);
-    setNewPassword('');
-    setConfirmPassword('');
     setResetPasswordDialogOpen(true);
   };
 
   const handleResetPassword = async () => {
-    if (!resetPasswordProfile) return;
-
-    if (newPassword.length < 6) {
-      toast({
-        title: 'Erro de validação',
-        description: 'A password deve ter pelo menos 6 caracteres',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: 'Erro de validação',
-        description: 'As passwords não coincidem',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setResetting(true);
-
+    if (!resetPasswordProfile || !orgId) return;
     try {
-      const { data, error } = await supabase.functions.invoke('reset-user-password', {
-        body: {
-          userId: resetPasswordProfile.id,
-          newPassword: newPassword,
-          org_id: orgId,
-        },
-      });
-
-      // invoke marca `error` em qualquer resposta não-2xx — a mensagem amigável
-      // vem no corpo (error.context). Sem isto, mostrava o genérico "non-2xx".
-      if (error) {
-        let description = 'Não foi possível resetar a password. Tenta novamente.';
-        const ctx = (error as { context?: Response }).context;
-        if (ctx && typeof ctx.json === 'function') {
-          try {
-            const body = await ctx.json();
-            if (
-              body?.code === 'weak_password' ||
-              /Password should contain|weak[_ ]?password/i.test(body?.error ?? '')
-            ) {
-              description =
-                'A palavra-passe é demasiado fraca. Tem de incluir pelo menos uma letra minúscula, uma maiúscula, um número e um símbolo (ex.: ! @ # $ % &).';
-            } else if (body?.error) {
-              description = body.error;
-            }
-          } catch {
-            /* corpo não-JSON — fica a mensagem genérica */
-          }
-        }
-        toast({ title: 'Erro ao resetar password', description, variant: 'destructive' });
-        return;
-      }
-
-      if (data?.error) {
-        toast({
-          title: 'Erro ao resetar password',
-          description: data.error,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const wasSelfReset = currentUser?.id === resetPasswordProfile.id;
-      const targetEmail = resetPasswordProfile.email;
-
+      await recovery.mutateAsync({ userId: resetPasswordProfile.id, org_id: orgId });
       setResetPasswordDialogOpen(false);
       setResetPasswordProfile(null);
-      setNewPassword('');
-      setConfirmPassword('');
-
-      if (wasSelfReset) {
-        // Supabase invalida a sessão atual quando se muda a própria password
-        // — voltar a fazer login com a nova password para repor um JWT válido.
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: targetEmail,
-          password: newPassword,
-        });
-        if (signInError) {
-          toast({
-            title: 'Password alterada — volta a entrar',
-            description: 'Por favor faz login novamente com a nova password.',
-          });
-          await supabase.auth.signOut();
-          window.location.href = '/equipa';
-          return;
-        }
-      }
-
+      toast({ title: 'Email de recuperação enviado ao titular' });
+    } catch (error: unknown) {
       toast({
-        title: 'Password resetada',
-        description: 'A password foi atualizada com sucesso.',
-      });
-
-      fetchProfiles();
-    } catch (error: any) {
-      toast({
-        title: 'Erro ao resetar password',
-        description: error.message,
+        title: 'Erro ao enviar recuperação',
+        description: error instanceof Error ? error.message : 'Erro inesperado',
         variant: 'destructive',
       });
-    } finally {
-      setResetting(false);
     }
   };
-
   const getGrupoName = (cargoId: string | null) => {
     if (!cargoId) return 'Sem grupo';
     const grupo = grupos.find((g) => g.id === cargoId);
@@ -673,7 +565,8 @@ export const UsersTab = () => {
                         variant="outline"
                         size="icon"
                         onClick={() => openResetPasswordDialog(profile)}
-                        title="Resetar Password"
+                        title="Enviar recuperação"
+                        aria-label="Enviar recuperação"
                         className="border-border hover:bg-muted"
                       >
                         <Key className="h-4 w-4" />
@@ -704,11 +597,25 @@ export const UsersTab = () => {
         </CardContent>
       </Card>
 
+      <div aria-live="polite">
+        {pendingInviteLink && (
+          <>
+            <p className="text-sm text-muted-foreground mb-3">
+              Convite pendente de aceitação pelo titular.
+            </p>
+            <GeneratedInviteDisplay inviteLink={pendingInviteLink} />
+          </>
+        )}
+      </div>
       {/* Create User Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
             <DialogTitle className="text-foreground">Novo Utilizador</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Se o email já tiver conta, será gerado um convite. A palavra-passe indicada só se
+              aplica a contas novas.
+            </p>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -941,72 +848,13 @@ export const UsersTab = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reset Password Dialog */}
-      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
-        <DialogContent className="bg-card border-border">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">Resetar Password</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="p-3 bg-muted rounded-md border border-border">
-              <p className="text-sm text-muted-foreground">Definir nova password para:</p>
-              <p className="font-medium text-foreground mt-1">{resetPasswordProfile?.email}</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword" className="text-foreground">
-                Nova Password
-              </Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
-                className="bg-background border-border"
-              />
-              <p className="text-xs text-muted-foreground">
-                Deve incluir minúscula, maiúscula, número e símbolo (ex.: ! @ # $ %).
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-foreground">
-                Confirmar Password
-              </Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repita a password"
-                className="bg-background border-border"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setResetPasswordDialogOpen(false)}
-              disabled={resetting}
-              className="border-border"
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleResetPassword}
-              disabled={resetting || !newPassword || !confirmPassword}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {resetting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />A resetar...
-                </>
-              ) : (
-                'Resetar Password'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <UserRecoveryDialog
+        open={resetPasswordDialogOpen}
+        onOpenChange={setResetPasswordDialogOpen}
+        email={resetPasswordProfile?.email ?? ''}
+        isPending={recovery.isPending}
+        onSend={handleResetPassword}
+      />
     </div>
   );
 };

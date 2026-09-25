@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Eye, EyeOff, Car, UserPlus } from 'lucide-react';
+import { AcceptOrgInvite } from '@/components/admin/AcceptOrgInvite';
 
 const Register = () => {
   const [searchParams] = useSearchParams();
@@ -24,13 +25,14 @@ const Register = () => {
   const [isFirstUser, setIsFirstUser] = useState(false);
   const [cargoId, setCargoId] = useState<string | null>(null);
   const [cargoNome, setCargoNome] = useState<string | null>(null);
+  const [hasExistingAccount, setHasExistingAccount] = useState(false);
 
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
+    if (user && !token) {
       navigate('/crm');
       return;
     }
@@ -40,27 +42,8 @@ const Register = () => {
 
   const validateAccess = async () => {
     try {
-      // Verificar se há usuários no sistema
-      const { count, error: countError } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
-
-      if (countError) {
-        console.error('Erro ao contar usuários:', countError);
-        setTokenValid(false);
-        setValidatingToken(false);
-        return;
-      }
-
-      // CASO 1: Sistema vazio (primeiro usuário) - SEM TOKEN
-      if (count === 0 && !token) {
-        setIsFirstUser(true);
-        setTokenValid(true);
-        setValidatingToken(false);
-        return;
-      }
-
-      // CASO 2: Token presente - validar convite
+      // CASO 1: Token presente - validar convite. Só pela RPC: sem sessão não há
+      // SELECT em profiles, e contar primeiro dava "permission denied" ao convidado.
       if (token) {
         // RPC devolve só a linha do token pedido (não usado, não expirado) —
         // convites já não tem SELECT aberto a anon.
@@ -87,6 +70,26 @@ const Register = () => {
         setCargoId(convite.cargo_id);
         setCargoNome(convite.cargo_nome || null);
         setIsFirstUser(false);
+        setTokenValid(true);
+        setValidatingToken(false);
+        return;
+      }
+
+      // Sem token só se regista o primeiro utilizador da instalação.
+      const { count, error: countError } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+
+      if (countError) {
+        console.error('Erro ao contar usuários:', countError);
+        setTokenValid(false);
+        setValidatingToken(false);
+        return;
+      }
+
+      // CASO 2: Sistema vazio (primeiro usuário)
+      if (count === 0) {
+        setIsFirstUser(true);
         setTokenValid(true);
         setValidatingToken(false);
         return;
@@ -126,7 +129,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -145,16 +148,18 @@ const Register = () => {
         throw signUpError;
       }
 
-      // Marcar convite como usado se tem token
-      if (token) {
-        await supabase.rpc('marcar_convite_usado', { p_token: token });
+      // Com sessão já aberta (confirmação de email desligada), aceita-se o
+      // convite aqui; sem sessão, depois de confirmar o email e reabrir o link.
+      if (token && signUpData.session) {
+        setHasExistingAccount(true);
+        return;
       }
 
       toast({
         title: 'Sucesso',
         description: isFirstUser
           ? 'Primeira conta criada com sucesso! Você é agora um administrador.'
-          : 'Conta criada com sucesso! Você já pode fazer login.',
+          : 'Confirme o seu email e reabra o convite para concluir a associação.',
       });
 
       navigate('/login');
@@ -233,90 +238,112 @@ const Register = () => {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={!isFirstUser}
-                  required
-                  placeholder="seu@email.com"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="nome">Nome Completo</Label>
-                <Input
-                  id="nome"
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  required
-                  placeholder="Seu nome completo"
-                />
-              </div>
-
-              {cargoNome && (
+            {token && (user || hasExistingAccount) ? (
+              <AcceptOrgInvite
+                token={token}
+                email={email}
+                currentEmail={user?.email}
+                cargoNome={cargoNome}
+                onAccepted={() => {
+                  window.location.assign('/crm');
+                }}
+              />
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Grupo de Permissões</Label>
-                  <div className="bg-muted border border-border rounded-md px-3 py-2">
-                    {cargoNome}
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={!isFirstUser}
+                    required
+                    placeholder="seu@email.com"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="nome">Nome Completo</Label>
+                  <Input
+                    id="nome"
+                    type="text"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    required
+                    placeholder="Seu nome completo"
+                  />
+                </div>
+
+                {cargoNome && (
+                  <div className="space-y-2">
+                    <Label>Grupo de Permissões</Label>
+                    <div className="bg-muted border border-border rounded-md px-3 py-2">
+                      {cargoNome}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Senha</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      placeholder="Mínimo 6 caracteres"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
-                <div className="relative">
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirmar Senha</Label>
                   <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    placeholder="Mínimo 6 caracteres"
-                    className="pr-10"
+                    placeholder="Repita sua senha"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  placeholder="Repita sua senha"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold mt-6"
-              >
-                {loading ? 'Criando conta...' : isFirstUser ? 'Criar Conta Admin' : 'Criar Conta'}
-              </Button>
-            </form>
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold mt-6"
+                >
+                  {loading ? 'Criando conta...' : isFirstUser ? 'Criar Conta Admin' : 'Criar Conta'}
+                </Button>
+              </form>
+            )}
 
             <div className="mt-6 text-center">
               <p className="text-muted-foreground text-sm">
                 Já tem uma conta?{' '}
-                <Link to="/login" className="text-primary hover:underline font-medium">
-                  Fazer login
-                </Link>
+                {token ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline font-medium"
+                    onClick={() => setHasExistingAccount(true)}
+                  >
+                    Entrar para aceitar convite
+                  </button>
+                ) : (
+                  <Link to="/login" className="text-primary hover:underline font-medium">
+                    Fazer login
+                  </Link>
+                )}
               </p>
             </div>
           </CardContent>

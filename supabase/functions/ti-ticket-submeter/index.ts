@@ -1,7 +1,15 @@
+import { RequestBodyError } from '../_shared/http/boundedJson.ts';
+import { readBoundedObject } from '../_shared/rate-limit/requestBody.ts';
 // Submissão pública de tickets de TI. verify_jwt = false: quem submete pode não
 // ter conta nenhuma. A autorização é o token do link, validado aqui dentro; as
 // tabelas continuam fechadas por RLS a quem tem sessão.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import {
+  consumeRateLimit,
+  hashRateLimitIdentity,
+  rateLimitResponse,
+  trustedRequestIp,
+} from '../_shared/rate-limit/rateLimit.ts';
 import { validarAnexosSubmissao } from '../_shared/ti-tickets/anexos.ts';
 
 const cors = {
@@ -19,14 +27,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Hash da origem com um segredo do projecto: conta o limite sem guardar o IP. */
-async function hashOrigem(ip: string): Promise<string> {
-  const segredo = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  const dados = new TextEncoder().encode(`${segredo}:${ip}`);
-  const digest = await crypto.subtle.digest('SHA-256', dados);
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 /** Valida um email simples: algo@algo.algo (algo antes de @, algo depois, e um ponto no domínio). */
 function isValidEmail(email: string): boolean {
   const parts = email.split('@');
@@ -40,7 +40,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
   try {
-    const { token, nome, email, descricao, anexos } = await req.json();
+    const { token, nome, email, descricao, anexos } = await readBoundedObject(
+      req,
+      21 * 1024 * 1024
+    );
 
     if (!token) return json({ success: false, error: 'Link inválido.' }, 400);
     if (typeof nome !== 'string' || !nome.trim())
@@ -92,34 +95,35 @@ Deno.serve(async (req) => {
 
     if (!linha) return json({ success: false, error: 'Este link já não é válido.' }, 403);
 
-    // Limite por origem. Um endpoint anónimo de escrita e uma porta aberta, e o
-    // token circula por email e WhatsApp. Prioridade de confiança: cf-connecting-ip
-    // (sobreposto pelo proxy Cloudflare/Supabase) antes de x-forwarded-for (cliente
-    // pode falsificar o primeiro valor). Se x-forwarded-for, usa o ÚLTIMO, não o
-    // primeiro: o gateway acrescenta o IP verdadeiro no fim da lista.
-    const cfConnectingIp = req.headers.get('cf-connecting-ip');
-    const xForwardedFor = req.headers.get('x-forwarded-for');
-    const ip =
-      cfConnectingIp ??
-      (xForwardedFor ? xForwardedFor.split(',').pop()?.trim() : undefined) ??
-      'desconhecido';
-    const origem = await hashOrigem(ip);
-    const desde = new Date(Date.now() - 3_600_000).toISOString();
-
-    const { count, error: countError } = await sb
-      .from('ti_submissoes')
-      .select('id', { count: 'exact', head: true })
-      .eq('org_id', linha.org_id)
-      .eq('origem_hash', origem)
-      .gte('created_at', desde);
-
-    if (countError) {
-      console.error('Erro ao contar submissões:', countError);
-      return json({ success: false, error: 'Não foi possível verificar o limite.' }, 429);
-    }
-
-    if ((count ?? 0) >= LIMITE_POR_HORA) {
-      return json({ success: false, error: 'Demasiados pedidos. Tente dentro de uma hora.' }, 429);
+    const origem = await hashRateLimitIdentity(
+      trustedRequestIp(req),
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    );
+    const quotas = [
+      {
+        operation: 'ti-ticket-origin',
+        identity: linha.org_id + ':' + origem,
+        limit: LIMITE_POR_HORA,
+        windowSeconds: 3600,
+      },
+    ];
+    if (criadoPor)
+      quotas.push({
+        operation: 'ti-ticket-user',
+        identity: linha.org_id + ':' + criadoPor,
+        limit: LIMITE_POR_HORA,
+        windowSeconds: 3600,
+      });
+    // A agregada vai por último: quem é barrado pela sua quota não gasta a da org.
+    quotas.push({
+      operation: 'ti-ticket-org',
+      identity: linha.org_id,
+      limit: 100,
+      windowSeconds: 3600,
+    });
+    for (const quota of quotas) {
+      const limitada = rateLimitResponse(await consumeRateLimit(sb, quota), cors);
+      if (limitada) return limitada;
     }
 
     const { data: ticket, error } = await sb
@@ -197,6 +201,7 @@ Deno.serve(async (req) => {
 
     return json({ success: true, numero: ticket.numero, anexosFalhou });
   } catch (e) {
+    if (e instanceof RequestBodyError) return json({ success: false, error: e.message }, e.status);
     console.error('ti-ticket-submeter:', e);
     return json({ success: false, error: 'Não foi possível registar o pedido.' }, 500);
   }

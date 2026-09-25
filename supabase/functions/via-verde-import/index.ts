@@ -1,3 +1,6 @@
+import { RequestBodyError } from '../_shared/http/boundedJson.ts';
+import { MAX_IMPORT_ROWS, readViaVerdeImport } from './requestSchema.ts';
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const corsHeaders = {
@@ -73,6 +76,9 @@ function parseCsv(text: string): Record<string, string>[] {
     headers.forEach((h, idx) => {
       row[h] = vals[idx] || '';
     });
+    if (rows.length >= MAX_IMPORT_ROWS) {
+      throw new RequestBodyError('Importação Via Verde excede 10000 linhas');
+    }
     rows.push(row);
   }
   return rows;
@@ -87,45 +93,19 @@ function findField(row: Record<string, string>, candidates: string[]): string {
   return '';
 }
 
-interface TransacaoEstruturada {
-  transaction_date?: string | null;
-  matricula?: string | null;
-  nr_equipamento?: string | null;
-  operador?: string | null;
-  barreira_entrada?: string | null;
-  barreira_saida?: string | null;
-  amount?: number | string | null;
-  tipo_evento?: string | null;
-  contrato?: string | null;
-  transaction_id?: string | null;
-  // Campos como o actor Apify da Via Verde realmente produz (ver
-  // viaverde-scraper-wegest main.js) — nomes diferentes dos assumidos acima.
-  data_entrada?: string | null;
-  data_saida?: string | null;
-  local_entrada?: string | null;
-  local_saida?: string | null;
-  servico?: string | null;
-  valor?: number | string | null;
-  contaMobilidade?: string | null;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method !== 'POST') {
+    return new Response(null, { status: 405, headers: { ...corsHeaders, Allow: 'POST, OPTIONS' } });
+  }
+
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    requireInternalRequest(req, SERVICE_ROLE_KEY);
+    const { integracao_id, dados_csv, transacoes } = await readViaVerdeImport(req);
+    const csvRows = dados_csv ? parseCsv(dados_csv) : null;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-    const body = await req.json();
-    const { integracao_id, dados_csv, transacoes } = body;
-
-    if (!integracao_id) {
-      return jsonError('integracao_id é obrigatório', 400);
-    }
-    if (!dados_csv && !transacoes) {
-      return jsonError('dados_csv ou transacoes são obrigatórios', 400);
-    }
-
     const { data: intConfig } = await supabase
       .from('plataformas_configuracao')
       .select('org_id, robot_target_platform, nome')
@@ -273,9 +253,8 @@ Deno.serve(async (req) => {
       });
     };
 
-    if (dados_csv) {
-      const rows = parseCsv(dados_csv);
-      for (const row of rows) {
+    if (csvRows) {
+      for (const row of csvRows) {
         const matricula = findField(row, ['matricula']);
         const dataStr = findField(row, ['data saida', 'data saída', 'data', 'saida']);
         const barreira = findField(row, ['barreira saida', 'barreira saída', 'barreira s']);
@@ -288,7 +267,7 @@ Deno.serve(async (req) => {
         processRow(txDate, matricula, barreira, operador, valorStr, contrato, equip, tipo, row);
       }
     } else if (Array.isArray(transacoes)) {
-      for (const t of transacoes as TransacaoEstruturada[]) {
+      for (const t of transacoes) {
         // Aceita tanto os nomes "canónicos" como os que o actor Apify da Via
         // Verde realmente produz (data_entrada/data_saida/local_saida/valor/...).
         const txDate = parseDate(t.transaction_date || t.data_saida || t.data_entrada || '');
@@ -303,7 +282,7 @@ Deno.serve(async (req) => {
           t.contrato || t.contaMobilidade || '',
           t.nr_equipamento || '',
           t.tipo_evento || t.servico || '',
-          t as Record<string, unknown>
+          t
         );
       }
     }
@@ -324,9 +303,21 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ success: false, error: (err as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    if (err instanceof AuthorizationError || err instanceof RequestBodyError) {
+      return new Response(JSON.stringify({ success: false, error: err.message }), {
+        status: err.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: err instanceof Error ? err.message : 'Erro inesperado',
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });

@@ -1,3 +1,4 @@
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const corsHeaders = {
@@ -29,9 +30,14 @@ interface QueueItem {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  if (req.method !== 'POST') {
+    return new Response(null, { status: 405, headers: { ...corsHeaders, Allow: 'POST, OPTIONS' } });
+  }
+
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    requireInternalRequest(req, SERVICE_ROLE_KEY);
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
     const { data: claimed, error: claimError } = await supabase.rpc('via_verde_sync_queue_claim', {
@@ -103,6 +109,12 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
+    if (err instanceof AuthorizationError) {
+      return new Response(JSON.stringify({ success: false, error: err.message }), {
+        status: err.status,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     console.error('via-verde-sync-drain error:', err);
     return new Response(
       JSON.stringify({ success: false, error: err instanceof Error ? err.message : String(err) }),

@@ -3,7 +3,8 @@ import { assert, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 const root = new URL("../../", import.meta.url);
 
 async function readFunction(name: string): Promise<string> {
-  return await Deno.readTextFile(new URL(`${name}/index.ts`, root));
+  const file = name === "create-user" ? "handler.ts" : "index.ts";
+  return await Deno.readTextFile(new URL(`${name}/${file}`, root));
 }
 
 Deno.test("workers privilegiados exigem a service role antes de criar o cliente de BD", async () => {

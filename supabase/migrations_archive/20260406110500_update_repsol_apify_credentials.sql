@@ -2,9 +2,7 @@
 -- Data: 2026-04-06
 
 -- 1. Atualizar o Token de API do Apify para todas as integrações de robô
-UPDATE public.plataformas_configuracao
-SET apify_api_token = 'apify_api_zyXNhVu0c2aYqhETTy6fgfDI5ZNrOA3DM0vc'
-WHERE plataforma = 'robot';
+-- Credencial removida por exposição; provisionar o token fora do Git.
 
 -- 2. Atualizar o Actor ID específico da Repsol
 UPDATE public.plataformas_configuracao

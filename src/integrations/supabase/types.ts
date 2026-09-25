@@ -15020,6 +15020,15 @@ export type Database = {
         Args: { p_cobranca_id: string }
         Returns: number
       }
+      consume_edge_rate_limit: {
+        Args: {
+          p_limit: number
+          p_operation: string
+          p_subject_hash: string
+          p_window_seconds: number
+        }
+        Returns: Json
+      }
       consumir_token_realizacao: {
         Args: { p_token: string }
         Returns: {
@@ -16035,6 +16044,14 @@ export type Database = {
       }
       verificar_lista_espera_disponibilidade: { Args: never; Returns: number }
       verificar_modulo: { Args: { p_modulo: string }; Returns: boolean }
+      via_verde_sync_pedir: {
+        Args: {
+          p_integracao_id: string
+          p_periodo_fim?: string
+          p_periodo_inicio?: string
+        }
+        Returns: string
+      }
       via_verde_sync_queue_claim: {
         Args: { p_max: number }
         Returns: {
