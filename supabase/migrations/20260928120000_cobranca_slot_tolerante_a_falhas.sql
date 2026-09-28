@@ -134,9 +134,12 @@ $$;
 COMMENT ON FUNCTION public.gerar_cobrancas_slot_mensais() IS
   'Gera as cobranças mensais de slot em falta (stub do mês de entrada em M+1, mês cheio de M+2 em diante). Idempotente. Devolve o nº de cobranças criadas. Cada reserva corre no seu próprio sub-bloco: uma reserva que falha (ex.: motorista com cliente noutra organização) sai em WARNING, fica em failed_jobs (job_type cobranca.slot_mensal, org da reserva) e não trava as outras.';
 
--- Grants iguais à baseline (e a produção): só o service_role (o cron) executa.
-REVOKE ALL ON FUNCTION public.gerar_cobrancas_slot_mensais() FROM PUBLIC;
-GRANT ALL ON FUNCTION public.gerar_cobrancas_slot_mensais() TO service_role;
+-- Só o service_role (o cron) executa. Os default privileges da baseline dão
+-- EXECUTE a authenticated em cada função nova, por isso o REVOKE tem de o
+-- nomear: só FROM PUBLIC deixava authenticated a executar numa base
+-- reconstruída (o CI apanhou-o). Em produção é no-op.
+REVOKE EXECUTE ON FUNCTION public.gerar_cobrancas_slot_mensais() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.gerar_cobrancas_slot_mensais() TO service_role;
 
 -- O Supabase serve a API a partir de um cache do desenho da base: sem isto,
 -- a função nova só é reconhecida na próxima vez que ele recarregar.
