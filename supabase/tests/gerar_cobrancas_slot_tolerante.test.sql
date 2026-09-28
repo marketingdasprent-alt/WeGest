@@ -45,9 +45,20 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000c5a01', 'gestor@slot-tol-a.pt'),
   ('00000000-0000-0000-0000-0000000c5b01', 'gestor@slot-tol-b.pt');
 
-insert into public.viaturas (id, org_id, matricula, marca, modelo) values
-  ('00000000-0000-0000-0000-0000000c5ae1', '00000000-0000-0000-0000-0000000c5a00', 'ST-01-AA', 'Opel', 'Corsa'),
-  ('00000000-0000-0000-0000-0000000c5be1', '00000000-0000-0000-0000-0000000c5b00', 'ST-01-BB', 'Opel', 'Corsa');
+-- trg_sync_viatura_marca_modelo preenche marca/modelo a partir do catálogo e
+-- apaga o texto passado directamente; sem catálogo a coluna fica NULL e rebenta.
+insert into public.viatura_marcas (id, org_id, nome) values
+  ('00000000-0000-0000-0000-0000000c5aa1', '00000000-0000-0000-0000-0000000c5a00', 'Opel'),
+  ('00000000-0000-0000-0000-0000000c5ba1', '00000000-0000-0000-0000-0000000c5b00', 'Opel');
+insert into public.viatura_modelos (id, org_id, marca_id, nome) values
+  ('00000000-0000-0000-0000-0000000c5ab1', '00000000-0000-0000-0000-0000000c5a00', '00000000-0000-0000-0000-0000000c5aa1', 'Corsa'),
+  ('00000000-0000-0000-0000-0000000c5bb1', '00000000-0000-0000-0000-0000000c5b00', '00000000-0000-0000-0000-0000000c5ba1', 'Corsa');
+
+insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id) values
+  ('00000000-0000-0000-0000-0000000c5ae1', '00000000-0000-0000-0000-0000000c5a00', 'ST-01-AA',
+   '00000000-0000-0000-0000-0000000c5aa1', '00000000-0000-0000-0000-0000000c5ab1'),
+  ('00000000-0000-0000-0000-0000000c5be1', '00000000-0000-0000-0000-0000000c5b00', 'ST-01-BB',
+   '00000000-0000-0000-0000-0000000c5ba1', '00000000-0000-0000-0000-0000000c5bb1');
 
 -- Cliente da org A que vai ficar (mal) ligado ao motorista da org B.
 insert into public.clientes (id, org_id, nome) values
