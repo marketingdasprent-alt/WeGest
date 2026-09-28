@@ -17,7 +17,8 @@ interface NovoDanoUpload {
   descricao: string;
   localizacao: string;
   valor: string;
-  files: File[];
+  /** Fotos já no bucket (subiram ao ser escolhidas, ver DanosEditor). */
+  files: { path: string; nome: string }[];
 }
 import type { AssinaturasHandoverHandle } from '@/components/assinatura/AssinaturasHandoverSection';
 
@@ -275,8 +276,15 @@ export async function uploadDanos(params: UploadDanosParams): Promise<string[]> 
         .select('id')
         .single();
       if (dErr) throw dErr;
-      for (const file of dano.files) {
-        await subirFoto(novoDano.id, file);
+      // As fotos já estão no bucket: só se liga o caminho ao dano.
+      for (const foto of dano.files) {
+        const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
+          dano_id: novoDano.id,
+          ficheiro_url: foto.path,
+          nome_ficheiro: foto.nome,
+          uploaded_by: userId,
+        });
+        if (fErr) throw fErr;
       }
     }
   }

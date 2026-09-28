@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -38,8 +38,15 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { precisaCombustivel, precisaEletrico } from '@/utils/combustivel';
-import { validarDanos, type NovoDano } from '@/components/renting/danos/DanosEditor';
+import {
+  fotosGravaveis,
+  reidratarDanos,
+  validarDanos,
+  type NovoDano,
+} from '@/components/renting/danos/DanosEditor';
 import { RegistoViaturaSection } from '@/components/entrega/RegistoViaturaSection';
+import { useRascunho } from '@/hooks/useRascunho';
+import { pastaRascunhoDanos } from '@/lib/fotosDano';
 import { useFecharContrato } from '@/hooks/useContratosRenting';
 import { computeFechoRapidoDefaults } from './fecharContratoDefaults';
 import { useEstacoes } from '@/hooks/useEstacoes';
@@ -210,6 +217,29 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   // Danos encontrados na recolha. Entidade própria (descrição, onde, quanto),
   // não uma legenda de foto — o valor é o que chega à conta do motorista.
   const [novosDanos, setNovosDanos] = useState<NovoDano[]>([]);
+
+  // Rascunho da recolha por contrato (IndexedDB, o mesmo hook do calendário).
+  // Um erro a fechar, um refresh ou o telemóvel a matar a página deixavam de
+  // apagar o que estava preenchido — no #764 perderam-se as fotos tiradas no
+  // terreno. As fotos sobem ao ser escolhidas (DanosEditor), por isso aqui só
+  // se guardam caminhos. Limpa-se quando o fecho passa.
+  const rascunhoValor = useMemo(
+    () => ({ km, combustivel, nivelEletrico, novosDanos }),
+    [km, combustivel, nivelEletrico, novosDanos]
+  );
+  const { limpar: limparRascunho } = useRascunho<typeof rascunhoValor>({
+    chave: open ? `fecho-contrato-${contratoId}` : null,
+    valor: rascunhoValor,
+    restaurar: (r) => {
+      setKm(r.km ?? '');
+      setCombustivel(r.combustivel ?? '');
+      setNivelEletrico(r.nivelEletrico ?? '');
+      const danos = reidratarDanos(r.novosDanos);
+      setNovosDanos(danos);
+      if (r.km || danos.length > 0)
+        toast.info('Recuperámos o que tinhas preenchido nesta recolha.');
+    },
+  });
   const assinaturasRef = useRef<AssinaturasHandoverHandle>(null);
   const [gerandoFolha, setGerandoFolha] = useState(false);
 
@@ -377,7 +407,10 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     setCombustivel('');
     setNivelEletrico('');
     setDuaDevolvido(false);
-    novosDanos.forEach((d) => d.files.forEach((f) => f.preview && URL.revokeObjectURL(f.preview)));
+    // Só os object URLs são nossos; as miniaturas assinadas do bucket não se revogam.
+    novosDanos.forEach((d) =>
+      d.files.forEach((f) => f.preview?.startsWith('blob:') && URL.revokeObjectURL(f.preview))
+    );
     setNovosDanos([]);
   };
 
@@ -586,7 +619,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                   // Vazio fica a null, não a 0: "ainda não avaliado" e "não
                   // custa nada" são coisas diferentes para quem cobra.
                   valor: d.valor.trim() ? Number(d.valor) : null,
-                  files: d.files.map((f) => f.file),
+                  // Já no bucket — subiram ao ser escolhidas.
+                  files: fotosGravaveis(d),
                 })),
             }
           : undefined,
@@ -600,6 +634,9 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     if (!viaturaEhSlot && registarAgora) {
       await gerarFolha('print');
     }
+    // Antes de limpar o estado: o hook trava gravações seguintes desta chave,
+    // senão o debounce ressuscitava o rascunho vazio.
+    await limparRascunho();
     form.reset();
     resetRecolhaState();
     onOpenChange(false);
@@ -927,6 +964,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                   nivelEletrico={nivelEletrico}
                   onNivelEletricoChange={setNivelEletrico}
                   danos={novosDanos}
+                  pastaUpload={pastaRascunhoDanos(`contrato-${contratoId}`)}
                   onDanosChange={setNovosDanos}
                 />
 
