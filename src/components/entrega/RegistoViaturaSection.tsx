@@ -66,6 +66,10 @@ export interface RegistoViaturaSectionProps {
 
   danos: NovoDano[];
   onDanosChange: (danos: NovoDano[]) => void;
+  /** Pasta no bucket para onde as fotos dos danos sobem ao ser escolhidas
+   *  (`pastaRascunhoDanos`). Por contrato/token, para um rascunho não ver
+   *  fotos de outro. */
+  pastaUpload: string;
 
   /** Fotos gerais do estado da viatura (sem dano associado). Só aparecem se
    *  o ecrã as tratar — o fecho de contrato não as usa. */
@@ -105,6 +109,7 @@ export function RegistoViaturaSection({
   onNivelGplChange,
   danos,
   onDanosChange,
+  pastaUpload,
   files,
   onAddFiles,
   onRemoveFile,
@@ -349,7 +354,7 @@ export function RegistoViaturaSection({
           </div>
 
           <div className="border-t pt-3">
-            <DanosEditor danos={danos} onChange={onDanosChange} />
+            <DanosEditor danos={danos} onChange={onDanosChange} pastaUpload={pastaUpload} />
           </div>
         </div>
       )}

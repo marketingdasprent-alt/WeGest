@@ -68,7 +68,15 @@ const args: FecharContratoArgs = {
   recolha: {
     km: '32438',
     combustivel: '1/2',
-    danos: [{ descricao: 'Parachoque', localizacao: 'frente', valor: 120, files: [] }],
+    danos: [
+      {
+        descricao: 'Parachoque',
+        localizacao: 'frente',
+        valor: 120,
+        // Já no bucket: subiu quando foi escolhida.
+        files: [{ path: 'rascunho/contrato-764/1.jpg', nome: '1.jpg' }],
+      },
+    ],
   },
 };
 
@@ -123,6 +131,11 @@ describe('useFecharContrato — ordem e idempotência', () => {
       origem_id: 'cr-764',
       criado_por: 'user-1',
     });
+    // A foto liga-se pelo caminho que já existe — nada sobe no fecho.
+    expect(chains.viatura_dano_fotos.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ dano_id: 'd-1', ficheiro_url: 'rascunho/contrato-764/1.jpg' })
+    );
+    expect((supabase.storage.from as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
   });
 
   it('refecho/retentativa actualiza o evento que já existe em vez de duplicar', async () => {

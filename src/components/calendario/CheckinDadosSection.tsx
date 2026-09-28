@@ -3,8 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { validarDanos, type NovoDano } from '@/components/renting/danos/DanosEditor';
+import {
+  fotosGravaveis,
+  reidratarDanos,
+  validarDanos,
+  type NovoDano,
+} from '@/components/renting/danos/DanosEditor';
 import { RegistoViaturaSection } from '@/components/entrega/RegistoViaturaSection';
+import { pastaRascunhoDanos } from '@/lib/fotosDano';
 import { Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { precisaCombustivel, precisaEletrico, precisaGpl } from '@/utils/combustivel';
@@ -30,27 +36,9 @@ export function emptyCheckinDados(): CheckinDadosState {
   return { km: '', combustivel: '', nivelEletrico: '', nivelGpl: '', novosDanos: [] };
 }
 
-/**
- * Repõe um rascunho vindo do IndexedDB em estado utilizável.
- *
- * Os `File` sobrevivem intactos (structured clone), mas os `preview` são
- * object URLs da sessão anterior — a página que os criou já não existe e o
- * browser revogou-os, por isso as miniaturas apareceriam partidas. Criam-se
- * de novo a partir do ficheiro, que é o que interessa guardar.
- */
+/** Repõe um rascunho vindo do IndexedDB em estado utilizável (ver reidratarDanos). */
 export function reidratarCheckinDados(dados: CheckinDadosState): CheckinDadosState {
-  return {
-    ...dados,
-    novosDanos: (dados.novosDanos ?? []).map((dano) => ({
-      ...dano,
-      files: (dano.files ?? [])
-        .filter((f) => f.file instanceof File)
-        .map((f) => ({
-          ...f,
-          preview: f.file.type.startsWith('image/') ? URL.createObjectURL(f.file) : null,
-        })),
-    })),
-  };
+  return { ...dados, novosDanos: reidratarDanos(dados.novosDanos) };
 }
 
 export function validateCheckinDados(
@@ -133,20 +121,16 @@ export async function saveCheckinDados({
       .single();
     if (dErr) throw dErr;
 
-    for (const { file } of dano.files) {
-      const ext = file.name.split('.').pop() || 'bin';
-      const path = `${newDano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('viatura-danos')
-        .upload(path, file, { contentType: file.type });
-      if (upErr) throw upErr;
-      await supabase.from('viatura_dano_fotos').insert({
+    // As fotos já estão no bucket (subiram ao ser escolhidas): só se liga o caminho.
+    for (const foto of fotosGravaveis(dano)) {
+      const { error: fErr } = await supabase.from('viatura_dano_fotos').insert({
         dano_id: newDano.id,
-        ficheiro_url: path,
-        nome_ficheiro: file.name,
+        ficheiro_url: foto.path,
+        nome_ficheiro: foto.nome,
         uploaded_by: userId,
         contrato_id: contratoId,
       });
+      if (fErr) throw fErr;
     }
   }
 }
@@ -513,6 +497,9 @@ export const CheckinDadosSection: React.FC<CheckinDadosSectionProps> = ({
       onNivelGplChange={(nivelGpl) => set({ nivelGpl })}
       danos={dados.novosDanos}
       onDanosChange={(novosDanos) => set({ novosDanos })}
+      pastaUpload={pastaRascunhoDanos(
+        contratoId ? `contrato-${contratoId}` : `viatura-${viaturaId}`
+      )}
     />
   );
 };

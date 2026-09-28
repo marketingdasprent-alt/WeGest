@@ -33,7 +33,12 @@ import {
   type RascunhoCache,
 } from '@/utils/entrega';
 import { gerarFolhaBloco, uploadDanos } from './entrega/entregaOperations';
-import { validarDanos, type NovoDano } from '@/components/renting/danos/DanosEditor';
+import {
+  fotosGravaveis,
+  validarDanos,
+  type NovoDano,
+} from '@/components/renting/danos/DanosEditor';
+import { pastaRascunhoDanos } from '@/lib/fotosDano';
 import {
   StepDadosIniciais,
   StepKmCombustivelFotos,
@@ -53,7 +58,7 @@ const paraUpload = (lista: NovoDano[]) =>
       descricao: d.descricao,
       localizacao: d.localizacao,
       valor: d.valor,
-      files: d.files.map((f) => f.file),
+      files: fotosGravaveis(d),
     }));
 
 // ── Componente principal ─────────────────────────────────────────────────────
@@ -763,6 +768,7 @@ const RealizarEntregaPage = () => {
             tipoCombustivel={tipoCombustivelAntiga}
             danos={danosAntiga}
             onDanosChange={setDanosAntiga}
+            pastaUpload={pastaRascunhoDanos(`realizar-${token}`)}
             viaturaId={viaturaAntigaId}
             contratoId={info?.contrato_id}
             kmMinimo={viaturaAntigaKmAtual ?? 0}
@@ -780,6 +786,7 @@ const RealizarEntregaPage = () => {
           tipoCombustivel={tipoCombustivel}
           danos={danos}
           onDanosChange={setDanos}
+          pastaUpload={pastaRascunhoDanos(`realizar-${token}`)}
           viaturaId={contexto?.viaturaId}
           contratoId={info?.contrato_id}
           kmMinimo={viaturaKmAtual ?? 0}

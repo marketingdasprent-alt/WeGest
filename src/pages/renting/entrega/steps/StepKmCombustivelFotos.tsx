@@ -17,6 +17,8 @@ interface StepKmCombustivelFotosProps {
   tipoCombustivel: string | null | undefined;
   danos: NovoDano[];
   onDanosChange: (danos: NovoDano[]) => void;
+  /** Pasta no bucket para as fotos dos danos (ver `pastaRascunhoDanos`). */
+  pastaUpload: string;
   viaturaId?: string | null;
   contratoId?: string | null;
 }
@@ -45,6 +47,7 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
   tipoCombustivel,
   danos,
   onDanosChange,
+  pastaUpload,
   viaturaId,
   contratoId,
 }) => (
@@ -62,5 +65,6 @@ export const StepKmCombustivelFotos: React.FC<StepKmCombustivelFotosProps> = ({
     onNivelEletricoChange={onEletricidadeChange}
     danos={danos}
     onDanosChange={onDanosChange}
+    pastaUpload={pastaUpload}
   />
 );

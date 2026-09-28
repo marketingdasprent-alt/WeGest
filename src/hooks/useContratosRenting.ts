@@ -380,7 +380,9 @@ export interface FecharContratoRecolhaInfo {
     localizacao: string | null;
     /** null = ainda por avaliar. Não é o mesmo que 0 €. */
     valor: number | null;
-    files: File[];
+    /** Fotos JÁ no bucket `viatura-danos` (subiram ao ser escolhidas, ver
+     *  DanosEditor). Aqui só se liga o caminho ao dano — nada sobe. */
+    files: { path: string; nome: string }[];
   }[];
 }
 
@@ -572,17 +574,13 @@ export function useFecharContrato() {
               .single();
             if (danoErr) throw danoErr;
 
-            for (const file of dano.files) {
-              const ext = file.name.split('.').pop() || 'bin';
-              const path = `${novoDano.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-              const { error: upErr } = await supabase.storage
-                .from('viatura-danos')
-                .upload(path, file, { contentType: file.type });
-              if (upErr) throw upErr;
+            // As fotos já estão no bucket (subiram ao ser escolhidas): só se liga o
+            // caminho ao dano. Nada sobe aqui — é isso que as salva quando o fecho falha.
+            for (const foto of dano.files) {
               const { error: fotoErr } = await supabase.from('viatura_dano_fotos').insert({
                 dano_id: novoDano.id,
-                ficheiro_url: path,
-                nome_ficheiro: file.name,
+                ficheiro_url: foto.path,
+                nome_ficheiro: foto.nome,
                 uploaded_by: userId,
               });
               if (fotoErr) throw fotoErr;
