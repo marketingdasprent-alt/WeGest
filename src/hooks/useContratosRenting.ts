@@ -404,6 +404,32 @@ export interface FecharContratoArgs {
   fecharAgora?: boolean;
 }
 
+type DanoDoFecho = NonNullable<FecharContratoRecolhaInfo['danos']>[number];
+
+/**
+ * Linha de `viatura_danos` para um dano encontrado no fecho de um contrato
+ * renting. Liga-se por `contrato_renting_id` — nunca por `contrato_id_origem`
+ * nem `contrato_id`, que têm FK para `contratos` (a tabela legada) e com um
+ * id de contratos_renting rebentam o fecho inteiro (aconteceu no #764).
+ */
+export function linhaDanoDoFecho(
+  dano: Pick<DanoDoFecho, 'descricao' | 'localizacao' | 'valor'>,
+  ctx: { viaturaId: string; contratoId: string; motoristaId?: string | null; userId: string }
+) {
+  return {
+    viatura_id: ctx.viaturaId,
+    descricao: dano.descricao,
+    localizacao: dano.localizacao,
+    valor: dano.valor,
+    // O separador Danos da viatura só reconhece existente/em_reparacao/
+    // reparado/irreparavel — 'pendente' aparecia lá sem estado.
+    estado: 'existente' as const,
+    registado_por: ctx.userId,
+    contrato_renting_id: ctx.contratoId,
+    motorista_id: ctx.motoristaId || null,
+  };
+}
+
 /** Título/descrição do toast final — depende de a recolha ter sido
  *  confirmada já aqui (`fechouAgora`) ou só agendada para mais tarde. */
 export function resolveFechoContratoToast(fechouAgora: boolean): {
@@ -577,31 +603,12 @@ export function useFecharContrato() {
           }
         }
 
-        // Danos encontrados na recolha: um registo POR DANO, com localização e
-        // valor. O contrato_id_origem é o que permite saber depois em que
-        // contrato o dano apareceu, mesmo que a viatura mude de mãos.
-        //
-        // Estado 'existente' e não 'pendente': a lista de estados que o
-        // separador Danos da viatura conhece é existente/em_reparacao/
-        // reparado/irreparavel. O caminho do calendário grava 'pendente', que
-        // não está lá — são 144 danos em produção a aparecer sem estado
-        // reconhecido nesse ecrã. Não replico o problema; uniformizar os 144
-        // fica para decisão à parte.
+        // Danos encontrados na recolha: um registo POR DANO (ver linhaDanoDoFecho).
         if (recolha.danos?.length && viaturaId) {
           for (const dano of recolha.danos) {
             const { data: novoDano, error: danoErr } = await supabase
               .from('viatura_danos')
-              .insert({
-                viatura_id: viaturaId,
-                descricao: dano.descricao,
-                localizacao: dano.localizacao,
-                valor: dano.valor,
-                estado: 'pendente',
-                registado_por: userId,
-                contrato_renting_id: contratoId,
-                contrato_id_origem: contratoId,
-                motorista_id: motoristaId || null,
-              })
+              .insert(linhaDanoDoFecho(dano, { viaturaId, contratoId, motoristaId, userId }))
               .select('id')
               .single();
             if (danoErr) throw danoErr;
