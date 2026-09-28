@@ -497,58 +497,17 @@ export function useFecharContrato() {
       if (errAtual) throw errAtual;
       const dataFim = dataFimNoFecho(atual, dataEvento);
 
-      // Fecha sempre para 'fechado', com ou sem `recolha` já registada — antes,
-      // sem `recolha`, o estado não mudava e o contrato ficava preso à espera
-      // de confirmação. Fechar NÃO é cancelar (ver useCancelarContratoRenting).
-      const { error: errUpdate } = await supabase
-        .from('contratos_renting')
-        .update({
-          estacao_recolha_id: estacaoId,
-          estado_operacional: 'fechado' as const,
-          // Como o contrato acabou: 'devolvido' ou 'recolhido' — informação sobre o motorista.
-          tipo_fecho: tipoEvento,
-          // TVDE: no MESMO update que o 'fechado' — com o contrato ainda
-          // em_curso, a trigger fn_tvde_nasce_sem_data_fim desviava a data
-          // para proxima_renovacao_em.
-          ...(dataFim ? { data_fim: dataFim } : {}),
-          // Fecha o ciclo da DUA original, se o gestor confirmou a devolução.
-          ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),
-        })
-        .eq('id', contratoId);
-      if (errUpdate) throw errUpdate;
-
-      // Evento no calendário com a data escolhida pelo gestor
       const {
         data: { session },
       } = await supabase.auth.getSession();
       const userId = session?.user?.id ?? null;
       if (!userId) throw new Error('Sessão não encontrada');
 
-      // Sempre 'recolha' — único tipo que o fluxo de renting reconhece como
-      // pendente para contratos_renting ('devolucao' é do sistema legado).
-      const tipoCalendario = 'recolha';
-      const matriculaNorm = matricula ? matricula.replace(/[\s-]/g, '').toUpperCase() : null;
-      const descricaoEvento = [motivo || null, `Fecho do contrato #${contratoCodigo}`]
-        .filter(Boolean)
-        .join(' — ');
-
-      // Com `recolha` já registada, o evento nasce marcado como realizado;
-      // senão fica pendente até o fluxo de QR/Calendário confirmar.
-      const { error: errEvento } = await supabase.from('calendario_eventos').insert({
-        tipo: tipoCalendario,
-        titulo: matriculaNorm ?? '?',
-        descricao: descricaoEvento,
-        cidade: cidadeEvento,
-        data_inicio: dataEvento,
-        data_fim: dataEvento,
-        dia_todo: false,
-        matricula_devolver: matriculaNorm,
-        origem_tipo: 'contrato_renting',
-        origem_id: contratoId,
-        criado_por: userId,
-        ...(recolha ? { realizado_em: new Date().toISOString(), realizado_por_id: userId } : {}),
-      });
-      if (errEvento) throw errEvento;
+      // ORDEM IMPORTA: isto não é uma transacção (são pedidos HTTP separados).
+      // Primeiro grava-se tudo o que a recolha traz — KM, danos, fotos —, e só
+      // no fim se marca o contrato como fechado e se cria o evento. Ao
+      // contrário, um erro nos danos (FK do #764) deixava o contrato fechado
+      // sem danos e um evento novo por cada tentativa: 9 duplicados.
 
       // Mesmas colunas km_entrada/combustivel_entrada que a Recolha via QR usa,
       // para a Folha de Danos ler o valor certo seja qual for o caminho.
@@ -631,6 +590,66 @@ export function useFecharContrato() {
           }
         }
       }
+
+      // Fecha sempre para 'fechado', com ou sem `recolha` já registada — antes,
+      // sem `recolha`, o estado não mudava e o contrato ficava preso à espera
+      // de confirmação. Fechar NÃO é cancelar (ver useCancelarContratoRenting).
+      const { error: errUpdate } = await supabase
+        .from('contratos_renting')
+        .update({
+          estacao_recolha_id: estacaoId,
+          estado_operacional: 'fechado' as const,
+          // Como o contrato acabou: 'devolvido' ou 'recolhido' — informação sobre o motorista.
+          tipo_fecho: tipoEvento,
+          // TVDE: no MESMO update que o 'fechado' — com o contrato ainda
+          // em_curso, a trigger fn_tvde_nasce_sem_data_fim desviava a data
+          // para proxima_renovacao_em.
+          ...(dataFim ? { data_fim: dataFim } : {}),
+          // Fecha o ciclo da DUA original, se o gestor confirmou a devolução.
+          ...(marcarDuaDevolvida ? { dua_devolvida_em: new Date().toISOString() } : {}),
+        })
+        .eq('id', contratoId);
+      if (errUpdate) throw errUpdate;
+
+      // Evento no calendário com a data escolhida pelo gestor. Sempre
+      // 'recolha' — único tipo que o fluxo de renting reconhece como pendente
+      // para contratos_renting ('devolucao' é do sistema legado).
+      const matriculaNorm = matricula ? matricula.replace(/[\s-]/g, '').toUpperCase() : null;
+      const descricaoEvento = [motivo || null, `Fecho do contrato #${contratoCodigo}`]
+        .filter(Boolean)
+        .join(' — ');
+      // Com `recolha` já registada, o evento nasce marcado como realizado;
+      // senão fica pendente até o fluxo de QR/Calendário confirmar.
+      const evento = {
+        tipo: 'recolha',
+        titulo: matriculaNorm ?? '?',
+        descricao: descricaoEvento,
+        cidade: cidadeEvento,
+        data_inicio: dataEvento,
+        data_fim: dataEvento,
+        dia_todo: false,
+        matricula_devolver: matriculaNorm,
+        origem_tipo: 'contrato_renting',
+        origem_id: contratoId,
+        ...(recolha ? { realizado_em: new Date().toISOString(), realizado_por_id: userId } : {}),
+      };
+
+      // Idempotente: uma retentativa ou um refecho actualiza o evento que já
+      // existe para este contrato em vez de criar outro.
+      const { data: existente, error: errExistente } = await supabase
+        .from('calendario_eventos')
+        .select('id')
+        .eq('origem_tipo', 'contrato_renting')
+        .eq('origem_id', contratoId)
+        .eq('tipo', 'recolha')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (errExistente) throw errExistente;
+
+      const { error: errEvento } = existente?.[0]
+        ? await supabase.from('calendario_eventos').update(evento).eq('id', existente[0].id)
+        : await supabase.from('calendario_eventos').insert({ ...evento, criado_por: userId });
+      if (errEvento) throw errEvento;
 
       if (valorDivida && valorDivida > 0 && motoristaId) {
         const descricao = [
