@@ -30,7 +30,14 @@ import {
 } from 'lucide-react';
 import { FATURACAO_PROVIDERS, faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { FaturacaoIdentidadeFields } from './FaturacaoIdentidadeFields';
-import { buildFaturacaoSettings, type FaturacaoConfigRow } from './faturacaoIntegracaoConfig';
+import {
+  buildFaturacaoSettings,
+  camposPorTipo,
+  CAMPOS_POR_TIPO_VAZIOS,
+  type CamposPorTipo,
+  type FaturacaoConfigRow,
+} from './faturacaoIntegracaoConfig';
+import { CodigosPorTipoFields } from './CodigosPorTipoFields';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -85,11 +92,19 @@ export function FaturacaoIntegracaoDialog({
   const [endpoint, setEndpoint] = useState('');
   const [defaultProduct, setDefaultProduct] = useState('');
   const [defaultIdTax, setDefaultIdTax] = useState('');
-  const [dt, setDt] = useState({ FT: '', FR: '', NC: '', RC: '' });
+  const [dt, setDt] = useState<CamposPorTipo>(CAMPOS_POR_TIPO_VAZIOS);
+  const [ds, setDs] = useState<CamposPorTipo>(CAMPOS_POR_TIPO_VAZIOS);
 
   const providerMeta = FATURACAO_PROVIDERS[provider];
   const settingsAtuais = () =>
-    buildFaturacaoSettings({ provider, endpoint, defaultProduct, defaultIdTax, doctypes: dt });
+    buildFaturacaoSettings({
+      provider,
+      endpoint,
+      defaultProduct,
+      defaultIdTax,
+      doctypes: dt,
+      docseries: ds,
+    });
   const { getById: getEmpresaById } = useClientesEmpresas();
   const empresaNome = (emissorId && getEmpresaById(emissorId)?.nome) || 'a empresa escolhida';
 
@@ -119,12 +134,8 @@ export function FaturacaoIntegracaoDialog({
     setEndpoint(c.endpoint || '');
     setDefaultProduct(c.default_product || '');
     setDefaultIdTax(c.default_idtax || '');
-    setDt({
-      FT: c.doctypes?.FT || '',
-      FR: c.doctypes?.FR || '',
-      NC: c.doctypes?.NC || '',
-      RC: c.doctypes?.RC || '',
-    });
+    setDt(camposPorTipo(c.doctypes));
+    setDs(camposPorTipo(c.docseries));
     setShowKey(false);
     setShowAdvanced(false);
     setChaveAcabouDeSerGerada(false);
@@ -511,25 +522,18 @@ export function FaturacaoIntegracaoDialog({
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Tipos de documento (DocType)</Label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {(['FT', 'FR', 'NC', 'RC'] as const).map((k) => (
-                        <div key={k} className="space-y-1">
-                          <span className="text-[11px] text-muted-foreground">{k}</span>
-                          <Input
-                            value={dt[k]}
-                            onChange={(e) => setDt((prev) => ({ ...prev, [k]: e.target.value }))}
-                            placeholder="—"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Só preencher se o software exigir códigos diferentes dos predefinidos. O RC
-                      (recibo) costuma não ter predefinição.
-                    </p>
-                  </div>
+                  <CodigosPorTipoFields
+                    label="Tipos de documento (DocType)"
+                    valores={dt}
+                    onChange={setDt}
+                    ajuda="Só preencher se o software exigir códigos diferentes dos predefinidos. O RC (recibo) costuma não ter predefinição."
+                  />
+                  <CodigosPorTipoFields
+                    label="Séries (DocSeries)"
+                    valores={ds}
+                    onChange={setDs}
+                    ajuda='Código interno da série no software (ex.: 67), não a referência (ex.: FT26). Obrigatório quando a conta não tem série por omissão: sem ela o KeyInvoice recusa com "Série de documento inválida".'
+                  />
                 </div>
               )}
             </>

@@ -36,6 +36,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
@@ -216,10 +217,9 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
         console.error('Falha a emitir o documento fiscal da reserva:', kiErr);
         // Sem documento nenhum: emitir uma factura é acto de software
         // certificado. Se o provider não emitiu, não há factura.
-        toast.warning(
-          'Reserva faturada na conta-corrente, mas o documento fiscal NÃO foi emitido. ' +
-            'Reemita-o na lista de faturas — até lá não existe documento para entregar ao cliente.'
-        );
+        toast.warning(mensagemFalhaEmissao(kiErr, 'reserva'), {
+          duration: DURACAO_AVISO_FALHA_MS,
+        });
       }
 
       onFaturado();
