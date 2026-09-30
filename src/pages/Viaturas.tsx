@@ -59,6 +59,9 @@ import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { useCapasViaturas } from '@/hooks/useCapasViaturas';
+import { AmbitoFrotaAviso } from '@/components/viaturas/AmbitoFrotaAviso';
+import { useAmbitoViaturas } from '@/hooks/useAmbitoViaturas';
+import { viaturaNoAmbito } from '@/utils/ambitoViaturas';
 
 interface ViaturasTipo {
   id: string;
@@ -103,7 +106,7 @@ function matchesVendaScope(v: { is_vendida?: boolean | null }, statusFilter: str
 export default function Viaturas() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [viaturas, setViaturas] = useState<Viatura[]>([]);
+  const [todasViaturas, setViaturas] = useState<Viatura[]>([]);
   const [loading, setLoading] = useState(true);
   const [tipos, setTipos] = useState<ViaturasTipo[]>([]);
 
@@ -170,6 +173,26 @@ export default function Viaturas() {
 
   // Reservas e contratos futuros já contam como ocupação da viatura.
   const { data: fontesMap } = useViaturasOcupacao();
+
+  // Âmbito do cargo (ex.: Gestor TVDE → TVDE + SLOT): contagens, cartões e
+  // lista contam só estas. "Ver toda a frota" desliga (fica no URL).
+  const ambito = useAmbitoViaturas();
+  const viaturas = useMemo(
+    () =>
+      ambito.activo
+        ? todasViaturas.filter((v) =>
+            viaturaNoAmbito({ isSlot: v.is_slot, tipoNome: v.viatura_tipos?.nome }, ambito.ambito)
+          )
+        : todasViaturas,
+    [todasViaturas, ambito.activo, ambito.ambito]
+  );
+  const tiposVisiveis = useMemo(
+    () =>
+      ambito.activo
+        ? tipos.filter((t) => viaturaNoAmbito({ tipoNome: t.nome }, ambito.ambito))
+        : tipos,
+    [tipos, ambito.activo, ambito.ambito]
+  );
 
   const estadoDe = useCallback(
     (v: Viatura) => deriveViaturaEstado(v, fontesMap?.get(v.id)),
@@ -481,13 +504,15 @@ export default function Viaturas() {
         </div>
       </StickyPageHeader>
 
+      <AmbitoFrotaAviso ambito={ambito} oQue="viaturas" />
+
       <ViaturaStatsCards
         stats={stats}
         activeFilter={statusFilter}
         onFilter={(filter) => setStatusFilter(filter)}
       />
 
-      {tipos.length > 0 && (
+      {tiposVisiveis.length > 0 && (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
           {(() => {
             const todosTotal = viaturas.filter(
@@ -506,7 +531,7 @@ export default function Viaturas() {
                 color: 'text-primary',
                 bgColor: 'bg-primary/10',
               },
-              ...tipos.map((t) => ({
+              ...tiposVisiveis.map((t) => ({
                 id: t.id,
                 nome: t.nome,
                 total: tiposCounts.total[t.id] || 0,
