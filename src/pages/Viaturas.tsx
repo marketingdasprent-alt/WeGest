@@ -58,6 +58,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { useCapasViaturas } from '@/hooks/useCapasViaturas';
 
 interface ViaturasTipo {
   id: string;
@@ -360,6 +361,10 @@ export default function Viaturas() {
     `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}`,
     'page'
   );
+
+  // Miniatura da capa — só das viaturas da página; sem fotos mostra o ícone.
+  const idsDaPagina = useMemo(() => paginatedViaturas.map((v) => v.id), [paginatedViaturas]);
+  const capas = useCapasViaturas(idsDaPagina);
 
   const getCategoriaColor = (categoria: string | null | undefined) =>
     getCategoriaBadgeClass(categoria);
@@ -708,6 +713,9 @@ export default function Viaturas() {
           <Table>
             <TableHeader>
               <TableRow className="h-10">
+                <TableHead className="h-10 w-28">
+                  <span className="sr-only">Foto</span>
+                </TableHead>
                 <SortableTableHead
                   field="matricula"
                   sortField={sortField}
@@ -787,9 +795,23 @@ export default function Viaturas() {
               {paginatedViaturas.map((viatura) => (
                 <TableRow
                   key={viatura.id}
-                  className="cursor-pointer hover:bg-muted/50 h-10"
+                  className="cursor-pointer hover:bg-muted/50 h-20"
                   onClick={() => handleViewPage(viatura)}
                 >
+                  <TableCell className="w-28 py-2">
+                    <div className="flex h-16 w-24 items-center justify-center overflow-hidden rounded-md border border-border bg-muted">
+                      {capas.get(viatura.id) ? (
+                        <img
+                          src={capas.get(viatura.id)}
+                          alt={`Capa da viatura ${viatura.matricula}`}
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Car className="h-6 w-6 text-muted-foreground/40" aria-hidden="true" />
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="py-2 text-sm font-mono font-bold">
                     {viatura.matricula}
                   </TableCell>

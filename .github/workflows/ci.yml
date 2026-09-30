@@ -326,7 +326,8 @@ jobs:
             aceitar_convite_pelo_titular \
             buckets_viaturas_fase0 \
             gerar_cobrancas_slot_tolerante \
-            atribuicao_segue_estado_do_contrato
+            atribuicao_segue_estado_do_contrato \
+            fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

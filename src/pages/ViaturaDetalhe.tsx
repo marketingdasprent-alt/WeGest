@@ -12,6 +12,7 @@ import {
   Receipt,
   Radio,
   Paperclip,
+  Images,
   Loader2,
   Wallet,
   CalendarPlus,
@@ -34,6 +35,7 @@ import { ViaturaTabHistorico } from '@/components/viaturas/tabs/ViaturaTabHistor
 import { ViaturaTabMultas } from '@/components/viaturas/tabs/ViaturaTabMultas';
 import { ViaturaTabOBE } from '@/components/viaturas/tabs/ViaturaTabOBE';
 import { ViaturaTabAnexos } from '@/components/viaturas/tabs/ViaturaTabAnexos';
+import { ViaturaTabFotos } from '@/components/viaturas/tabs/ViaturaTabFotos';
 import { ViaturaTabFinanceira } from '@/components/viaturas/tabs/ViaturaTabFinanceira';
 import { ViaturaTabGeolocalizacao } from '@/components/viaturas/tabs/ViaturaTabGeolocalizacao';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -104,6 +106,7 @@ interface Viatura {
 
 const TABS = [
   { id: 'dados', label: 'Dados', icon: Car },
+  { id: 'fotos', label: 'Fotos', icon: Images },
   { id: 'seguro', label: 'Seguro', icon: FileText },
   { id: 'danos', label: 'Danos', icon: AlertTriangle },
   { id: 'reparacoes', label: 'Reparações', icon: Wrench },
@@ -464,6 +467,10 @@ export default function ViaturaDetalhe() {
             onSave={handleSaveViatura}
             saving={saving}
           />
+        </TabsContent>
+
+        <TabsContent value="fotos" className="mt-0">
+          <ViaturaTabFotos viaturaId={viatura?.id} />
         </TabsContent>
 
         <TabsContent value="seguro" className="mt-0">
