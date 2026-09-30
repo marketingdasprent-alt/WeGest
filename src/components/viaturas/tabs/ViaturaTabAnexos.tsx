@@ -43,6 +43,8 @@ const EXCLUDED_TIPOS = [
   'ipo',
   'carta_verde',
   'contrato_obe',
+  // Fotos têm separador próprio (ViaturaTabFotos).
+  'foto',
 ];
 
 export function ViaturaTabAnexos({ viaturaId }: ViaturaTabAnexosProps) {
