@@ -1,10 +1,13 @@
 // Calendario module
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { AmbitoFrotaAviso } from '@/components/viaturas/AmbitoFrotaAviso';
+import { SEM_VIATURAS, useAmbitoViaturas, useViaturasDoAmbito } from '@/hooks/useAmbitoViaturas';
+import { eventoNoAmbito } from '@/utils/ambitoViaturas';
 import { CalendarioGrid } from '@/components/calendario/CalendarioGrid';
 import { EventoDialog } from '@/components/calendario/EventoDialog';
 import { EventoHistoricoDialog } from '@/components/calendario/EventoHistoricoDialog';
@@ -209,6 +212,22 @@ const Calendario: React.FC = () => {
     },
   });
 
+  // Âmbito do cargo: só eventos de viaturas do âmbito; sem viatura, sempre.
+  const ambito = useAmbitoViaturas();
+  const { data: doAmbito, isLoading: aCarregarAmbito } = useViaturasDoAmbito(
+    ambito.ambito,
+    ambito.activo
+  );
+  const eventosVisiveis = useMemo(
+    () =>
+      ambito.activo
+        ? eventos.filter((e) =>
+            eventoNoAmbito(e, ambito.ambito, doAmbito?.matriculas ?? SEM_VIATURAS)
+          )
+        : eventos,
+    [eventos, ambito.activo, ambito.ambito, doAmbito]
+  );
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       // Fetch event type + motorista_id before deleting
@@ -398,6 +417,8 @@ const Calendario: React.FC = () => {
           </div>
         </StickyPageHeader>
 
+        <AmbitoFrotaAviso ambito={ambito} oQue="eventos das viaturas" className="mb-3" />
+
         <div className="shrink-0 mt-2 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground shadow-sm">
           <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           <p className="leading-relaxed">
@@ -411,7 +432,7 @@ const Calendario: React.FC = () => {
 
         <div className="flex-1 min-h-0">
           <CalendarioGrid
-            eventos={eventos}
+            eventos={eventosVisiveis}
             currentMonth={currentMonth}
             onMonthChange={setCurrentMonth}
             onEventClick={
@@ -437,7 +458,7 @@ const Calendario: React.FC = () => {
             }
             onEventDetails={handleDetails}
             onAbrirCheckin={handleAbrirCheckin}
-            isLoading={isLoading}
+            isLoading={isLoading || (ambito.activo && aCarregarAmbito)}
             currentUserId={user?.id}
             canEditAll={hasPermission('calendario_gerir_todos')}
           />

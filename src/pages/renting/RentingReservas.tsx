@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { AmbitoFrotaAviso } from '@/components/viaturas/AmbitoFrotaAviso';
+import { SEM_VIATURAS, useAmbitoViaturas, useViaturasDoAmbito } from '@/hooks/useAmbitoViaturas';
+import { negocioNoAmbito } from '@/utils/ambitoViaturas';
 
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { useReservas } from '@/hooks/useReservas';
@@ -52,6 +55,25 @@ const RentingReservas = () => {
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
 
   const { data: reservas = [], isLoading } = useReservas({ limit: HARD_LIMIT });
+  // Âmbito do cargo: entra pelo regime (TVDE/slot) ou pela viatura.
+  const ambito = useAmbitoViaturas();
+  const { data: doAmbito, isLoading: aCarregarAmbito } = useViaturasDoAmbito(
+    ambito.ambito,
+    ambito.activo
+  );
+  const reservasVisiveis = useMemo(
+    () =>
+      ambito.activo
+        ? reservas.filter((r) =>
+            negocioNoAmbito(
+              { regime: r.regime, viaturaId: r.viatura_id },
+              ambito.ambito,
+              doAmbito?.ids ?? SEM_VIATURAS
+            )
+          )
+        : reservas,
+    [reservas, ambito.activo, ambito.ambito, doAmbito]
+  );
   const { data: condutoresPrincipais = [] } = useReservaCondutoresPrincipais();
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas();
@@ -131,7 +153,7 @@ const RentingReservas = () => {
       ? new Date(`${filtros.dataFim}T23:59:59.999`).getTime()
       : null;
 
-    const result = reservas.filter((r) => {
+    const result = reservasVisiveis.filter((r) => {
       if (searchRaw) {
         const principal = condutorPrincipalById.get(r.id);
         const condutorNome = getCondutorNome(r);
@@ -186,7 +208,7 @@ const RentingReservas = () => {
 
     return result;
   }, [
-    reservas,
+    reservasVisiveis,
     search,
     filtros,
     sortColumn,
@@ -273,7 +295,9 @@ const RentingReservas = () => {
         icon={CalendarCheck}
       />
 
-      <ReservasStats reservas={reservas} />
+      <AmbitoFrotaAviso ambito={ambito} oQue="reservas" className="mb-3" />
+
+      <ReservasStats reservas={reservasVisiveis} />
 
       <Card className="bg-card border-border">
         <CardContent className="p-0">
@@ -314,7 +338,7 @@ const RentingReservas = () => {
 
           <ReservasTabela
             reservas={pageItems}
-            isLoading={isLoading}
+            isLoading={isLoading || (ambito.activo && aCarregarAmbito)}
             totalSemFiltros={reservas.length}
             sortColumn={sortColumn}
             sortDir={sortDir}
