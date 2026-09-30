@@ -7,11 +7,20 @@
  * function.
  */
 
+export type TipoDocumentoFiscal = 'FT' | 'FR' | 'NC' | 'RC';
+export const TIPOS_DOCUMENTO_FISCAL: readonly TipoDocumentoFiscal[] = ['FT', 'FR', 'NC', 'RC'];
+
+type PorTipo = Partial<Record<TipoDocumentoFiscal, string>>;
+
 /** Settings específicos do provider (guardados em plataformas_configuracao.config). */
 export interface FaturacaoConfig {
   provider?: string;
   endpoint?: string;
-  doctypes?: { FT?: string; FR?: string; NC?: string; RC?: string };
+  doctypes?: PorTipo;
+  /** Série (código interno do provider) por tipo. Sem ela o KeyInvoice escolhe a
+   *  série "por omissão" da conta; numa conta sem esse padrão recusa a emissão
+   *  com "Série de documento inválida" (Dasp Rent Sul, 29-09-2026). */
+  docseries?: PorTipo;
   default_product?: string;
   default_idtax?: string;
 }
@@ -27,12 +36,35 @@ export interface FaturacaoConfigRow {
   emissor_id: string | null;
 }
 
+export type CamposPorTipo = Record<TipoDocumentoFiscal, string>;
+
 export interface FaturacaoFormFields {
   provider: string;
   endpoint: string;
   defaultProduct: string;
   defaultIdTax: string;
-  doctypes: { FT: string; FR: string; NC: string; RC: string };
+  doctypes: CamposPorTipo;
+  docseries: CamposPorTipo;
+}
+
+export const CAMPOS_POR_TIPO_VAZIOS: CamposPorTipo = { FT: '', FR: '', NC: '', RC: '' };
+
+/** Campos do formulário a partir do que está gravado (ausente → vazio). */
+export function camposPorTipo(valores: PorTipo | undefined): CamposPorTipo {
+  return {
+    FT: valores?.FT || '',
+    FR: valores?.FR || '',
+    NC: valores?.NC || '',
+    RC: valores?.RC || '',
+  };
+}
+
+function soPreenchidos(campos: CamposPorTipo): PorTipo | undefined {
+  const out: PorTipo = {};
+  TIPOS_DOCUMENTO_FISCAL.forEach((k) => {
+    if (campos[k].trim()) out[k] = campos[k].trim();
+  });
+  return Object.keys(out).length ? out : undefined;
 }
 
 /**
@@ -40,13 +72,12 @@ export interface FaturacaoFormFields {
  * predefinição partilhável que o adapter ia buscar aos secrets do deployment.
  */
 export function buildFaturacaoSettings(f: FaturacaoFormFields): FaturacaoConfig {
-  const doctypes: FaturacaoConfig['doctypes'] = {};
-  (['FT', 'FR', 'NC', 'RC'] as const).forEach((k) => {
-    if (f.doctypes[k].trim()) doctypes[k] = f.doctypes[k].trim();
-  });
   const s: FaturacaoConfig = { provider: f.provider };
   if (f.endpoint.trim()) s.endpoint = f.endpoint.trim();
-  if (Object.keys(doctypes).length) s.doctypes = doctypes;
+  const doctypes = soPreenchidos(f.doctypes);
+  if (doctypes) s.doctypes = doctypes;
+  const docseries = soPreenchidos(f.docseries);
+  if (docseries) s.docseries = docseries;
   if (f.defaultProduct.trim()) s.default_product = f.defaultProduct.trim();
   if (f.defaultIdTax.trim()) s.default_idtax = f.defaultIdTax.trim();
   return s;

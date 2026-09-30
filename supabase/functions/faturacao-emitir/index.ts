@@ -41,6 +41,8 @@
 //   'preflight' — confirma que a org tem o Recibo (RC) configurado e a chave
 //                 autentica, ANTES de se criar um acordo de parcelamento.
 //   'pdf'    — devolve o PDF (base64). Body: { provider_doctype, provider_docnum, serie?, signed? }
+//              PDF e 'void_receipt' usam a integração gravada na fatura
+//              (invoices.integracao_id) — ver getConfigDoDocumento.
 // ============================================================
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
@@ -48,6 +50,12 @@ import { keyInvoiceProvider } from './providers/keyinvoice.ts';
 import { primaveraProvider } from './providers/primavera.ts';
 import type { Cliente, EmitInput, FaturacaoProvider, Item, ProviderConfig } from './types.ts';
 import { EmissaoAmbiguaError } from './types.ts';
+import {
+  configDaLinha,
+  origemDaConsulta,
+  type LinhaIntegracao,
+} from '../_shared/faturacao/integracao.ts';
+import { linhaDeFalhaEmissao } from '../_shared/faturacao/falhas.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -126,6 +134,19 @@ function callerClient(req: Request) {
  *  e quem fatura pode não ser admin. */
 function serviceClient() {
   return createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+}
+
+/** Guarda a emissão falhada em `failed_jobs` (separador de falhas + aviso aos
+ *  admins). Best-effort: registar a falha nunca pode mascarar a resposta ao chamador. */
+async function registarFalhaEmissao(linha: ReturnType<typeof linhaDeFalhaEmissao>) {
+  if (!linha) return;
+  try {
+    const { error } = await serviceClient().from('failed_jobs').insert(linha);
+    if (error)
+      console.error('[faturacao-emitir] falha não registada em failed_jobs:', error.message);
+  } catch (e) {
+    console.error('[faturacao-emitir] falha não registada em failed_jobs:', (e as Error).message);
+  }
 }
 
 /**
@@ -207,6 +228,19 @@ async function resolverEmissorId(
  *  ligado. Não é falha técnica, é uma coisa que alguém tem de ir configurar. */
 class EmpresaSemFaturacaoError extends Error {}
 
+async function resolverOrgId(req: Request, orgIdExplicito?: string): Promise<string | null> {
+  const isServiceRole = isServiceRoleRequest(req);
+  // Worker interno a emitir em nome de uma org concreta.
+  if (isServiceRole) return orgIdExplicito ?? null;
+  // Utilizador normal: a org vem SEMPRE do JWT, nunca do body.
+  try {
+    const { data } = await callerClient(req).rpc('get_current_org_id');
+    return (data as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolve { provider, cfg } da EMPRESA que vai emitir. Sem org ou sem empresa
  * com integração → sem chave, e a emissão falha cedo e claro.
@@ -227,31 +261,26 @@ async function getOrgConfig(
   orgIdExplicito?: string,
   providerFiltro?: string,
   emissorId?: string | null
-): Promise<{ provider: string; cfg: ProviderConfig; orgId: string | null }> {
-  const isServiceRole = isServiceRoleRequest(req);
-
-  let orgId: string | null = null;
-
-  if (isServiceRole && orgIdExplicito) {
-    // Worker interno a emitir em nome de uma org concreta.
-    orgId = orgIdExplicito;
-  } else if (!isServiceRole) {
-    // Utilizador normal: a org vem SEMPRE do JWT, nunca do body.
-    try {
-      const { data } = await callerClient(req).rpc('get_current_org_id');
-      orgId = (data as string) ?? null;
-    } catch {
-      /* segue sem org */
-    }
-  }
+): Promise<{
+  provider: string;
+  cfg: ProviderConfig;
+  orgId: string | null;
+  integracaoId: string | null;
+}> {
+  const orgId = await resolverOrgId(req, orgIdExplicito);
 
   if (!orgId)
-    return { provider: DEFAULT_PROVIDER, cfg: { apiKey: null, settings: null }, orgId: null };
+    return {
+      provider: DEFAULT_PROVIDER,
+      cfg: { apiKey: null, settings: null },
+      orgId: null,
+      integracaoId: null,
+    };
 
   const service = serviceClient();
   let query = service
     .from('plataformas_configuracao')
-    .select('client_secret, config')
+    .select('id, client_secret, config')
     .eq('plataforma', 'faturacao')
     .eq('org_id', orgId);
   if (providerFiltro) {
@@ -283,14 +312,76 @@ async function getOrgConfig(
     );
   }
 
-  const settings = ((row as any)?.config ?? null) as Record<string, unknown> | null;
-  const provider =
-    providerFiltro || String((settings?.provider as string) || DEFAULT_PROVIDER).toLowerCase();
+  if (!row) {
+    // Teste de ligação de um provider sem linha gravada: sem chave, falha no adapter.
+    return {
+      provider: providerFiltro || DEFAULT_PROVIDER,
+      cfg: { apiKey: null, settings: null, orgId },
+      orgId,
+      integracaoId: null,
+    };
+  }
+  const c = configDaLinha(row as LinhaIntegracao, providerFiltro);
   return {
-    provider,
-    cfg: { apiKey: (row as any)?.client_secret ?? null, settings, orgId },
+    provider: c.provider,
+    cfg: { apiKey: c.apiKey, settings: c.settings, orgId },
     orgId,
+    integracaoId: c.integracaoId,
   };
+}
+
+/**
+ * Config para CONSULTAR um documento já emitido (PDF, anulação de recibo).
+ * Usa a integração gravada na própria fatura: a conta em que um documento
+ * vive não muda, e as facturas anteriores a 17-09 estão na conta DEMO mesmo
+ * quando o contrato é de outra empresa. Sem integração gravada, cai na
+ * empresa do contrato (getOrgConfig), como antes.
+ */
+async function getConfigDoDocumento(
+  req: Request,
+  payload: Body,
+  hint: { provider_doctype?: string; provider_docnum?: string; serie?: string }
+): Promise<{ provider: string; cfg: ProviderConfig }> {
+  const orgId = await resolverOrgId(req, payload.org_id);
+  const db = serviceClient();
+
+  let fatura: { integracao_id: string | null } | null = null;
+  if (orgId && hint.provider_docnum) {
+    // Filtrado pela org do chamador: nunca consultar a chave de outra organização.
+    let q = db
+      .from('invoices')
+      .select('integracao_id')
+      .eq('org_id', orgId)
+      .eq('provider_docnum', hint.provider_docnum);
+    if (hint.provider_doctype) q = q.eq('provider_doctype', hint.provider_doctype);
+    if (hint.serie) q = q.eq('serie', hint.serie);
+    const { data } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
+    fatura = (data as { integracao_id: string | null } | null) ?? null;
+  }
+
+  const origem = origemDaConsulta(fatura);
+  if (origem.tipo === 'integracao_da_fatura') {
+    // Activa ou não: uma integração desligada continua a ser onde o documento está.
+    const { data: row } = await db
+      .from('plataformas_configuracao')
+      .select('id, client_secret, config')
+      .eq('id', origem.integracaoId)
+      .eq('org_id', orgId!)
+      .eq('plataforma', 'faturacao')
+      .maybeSingle();
+    if (!row) {
+      throw new EmpresaSemFaturacaoError(
+        'A integração de faturação que emitiu este documento já não existe. ' +
+          'Sem a chave dessa conta não é possível consultar o documento.'
+      );
+    }
+    const c = configDaLinha(row as LinhaIntegracao);
+    return { provider: c.provider, cfg: { apiKey: c.apiKey, settings: c.settings, orgId } };
+  }
+
+  const emissorId = await resolverEmissorId(payload, hint);
+  const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
+  return { provider, cfg };
 }
 
 function pickAdapter(provider: string): FaturacaoProvider {
@@ -333,6 +424,7 @@ serve(async (req) => {
       await pickAdapter(provider).health(cfg);
       return json({ ok: true, provider });
     } catch (e) {
+      console.error('[faturacao-emitir] health falhou:', (e as Error).message);
       return json({ ok: false, error: (e as Error).message });
     }
   }
@@ -362,6 +454,7 @@ serve(async (req) => {
       await adapter.health(cfg);
       return json({ ok: true, provider, rc_configurado: true });
     } catch (e) {
+      console.error('[faturacao-emitir] preflight falhou:', (e as Error).message);
       return json({ ok: false, rc_configurado: false, error: (e as Error).message });
     }
   }
@@ -376,17 +469,19 @@ serve(async (req) => {
       if (!payload.provider_docnum) {
         return json({ success: false, error: 'void_receipt: provider_docnum obrigatório' });
       }
-      const emissorId = await resolverEmissorId(payload, {
+      const { provider, cfg } = await getConfigDoDocumento(req, payload, {
         provider_docnum: payload.provider_docnum,
         serie: payload.serie,
       });
-      const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
       await pickAdapter(provider).voidReceipt(
         { docnum: payload.provider_docnum, docseries: payload.serie },
         cfg
       );
       return json({ success: true });
     } catch (e) {
+      console.error('[faturacao-emitir] void_receipt falhou:', (e as Error).message, {
+        provider_docnum: payload.provider_docnum ?? null,
+      });
       return json({ success: false, error: (e as Error).message });
     }
   }
@@ -400,12 +495,11 @@ serve(async (req) => {
           error: 'pdf: provider_doctype e provider_docnum obrigatórios',
         });
       }
-      const emissorId = await resolverEmissorId(payload, {
+      const { provider, cfg } = await getConfigDoDocumento(req, payload, {
         provider_doctype: payload.provider_doctype,
         provider_docnum: payload.provider_docnum,
         serie: payload.serie,
       });
-      const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
       const base64 = await pickAdapter(provider).pdf(
         {
           doctype: payload.provider_doctype,
@@ -417,6 +511,10 @@ serve(async (req) => {
       );
       return json({ success: true, base64 });
     } catch (e) {
+      console.error('[faturacao-emitir] pdf falhou:', (e as Error).message, {
+        provider_doctype: payload.provider_doctype ?? null,
+        provider_docnum: payload.provider_docnum ?? null,
+      });
       return json({ success: false, error: (e as Error).message });
     }
   }
@@ -437,9 +535,20 @@ serve(async (req) => {
   }
 
   let docEmitido = false;
+  // O que já se sabia quando a emissão falhou — vai para o registo da falha.
+  const contexto: { provider?: string; integracaoId?: string | null; emissorId?: string | null } =
+    {};
   try {
     const emissorId = await resolverEmissorId(payload);
-    const { provider, cfg, orgId } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
+    contexto.emissorId = emissorId;
+    const { provider, cfg, orgId, integracaoId } = await getOrgConfig(
+      req,
+      payload.org_id,
+      undefined,
+      emissorId
+    );
+    contexto.provider = provider;
+    contexto.integracaoId = integracaoId;
     const adapter = pickAdapter(provider);
 
     // Worker (service role) grava com service role e org_id explícito — o trigger
@@ -513,6 +622,7 @@ serve(async (req) => {
         cobranca_id: payload.cobranca_id ?? null,
         tipo: payload.tipo,
         provider,
+        integracao_id: integracaoId,
         provider_doctype: doc.doctype,
         provider_docnum: doc.docnum || null,
         serie: doc.serie || null,
@@ -554,10 +664,25 @@ serve(async (req) => {
     //   reemitir sem reconciliar primeiro; o risco é um SEGUNDO documento
     //   fiscal legal sobre o mesmo pagamento.
     const ambiguo = docEmitido || e instanceof EmissaoAmbiguaError;
-    return json({
-      success: false,
-      error: (e as Error).message,
-      classe: ambiguo ? 'unknown' : 'known_failed',
+    const classe = ambiguo ? 'unknown' : 'known_failed';
+    const erro = (e as Error).message;
+    // O provider responde 200 com o erro no corpo e nós também. Sem log nem
+    // registo, 25 emissões da Dasp Rent Sul falharam em 09/2026 sem ninguém saber porquê.
+    console.error(`[faturacao-emitir] emit ${payload.tipo} falhou (${classe}):`, erro, {
+      contrato_id: payload.contrato_id ?? null,
+      cobranca_id: payload.cobranca_id ?? null,
+      provider: contexto.provider ?? null,
+      emissor_id: contexto.emissorId ?? null,
     });
+    await registarFalhaEmissao(
+      linhaDeFalhaEmissao({
+        orgId: await resolverOrgId(req, payload.org_id),
+        pedido: payload,
+        erro,
+        classe,
+        ...contexto,
+      })
+    );
+    return json({ success: false, error: erro, classe });
   }
 });
