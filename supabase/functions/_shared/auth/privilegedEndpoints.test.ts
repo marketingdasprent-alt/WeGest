@@ -98,7 +98,6 @@ Deno.test("ações de utilizador validam identidade e organização", async () =
   for (
     const endpoint of [
       "assinatura-pedir",
-      "send-documento-fiscal-email",
       "robot-webhook",
     ]
   ) {
@@ -106,6 +105,15 @@ Deno.test("ações de utilizador validam identidade e organização", async () =
     assertStringIncludes(source, "authenticateUser(req,");
     assertStringIncludes(source, "requireOrgAdmin(");
   }
+});
+
+Deno.test("envio de documentos ao cliente exige sessão e permissão de faturação/contratos na organização", async () => {
+  // Só admin barrava o cargo Faturação (30/09); membro sem estes recursos continua fora.
+  const source = await readFunction("send-documento-fiscal-email");
+  assertStringIncludes(source, "authenticateUser(req,");
+  assertStringIncludes(source, "requireOrgPermission(");
+  assertStringIncludes(source, '"financeiro_recibos"');
+  assertStringIncludes(source, '.eq("org_id", requestedOrgId)');
 });
 
 Deno.test("leituras de dados de uma organização exigem sessão e membro dessa organização", async () => {

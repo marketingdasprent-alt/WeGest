@@ -8,6 +8,8 @@ import {
   requireInternalRequest,
   requireOrgMember,
   requireOrgAdmin,
+  requireOrgPermission,
+  type PermissionsLookup,
   type AuthDependencies,
   type MembershipLookup,
 } from './edgeAuthorization.ts';
@@ -119,5 +121,36 @@ Deno.test('chamada interna exige correspondência exata com a service role', asy
     () => requireInternalRequest(requestWithToken('wrong'), 'service-secret'),
     AuthorizationError,
     'Chamada interna não autorizada',
+  );
+});
+
+const permissoes = (p: { is_admin: boolean; recursos: string[] } | null): PermissionsLookup =>
+  () => Promise.resolve(p);
+
+Deno.test('requireOrgPermission aceita o cargo com um dos recursos pedidos', async () => {
+  // Caso real: cargo Faturação, não admin, com financeiro_recibos (30/09).
+  await requireOrgPermission('user-1', 'org-1', ['financeiro_recibos', 'renting_contratos'],
+    permissoes({ is_admin: false, recursos: ['administrativo_resumos', 'financeiro_recibos'] }));
+});
+
+Deno.test('requireOrgPermission aceita o admin mesmo sem recursos no cargo', async () => {
+  await requireOrgPermission('user-1', 'org-1', ['financeiro_recibos'],
+    permissoes({ is_admin: true, recursos: [] }));
+});
+
+Deno.test('requireOrgPermission rejeita membro sem nenhum dos recursos', async () => {
+  const erro = await assertRejects(
+    () => requireOrgPermission('user-1', 'org-1', ['financeiro_recibos'],
+      permissoes({ is_admin: false, recursos: ['viaturas_ver'] })),
+    AuthorizationError,
+  );
+  assertEquals((erro as AuthorizationError).status, 403);
+});
+
+Deno.test('requireOrgPermission rejeita quem não pertence à organização', async () => {
+  await assertRejects(
+    () => requireOrgPermission('user-1', 'org-2', ['financeiro_recibos'], permissoes(null)),
+    AuthorizationError,
+    'Sem acesso a esta organização',
   );
 });
