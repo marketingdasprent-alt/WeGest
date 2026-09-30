@@ -85,6 +85,36 @@ export async function requireAnyOrgAdmin(
   }
 }
 
+export interface OrgPermissions {
+  is_admin: boolean;
+  /** Nomes em `recursos` com acesso pelo cargo do utilizador nesta organização. */
+  recursos: string[];
+}
+
+export type PermissionsLookup = (
+  userId: string,
+  orgId: string,
+) => Promise<OrgPermissions | null>;
+
+/**
+ * Membro da organização que é admin OU tem um dos recursos aceites.
+ * `has_permission` na base não serve aqui: resolve a org pela sessão, e a
+ * edge corre com service role.
+ */
+export async function requireOrgPermission(
+  userId: string,
+  orgId: string,
+  recursosAceites: readonly string[],
+  lookup: PermissionsLookup,
+): Promise<void> {
+  const permissoes = await lookup(userId, orgId);
+  if (!permissoes) throw new AuthorizationError('Sem acesso a esta organização', 403);
+  if (permissoes.is_admin) return;
+  if (!recursosAceites.some((r) => permissoes.recursos.includes(r))) {
+    throw new AuthorizationError('Sem permissão para esta acção nesta organização', 403);
+  }
+}
+
 export function isInternalRequest(req: Request, serviceRoleKey: string): boolean {
   const token = readBearerToken(req);
   return Boolean(serviceRoleKey && token && token === serviceRoleKey);

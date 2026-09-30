@@ -4,7 +4,7 @@ import { EmailService } from "../_shared/email/services/EmailService.ts";
 import {
   authenticateUser,
   AuthorizationError,
-  requireOrgAdmin,
+  requireOrgPermission,
 } from "../_shared/auth/edgeAuthorization.ts";
 import { validateDocumentAttachments } from "../_shared/documents/requestSecurity.ts";
 
@@ -13,6 +13,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+/** Recursos (cargo_permissoes) que permitem enviar documentos ao cliente. */
+const RECURSOS_QUE_ENVIAM_DOCUMENTOS = [
+  "financeiro_recibos",
+  "renting_contratos",
+  "renting_reservas",
+] as const;
 
 interface SendDocumentoFiscalEmailRequest {
   to: string;
@@ -116,15 +123,35 @@ serve(async (req) => {
 
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
-    await requireOrgAdmin(user.id, org_id, async (userId, requestedOrgId) => {
-      const { data, error } = await supabase
-        .from("user_organizacoes")
-        .select("is_admin")
-        .eq("user_id", userId)
-        .eq("org_id", requestedOrgId)
-        .maybeSingle();
-      return error ? null : data;
-    });
+    // Quem trabalha a faturação ou os contratos envia documentos ao cliente.
+    // Só admin barrava o cargo Faturação (caso da Década Ousada, 30/09).
+    await requireOrgPermission(
+      user.id,
+      org_id,
+      RECURSOS_QUE_ENVIAM_DOCUMENTOS,
+      async (userId, requestedOrgId) => {
+        const { data: membro, error } = await supabase
+          .from("user_organizacoes")
+          .select("is_admin, cargo_id")
+          .eq("user_id", userId)
+          .eq("org_id", requestedOrgId)
+          .maybeSingle();
+        if (error || !membro) return null;
+        if (membro.is_admin || !membro.cargo_id) {
+          return { is_admin: !!membro.is_admin, recursos: [] };
+        }
+        const { data: perms } = await supabase
+          .from("cargo_permissoes")
+          .select("recursos(nome)")
+          .eq("cargo_id", membro.cargo_id)
+          .eq("tem_acesso", true);
+        const recursos = (perms ?? [])
+          // O embed chega como objecto ou lista, conforme a relação inferida.
+          .flatMap((p) => [p.recursos].flat().map((r) => r?.nome))
+          .filter((n): n is string => !!n);
+        return { is_admin: false, recursos };
+      },
+    );
     const emailService = new EmailService(supabase);
 
     const result = await emailService.sendDocumentoFiscal(org_id, {
