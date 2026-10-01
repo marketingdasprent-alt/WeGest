@@ -17,6 +17,10 @@ import { consumeRateLimit, trustedRequestIp } from '../_shared/rate-limit/rateLi
 
 const CACHE_OPENAPI_SEGUNDOS = 3600;
 
+// Supabase Edge Runtime: sem waitUntil, o isolate pode fechar logo depois da
+// resposta e a auditoria perder-se. Fora do runtime (deno check, testes) não existe.
+declare const EdgeRuntime: { waitUntil(promessa: Promise<unknown>): void } | undefined;
+
 const env = (k: string) => Deno.env.get(k) ?? '';
 const db = () => createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
 
@@ -68,7 +72,7 @@ Deno.serve(async (req) => {
 
   // Auditoria best-effort (api_pedidos): sem corpo nem dados de cliente; nunca
   // atrasa nem altera a resposta.
-  cliente
+  const auditoria = cliente
     .from('api_pedidos')
     .insert({
       org_id: ctx.orgId,
@@ -82,6 +86,7 @@ Deno.serve(async (req) => {
     .then(({ error }) => {
       if (error) console.error('[api-rent-a-car] auditoria falhou:', error.message);
     });
+  if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(auditoria);
 
   return resposta;
 });
