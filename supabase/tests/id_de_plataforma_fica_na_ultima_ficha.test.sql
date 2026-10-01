@@ -5,7 +5,7 @@
 --
 -- Reproduz o André Nascimento (2026-10-01): a ficha antiga, inactiva, tinha o
 -- ID Bolt e a conta Uber; voltou com ficha nova e o Bolt continuava a cair na
--- antiga. Ver a migração 20261001170000. As datas são relativas a hoje, para
+-- antiga. Ver a migração 20261001180000. As datas são relativas a hoje, para
 -- o teste não depender do dia em que corre.
 --   (1) a ficha nova com a mesma conta Uber leva também o Bolt da antiga
 --       (mesma pessoa);
@@ -15,11 +15,13 @@
 --       a dobrar); o de uma semana antiga fica;
 --   (4) entre duas fichas activas, fica com o ID a última que o recebeu;
 --   (5) mudar o dono de uma linha não é recusado pela validação dos ganhos;
---   (6) só o service_role chama mover_identidade_plataforma.
+--   (6) só o service_role chama mover_identidade_plataforma e semana_ja_liquidada;
+--   (7) a semana anterior, já paga à ficha antiga, não muda de ficha (senão a
+--       nova recebia outra vez o mesmo dinheiro ao abrir a semana).
 -- ============================================================
 
 begin;
-select plan(13);
+select plan(16);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000001e00ff', 'bootstrap@ultima-ficha.pt');
@@ -35,9 +37,9 @@ insert into public.motoristas_ativos (id, org_id, nome, bolt_id, uber_uuid) valu
   ('00000000-0000-0000-0000-0000001e0b01', '00000000-0000-0000-0000-0000001e0000',
    'André Nascimento', 'bolt-andre', 'uber-andre');
 
--- Bolt da semana actual e de uma semana de há cinco semanas, importado quando a
--- antiga era a dona. Ganhos sem actividade, aceites porque a integração não
--- traz métricas (serve o caso 5).
+-- Bolt da semana actual, da anterior e de uma de há cinco semanas, importado
+-- quando a antiga era a dona. Ganhos sem actividade, aceites porque a
+-- integração não traz métricas (serve o caso 5).
 insert into public.bolt_resumos_semanais
   (org_id, integracao_id, periodo, periodo_inicio, periodo_fim, chave_motorista,
    identificador_motorista, motorista_nome, ganhos_liquidos)
@@ -45,19 +47,28 @@ select '00000000-0000-0000-0000-0000001e0000', '00000000-0000-0000-0000-0000001e
        to_char(s.ini, 'YYYY-MM-DD') || ' a ' || to_char(s.ini + 6, 'YYYY-MM-DD'),
        s.ini, s.ini + 6, 'bolt-andre', 'bolt-andre', 'André Nascimento', s.valor
   from (values (date_trunc('week', current_date)::date, 105.09),
+               (date_trunc('week', current_date)::date - 7, 88.10),
                (date_trunc('week', current_date)::date - 35, 71.38)) as s(ini, valor);
 
--- Fechos da ficha antiga: semana actual e semana antiga, ambos por pagar.
+-- Fechos da ficha antiga nas três semanas, todos por pagar.
 insert into public.motorista_liquido_semanal (org_id, motorista_id, semana_inicio, semana_fim, liquido)
 select '00000000-0000-0000-0000-0000001e0000', '00000000-0000-0000-0000-0000001e0b01', s.ini, s.ini + 6, s.liquido
   from (values (date_trunc('week', current_date)::date, 99.20),
+               (date_trunc('week', current_date)::date - 7, 85.00),
                (date_trunc('week', current_date)::date - 35, 69.07)) as s(ini, liquido);
+
+-- A semana anterior já foi paga à ficha antiga.
+update public.motorista_financeiro set status = 'pago', data_pagamento = current_date
+ where liquido_semanal_id = (
+   select id from public.motorista_liquido_semanal
+    where motorista_id = '00000000-0000-0000-0000-0000001e0b01'
+      and semana_inicio = date_trunc('week', current_date)::date - 7);
 
 select is(
   (select count(*)::int from public.bolt_resumos_semanais
     where identificador_motorista = 'bolt-andre' and motorista_id = '00000000-0000-0000-0000-0000001e0b01'),
-  2,
-  'antes: o Bolt das duas semanas vai para a ficha antiga'
+  3,
+  'antes: o Bolt das três semanas vai para a ficha antiga'
 );
 
 -- A antiga é desactivada; a integração passa a exigir métricas.
@@ -124,6 +135,23 @@ select is(
   'o fecho de uma semana que já passou fica'
 );
 
+-- (7)
+select is(
+  (select motorista_id from public.bolt_resumos_semanais
+    where identificador_motorista = 'bolt-andre' and periodo_inicio = date_trunc('week', current_date)::date - 7),
+  '00000000-0000-0000-0000-0000001e0b01'::uuid,
+  'o Bolt da semana anterior, já paga à ficha antiga, fica na antiga (não se paga duas vezes)'
+);
+
+select is(
+  (select f.status from public.motorista_financeiro f
+     join public.motorista_liquido_semanal l on l.id = f.liquido_semanal_id
+    where l.motorista_id = '00000000-0000-0000-0000-0000001e0b01'
+      and l.semana_inicio = date_trunc('week', current_date)::date - 7),
+  'pago',
+  'o fecho pago da semana anterior fica, com o movimento pago'
+);
+
 -- (4) Duas fichas activas: fica com o ID a última que o recebeu.
 insert into public.motoristas_ativos (id, org_id, nome, bolt_id) values
   ('00000000-0000-0000-0000-0000001e0b03', '00000000-0000-0000-0000-0000001e0000', 'Primeira', 'bolt-y');
@@ -157,11 +185,28 @@ select is(
   'só o ID disputado mudou de dono'
 );
 
+-- Marcar no Relatório de Pagamento também conta como pago.
+insert into public.relatorio_pagamento_pagos (org_id, motorista_id, semana_inicio) values
+  ('00000000-0000-0000-0000-0000001e0000', '00000000-0000-0000-0000-0000001e0b02',
+   date_trunc('week', current_date)::date - 14);
+
+select ok(
+  public.semana_ja_liquidada('00000000-0000-0000-0000-0000001e0b01',
+    date_trunc('week', current_date)::date - 7, date_trunc('week', current_date)::date - 1)
+  and public.semana_ja_liquidada('00000000-0000-0000-0000-0000001e0b02',
+    date_trunc('week', current_date)::date - 14, date_trunc('week', current_date)::date - 8)
+  and not public.semana_ja_liquidada('00000000-0000-0000-0000-0000001e0b01',
+    date_trunc('week', current_date)::date - 35, date_trunc('week', current_date)::date - 29),
+  'semana_ja_liquidada: paga no fecho ou no relatório; por pagar não conta'
+);
+
 -- (6)
 select ok(
   not has_function_privilege('authenticated', 'public.mover_identidade_plataforma(uuid, text, text, uuid, boolean, date)', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.mover_identidade_plataforma(uuid, text, text, uuid, boolean, date)', 'EXECUTE'),
-  'mover_identidade_plataforma: só o service_role'
+  and not has_function_privilege('anon', 'public.mover_identidade_plataforma(uuid, text, text, uuid, boolean, date)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.semana_ja_liquidada(uuid, date, date)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.semana_ja_liquidada(uuid, date, date)', 'EXECUTE'),
+  'mover_identidade_plataforma e semana_ja_liquidada: só o service_role'
 );
 
 select * from finish();

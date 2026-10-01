@@ -15,9 +15,9 @@
 --      recente que tenha o mesmo ID.
 -- As semanas que já passaram ficam como estão: o histórico só muda de ficha a
 -- partir da semana anterior à mudança (no realinhamento de hoje, a semana de
--- 21 a 27/09, a pedido da direcção). Nessas semanas, o fecho ainda por pagar
--- da ficha inactiva sai (o Bolt dela passou para a nova): senão pagava-se a
--- dobrar. Fechos pagos nunca se tocam.
+-- 21 a 27/09, a pedido da direcção), e nunca numa semana já paga a quem a
+-- tinha. O fecho ainda por pagar de quem perde a semana sai: refaz-se ao abrir
+-- a semana, já sem esse dinheiro. Senão pagava-se a dobrar.
 
 -- A validação dos ganhos Bolt só corre quando os ganhos mudam. Mudar o dono
 -- de uma linha antiga não pode ser recusado por uma regra de importação.
@@ -83,6 +83,28 @@ begin
 end;
 $$;
 
+-- A semana já foi paga (ou anulada) a este motorista: no fecho dele, ou
+-- marcada no Relatório de Pagamento. Essa semana não muda de ficha.
+create or replace function public.semana_ja_liquidada(p_motorista uuid, p_inicio date, p_fim date)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select exists (
+           select 1
+             from public.motorista_liquido_semanal l
+             join public.motorista_financeiro f on f.liquido_semanal_id = l.id
+            where l.motorista_id = p_motorista
+              and l.semana_inicio <= p_fim and l.semana_fim >= p_inicio
+              and f.status is distinct from 'pendente')
+      or exists (
+           select 1
+             from public.relatorio_pagamento_pagos p
+            where p.motorista_id = p_motorista
+              and p.semana_inicio between p_inicio - 6 and p_fim);
+$$;
+
 create or replace function public.mover_identidade_plataforma(
   p_org uuid,
   p_plataforma text,
@@ -134,24 +156,48 @@ begin
   on conflict (org_id, plataforma, identificador)
     do update set motorista_id = excluded.motorista_id;
 
-  -- O que já foi importado dessa conta segue a ficha, de v_desde em diante.
+  -- O que já foi importado dessa conta segue a ficha, de v_desde em diante,
+  -- menos as semanas já pagas a quem as tem (ao abrir a semana, a ficha nova
+  -- recebia outra vez o mesmo dinheiro). O fecho por pagar de quem perde a
+  -- semana sai antes; refaz-se ao abrir a semana, já sem esse dinheiro.
   if p_plataforma = 'bolt' then
-    update public.bolt_resumos_semanais set motorista_id = p_motorista
-     where org_id = p_org and identificador_motorista = p_identificador
-       and periodo_inicio >= v_desde
-       and motorista_id is distinct from p_motorista;
+    delete from public.motorista_liquido_semanal l
+     using public.bolt_resumos_semanais b
+     where b.org_id = p_org and b.identificador_motorista = p_identificador
+       and b.periodo_inicio >= v_desde and b.motorista_id <> p_motorista
+       and l.motorista_id = b.motorista_id
+       and l.semana_inicio <= coalesce(b.periodo_fim, b.periodo_inicio + 6)
+       and l.semana_fim >= b.periodo_inicio
+       and not public.semana_ja_liquidada(l.motorista_id, l.semana_inicio, l.semana_fim);
+    update public.bolt_resumos_semanais b set motorista_id = p_motorista
+     where b.org_id = p_org and b.identificador_motorista = p_identificador
+       and b.periodo_inicio >= v_desde
+       and b.motorista_id is distinct from p_motorista
+       and not public.semana_ja_liquidada(
+             b.motorista_id, b.periodo_inicio, coalesce(b.periodo_fim, b.periodo_inicio + 6));
     update public.bolt_drivers set motorista_id = p_motorista
      where org_id = p_org and driver_uuid = p_identificador
        and motorista_id is distinct from p_motorista;
   else
-    update public.uber_transactions set motorista_id = p_motorista
-     where org_id = p_org and uber_driver_id = p_identificador
-       and occurred_at >= v_desde
-       and motorista_id is distinct from p_motorista;
-    update public.uber_resumos_semanais set motorista_id = p_motorista
-     where org_id = p_org and uber_driver_id = p_identificador
-       and periodo_inicio >= v_desde
-       and motorista_id is distinct from p_motorista;
+    delete from public.motorista_liquido_semanal l
+     using public.uber_resumos_semanais u
+     where u.org_id = p_org and u.uber_driver_id = p_identificador
+       and u.periodo_inicio >= v_desde and u.motorista_id <> p_motorista
+       and l.motorista_id = u.motorista_id
+       and l.semana_inicio <= u.periodo_fim and l.semana_fim >= u.periodo_inicio
+       and not public.semana_ja_liquidada(l.motorista_id, l.semana_inicio, l.semana_fim);
+    -- Dia em UTC, como os baldes de fn_uber_resumo_recalcular.
+    update public.uber_transactions t set motorista_id = p_motorista
+     where t.org_id = p_org and t.uber_driver_id = p_identificador
+       and t.occurred_at >= v_desde
+       and t.motorista_id is distinct from p_motorista
+       and not public.semana_ja_liquidada(t.motorista_id,
+             (t.occurred_at at time zone 'UTC')::date, (t.occurred_at at time zone 'UTC')::date);
+    update public.uber_resumos_semanais u set motorista_id = p_motorista
+     where u.org_id = p_org and u.uber_driver_id = p_identificador
+       and u.periodo_inicio >= v_desde
+       and u.motorista_id is distinct from p_motorista
+       and not public.semana_ja_liquidada(u.motorista_id, u.periodo_inicio, u.periodo_fim);
     update public.uber_drivers set motorista_id = p_motorista
      where org_id = p_org and uber_driver_id = p_identificador
        and motorista_id is distinct from p_motorista;
@@ -171,19 +217,6 @@ begin
         perform public.mover_identidade_plataforma(
           p_org, r.plataforma, r.identificador, p_motorista, false, v_desde);
       end loop;
-
-      -- O fecho ainda por pagar da ficha inactiva nessas semanas era o dinheiro
-      -- que acabou de passar para a ficha nova: sai, para não se pagar a dobrar.
-      -- Ao recarregar a semana refaz-se, se ela ainda tiver alguma coisa. Um
-      -- fecho com movimento pago ou anulado nunca se apaga (a ligação apaga o
-      -- movimento em cascata).
-      delete from public.motorista_liquido_semanal l
-       where l.motorista_id = v_anterior
-         and l.semana_inicio >= v_desde
-         and not exists (
-           select 1 from public.motorista_financeiro f
-            where f.liquido_semanal_id = l.id and f.status is distinct from 'pendente'
-         );
     end if;
   end if;
 
@@ -270,9 +303,11 @@ create trigger trg_ficha_fica_com_id_plataforma
   after insert or update of bolt_id, uber_uuid, status_ativo on public.motoristas_ativos
   for each row execute function public.tg_ficha_fica_com_id_plataforma();
 
+revoke all on function public.semana_ja_liquidada(uuid, date, date) from public, anon, authenticated;
 revoke all on function public.mover_identidade_plataforma(uuid, text, text, uuid, boolean, date) from public, anon, authenticated;
 revoke all on function public.tg_ficha_liberta_id_plataforma() from public, anon, authenticated;
 revoke all on function public.tg_ficha_fica_com_id_plataforma() from public, anon, authenticated;
+grant execute on function public.semana_ja_liquidada(uuid, date, date) to service_role;
 grant execute on function public.mover_identidade_plataforma(uuid, text, text, uuid, boolean, date) to service_role;
 
 -- A API também: o ID mais recente vai para a ficha activa, e uma ficha
