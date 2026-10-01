@@ -55,11 +55,12 @@ language sql stable security definer set search_path = public as $$
          m.caixa, nullif(f.combustivel, ''), m.lugares, m.portas, m.bagageira, m.ar_condicionado,
          m.imagem_url, p.preco_dia, f.n
     from public.viatura_modelos m
-    join public.viatura_marcas ma on ma.id = m.marca_id
+    join public.viatura_marcas ma on ma.id = m.marca_id and ma.org_id = p_org_id
     join frota f on f.modelo_id = m.id
-    left join public.renting_grupos g on g.id = f.grupo_id
+    left join public.renting_grupos g on g.id = f.grupo_id and g.org_id = p_org_id
     join public.renting_tarifa_precos_modelo p
-      on p.modelo_id = m.id and p.tarifa_id = public.api_tarifa_site(p_org_id)
+      on p.modelo_id = m.id and p.org_id = p_org_id
+     and p.tarifa_id = public.api_tarifa_site(p_org_id)
    where m.org_id = p_org_id
      and coalesce(m.ativo, true)
      and m.caixa is not null and m.lugares is not null
@@ -119,7 +120,8 @@ returns jsonb language sql stable security definer set search_path = public as $
       'caucao', public.api_preco_json(p.caucao_valor, public.api_iva_rent_a_car(p_org_id))),
     'coberturas', public.api_coberturas(p_org_id))
   from public.renting_tarifa_precos_modelo p
-  where p.modelo_id = p_modelo_id and p.tarifa_id = public.api_tarifa_site(p_org_id)
+  where p.modelo_id = p_modelo_id and p.org_id = p_org_id
+    and p.tarifa_id = public.api_tarifa_site(p_org_id)
     and exists (select 1 from public.api_modelos_publicaveis(p_org_id) x where x.modelo_id = p_modelo_id);
 $$;
 
