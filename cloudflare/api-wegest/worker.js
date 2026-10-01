@@ -3,10 +3,11 @@
 // ============================================================
 // https://api.wegest.pt/v1/* faz fetch a
 // https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1/*
-// com o mesmo método, query, corpo e cabeçalhos, e devolve a resposta tal qual
-// (status, corpo, Cache-Control, Vary, Retry-After, CORS). Não guarda nada em
-// cache: o catálogo é por organização (Cache-Control private) e a decisão de
-// cache é da edge function. Toda a regra (chave, limites, auditoria) vive lá.
+// com o mesmo método, query e corpo e só os cabeçalhos da lista PASSAM, e devolve
+// a resposta tal qual (status, corpo, Cache-Control, Vary, Retry-After, CORS),
+// sem Set-Cookie. Não guarda nada em cache: o catálogo é por organização
+// (Cache-Control private) e a decisão de cache é da edge function. Toda a regra
+// (chave, limites, auditoria) vive lá.
 //
 // Existe porque a firewall da Vercel desafia rajadas de pedidos que chegam por
 // wegest.pt/api/rent-a-car (403 "Vercel Security Checkpoint").
@@ -21,39 +22,62 @@ const APRESENTACAO = {
   documentacao: 'https://docs.wegest.pt',
 };
 
-// Cabeçalhos que não seguem para a origem: o Host é o da origem, os cookies de
-// wegest.pt não são da API, os hop-by-hop são da ligação e os cf-* são do
-// próprio Cloudflare.
-const NAO_PASSAM = new Set([
-  'host',
-  'cookie',
-  'connection',
-  'keep-alive',
-  'transfer-encoding',
-  'upgrade',
-  'proxy-authorization',
-  'proxy-connection',
+// Só estes cabeçalhos seguem para a origem (lista de inclusão). Tudo o resto
+// fica: Host e cookies de wegest.pt, hop-by-hop, cf-* e sobretudo os
+// X-Forwarded-For / X-Real-IP que o cliente forje.
+const PASSAM = new Set([
+  'x-api-key',
+  'authorization',
+  'content-type',
+  'accept',
+  'accept-encoding',
+  'origin',
+  'user-agent',
+  'access-control-request-method',
+  'access-control-request-headers',
 ]);
 
-const V1 = /^\/v1(\/|$)/;
+// /v1 e no máximo dois segmentos (recurso e id), só com caracteres seguros:
+// nenhum % (ex.: ..%2f) chega à origem.
+const V1 = /^\/v1(?:\/[A-Za-z0-9._-]{1,64}){0,2}\/?$/;
 
-function json(corpo, status) {
-  return new Response(JSON.stringify(corpo), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+export const CORPO_MAXIMO = 65536;
+
+// As mesmas origens que a edge function aceita para CORS.
+const ORIGENS_PERMITIDAS = new Set([
+  'https://wegest.pt',
+  'https://www.wegest.pt',
+  'https://docs.wegest.pt',
+]);
+
+// Respostas do próprio Worker: CORS com a mesma regra da edge (Allow-Origin só
+// para as origens permitidas, Vary: Origin).
+function json(request, corpo, status) {
+  const headers = new Headers({ 'Content-Type': 'application/json', Vary: 'Origin' });
+  const origem = request.headers.get('origin');
+  if (origem && ORIGENS_PERMITIDAS.has(origem)) {
+    headers.set('Access-Control-Allow-Origin', origem);
+  }
+  return new Response(JSON.stringify(corpo), { status, headers });
 }
 
-function erro(codigo, mensagem, status) {
-  return json({ erro: { codigo, mensagem } }, status);
+function erro(request, codigo, mensagem, status) {
+  return json(request, { erro: { codigo, mensagem } }, status);
+}
+
+function corpoDemasiadoGrande(request) {
+  return erro(
+    request,
+    'CORPO_INVALIDO',
+    `Corpo do pedido demasiado grande (máximo ${CORPO_MAXIMO} bytes).`,
+    413
+  );
 }
 
 function cabecalhosParaOrigem(original) {
   const h = new Headers();
   for (const [nome, valor] of original) {
-    const n = nome.toLowerCase();
-    if (NAO_PASSAM.has(n) || n.startsWith('cf-')) continue;
-    h.set(nome, valor);
+    if (PASSAM.has(nome.toLowerCase())) h.set(nome, valor);
   }
   return h;
 }
@@ -63,17 +87,27 @@ export async function tratar(request, fazerFetch = fetch) {
   const url = new URL(request.url);
 
   if (url.pathname === '/' && (request.method === 'GET' || request.method === 'HEAD')) {
-    return json(APRESENTACAO, 200);
+    return json(request, APRESENTACAO, 200);
   }
   if (!V1.test(url.pathname)) {
-    return erro('NAO_ENCONTRADO', 'Rota inexistente. A API vive em /v1.', 404);
+    return erro(request, 'NAO_ENCONTRADO', 'Rota inexistente. A API vive em /v1.', 404);
   }
 
   const temCorpo = request.method !== 'GET' && request.method !== 'HEAD';
+  let corpo;
+  if (temCorpo) {
+    // Recusa pelo Content-Length antes de ler; quem não o declara (chunked) é
+    // medido depois de lido.
+    if (Number(request.headers.get('content-length')) > CORPO_MAXIMO) {
+      return corpoDemasiadoGrande(request);
+    }
+    corpo = await request.arrayBuffer();
+    if (corpo.byteLength > CORPO_MAXIMO) return corpoDemasiadoGrande(request);
+  }
   const pedido = new Request(`${ORIGEM}${url.pathname}${url.search}`, {
     method: request.method,
     headers: cabecalhosParaOrigem(request.headers),
-    body: temCorpo ? await request.arrayBuffer() : undefined,
+    body: corpo,
     redirect: 'manual',
     cache: 'no-store',
   });
@@ -83,10 +117,17 @@ export async function tratar(request, fazerFetch = fetch) {
     resposta = await fazerFetch(pedido);
   } catch (e) {
     console.error('[api.wegest.pt] origem indisponível:', e instanceof Error ? e.message : e);
-    return erro('ERRO_INTERNO', 'API temporariamente indisponível. Tente de novo.', 502);
+    return erro(request, 'ERRO_INTERNO', 'API temporariamente indisponível. Tente de novo.', 502);
   }
-  // Tal qual: status, statusText, cabeçalhos e corpo em stream.
-  return new Response(resposta.body, resposta);
+  // Tal qual (status, statusText, cabeçalhos, corpo em stream), menos o
+  // Set-Cookie: api.wegest.pt não põe cookies em wegest.pt.
+  const headers = new Headers(resposta.headers);
+  headers.delete('set-cookie');
+  return new Response(resposta.body, {
+    status: resposta.status,
+    statusText: resposta.statusText,
+    headers,
+  });
 }
 
 export default {
