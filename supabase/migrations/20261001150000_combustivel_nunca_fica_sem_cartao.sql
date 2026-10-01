@@ -9,7 +9,7 @@
 -- Agora, se o sítio habitual vier vazio, o gatilho usa o número que vem no
 -- próprio ficheiro (raw_data da BP) ou no transaction_id que os importadores
 -- montam ("edp-<cartão>-<data>", "bp-<cartão>-<data>"). Na Repsol e na EDP
--- grava-o também em card_number. Igual a 20261001100000 no resto.
+-- grava-o também em card_number. Igual a 20261001100500 no resto.
 
 create or replace function public.tg_resolver_motorista_cartao()
 returns trigger

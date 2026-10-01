@@ -5,7 +5,7 @@
 --
 -- Reproduz o caso do Repsol 0511 (2026-09-23): o cartão passa do Luiz para o
 -- Gurbhej, registado às 11:11 UTC (12:11 em Lisboa), e o Gurbhej atesta às
--- 12:23 locais. Ver a migração 20261001100000.
+-- 12:23 locais. Ver a migração 20261001100500.
 --   (1) antes da hora da entrega, nesse dia → quem entregou;
 --   (2) depois → quem recebeu;
 --   (3) 11:30 locais fica com quem entregou: a hora da bomba é local e a da
