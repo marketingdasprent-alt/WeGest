@@ -1,0 +1,82 @@
+// Autenticação por chave da API externa de rent-a-car. A chave em claro só
+// circula no cabeçalho; a base guarda o sha256 e resolve-o por api_chave_por_hash.
+import { trustedRequestIp } from '../rate-limit/rateLimit.ts';
+import { erro } from './respostas.ts';
+
+export interface ContextoApi {
+  chaveId: string;
+  orgId: string;
+  permissoes: string[];
+  limitePorMinuto: number;
+}
+
+export interface DbRpc {
+  rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
+}
+
+interface LinhaChave {
+  id: string;
+  org_id: string;
+  escopo: string;
+  permissoes: string[] | null;
+  ativo: boolean;
+  ip_whitelist: string[] | null;
+  rate_limit_per_minute: number | null;
+  expires_at: string | null;
+}
+
+const PREFIXO_CHAVE = 'wg_ra_';
+const LIMITE_POR_OMISSAO = 120;
+
+export function readApiKey(req: Request): string | null {
+  const directo = req.headers.get('x-api-key')?.trim();
+  if (directo) return directo;
+  const auth = req.headers.get('authorization') ?? '';
+  const m = /^(?:Bearer|ApiKey)\s+(\S+)$/i.exec(auth);
+  return m ? m[1] : null;
+}
+
+export async function sha256Hex(texto: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Devolve o contexto da chave ou a Response de recusa (401/403). */
+export async function autenticar(req: Request, db: DbRpc): Promise<ContextoApi | Response> {
+  const chave = readApiKey(req);
+  if (!chave || !chave.startsWith(PREFIXO_CHAVE)) {
+    return erro(
+      'NAO_AUTENTICADO',
+      'Chave de API em falta ou inválida. Use o cabeçalho X-API-Key.',
+      401
+    );
+  }
+  const { data, error } = await db.rpc('api_chave_por_hash', { p_hash: await sha256Hex(chave) });
+  const linha = (Array.isArray(data) ? data[0] : data) as LinhaChave | undefined;
+  if (error || !linha) return erro('NAO_AUTENTICADO', 'Chave de API desconhecida.', 401);
+  if (linha.escopo !== 'rent_a_car') {
+    return erro('SEM_PERMISSAO', 'Esta chave não serve a API de rent-a-car.', 403);
+  }
+  if (!linha.ativo) return erro('SEM_PERMISSAO', 'Chave desactivada.', 403);
+  if (linha.expires_at && new Date(linha.expires_at) < new Date()) {
+    return erro('SEM_PERMISSAO', 'Chave expirada.', 403);
+  }
+  // trustedRequestIp: cf-connecting-ip (posto pelo gateway) antes do ÚLTIMO valor de
+  // x-forwarded-for; o primeiro valor é escolhido pelo cliente e não vale nada.
+  const whitelist = linha.ip_whitelist ?? [];
+  if (whitelist.length > 0 && !whitelist.includes(trustedRequestIp(req))) {
+    return erro('SEM_PERMISSAO', 'Origem não autorizada para esta chave.', 403);
+  }
+  return {
+    chaveId: linha.id,
+    orgId: linha.org_id,
+    permissoes: linha.permissoes ?? [],
+    limitePorMinuto: linha.rate_limit_per_minute ?? LIMITE_POR_OMISSAO,
+  };
+}
+
+export function exigirPermissao(ctx: ContextoApi, permissao: string): Response | null {
+  return ctx.permissoes.includes(permissao)
+    ? null
+    : erro('SEM_PERMISSAO', `A chave não tem a permissão ${permissao}.`, 403);
+}
