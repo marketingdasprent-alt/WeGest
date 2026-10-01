@@ -13,7 +13,11 @@
 --      contas dela também passam;
 --   3. uma ficha que é desactivada entrega cada conta à ficha activa mais
 --      recente que tenha o mesmo ID.
--- Os fechos já gravados (motorista_liquido_semanal) não mudam.
+-- As semanas que já passaram ficam como estão: o histórico só muda de ficha a
+-- partir da semana anterior à mudança (no realinhamento de hoje, a semana de
+-- 21 a 27/09, a pedido da direcção). Nessas semanas, o fecho ainda por pagar
+-- da ficha inactiva sai (o Bolt dela passou para a nova): senão pagava-se a
+-- dobrar. Fechos pagos nunca se tocam.
 
 -- A validação dos ganhos Bolt só corre quando os ganhos mudam. Mudar o dono
 -- de uma linha antiga não pode ser recusado por uma regra de importação.
@@ -84,7 +88,10 @@ create or replace function public.mover_identidade_plataforma(
   p_plataforma text,
   p_identificador text,
   p_motorista uuid,
-  p_substituir_na_ficha boolean default true
+  p_substituir_na_ficha boolean default true,
+  -- Primeira semana que muda de ficha. Por omissão, a semana anterior à de
+  -- hoje (a que está a ser fechada e paga); as anteriores ficam como estão.
+  p_desde date default null
 )
 returns void
 language plpgsql
@@ -94,6 +101,7 @@ declare
   v_anterior   uuid;
   v_ant_activa boolean;
   v_flag       text := current_setting('wegest.movendo_identidade', true);
+  v_desde      date := coalesce(p_desde, date_trunc('week', current_date - 7)::date);
   r            record;
 begin
   if p_identificador is null or p_identificador = '' or p_plataforma not in ('uber', 'bolt') then
@@ -126,10 +134,11 @@ begin
   on conflict (org_id, plataforma, identificador)
     do update set motorista_id = excluded.motorista_id;
 
-  -- O que já foi importado dessa conta segue a ficha.
+  -- O que já foi importado dessa conta segue a ficha, de v_desde em diante.
   if p_plataforma = 'bolt' then
     update public.bolt_resumos_semanais set motorista_id = p_motorista
      where org_id = p_org and identificador_motorista = p_identificador
+       and periodo_inicio >= v_desde
        and motorista_id is distinct from p_motorista;
     update public.bolt_drivers set motorista_id = p_motorista
      where org_id = p_org and driver_uuid = p_identificador
@@ -137,9 +146,11 @@ begin
   else
     update public.uber_transactions set motorista_id = p_motorista
      where org_id = p_org and uber_driver_id = p_identificador
+       and occurred_at >= v_desde
        and motorista_id is distinct from p_motorista;
     update public.uber_resumos_semanais set motorista_id = p_motorista
      where org_id = p_org and uber_driver_id = p_identificador
+       and periodo_inicio >= v_desde
        and motorista_id is distinct from p_motorista;
     update public.uber_drivers set motorista_id = p_motorista
      where org_id = p_org and uber_driver_id = p_identificador
@@ -157,8 +168,22 @@ begin
           from public.motorista_plataforma_identidades i
          where i.org_id = p_org and i.motorista_id = v_anterior
       loop
-        perform public.mover_identidade_plataforma(p_org, r.plataforma, r.identificador, p_motorista, false);
+        perform public.mover_identidade_plataforma(
+          p_org, r.plataforma, r.identificador, p_motorista, false, v_desde);
       end loop;
+
+      -- O fecho ainda por pagar da ficha inactiva nessas semanas era o dinheiro
+      -- que acabou de passar para a ficha nova: sai, para não se pagar a dobrar.
+      -- Ao recarregar a semana refaz-se, se ela ainda tiver alguma coisa. Um
+      -- fecho com movimento pago ou anulado nunca se apaga (a ligação apaga o
+      -- movimento em cascata).
+      delete from public.motorista_liquido_semanal l
+       where l.motorista_id = v_anterior
+         and l.semana_inicio >= v_desde
+         and not exists (
+           select 1 from public.motorista_financeiro f
+            where f.liquido_semanal_id = l.id and f.status is distinct from 'pendente'
+         );
     end if;
   end if;
 
@@ -245,10 +270,10 @@ create trigger trg_ficha_fica_com_id_plataforma
   after insert or update of bolt_id, uber_uuid, status_ativo on public.motoristas_ativos
   for each row execute function public.tg_ficha_fica_com_id_plataforma();
 
-revoke all on function public.mover_identidade_plataforma(uuid, text, text, uuid, boolean) from public, anon, authenticated;
+revoke all on function public.mover_identidade_plataforma(uuid, text, text, uuid, boolean, date) from public, anon, authenticated;
 revoke all on function public.tg_ficha_liberta_id_plataforma() from public, anon, authenticated;
 revoke all on function public.tg_ficha_fica_com_id_plataforma() from public, anon, authenticated;
-grant execute on function public.mover_identidade_plataforma(uuid, text, text, uuid, boolean) to service_role;
+grant execute on function public.mover_identidade_plataforma(uuid, text, text, uuid, boolean, date) to service_role;
 
 -- A API também: o ID mais recente vai para a ficha activa, e uma ficha
 -- inactiva já não o prende. Igual à versão do baseline no resto.
@@ -313,7 +338,8 @@ begin
      where dona.status_ativo is not distinct from false
      order by i.org_id, i.plataforma, i.identificador, a.created_at desc
   loop
-    perform public.mover_identidade_plataforma(r.org_id, r.plataforma, r.identificador, r.alvo);
+    perform public.mover_identidade_plataforma(
+      r.org_id, r.plataforma, r.identificador, r.alvo, true, date '2026-09-21');
   end loop;
 end $$;
 
