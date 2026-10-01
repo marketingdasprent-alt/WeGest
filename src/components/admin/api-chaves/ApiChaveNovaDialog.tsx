@@ -50,6 +50,8 @@ export function ApiChaveNovaDialog({ open, onOpenChange }: Props) {
     setChave(null);
     setCopiada(false);
     setGuardada(false);
+    // A chave em claro também vive no MutationCache (data da mutação): limpa-se.
+    criar.reset();
   };
 
   // Com a chave à vista, só fecha depois de copiada ou confirmada.
@@ -70,14 +72,18 @@ export function ApiChaveNovaDialog({ open, onOpenChange }: Props) {
     const whitelist = parseIpWhitelist(ips);
     if (whitelist.erro) return setErro(whitelist.erro);
     setErro(null);
-    const criada = await criar.mutateAsync({
-      nome: nome.trim(),
-      escopo: ESCOPO,
-      permissoes,
-      expiraEm: expiraEm ? new Date(`${expiraEm}T23:59:59`).toISOString() : null,
-      ipWhitelist: whitelist.ips,
-    });
-    setChave(criada.chave);
+    try {
+      const criada = await criar.mutateAsync({
+        nome: nome.trim(),
+        escopo: ESCOPO,
+        permissoes,
+        expiraEm: expiraEm ? new Date(`${expiraEm}T23:59:59`).toISOString() : null,
+        ipWhitelist: whitelist.ips,
+      });
+      setChave(criada.chave);
+    } catch {
+      // O toast já foi mostrado no onError do hook; o diálogo fica no formulário.
+    }
   };
 
   const copiar = async () => {

@@ -12,7 +12,12 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { errorMessage } from '@/utils/errorMessage';
-import { caminhoFotoModelo, validarFotoModelo, type ModeloSiteInput } from './modeloSite.schema';
+import {
+  caminhoFotoModelo,
+  outrosCaminhosFotoModelo,
+  validarFotoModelo,
+  type ModeloSiteInput,
+} from './modeloSite.schema';
 
 interface Props {
   value: ModeloSiteInput;
@@ -46,6 +51,13 @@ export function ModeloSiteFields({ value, onChange, modeloId, orgId }: Props) {
         .from(BUCKET)
         .upload(caminho, ficheiro, { upsert: true, contentType: ficheiro.type });
       if (error) throw error;
+      // Tira as fotos antigas com outra extensão (não ficam órfãs no bucket
+      // público). Depois do upload, para um falhanço nunca deixar o modelo sem
+      // foto; best-effort: se falhar, a foto nova já está gravada.
+      const { error: erroRemover } = await supabase.storage
+        .from(BUCKET)
+        .remove(outrosCaminhosFotoModelo(orgId, modeloId, caminho));
+      if (erroRemover) console.warn('Fotos antigas do modelo por remover:', erroRemover.message);
       const { data } = supabase.storage.from(BUCKET).getPublicUrl(caminho);
       // O caminho é o mesmo a cada troca: o ?v= fura a cache do CDN e do site.
       set('imagem_url', `${data.publicUrl}?v=${Date.now()}`);

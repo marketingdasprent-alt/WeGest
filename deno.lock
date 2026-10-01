@@ -245,6 +245,7 @@
         "npm:@radix-ui/react-use-controllable-state@^1.2.4",
         "npm:@react-native-community/cli@^20.2.0",
         "npm:@realflow/react@~0.2.1",
+        "npm:@scalar/api-reference-react@~0.9.76",
         "npm:@supabase/supabase-js@^2.49.9",
         "npm:@tailwindcss/typography@~0.5.15",
         "npm:@tanstack/react-query@^5.56.2",

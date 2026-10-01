@@ -2,18 +2,36 @@
 // repetem os CHECK de viatura_modelos (migração 20261001110000), para o erro
 // aparecer em PT no formulário em vez de vir da base.
 import { z } from 'zod';
+import { SUPABASE_URL } from '@/integrations/supabase/env';
 
 const inteiroOuNulo = (min: number, max: number, msg: string) =>
   z.number().int(msg).min(min, msg).max(max, msg).nullable();
 
-export const modeloSiteSchema = z.object({
-  caixa: z.enum(['manual', 'automatica']).nullable(),
-  lugares: inteiroOuNulo(1, 9, 'Lugares entre 1 e 9'),
-  portas: inteiroOuNulo(2, 6, 'Portas entre 2 e 6'),
-  bagageira: inteiroOuNulo(0, 10, 'Bagageira entre 0 e 10 malas'),
-  ar_condicionado: z.boolean(),
-  imagem_url: z.string().url('URL inválido').nullable(),
-});
+/** URL público do bucket modelos-viaturas no projecto Supabase. */
+export function prefixoFotosModelo(supabaseUrl: string): string {
+  return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/modelos-viaturas/`;
+}
+
+/**
+ * A API publica imagem_url ao site: só aceita fotos do nosso bucket, nunca um
+ * URL qualquer escrito à mão (imagem de terceiros ou rastreio no site).
+ */
+export function criarModeloSiteSchema(prefixoFotos: string) {
+  return z.object({
+    caixa: z.enum(['manual', 'automatica']).nullable(),
+    lugares: inteiroOuNulo(1, 9, 'Lugares entre 1 e 9'),
+    portas: inteiroOuNulo(2, 6, 'Portas entre 2 e 6'),
+    bagageira: inteiroOuNulo(0, 10, 'Bagageira entre 0 e 10 malas'),
+    ar_condicionado: z.boolean(),
+    imagem_url: z
+      .string()
+      .url('URL inválido')
+      .refine((u) => u.startsWith(prefixoFotos), 'A foto tem de ser carregada aqui, no WeGest.')
+      .nullable(),
+  });
+}
+
+export const modeloSiteSchema = criarModeloSiteSchema(prefixoFotosModelo(SUPABASE_URL));
 export type ModeloSiteInput = z.infer<typeof modeloSiteSchema>;
 
 export const modeloSiteVazio: ModeloSiteInput = {
@@ -69,4 +87,20 @@ export function caminhoFotoModelo(
   ficheiro: Pick<File, 'type'>
 ): string {
   return `${orgId}/${modeloId}.${EXTENSOES[ficheiro.type] ?? 'jpg'}`;
+}
+
+const TODAS_AS_EXTENSOES = ['jpg', 'jpeg', 'png', 'webp'] as const;
+
+/**
+ * As fotos antigas deste modelo com outra extensão: trocar um .png por um .webp
+ * deixava o .png órfão no bucket público. Remove-se antes do upload.
+ */
+export function outrosCaminhosFotoModelo(
+  orgId: string,
+  modeloId: string,
+  caminhoNovo: string
+): string[] {
+  return TODAS_AS_EXTENSOES.map((ext) => `${orgId}/${modeloId}.${ext}`).filter(
+    (c) => c !== caminhoNovo
+  );
 }

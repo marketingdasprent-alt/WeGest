@@ -90,3 +90,31 @@ describe('useCriarApiChave', () => {
     );
   });
 });
+
+describe('a chave em claro não fica no MutationCache', () => {
+  it('gcTime 0: depois de reset a mutação sai da cache', async () => {
+    rpcMock.mockResolvedValue({
+      data: [{ id: 'k1', chave: 'wg_ra_segredo', prefixo: 'wg_ra_segr' }],
+      error: null,
+    });
+    const qc = new QueryClient();
+    const w = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(() => useCriarApiChave(), { wrapper: w });
+    await result.current.mutateAsync({
+      nome: 'Site',
+      escopo: 'rent_a_car',
+      permissoes: ['catalogo:read'],
+      expiraEm: null,
+      ipWhitelist: [],
+    });
+    const comChave = () =>
+      qc
+        .getMutationCache()
+        .getAll()
+        .some((m) => JSON.stringify(m.state.data ?? '').includes('wg_ra_segredo'));
+    await waitFor(() => expect(comChave()).toBe(true));
+    result.current.reset();
+    await waitFor(() => expect(comChave()).toBe(false));
+  });
+});

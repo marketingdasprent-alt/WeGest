@@ -56,6 +56,9 @@ export function useCriarApiChave() {
   const qc = useQueryClient();
   const { toast } = useToast();
   return useMutation({
+    // A resposta traz a chave em claro: não fica no MutationCache depois de o
+    // diálogo a largar (gcTime 0 + reset() no diálogo).
+    gcTime: 0,
     mutationFn: async (input: CriarApiChaveInput): Promise<ApiChaveCriada> => {
       // O gerador de tipos marca todos os argumentos como obrigatórios; a RPC
       // aceita null em p_expira_em e p_ip_whitelist (sem validade / sem whitelist).
