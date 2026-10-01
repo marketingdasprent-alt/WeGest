@@ -1,4 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { unicos } from '../_shared/importacao/substituir.ts';
 import {
   construirChaveMotorista,
   criarMatcherMotoristas,
@@ -14,6 +15,11 @@ import {
   type LinhaHistorico,
   SEMANAS_HISTORICO,
 } from '../_shared/bolt-import-csv/qualidade.ts';
+import {
+  construirArgsMergeCsv,
+  type ContextoImportacao,
+  linhaSemConteudo,
+} from '../_shared/bolt-import-csv/gravacao.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -364,33 +370,53 @@ Deno.serve(async (req) => {
     // aplicada cai-se para a chave antiga — mas isso vai para o log como aviso,
     // porque nesse estado as linhas sem identificador_motorista continuam a
     // duplicar a cada reimportação.
-    let migracaoChaveEmFalta = false;
+    // Um instante só para o ficheiro inteiro: todas as linhas desta importação
+    // ficam com o mesmo csv_importado_em, o que torna possível dizer "esta
+    // semana veio deste import" numa consulta.
+    const contexto: ContextoImportacao = {
+      integracaoId: integracao_id,
+      // A org da INTEGRAÇÃO (intConfig.org_id), não a de quem carregou o
+      // ficheiro — a RPC rebenta de propósito se as duas divergirem.
+      orgId,
+      periodo: periodoValue,
+      periodoInicio: periodoInicioValue,
+      periodoFim: periodoFimValue,
+      importadoEm: new Date().toISOString(),
+    };
 
+    // A gravação passa pela RPC bolt_resumo_merge_csv e NUNCA por um upsert
+    // directo. Ver o cabeçalho de gravacao.ts: é a RPC que decide se o CSV
+    // pode escrever as viagens ou se entra só com os extras, e é ela que
+    // carimba fonte_viagens/fonte_extras/csv_importado_em.
+    //
+    // Se a RPC não existir, isto falha alto. Não há recurso para o upsert
+    // directo: voltar a ele seria voltar a apagar em silêncio as parcelas que
+    // vieram da API oficial, que é o bug que se está a fechar aqui.
     const gravarRegisto = async (record: Record<string, any>) => {
-      if (!migracaoChaveEmFalta) {
-        const { error } = await supabase
-          .from('bolt_resumos_semanais')
-          .upsert(record, { onConflict: 'integracao_id,periodo,chave_motorista' });
-        if (!error) return null;
-        if (!faltaMigracaoChave(error)) return error;
-        console.warn(
-          'bolt-import-csv: chave_motorista ainda não existe na BD — migração por aplicar. ' +
-          'A usar a chave antiga (duplicados possíveis).',
-        );
-        migracaoChaveEmFalta = true;
-      }
+      const { error } = await supabase.rpc(
+        'bolt_resumo_merge_csv',
+        construirArgsMergeCsv(record, contexto) as unknown as Record<string, unknown>,
+      );
+      if (!error) return null;
 
-      const { chave_motorista: _semChaveNova, ...legado } = record;
-      const { error } = await supabase
-        .from('bolt_resumos_semanais')
-        .upsert(legado, { onConflict: 'integracao_id,periodo,identificador_motorista' });
+      if (faltaMigracaoChave(error) || /bolt_resumo_merge_csv/i.test(error.message || '')) {
+        return {
+          ...error,
+          message:
+            'a base de dados ainda não tem o que esta função precisa. Aplique as migrações ' +
+            '20260804120000_bolt_resumos_chave_motorista.sql e 20260813220000_bolt_csv_nao_pisa_a_api.sql. ' +
+            `Detalhe: ${error.message}`,
+        };
+      }
       return error;
     };
 
     let imported = 0;
     let errors = 0;
     let semChave = 0;
+    let semConteudo = 0;
     let brutoImportado = 0;
+    const chavesGravadas: string[] = [];
 
     for (const row of rows) {
       try {
@@ -415,6 +441,15 @@ Deno.serve(async (req) => {
           } else {
             record[dbCol] = value || null;
           }
+        }
+
+        // O CSV do portal lista todos os motoristas registados na empresa,
+        // não só os que trabalharam. Uma linha a zeros de ponta a ponta não
+        // diz nada sobre a semana — gravá-la só a faz passar por motorista
+        // dessa frota. Ver o cabeçalho de linhaSemConteudo em gravacao.ts.
+        if (linhaSemConteudo(record)) {
+          semConteudo++;
+          continue;
         }
 
         // Chave de upsert estável: identificador → email → nome normalizado.
@@ -466,12 +501,27 @@ Deno.serve(async (req) => {
           errors++;
         } else {
           imported++;
+          chavesGravadas.push(record.chave_motorista);
           brutoImportado += Number(record.ganhos_brutos_total ?? 0) || 0;
         }
       } catch (rowError) {
         console.error('bolt-import-csv row error:', rowError);
         errors++;
       }
+    }
+
+    // Voltar a importar a mesma semana substitui: sai o que veio de ficheiro para
+    // esta conta e semana e já não vem no ficheiro novo (nunca se soma). Só com
+    // o ficheiro todo gravado; a API (api_sincronizado_em) nunca é tocada.
+    let substituidas = 0;
+    if (errors === 0 && imported > 0) {
+      const { data: sub, error: subErr } = await supabase.rpc('bolt_substituir_semana_csv', {
+        p_integracao_id: integracao_id,
+        p_periodo: periodoValue,
+        p_chaves: unicos(chavesGravadas),
+      });
+      if (subErr) console.error('bolt-import-csv: substituir semana falhou:', subErr.message);
+      else substituidas = Number(sub ?? 0);
     }
 
     // ── 3. Piso relativo ──
@@ -526,7 +576,7 @@ Deno.serve(async (req) => {
       mensagem = `Semana ${periodoValue}: ${avaliacao.mensagem}`;
     } else {
       status = 'success';
-      mensagem = `Importação Apify/Robot: ${imported} registos processados para ${periodoValue}`;
+      mensagem = `Importação Apify/Robot: ${imported} registos processados para ${periodoValue}${substituidas > 0 ? `, ${substituidas} da importação anterior substituídas` : ''}`;
     }
 
     // Avisos que não mudam o número de linhas mas não podem passar em silêncio.
@@ -534,16 +584,18 @@ Deno.serve(async (req) => {
     if (semChave > 0 && imported > 0) {
       avisosExtra.push(`${semChave} linhas ignoradas por não terem identificador, email nem nome`);
     }
+    if (semConteudo > 0) {
+      // Não é erro: o CSV do portal lista sempre os motoristas registados que
+      // não trabalharam. Mas fica dito, porque um número alto aqui significa
+      // que a frota desta empresa se esvaziou — foi o caso da Distancia Lisboa
+      // em 2026-09-07, com 392 linhas a zeros em 393.
+      avisosExtra.push(
+        `${semConteudo} linhas sem ganhos, campanha nem actividade — não gravadas`,
+      );
+    }
     const errosDeGravacao = errors - semChave;
     if (errosDeGravacao > 0 && imported > 0) {
       avisosExtra.push(`${errosDeGravacao} linhas com erro de gravação`);
-    }
-    if (migracaoChaveEmFalta) {
-      avisosExtra.push(
-        'a coluna/índice chave_motorista ainda não existe na BD (migração ' +
-        '20260804120000_bolt_resumos_chave_motorista.sql por aplicar) — as linhas sem ' +
-        'identificador_motorista continuam a duplicar',
-      );
     }
     if (avisosExtra.length > 0) {
       if (status === 'success') status = 'warning';
@@ -559,11 +611,12 @@ Deno.serve(async (req) => {
       importados: imported,
       erros: errors,
       sem_chave: semChave,
+      sem_conteudo: semConteudo,
+      substituidas,
       bruto_importado: Number(brutoImportado.toFixed(2)),
       mediana_linhas: avaliacao.medianaLinhas,
       mediana_bruto: Number(avaliacao.medianaBruto.toFixed(2)),
       semanas_comparadas: avaliacao.semanasComparadas,
-      migracao_chave_em_falta: migracaoChaveEmFalta,
     };
 
     await registarLog(status, mensagem, detalhes);
@@ -583,6 +636,8 @@ Deno.serve(async (req) => {
       imported,
       errors,
       sem_chave: semChave,
+      sem_conteudo: semConteudo,
+      substituidas,
       total_rows: rows.length,
       bruto_importado: detalhes.bruto_importado,
       mediana_linhas: avaliacao.medianaLinhas,

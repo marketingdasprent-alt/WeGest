@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TurnstileCaptcha } from '@/components/auth/TurnstileCaptcha';
+import { turnstileSiteKey } from '@/lib/turnstile';
 import {
   Building2,
   User,
@@ -29,7 +31,7 @@ const RegistarOrg = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [codigoDisponivel, setCodigoDisponivel] = useState<boolean | null>(null);
   const [checkingCodigo, setCheckingCodigo] = useState(false);
-  const [resultData, setResultData] = useState<{ codigo: string } | null>(null);
+  const [resultData, setResultData] = useState<{ codigo: string; email: string } | null>(null);
 
   // Campos empresa
   const [nomeEmpresa, setNomeEmpresa] = useState('');
@@ -42,6 +44,11 @@ const RegistarOrg = () => {
   const [adminNome, setAdminNome] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Cada token só serve uma vez: depois de um envio o widget é remontado.
+  const [captchaVersao, setCaptchaVersao] = useState(0);
+  const captchaEmFalta = !!turnstileSiteKey() && !captchaToken;
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -101,6 +108,7 @@ const RegistarOrg = () => {
           admin_nome: adminNome,
           admin_email: adminEmail,
           admin_password: adminPassword,
+          ...(captchaToken ? { captcha_token: captchaToken } : {}),
         },
       });
 
@@ -116,27 +124,11 @@ const RegistarOrg = () => {
         return;
       }
 
-      // Login direto: o subdomínio novo ({codigo}.wegest.pt) pode ainda não
-      // estar provisionado (DNS/Vercel) no momento, por isso autenticamos já
-      // com as credenciais introduzidas e entramos na app no domínio atual —
-      // a org é resolvida pelo profile.org_id / user_org_ativa (que o
-      // register-org já preencheu), não pelo subdomínio.
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: adminEmail.trim(),
-        password: adminPassword,
-      });
-
-      if (signInError) {
-        // Fallback: mostrar ecrã de sucesso com o código da empresa.
-        setResultData({ codigo: data.org.codigo });
-        setStep('success');
-        setLoading(false);
-        return;
-      }
-
-      // Sessão criada → entrar na app (reload completo para inicializar a
-      // sessão/contexto de org).
-      window.location.href = '/dashboard';
+      // Conta nasce por confirmar (sem login automático); resposta não
+      // enumerável, por isso `data.org` pode não vir (auditoria 2026-09-16).
+      setResultData({ codigo: data?.org?.codigo ?? codigo, email: adminEmail.trim() });
+      setStep('success');
+      setLoading(false);
       return;
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -162,6 +154,8 @@ const RegistarOrg = () => {
       });
     } finally {
       setLoading(false);
+      setCaptchaToken(null);
+      setCaptchaVersao((v) => v + 1);
     }
   };
 
@@ -175,9 +169,11 @@ const RegistarOrg = () => {
             <CardContent className="pt-8 pb-8 text-center space-y-6">
               <CheckCircle2 className="mx-auto h-16 w-16 text-green-500" />
               <div>
-                <h2 className="text-2xl font-bold text-card-foreground">Registo concluído!</h2>
+                <h2 className="text-2xl font-bold text-card-foreground">Falta confirmar o email</h2>
                 <p className="mt-2 text-muted-foreground">
-                  A sua organização foi criada com sucesso.
+                  Enviámos um link de confirmação para{' '}
+                  <span className="font-medium text-card-foreground">{resultData?.email}</span>. A
+                  conta fica ativa depois de clicar nesse link.
                 </p>
               </div>
 
@@ -186,14 +182,16 @@ const RegistarOrg = () => {
                   <p className="text-sm text-muted-foreground mb-1">Código da empresa:</p>
                   <p className="text-lg font-semibold text-primary">{resultData.codigo}</p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Use este código no ecrã de login, junto com o seu email e palavra-passe.
+                    Depois de confirmar o email, use este código no ecrã de login, junto com o seu
+                    email e palavra-passe. Não recebeu? Verifique o spam ou peça um novo link no
+                    ecrã de login.
                   </p>
                 </div>
               )}
 
               <div className="space-y-3">
-                <Button onClick={() => navigate('/equipa')} className="w-full">
-                  Aceder ao sistema
+                <Button onClick={() => navigate('/login')} className="w-full">
+                  Ir para o login
                 </Button>
                 <Button variant="outline" onClick={() => navigate('/')} className="w-full">
                   Voltar à página inicial
@@ -406,9 +404,11 @@ const RegistarOrg = () => {
                 </div>
               </div>
 
+              <TurnstileCaptcha key={captchaVersao} acao="registo_org" onToken={setCaptchaToken} />
+
               <Button
                 type="submit"
-                disabled={loading || codigoDisponivel === false}
+                disabled={loading || codigoDisponivel === false || captchaEmFalta}
                 className="w-full"
               >
                 {loading ? (

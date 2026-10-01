@@ -3,19 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 /**
- * Factory de hooks de anexos.
- *
- * Os domínios de anexos (reserva, contrato, cliente, movimento) partilhavam
- * ~95% do código: validação de MIME/tamanho, upload com rollback, listagem,
- * eliminação best-effort, rename e URL assinada. Esta factory centraliza esse
- * comportamento; cada hook de domínio passa a ser um wrapper fino que injecta
- * a sua configuração e re-exporta com os nomes existentes (API inalterada).
- *
- * Nota de tipagem: a tabela é resolvida em runtime (`config.table`), o que nos
- * retira os overloads tipados de `supabase.from(<literal>)`. O único cast vive
- * aqui — antes existiam 3 variantes inconsistentes (`as TablesInsert`,
- * `@ts-expect-error`, sem cast) espalhadas pelos hooks. As leituras voltam a
- * ser tipadas como `TRow`, fornecido por cada domínio.
+ * Factory de hooks de anexos: os domínios (reserva, contrato, cliente, movimento) partilhavam
+ * ~95% do código, agora centralizado aqui; cada hook de domínio é um wrapper fino com a sua config.
+ * A tabela é resolvida em runtime, por isso o único cast de tipo vive aqui (antes havia 3 variantes inconsistentes espalhadas).
  */
 
 /** Campos mínimos que qualquer linha de anexo expõe à UI. */
@@ -75,8 +65,7 @@ export function createAnexosHooks<TRow extends AnexoBase>(config: AnexosConfig) 
 
   const queryKey = (parentId: string | null) => [...queryDomain, parentId] as const;
 
-  // Cast único da tabela dinâmica — ver nota no topo do ficheiro. (`no-explicit-any`
-  // está off no projecto; mesmo padrão usado noutros hooks de tabela dinâmica.)
+  // Cast único da tabela dinâmica — ver nota no topo do ficheiro.
   const from = () => (supabase as any).from(table);
 
   function validateFile(file: File): void {

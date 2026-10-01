@@ -9,7 +9,7 @@
 // Devolve só o payload de NEGÓCIO de cada job (tipo, cliente, itens) — nunca
 // nenhuma credencial do AS Connect, que o agente já tem na sua própria
 // configuração local.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

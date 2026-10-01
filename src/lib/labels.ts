@@ -1,15 +1,6 @@
-// ============================================================
-// Dicionário de labels — vocabulário neutro / contextual
-// ============================================================
-// Permite que a mesma chave semântica ("cliente.singular") apareça com
-// palavras diferentes consoante os módulos activos. Ex.: numa org só-TVDE
-// "cliente" passa a "motorista parceiro"; numa só-aluguer mantém-se "cliente".
-//
-// Convenção da chave: `<dominio>.<forma>` → ex. `cliente.singular`,
-// `cliente.plural`, `contrato.singular`. Sempre PT-PT.
-//
-// Esta tabela é a fonte. O hook `useLabel(key)` resolve a variante correcta
-// com base nos módulos activos da organização.
+// Dicionário de labels: a mesma chave ("cliente.singular") muda de palavra
+// consoante os módulos activos (ex.: TVDE puro usa "motorista parceiro").
+// Chave: `<dominio>.<forma>`, sempre PT-PT. `useLabel(key)` resolve a variante.
 
 import type { Modulo } from '@/types/modulo';
 

@@ -1,26 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-/**
- * Cartões de frota (BP / Repsol / EDP) na perspectiva do motorista.
- *
- * Extraído de MotoristaCartoesFrota, que fazia sete `supabase.from()` directos
- * com `useState` + `useEffect` + um `refetchAll()` chamado à mão.
- *
- * ATOMICIDADE — resolvida em 20260826131640
- * Atribuir e devolver tocam em DUAS tabelas: `cartoes_frota` e a coluna
- * `cartao_<tipo>` da ficha em `motoristas_ativos` (que alimenta o match das
- * transacções importadas). Feitas daqui eram duas chamadas PostgREST sem
- * transacção: se a segunda falhasse, o cartão ficava atribuído e a ficha não,
- * e o consumo desse cartão deixava de ser imputado ao motorista em silêncio.
- *
- * Passaram para RPC `SECURITY DEFINER`, que faz as duas escritas numa só
- * transacção. Por isso `tipo`, `numero` e a data deixaram de ser argumentos:
- * são lidos do próprio cartão, no servidor. Antes o cliente escolhia a coluna
- * da ficha e o valor — um payload trocado escrevia o número de um cartão BP na
- * coluna EDP.
- */
-
 export type TipoCartao = 'bp' | 'repsol' | 'edp';
 
 export interface CartaoAssociado {
@@ -43,10 +23,6 @@ export const cartoesAssociadosKey = (motoristaId: string) =>
 export const cartoesDisponiveisKey = (tipo: TipoCartao | undefined) =>
   ['cartoes-frota', 'disponiveis', tipo] as const;
 
-// A coluna da ficha (`cartao_<tipo>`) deixou de ser calculada aqui: passou
-// para dentro das RPC, num CASE estático sobre as três colunas conhecidas.
-
-/** Cartões actualmente atribuídos a este motorista. */
 export function useCartoesAssociados(motoristaId: string) {
   return useQuery({
     queryKey: cartoesAssociadosKey(motoristaId),
@@ -64,7 +40,6 @@ export function useCartoesAssociados(motoristaId: string) {
   });
 }
 
-/** Cartões livres daquele tipo — os que se podem atribuir agora. */
 export function useCartoesDisponiveis(tipo: TipoCartao | undefined) {
   return useQuery({
     queryKey: cartoesDisponiveisKey(tipo),
@@ -75,6 +50,8 @@ export function useCartoesDisponiveis(tipo: TipoCartao | undefined) {
         .eq('tipo', tipo as TipoCartao)
         .eq('status', 'disponivel')
         .is('motorista_id', null)
+
+        .is('cliente_id', null)
         .order('numero');
       if (error) throw error;
       return (data ?? []) as CartaoDisponivel[];
@@ -83,7 +60,6 @@ export function useCartoesDisponiveis(tipo: TipoCartao | undefined) {
   });
 }
 
-/** Invalida as duas listas depois de qualquer movimento de cartão. */
 function useInvalidarCartoes() {
   const qc = useQueryClient();
   return (motoristaId: string) => {
@@ -94,21 +70,20 @@ function useInvalidarCartoes() {
 
 export interface MovimentoCartaoArgs {
   cartaoId: string;
-  /**
-   * NÃO vai no payload da RPC — o servidor lê o motorista do próprio cartão.
-   * Serve só para invalidar a lista certa depois de gravar.
-   */
+
   motoristaId: string;
+
+  data?: string;
 }
 
-/** Marca o cartão em uso E grava o número na ficha, numa só transacção. */
 export function useAssociarCartaoAoMotorista() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
-    mutationFn: async ({ cartaoId, motoristaId }: MovimentoCartaoArgs): Promise<void> => {
+    mutationFn: async ({ cartaoId, motoristaId, data }: MovimentoCartaoArgs): Promise<void> => {
       const { error } = await supabase.rpc('atribuir_cartao_frota', {
         p_cartao_id: cartaoId,
         p_motorista_id: motoristaId,
+        ...(data ? { p_de: data } : {}),
       });
       if (error) throw error;
     },
@@ -116,23 +91,63 @@ export function useAssociarCartaoAoMotorista() {
   });
 }
 
-/**
- * Liberta o cartão, guarda quem o tinha, e limpa a ficha — mas só se ela
- * apontava mesmo para este número. Essa comparação passou para o servidor: era
- * feita no componente com os dados que ele por acaso tinha em memória.
- */
 export function useDevolverCartaoDoMotorista() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
-    mutationFn: async ({ cartaoId }: MovimentoCartaoArgs): Promise<void> => {
-      const { error } = await supabase.rpc('devolver_cartao_frota', { p_cartao_id: cartaoId });
+    mutationFn: async ({ cartaoId, data }: MovimentoCartaoArgs): Promise<void> => {
+      const { error } = await supabase.rpc('devolver_cartao_frota', {
+        p_cartao_id: cartaoId,
+        ...(data ? { p_ate: data } : {}),
+      });
       if (error) throw error;
     },
     onSuccess: (_r, { motoristaId }) => invalidar(motoristaId),
   });
 }
 
-/** Repõe na ficha o número do cartão que o motorista tem mesmo atribuído. */
+export function useAssociarCartaoAoCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      cartaoId,
+      clienteId,
+      data,
+    }: {
+      cartaoId: string;
+      clienteId: string;
+      data?: string;
+    }): Promise<void> => {
+      const { error } = await supabase.rpc('atribuir_cartao_frota_cliente', {
+        p_cartao_id: cartaoId,
+        p_cliente_id: clienteId,
+        ...(data ? { p_de: data } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cartoes-frota'] });
+      qc.invalidateQueries({ queryKey: ['cliente-combustivel'] });
+    },
+  });
+}
+
+export function useDevolverCartaoDoCliente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ cartaoId, data }: { cartaoId: string; data?: string }): Promise<void> => {
+      const { error } = await supabase.rpc('devolver_cartao_frota', {
+        p_cartao_id: cartaoId,
+        ...(data ? { p_ate: data } : {}),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cartoes-frota'] });
+      qc.invalidateQueries({ queryKey: ['cliente-combustivel'] });
+    },
+  });
+}
+
 export function useSincronizarFichaCartao() {
   const invalidar = useInvalidarCartoes();
   return useMutation({
@@ -146,13 +161,8 @@ export function useSincronizarFichaCartao() {
   });
 }
 
-// ── Administração (CartoesFlotaTab) ──────────────────────────────────────────
-// Mesmo domínio, outra perspectiva: aqui gere-se o catálogo de cartões, não a
-// atribuição a um motorista.
-
 export const cartoesListaKey = ['cartoes-frota', 'lista'] as const;
 
-/** Catálogo completo, com os nomes das entidades ligadas já embebidos. */
 export function useCartoesFrotaLista<T>() {
   return useQuery({
     queryKey: cartoesListaKey,
@@ -160,7 +170,7 @@ export function useCartoesFrotaLista<T>() {
       const { data, error } = await supabase
         .from('cartoes_frota')
         .select(
-          '*, motorista:motorista_id(nome), ultimo_motorista:ultimo_motorista_id(nome), cliente:cliente_id(nome)'
+          '*, motorista:motorista_id(nome), ultimo_motorista:ultimo_motorista_id(nome), cliente:cliente_id(nome), ultimo_cliente:ultimo_cliente_id(nome)'
         )
         .order('tipo')
         .order('numero');
@@ -170,7 +180,6 @@ export function useCartoesFrotaLista<T>() {
   });
 }
 
-/** Motoristas para o dropdown de atribuição. */
 export function useMotoristasParaCartoes() {
   return useQuery({
     queryKey: ['cartoes-frota', 'motoristas-opcoes'],
@@ -185,12 +194,26 @@ export function useMotoristasParaCartoes() {
   });
 }
 
+export function useClientesParaCartoes() {
+  return useQuery({
+    queryKey: ['cartoes-frota', 'clientes-opcoes'],
+    queryFn: async (): Promise<Array<{ id: string; nome: string }>> => {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('id, nome')
+        .is('deleted_at', null)
+        .order('nome');
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 function useInvalidarLista() {
   const qc = useQueryClient();
   return () => qc.invalidateQueries({ queryKey: ['cartoes-frota'] });
 }
 
-/** Cria ou actualiza — `cartaoId` ausente significa criar. */
 export function useGuardarCartaoFrota() {
   const invalidar = useInvalidarLista();
   return useMutation({
@@ -200,14 +223,21 @@ export function useGuardarCartaoFrota() {
     }: {
       cartaoId?: string;
       payload: Record<string, unknown>;
-    }): Promise<void> => {
-      const { error } = cartaoId
+    }): Promise<string> => {
+      const { data, error } = cartaoId
         ? await supabase
             .from('cartoes_frota')
             .update(payload as never)
             .eq('id', cartaoId)
-        : await supabase.from('cartoes_frota').insert(payload as never);
+            .select('id')
+            .single()
+        : await supabase
+            .from('cartoes_frota')
+            .insert(payload as never)
+            .select('id')
+            .single();
       if (error) throw error;
+      return (data as { id: string }).id;
     },
     onSuccess: invalidar,
   });
@@ -224,10 +254,6 @@ export function useEliminarCartaoFrota() {
   });
 }
 
-/**
- * Importação em massa. `onConflict: 'org_id,tipo,numero'` — reimportar o mesmo
- * ficheiro actualiza em vez de duplicar.
- */
 export function useImportarCartoesFrota() {
   const invalidar = useInvalidarLista();
   return useMutation({

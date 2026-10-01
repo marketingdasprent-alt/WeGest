@@ -411,3 +411,81 @@ Deno.test("paginar recusa endpoints não paginados", async () => {
     "não é um endpoint paginado",
   );
 });
+
+Deno.test("paginar repete a página curta em vez de a aceitar em silêncio", async () => {
+  // Reproduz a semana de 2026-09-07 da Urbango: com o total já declarado, uma
+  // das páginas paralelas voltou com HTTP 200 e zero registos a seguir a uma
+  // falha de rede. Aceitá-la em silêncio custou 1000 viagens e fez o
+  // verificarTotal abortar a semana inteira — 3839 viagens perdidas por causa
+  // de uma página.
+  const porOffset: Record<number, string[]> = { 0: ["a", "b"], 2: ["c", "d"], 4: ["e", "f"] };
+  let vaziasServidas = 0;
+
+  const pedidos = instalarFetch((pedido) => {
+    const offset = (pedido.corpo as Record<string, number>).offset;
+    if (offset === 2 && vaziasServidas === 0) {
+      vaziasServidas += 1;
+      return respostaJson({ code: 0, data: { total_orders: 6, orders: [] } });
+    }
+    return respostaJson({
+      code: 0,
+      data: {
+        total_orders: 6,
+        orders: porOffset[offset].map((referencia) => ({ order_reference: referencia })),
+      },
+    });
+  });
+
+  try {
+    const ordens = await paginar<FleetOrder>(
+      cred("cid-pagina-curta"),
+      "getFleetOrders",
+      { company_ids: [1], start_ts: 1, end_ts: 2 },
+      { limite: 2, concorrencia: 2 },
+    );
+
+    assertEquals(ordens.map((o) => o.order_reference), ["a", "b", "c", "d", "e", "f"]);
+    assertEquals(vaziasServidas, 1);
+    // 3 páginas + a repetição da que veio curta.
+    assertEquals(soDados(pedidos).length, 4);
+  } finally {
+    restaurar();
+  }
+});
+
+Deno.test("paginar em fila indiana não toma a página curta por última quando o total é conhecido", async () => {
+  // Mesmo buraco do caminho paralelo, no percurso que o bolt-drivers-sync usa:
+  // "página incompleta = última página" é verdade quando não sabemos o total,
+  // mas com o total declarado uma página curta a meio é anomalia, não fim.
+  const porOffset: Record<number, string[]> = { 0: ["a", "b"], 2: ["c", "d"], 4: ["e", "f"], 6: [] };
+  let vaziasServidas = 0;
+
+  const pedidos = instalarFetch((pedido) => {
+    const offset = (pedido.corpo as Record<string, number>).offset;
+    if (offset === 2 && vaziasServidas === 0) {
+      vaziasServidas += 1;
+      return respostaJson({ code: 0, data: { total_orders: 6, orders: [] } });
+    }
+    return respostaJson({
+      code: 0,
+      data: {
+        total_orders: 6,
+        orders: (porOffset[offset] ?? []).map((referencia) => ({ order_reference: referencia })),
+      },
+    });
+  });
+
+  try {
+    const ordens = await paginar<FleetOrder>(
+      cred("cid-fila-indiana-curta"),
+      "getFleetOrders",
+      { company_ids: [1], start_ts: 1, end_ts: 2 },
+      { limite: 2 },
+    );
+
+    assertEquals(ordens.map((o) => o.order_reference), ["a", "b", "c", "d", "e", "f"]);
+    assertEquals(vaziasServidas, 1);
+  } finally {
+    restaurar();
+  }
+});

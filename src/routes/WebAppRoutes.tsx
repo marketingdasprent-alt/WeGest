@@ -1,12 +1,14 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { RaizDaApp } from '@/components/auth/RaizDaApp';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { RouteErrorBoundary } from '@/components/ErrorBoundary';
 import { usePageTracking } from '@/hooks/usePageTracking';
 import { tokenDoDominioTickets } from '@/lib/ticketsUrl';
 import { RECURSOS } from '@/utils/permissions';
+import { DASHBOARD_ACCESS_RESOURCES } from '@/hooks/useDashboardTipo';
 import { REALIZE_ORG_IDS } from '@/config/realize';
 import { Loader2 } from 'lucide-react';
 
@@ -30,6 +32,7 @@ const FormularioPublico = lazy(() => import('@/pages/FormularioPublico'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const AssinarDocumento = lazy(() => import('@/pages/AssinarDocumento'));
 const QuadroLive = lazy(() => import('@/pages/QuadroLive'));
+const LinkCurto = lazy(() => import('@/pages/LinkCurto'));
 const TicketsTI = lazy(() => import('@/pages/TicketsTI'));
 const TicketTIAutor = lazy(() => import('@/pages/TicketTIAutor'));
 const DasprentLeads = lazy(() => import('@/pages/DasprentLeads'));
@@ -67,6 +70,7 @@ const Administrativo = lazy(() => import('@/pages/Administrativo'));
 const CartoesFlotaPage = lazy(() => import('@/pages/administrativo/CartoesFlotaPage'));
 const DispositivosObePage = lazy(() => import('@/pages/administrativo/DispositivosObePage'));
 const FaturacaoPage = lazy(() => import('@/pages/administrativo/FaturacaoPage'));
+const DividasPage = lazy(() => import('@/pages/administrativo/DividasPage'));
 const Instalar = lazy(() => import('@/pages/Instalar'));
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
@@ -127,7 +131,9 @@ const WebAppRoutes = () => {
             <Route
               path="/"
               element={
-                tokenDoDominioTickets(window.location.hostname) ? <TicketsTI /> : <Landing />
+                <RaizDaApp>
+                  {tokenDoDominioTickets(window.location.hostname) ? <TicketsTI /> : <Landing />}
+                </RaizDaApp>
               }
             />
             <Route path="/entrar" element={<Entrar />} />
@@ -143,6 +149,10 @@ const WebAppRoutes = () => {
             <Route path="/danos/:token" element={<DanosPublicosPage />} />
             {/* Assinar um documento por link, sem login — mesma familia do /danos/:token */}
             <Route path="/assinar/:token" element={<AssinarDocumento />} />
+            {/* Link curto para um ficheiro privado (resumo enviado por WhatsApp).
+                Sem login: o código é a credencial, e quem o resolve é a edge
+                function link-curto. */}
+            <Route path="/r/:codigo" element={<LinkCurto />} />
             {/* Quadro TV público — sem login, acesso por token */}
             <Route path="/quadro/:token" element={<QuadroLive />} />
             {/* A rota do autor vem ANTES: /ti/:token capturaria /ti/ticket/xxx com
@@ -179,7 +189,7 @@ const WebAppRoutes = () => {
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute requiredResource={RECURSOS.MOTORISTAS_GESTAO}>
+                <ProtectedRoute requiredResource={DASHBOARD_ACCESS_RESOURCES}>
                   <DashboardLayout>
                     <Dashboard />
                   </DashboardLayout>
@@ -459,6 +469,16 @@ const WebAppRoutes = () => {
                 <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
                   <DashboardLayout>
                     <FaturacaoPage />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/administrativo/dividas"
+              element={
+                <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+                  <DashboardLayout>
+                    <DividasPage />
                   </DashboardLayout>
                 </ProtectedRoute>
               }

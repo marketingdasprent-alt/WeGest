@@ -1,9 +1,3 @@
-/**
- * Hooks do parcelamento de faturas (Fase 4A). Consomem o backend já
- * implementado e revisto (acordos_pagamento, acordo_parcelas, acordo_criar,
- * faturacao-emitir). `as any` nos nomes de tabela/RPC: types.ts ainda não foi
- * regenerado para estas tabelas — mesmo padrão de src/lib/acordoPagamento.ts.
- */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { ParcelaPlano, FrequenciaParcela } from '@/lib/parcelamento';
@@ -16,7 +10,6 @@ export interface AcordoAtivoInfo {
   estado: string;
 }
 
-/** Existe já um acordo vivo (ativo|incumprimento) sobre esta cobrança? Bloqueia o botão de parcelar. */
 export function useAcordoAtivoPorCobranca(cobrancaId: string | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'ativo', cobrancaId ?? null],
@@ -29,11 +22,7 @@ export function useAcordoAtivoPorCobranca(cobrancaId: string | null | undefined)
         .in('estado', ['ativo', 'incumprimento'])
         .maybeSingle();
       if (error) throw error;
-      // `acordos_pagamento` não existe em types.ts (ver nota do topo do ficheiro):
-      // o select-string parser do postgrest-js não consegue validar o shape
-      // contra um schema desconhecido e devolve um SelectQueryError opaco, que
-      // nunca tem overlap suficiente com AcordoAtivoInfo para um cast directo —
-      // daí o passo por `unknown`, tal como o próprio erro do tsc recomenda.
+
       return data as unknown as AcordoAtivoInfo | null;
     },
     enabled: !!cobrancaId,
@@ -41,11 +30,6 @@ export function useAcordoAtivoPorCobranca(cobrancaId: string | null | undefined)
   });
 }
 
-/**
- * Mesma verificação que `useAcordoAtivoPorCobranca`, mas em lote — usado pela
- * checklist de "Anular faturação" (várias cobranças na mesma lista) para
- * avisar, por linha, que anular também vai cancelar o acordo associado.
- */
 export function useAcordosAtivosPorCobrancas(cobrancaIds: string[]) {
   const key = [...cobrancaIds].sort().join(',');
   return useQuery({
@@ -71,18 +55,6 @@ export interface CobrancaCedida {
   nome: string | null;
 }
 
-/**
- * Se esta cobrança já foi cedida a um motorista no momento da EMISSÃO
- * (Faturar contrato / Nova Fatura — ver
- * 20260730170000_cobranca_cessao_motorista_na_emissao.sql), devolve esse
- * motorista; senão devolve null.
- *
- * O parcelamento precisa de saber isto: `acordo_criar` recusa criar um acordo
- * para um responsável DIFERENTE do motorista a quem a fatura já foi cedida
- * (senão a dívida era cedida duas vezes). Sem esta informação o diálogo abria
- * sempre no titular por defeito e submeter dava um erro cru da BD — o caminho
- * mais natural (não mexer no campo) era exactamente o que falhava sempre.
- */
 export function useCobrancaCedida(cobrancaId: string | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'cedida', cobrancaId ?? null],
@@ -111,16 +83,11 @@ export function useCobrancaCedida(cobrancaId: string | null | undefined) {
 
 export interface ResponsavelElegivel {
   papel: 'condutor' | 'motorista';
-  /** cliente_id quando papel='condutor'; motorista_id quando papel='motorista'. */
+
   id: string;
   nome: string | null;
 }
 
-/**
- * Candidatos a "quem assume o pagamento" além do titular: condutores/motoristas
- * ligados ao contrato. Espelha o JOIN de useContratoCondutoresPrincipais
- * (useContratoCondutores.ts), sem o filtro is_principal — precisa de todos.
- */
 export function useAcordoResponsaveisElegiveis(contratoId: string | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'responsaveis', contratoId ?? null],
@@ -132,11 +99,7 @@ export function useAcordoResponsaveisElegiveis(contratoId: string | null | undef
         .eq('contrato_id', contratoId)
         .is('data_fim', null);
       if (error) throw error;
-      // Num contrato TVDE, a dívida é sempre do motorista responsável, nunca
-      // do titular/empresa — por isso o motorista tem de aparecer aqui como
-      // candidato (pedido explícito, 30/07/2026). Antes disto era filtrado
-      // fora porque acordo_criar recusava sempre responsavel_papel='motorista';
-      // esse bloqueio foi levantado (ver acordo_cessao_motorista_desbloqueada).
+
       return (data ?? [])
         .filter((c) => !!c.motorista_id || !!c.cliente_id)
         .map(
@@ -170,12 +133,6 @@ export interface CriarAcordoInput {
   observacoes?: string;
 }
 
-/**
- * Cria o acordo (RPC acordo_criar — transacional, backend Tarefa 3). Só
- * invalida a query de "acordo vivo" desta cobrança; o chamador (ParcelamentoDialog)
- * é responsável por invalidar o resto (lista de cobranças) via onCriado(),
- * exactamente como RecibosDialog.onEmitido já funciona.
- */
 export function useCriarAcordo() {
   const qc = useQueryClient();
   return useMutation({
@@ -199,55 +156,22 @@ export function useCriarAcordo() {
   });
 }
 
-/**
- * Parcelas que já contam como "pagas" para efeitos de progresso/próxima data no
- * cartão-resumo: 'liquidacao_pendente' entra aqui porque o dinheiro já
- * entrou (só falta o documento fiscal) — mesma leitura que a RPC
- * `acordo_vista_devedor` já faz para o devedor (ver useAcordoVistaDevedor.ts).
- */
 const PARCELA_ESTADOS_LIQUIDADOS = new Set(['paga', 'liquidacao_pendente']);
 
 export interface AcordoAtivoResumo {
   id: string;
   codigo: number;
   estado: string;
-  /** Saldo por liquidar — vem de `cobranca_saldo_por_liquidar`, a mesma fonte usada em toda a feature (nunca recalculado a partir das parcelas). */
+
   faltaPagar: number;
   parcelasPagas: number;
   parcelasTotal: number;
-  /** Vencimento da próxima parcela ainda não liquidada; null se todas já liquidadas. */
+
   proximaData: string | null;
-  /**
-   * Nº de OUTROS acordos ativos/em incumprimento desta entidade, além deste.
-   * Normalmente 0 — `uq_acordo_vivo_por_cobranca` só impede duplicar por
-   * cobrança, não por entidade, por isso em teoria uma entidade pode ter
-   * acordos vivos em cobranças diferentes ao mesmo tempo. Em vez de construir
-   * uma lista especulativa para um caso nunca visto na prática, mostra-se
-   * sempre o acordo mais antigo (o que precisa de atenção há mais tempo) e
-   * conta-se os restantes aqui, sem os esconder.
-   */
+
   outrosAtivos: number;
 }
 
-/**
- * Acordo ativo (ou em incumprimento) de UM cliente — como titular OU
- * responsável (`titular_id` ou `responsavel_cliente_id`). Não existe hoje uma
- * listagem "todos os acordos de X" (só `useAcordoDetalhe(id)`, que precisa de
- * um id já conhecido, e `useAcordoAtivoPorCobranca(cobrancaId)`, que precisa
- * de uma cobrança já conhecida) — esta é essa query, pequena e dedicada.
- *
- * Só cliente: um motorista nunca pode ser titular de um acordo
- * (`acordos_pagamento.titular_id` referencia `clientes`, nunca
- * `motoristas_ativos`) nem responsável (`acordo_criar`,
- * `20260724100001_acordos_saldo_e_criar.sql:131-133`, recusa sempre
- * `p_responsavel_papel = 'motorista'` — TVDE fatura-se fora do WeGest; o
- * próprio `useAcordoResponsaveisElegiveis` acima já filtra motoristas fora da
- * lista de candidatos, pela mesma razão). Uma versão anterior desta função
- * tinha um parâmetro `tipo: 'cliente' | 'motorista'` para cobrir também o
- * financeiro do motorista — removido por ser código morto e inalcançável por
- * qualquer caminho da aplicação (achado da revisão desta tarefa), não por uma
- * mudança de regra de negócio.
- */
 export function useAcordoAtivoResumoPorEntidade(clienteId: string | null | undefined) {
   return useQuery({
     queryKey: [...QUERY_KEY_BASE, 'ativo-entidade', clienteId ?? null],

@@ -28,12 +28,10 @@ interface CandidatoDoDia {
 }
 
 /**
- * Entre duas atribuições que cobrem o mesmo dia, manda a que COMEÇOU MAIS
- * TARDE: é o modelo de "entregou o carro A e levou o B", e é a única leitura
- * que sobrevive quando a `data_fim` da anterior ficou por fechar.
- * Empate a `data_inicio` desempata pelo `viatura_id`, para o resultado não
- * depender da ordem por que as linhas vieram da base de dados — o padrão
- * "último a ler ganha" já custou dinheiro três vezes neste projecto.
+ * Entre duas atribuições que cobrem o mesmo dia, manda a que começou mais
+ * tarde ("entregou o A, levou o B") — sobrevive mesmo se a `data_fim` da
+ * anterior ficou por fechar. Empate desempata por `viatura_id`, não pela
+ * ordem de leitura da BD ("último a ler ganha" já custou dinheiro 3x aqui).
  */
 function venceODia(candidato: CandidatoDoDia, actual: CandidatoDoDia): boolean {
   if (candidato.viaturaId === actual.viaturaId) return false;
@@ -45,22 +43,12 @@ function venceODia(candidato: CandidatoDoDia, actual: CandidatoDoDia): boolean {
  * Constrói os períodos de aluguer de viatura da semana, um por VEÍCULO —
  * nunca um por linha de atribuição (`motorista_viaturas`).
  *
- * REGRA CENTRAL: **cada dia do período é cobrado uma única vez**, ao motorista,
- * qualquer que seja o número de viaturas que o reclamem. A soma de `dias` de
- * todas as linhas devolvidas nunca excede os dias do período.
- *
- * Antes desta regra os dias eram unidos por VIATURA e nunca somados por
- * pessoa: duas viaturas com atribuições sobrepostas davam 7 + 7 dias numa
- * semana de 7. Caso real gravado no fecho de 10–16/08/2026 — um motorista com
- * BN-07-BO 500,00 € + BI-81-IR 275,00 € + BQ-28-AQ 275,00 € = 1.050,00 € numa
- * semana, com os sete dias totalmente sobrepostos nos três contratos.
- *
- * Duas linhas sobrepostas para o MESMO veículo (ex.: uma atribuição fechada
- * com `data_fim` tarde demais + a nova já aberta antes disso — bug de dados
- * real, motorista #582/Rui Teixeira: "encerrado" 15/07–10/08 e "ativo"
- * 02/08–∞ para a mesma AT-36-XD, sobrepostos 8 dias) continuam a contar a
- * UNIÃO dos dias. Uma troca a meio da semana para um veículo DIFERENTE
- * continua a gerar duas linhas, com os dias repartidos entre elas.
+ * Regra central: cada dia é cobrado uma única vez ao motorista, qualquer que
+ * seja o número de viaturas que o reclamem (a soma de `dias` nunca excede os
+ * dias do período). Antes disso, viaturas sobrepostas somavam os dias em
+ * dobro — caso real no fecho de 10–16/08/2026 (1.050 € numa semana de 7 dias
+ * em 3 contratos sobrepostos). Sobreposições no MESMO veículo (dados sujos,
+ * ex. motorista #582) continuam a contar a união dos dias.
  */
 export function buildSlotPeriodos(
   viaturasPeriodoData: ViaturaPeriodoInput[],

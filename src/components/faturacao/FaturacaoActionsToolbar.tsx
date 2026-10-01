@@ -35,7 +35,7 @@ import {
   type NotaCreditoCobranca,
 } from '@/components/renting/contratos/NotaCreditoDialog';
 import { RecibosDialog, type ReciboCobrancaAlvo } from './RecibosDialog';
-import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 
 /** Cobrança-alvo das ações de recibo / nota de crédito. */
 export interface ToolbarCobranca {

@@ -21,15 +21,26 @@ import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Button } from '@/components/ui/button';
 import { MotoristaFullModal } from '@/components/motoristas/MotoristaFullModal';
 import { MotoristasPlataformaNaoAssociados } from '@/components/motoristas/MotoristasPlataformaNaoAssociados';
+import { MotoristasVariasViaturasDialog } from '@/components/motoristas/MotoristasVariasViaturasDialog';
+import { useMotoristasVariasViaturas } from '@/hooks/useMotoristasVariasViaturas';
+import { useMotoristasViaturasAtivas } from '@/hooks/useMotoristasViaturasAtivas';
 import { MotoristasFichaIncompleta } from '@/components/motoristas/MotoristasFichaIncompleta';
 import { CartoesNaoReconhecidos } from '@/components/motoristas/CartoesNaoReconhecidos';
 import { PortagensNaoAssociadas } from '@/components/motoristas/PortagensNaoAssociadas';
 import { BpNaoAssociadas } from '@/components/motoristas/BpNaoAssociadas';
 import { GenerateDocumentsDialog } from '@/components/motoristas/GenerateDocumentsDialog';
 import { MotoristaCard } from '@/components/motoristas/MotoristaCard';
+import { AdicionarMotoristaButton } from '@/components/motoristas/AdicionarMotoristaButton';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import {
@@ -84,6 +95,8 @@ export default function Motoristas() {
   const statusFilter = searchParams.get('status') || 'todos';
   const cidadeFilter = searchParams.get('cidade') || 'todas';
   const gestorFilter = searchParams.get('gestor') || 'todos';
+  // 'todas' | 'com' | 'sem'
+  const viaturaFilter = searchParams.get('viatura') || 'todas';
   const sortColumn = (searchParams.get('sort') as SortColumn) || 'codigo';
   const sortDirection = (searchParams.get('dir') as 'asc' | 'desc') || 'asc';
 
@@ -123,6 +136,15 @@ export default function Motoristas() {
   const naoAssociadosCountQuery = useMotoristasPlataformaNaoAssociadosCount();
   const naoAssociadosCount = naoAssociadosCountQuery.data ?? 0;
   const [cartoesOpen, setCartoesOpen] = useState(false);
+  const [variasViaturasOpen, setVariasViaturasOpen] = useState(false);
+  const variasViaturasQuery = useMotoristasVariasViaturas();
+  const variasViaturas = variasViaturasQuery.data ?? [];
+  const viaturasAtivasQuery = useMotoristasViaturasAtivas();
+  const viaturasPorMotorista = useMemo(
+    () => viaturasAtivasQuery.data ?? new Map<string, string[]>(),
+    [viaturasAtivasQuery.data]
+  );
+
   const cartoesCountQuery = useCartoesNaoAssociadosCount();
   const cartoesCount = cartoesCountQuery.data ?? 0;
   const [portagensOpen, setPortagensOpen] = useState(false);
@@ -194,7 +216,14 @@ export default function Motoristas() {
       // Gestor filter
       const matchesGestor = gestorFilter === 'todos' || m.gestor_responsavel === gestorFilter;
 
-      return matchesSearch && matchesStatus && matchesCidade && matchesGestor;
+      // Viaturas associadas: com ou sem viatura atribuída neste momento
+      const temViatura = (viaturasPorMotorista.get(m.id) ?? []).length > 0;
+      const matchesViatura =
+        viaturaFilter === 'todas' ||
+        (viaturaFilter === 'com' && temViatura) ||
+        (viaturaFilter === 'sem' && !temViatura);
+
+      return matchesSearch && matchesStatus && matchesCidade && matchesGestor && matchesViatura;
     });
 
     // Apply sorting
@@ -228,13 +257,23 @@ export default function Motoristas() {
     });
 
     return result;
-  }, [motoristas, searchTerm, statusFilter, cidadeFilter, gestorFilter, sortColumn, sortDirection]);
+  }, [
+    motoristas,
+    searchTerm,
+    statusFilter,
+    cidadeFilter,
+    gestorFilter,
+    viaturaFilter,
+    viaturasPorMotorista,
+    sortColumn,
+    sortDirection,
+  ]);
 
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
     usePagination(
       filteredMotoristas,
       50,
-      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}`,
+      `${searchTerm}|${statusFilter}|${cidadeFilter}|${gestorFilter}|${viaturaFilter}`,
       'page'
     );
 
@@ -338,86 +377,6 @@ export default function Motoristas() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-          {naoAssociadosCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setNaoAssociadosOpen(true)}
-              className="w-full sm:w-auto gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
-            >
-              <Link2 className="h-4 w-4" />
-              {naoAssociadosCount} sem ficha
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-amber-500/20 text-amber-700 dark:text-amber-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
-          {motoristasFichaIncompleta.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setFichaIncompletaOpen(true)}
-              className="w-full sm:w-auto gap-2 border-rose-500/50 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400"
-            >
-              <FileWarning className="h-4 w-4" />
-              {motoristasFichaIncompleta.length} sem documentos
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-rose-500/20 text-rose-700 dark:text-rose-300"
-              >
-                atualizar
-              </Badge>
-            </Button>
-          )}
-          {cartoesCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setCartoesOpen(true)}
-              className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
-            >
-              <CreditCard className="h-4 w-4" />
-              {cartoesCount} cartões
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
-          {portagensCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setPortagensOpen(true)}
-              className="w-full sm:w-auto gap-2 border-blue-500/50 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
-            >
-              <Car className="h-4 w-4" />
-              {portagensCount} sem portagens
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-blue-500/20 text-blue-700 dark:text-blue-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
-          {bpNaoAssociadasCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setBpNaoAssociadasOpen(true)}
-              className="w-full sm:w-auto gap-2 border-green-500/50 text-green-700 hover:bg-green-500/10 dark:text-green-400"
-            >
-              <Fuel className="h-4 w-4" />
-              {bpNaoAssociadasCount} BP sem motorista
-              <Badge
-                variant="secondary"
-                className="ml-1 bg-green-500/20 text-green-700 dark:text-green-300"
-              >
-                associar
-              </Badge>
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={handleExport}
@@ -431,11 +390,108 @@ export default function Motoristas() {
             )}
             Exportar
           </Button>
-          <Button onClick={handleAddMotorista} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar Motorista
-          </Button>
+          <AdicionarMotoristaButton onAdicionar={handleAddMotorista} />
         </div>
+      </div>
+
+      {/* Alertas operacionais — faixa própria para não empurrar as ações do header */}
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 empty:hidden">
+        {naoAssociadosCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setNaoAssociadosOpen(true)}
+            className="w-full sm:w-auto gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-500/10 dark:text-amber-400"
+          >
+            <Link2 className="h-4 w-4" />
+            {naoAssociadosCount} sem ficha
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-amber-500/20 text-amber-700 dark:text-amber-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
+        {motoristasFichaIncompleta.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setFichaIncompletaOpen(true)}
+            className="w-full sm:w-auto gap-2 border-rose-500/50 text-rose-600 hover:bg-rose-500/10 dark:text-rose-400"
+          >
+            <FileWarning className="h-4 w-4" />
+            {motoristasFichaIncompleta.length} sem documentos
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-rose-500/20 text-rose-700 dark:text-rose-300"
+            >
+              atualizar
+            </Badge>
+          </Button>
+        )}
+        {variasViaturas.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setVariasViaturasOpen(true)}
+            className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+          >
+            <Car className="h-4 w-4" />
+            {variasViaturas.length} com 2 viaturas
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
+            >
+              fechar
+            </Badge>
+          </Button>
+        )}
+        {cartoesCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setCartoesOpen(true)}
+            className="w-full sm:w-auto gap-2 border-orange-500/50 text-orange-600 hover:bg-orange-500/10 dark:text-orange-400"
+          >
+            <CreditCard className="h-4 w-4" />
+            {cartoesCount} cartões
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-orange-500/20 text-orange-700 dark:text-orange-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
+        {portagensCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setPortagensOpen(true)}
+            className="w-full sm:w-auto gap-2 border-blue-500/50 text-blue-600 hover:bg-blue-500/10 dark:text-blue-400"
+          >
+            <Car className="h-4 w-4" />
+            {portagensCount} sem portagens
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-blue-500/20 text-blue-700 dark:text-blue-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
+        {bpNaoAssociadasCount > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => setBpNaoAssociadasOpen(true)}
+            className="w-full sm:w-auto gap-2 border-green-500/50 text-green-700 hover:bg-green-500/10 dark:text-green-400"
+          >
+            <Fuel className="h-4 w-4" />
+            {bpNaoAssociadasCount} BP sem motorista
+            <Badge
+              variant="secondary"
+              className="ml-1 bg-green-500/20 text-green-700 dark:text-green-300"
+            >
+              associar
+            </Badge>
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -457,7 +513,7 @@ export default function Motoristas() {
             </div>
           </div>
 
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Estado</label>
               <Select value={statusFilter} onValueChange={(v) => updateFilters({ status: v })}>
@@ -505,6 +561,20 @@ export default function Motoristas() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Viatura associada</label>
+              <Select value={viaturaFilter} onValueChange={(v) => updateFilters({ viatura: v })}>
+                <SelectTrigger className="h-10 bg-background">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas</SelectItem>
+                  <SelectItem value="com">Com viatura</SelectItem>
+                  <SelectItem value="sem">Sem viatura</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>
@@ -540,7 +610,8 @@ export default function Motoristas() {
             !!searchTerm ||
             statusFilter !== 'todos' ||
             cidadeFilter !== 'todas' ||
-            gestorFilter !== 'todos';
+            gestorFilter !== 'todos' ||
+            viaturaFilter !== 'todas';
           return (
             <EmptyState
               icon={Users}
@@ -564,6 +635,7 @@ export default function Motoristas() {
                         status: 'todos',
                         cidade: 'todas',
                         gestor: 'todos',
+                        viatura: 'todas',
                       })
                     }
                   >
@@ -631,6 +703,7 @@ export default function Motoristas() {
                 >
                   Gestor
                 </SortableTableHead>
+                <TableHead className="w-[110px] hidden lg:table-cell">Viatura</TableHead>
                 <SortableTableHead
                   field="bolt_id"
                   sortField={sortColumn}
@@ -676,6 +749,11 @@ export default function Motoristas() {
                   </TableCell>
                   <TableCell className="py-2 text-muted-foreground hidden md:table-cell">
                     {motorista.gestor_responsavel || '-'}
+                  </TableCell>
+                  <TableCell className="py-2 text-sm font-mono hidden lg:table-cell">
+                    {(viaturasPorMotorista.get(motorista.id) ?? []).join(', ') || (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="py-2 text-xs font-mono hidden xl:table-cell">
                     {motorista.bolt_id ? (
@@ -737,6 +815,12 @@ export default function Motoristas() {
       />
 
       {/* Dialog: motoristas de plataforma sem ficha */}
+      <MotoristasVariasViaturasDialog
+        open={variasViaturasOpen}
+        onOpenChange={setVariasViaturasOpen}
+        motoristas={variasViaturas}
+      />
+
       <MotoristasPlataformaNaoAssociados
         open={naoAssociadosOpen}
         onOpenChange={setNaoAssociadosOpen}

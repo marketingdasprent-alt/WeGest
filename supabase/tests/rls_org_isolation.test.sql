@@ -75,6 +75,12 @@ select is(
 );
 
 -- ── COMPORTAMENTO ───────────────────────────────────────────
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes de
+-- existir organização, para o handle_new_user_org não lhe atribuir org nem
+-- escrever user_org_ativa por cima do insert manual.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000a0ff', 'bootstrap@rls-test.pt');
+
 -- Seed (como role de migração, antes de trocar para authenticated).
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'rls-test-a'),

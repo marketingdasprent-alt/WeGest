@@ -130,6 +130,9 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
   const [estado, setEstado] = useState('existente');
   const [observacoes, setObservacoes] = useState('');
   const [valor, setValor] = useState('');
+  // Separado do custo: é este que lança o débito na conta do motorista, pelo
+  // gatilho viatura_danos_gera_debito. Ver a nota no campo do formulário.
+  const [valorCobrado, setValorCobrado] = useState('');
   const [dataOcorrencia, setDataOcorrencia] = useState('');
   const [motoristaId, setMotoristaId] = useState('');
   const [contratoId, setContratoId] = useState<string | null>(null);
@@ -152,6 +155,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
       estado,
       observacoes,
       valor,
+      valorCobrado,
       dataOcorrencia,
       motoristaId,
       categoriaId,
@@ -163,6 +167,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
       setEstado(r.estado ?? 'existente');
       setObservacoes(r.observacoes ?? '');
       setValor(r.valor ?? '');
+      setValorCobrado(r.valorCobrado ?? '');
       setDataOcorrencia(r.dataOcorrencia ?? '');
       setMotoristaId(r.motoristaId ?? '');
       setCategoriaId(r.categoriaId ?? '');
@@ -360,6 +365,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
     setSaving(true);
     try {
       const valorNumerico = valor ? parseFloat(valor.replace(',', '.')) : 0;
+      const valorCobradoNumerico = valorCobrado ? parseFloat(valorCobrado.replace(',', '.')) : 0;
 
       const { data: novoDano, error } = await supabase
         .from('viatura_danos')
@@ -370,6 +376,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
           estado,
           observacoes: observacoes.trim() || null,
           valor: valorNumerico,
+          valor_cobrado: valorCobradoNumerico,
           data_ocorrencia: dataOcorrencia || null,
           motorista_id: motoristaId || null,
           contrato_id: contratoId,
@@ -385,25 +392,18 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
         await uploadFotosParaDano(novoDano.id);
       }
 
-      // Se há motorista e valor > 0, criar movimento financeiro
-      if (motoristaId && valorNumerico > 0) {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        await supabase.from('motorista_financeiro').insert({
-          motorista_id: motoristaId,
-          tipo: 'debito',
-          valor: valorNumerico,
-          descricao: `Dano em viatura ${matricula || ''} - ${descricao.trim().substring(0, 50)}`,
-          categoria: 'dano',
-          data_movimento: dataOcorrencia || new Date().toISOString().split('T')[0],
-          status: 'pendente',
-          referencia: novoDano.id,
-          dano_id: novoDano.id,
-          criado_por: user?.id,
-        });
-      }
+      // O débito do motorista já NÃO se cria aqui: é o gatilho
+      // `viatura_danos_gera_debito` que o faz, a partir de `valor_cobrado`
+      // (migração 20260921110000).
+      //
+      // Este bloco criava-o a partir de `valor`, e só na criação — editar o
+      // dano depois não corrigia o débito, e apagá-lo deixava-o para trás.
+      // Nunca chegou a disparar (547 danos em produção, todos com valor a
+      // zero, zero movimentos de categoria 'dano'), mas mantê-lo agora daria
+      // dois caminhos a escrever o mesmo movimento: um por `valor`, outro por
+      // `valor_cobrado`. O gatilho trata criação, alteração e remoção, tem
+      // índice único a garantir um movimento por dano, e recusa-se a
+      // reescrever o que já foi pago.
 
       toast.success('Dano registado com sucesso!');
       // resetForm antes de fechar: é ele que apaga o rascunho, e a chave do
@@ -489,6 +489,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
     setEstado('pendente');
     setObservacoes('');
     setValor('');
+    setValorCobrado('');
     setDataOcorrencia('');
     setMotoristaId('');
     setContratoId(null);
@@ -627,6 +628,28 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                       value={valor}
                       onChange={(e) => setValor(e.target.value)}
                     />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Quanto custa reparar. Não é cobrado a ninguém.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="valorCobrado">Cobrar ao motorista (€)</Label>
+                    <Input
+                      id="valorCobrado"
+                      type="text"
+                      placeholder="0,00"
+                      value={valorCobrado}
+                      onChange={(e) => setValorCobrado(e.target.value)}
+                    />
+                    {/* Separado do custo de propósito: pôr um valor aqui LANÇA
+                        o débito na conta corrente do motorista (gatilho
+                        viatura_danos_gera_debito). Se fosse o mesmo campo,
+                        registar o custo de uma reparação cobrava-a por
+                        acidente. Voltar a zero apaga o débito, desde que ainda
+                        esteja por pagar. */}
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Lança o débito na conta do motorista. Deixe a zero para não cobrar.
+                    </p>
                   </div>
                 </div>
 

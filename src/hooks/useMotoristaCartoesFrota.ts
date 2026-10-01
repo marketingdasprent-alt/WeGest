@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { errorMessage } from '@/utils/errorMessage';
 
 export type CartaoTipo = 'bp' | 'repsol' | 'edp';
 export interface CartaoItem {
@@ -10,8 +11,6 @@ export interface CartaoItem {
 
 const TIPOS: CartaoTipo[] = ['bp', 'repsol', 'edp'];
 
-/** Cartões de frota (BP/Repsol/EDP) disponíveis para atribuir ao motorista —
- *  carrega ao abrir o dialog, e sincroniza a atribuição ao gravar. */
 export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | undefined) {
   const [cartoesFrota, setCartoesFrota] = useState<Record<CartaoTipo, CartaoItem[]>>({
     bp: [],
@@ -23,6 +22,9 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
     repsol: '',
     edp: '',
   });
+
+  // Regista a atribuição inicial para devolver o cartão anterior e fechar o período do titular.
+  const atribuidoInicial = useRef<Record<CartaoTipo, string>>({ bp: '', repsol: '', edp: '' });
 
   useEffect(() => {
     if (!open) return;
@@ -43,38 +45,50 @@ export function useMotoristaCartoesFrota(open: boolean, motoristaId: string | un
         });
         const atribuido = (t: string) =>
           all.find((c) => c.tipo === t && c.motorista_id === motoristaId)?.id || '';
-        setSelectedCartao({
+        const inicial = {
           bp: atribuido('bp'),
           repsol: atribuido('repsol'),
           edp: atribuido('edp'),
-        });
-      } catch {
-        /* silencioso */
-      }
+        };
+        atribuidoInicial.current = { ...inicial };
+        setSelectedCartao(inicial);
+      } catch {}
     };
     loadCartoes();
   }, [open, motoristaId]);
 
-  const syncCartoes = async (novoMotoristaId: string) => {
-    try {
-      for (const tipo of TIPOS) {
-        const cartaoId = selectedCartao[tipo];
-        await supabase
-          .from('cartoes_frota')
-          .update({ motorista_id: null })
-          .eq('tipo', tipo)
-          .eq('motorista_id', novoMotoristaId)
-          .neq('id', cartaoId || '00000000-0000-0000-0000-000000000000');
-        if (cartaoId) {
-          await supabase
-            .from('cartoes_frota')
-            .update({ motorista_id: novoMotoristaId })
-            .eq('id', cartaoId);
+  // As RPC mantêm o histórico que atribui o consumo; os erros são devolvidos
+  // porque a gravação do motorista já terminou e não deve ser revertida.
+  const syncCartoes = async (novoMotoristaId: string): Promise<string[]> => {
+    const erros: string[] = [];
+
+    for (const tipo of TIPOS) {
+      const escolhido = selectedCartao[tipo];
+      const anterior = atribuidoInicial.current[tipo];
+      if (escolhido === anterior) continue;
+
+      try {
+        // Devolve primeiro para fechar o período anterior antes de reatribuir o cartão.
+        if (anterior) {
+          const { error } = await supabase.rpc('devolver_cartao_frota', {
+            p_cartao_id: anterior,
+          });
+          if (error) throw error;
         }
+        if (escolhido) {
+          const { error } = await supabase.rpc('atribuir_cartao_frota', {
+            p_cartao_id: escolhido,
+            p_motorista_id: novoMotoristaId,
+          });
+          if (error) throw error;
+        }
+        atribuidoInicial.current[tipo] = escolhido;
+      } catch (err: unknown) {
+        erros.push(`${tipo.toUpperCase()}: ${errorMessage(err)}`);
       }
-    } catch {
-      /* silencioso — não bloqueia o save do motorista */
     }
+
+    return erros;
   };
 
   return { cartoesFrota, selectedCartao, setSelectedCartao, syncCartoes };

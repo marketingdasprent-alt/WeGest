@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Car, CheckCircle, AlertTriangle, KeyRound, Wrench, Ban } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -7,10 +8,20 @@ interface ViaturaStatsCardsProps {
   stats: ViaturaStatsSummary;
   activeFilter?: string;
   onFilter?: (status: string) => void;
+  /** O âmbito do cargo pode dispensar o cartão Inativas (ex.: Gestor TVDE). */
+  semInativas?: boolean;
+  /** Cartões extra na mesma grelha, a seguir aos de estado (ex.: o SLOT no âmbito TVDE). */
+  children?: ReactNode;
 }
 
-export function ViaturaStatsCards({ stats, activeFilter, onFilter }: ViaturaStatsCardsProps) {
-  const cards = [
+export function ViaturaStatsCards({
+  stats,
+  activeFilter,
+  onFilter,
+  semInativas = false,
+  children,
+}: ViaturaStatsCardsProps) {
+  const todos = [
     {
       title: 'Total de Viaturas',
       value: stats.total,
@@ -62,8 +73,10 @@ export function ViaturaStatsCards({ stats, activeFilter, onFilter }: ViaturaStat
       filter: 'inativo',
     },
   ];
+  const cards = semInativas ? todos.filter((c) => c.filter !== 'inativo') : todos;
 
   return (
+    // 6 colunas fixas, como os cartões por tipo — larguras iguais nas duas linhas.
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
       {cards.map((card) => {
         const isActive = activeFilter === card.filter;
@@ -93,6 +106,7 @@ export function ViaturaStatsCards({ stats, activeFilter, onFilter }: ViaturaStat
           </Card>
         );
       })}
+      {children}
     </div>
   );
 }

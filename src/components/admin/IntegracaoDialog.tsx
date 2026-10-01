@@ -37,27 +37,13 @@ import {
   type EstadoCredenciaisBolt,
   payloadCriacaoBolt,
 } from './integracoes/boltIntegracao';
+import { buildRobotIntegrationPayload } from './integracoes/robotIntegrationPayload';
 import { presetToCronExpression } from '@/lib/cronPresets';
 import { cn } from '@/lib/utils';
 import { FATURACAO_PROVIDER_OPTIONS } from '@/lib/faturacaoProviders';
 
-// A conta Apify é do WeGest, não de cada org — o token/actor_id de cada
-// plataforma são partilhados por todas as empresas (ver migration
-// apify_credenciais_partilhadas). Usado como fallback quando a org ainda não
-// tem nenhuma integração desta plataforma para herdar o token, e como fonte
-// preferida do actor_id (os `*_DEFAULTS` hardcoded ficam desatualizados
-// sempre que alguém corrige um actor_id só na BD).
-async function fetchApifyCredenciaisPartilhadas(
-  robotTargetPlatform: string
-): Promise<{ apify_actor_id: string; apify_api_token: string } | null> {
-  const { data, error } = await supabase.functions.invoke<{
-    apify_actor_id: string;
-    apify_api_token: string;
-  }>('apify-credenciais-partilhadas', { body: { robot_target_platform: robotTargetPlatform } });
-  if (error || !data) return null;
-  return data;
-}
-
+// A conta Apify é do WeGest. A Edge Function de criação associa a credencial
+// partilhada no servidor; o token nunca é lido ou transportado pelo browser.
 interface IntegracaoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -396,24 +382,11 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
       // a mesma forma das contas que já existem, para converter uma delas ser
       // só um UPDATE do auth_mode e nunca uma linha nova (ver boltIntegracao.ts).
       //
-      // O token Apify é best-effort aqui: a linha nasce em oauth, o robô não
-      // corre, e não faz sentido impedir a ligação à API por faltar um token de
-      // um robô que não vai ser usado. Guarda-se se existir.
+      // A linha nasce em oauth e não precisa de credenciais Apify.
       if (isBolt) {
         if (!boltCred.completo) {
           throw new Error(boltCred.motivo ?? 'Teste a ligação antes de criar a integração.');
         }
-
-        const [{ data: comToken }, apifyPartilhadoBolt] = await Promise.all([
-          supabase
-            .from('plataformas_configuracao')
-            .select('apify_api_token')
-            .in('plataforma', ['robot', 'via_verde'])
-            .eq('robot_target_platform', 'bolt')
-            .not('apify_api_token', 'is', null)
-            .limit(1),
-          fetchApifyCredenciaisPartilhadas('bolt'),
-        ]);
 
         const { error: boltError } = await supabase.from('plataformas_configuracao').insert(
           payloadCriacaoBolt({
@@ -422,10 +395,6 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
             clientSecret: boltCred.clientSecret,
             companyId: boltCred.companyId,
             companyName: boltCred.companyName,
-            apifyApiToken:
-              (comToken?.[0] as any)?.apify_api_token ??
-              apifyPartilhadoBolt?.apify_api_token ??
-              null,
           }) as any
         );
         if (boltError) throw boltError;
@@ -442,100 +411,25 @@ export const IntegracaoDialog: React.FC<IntegracaoDialogProps> = ({
         return;
       }
 
-      // Via Verde segue o fluxo de robot Apify abaixo (mesmo caminho de
-      // Uber/Bolt/BP/Repsol/EDP), incluindo a criação da via_verde_contas.
-      // O token Apify vem SEMPRE da configuração já existente em
-      // plataformas_configuracao (tabela protegida por RLS) — nunca de uma
-      // constante no código, que acabaria no bundle público de wegest.pt.
-      // Via Verde procura em plataforma='via_verde' e as restantes em
-      // plataforma='robot'; ambas gravam o robot_target_platform.
-      const [{ data: existingIntegrations, error: tokenLookupError }, apifyPartilhado] =
-        await Promise.all([
-          supabase
-            .from('plataformas_configuracao')
-            .select('apify_api_token')
-            .in('plataforma', ['robot', 'via_verde'])
-            // Sem este filtro, uma integração Via Verde nova podia herdar o
-            // token PARTILHADO do Uber/Bolt/BP/Repsol/EDP em vez do seu próprio
-            // token dedicado — plataforma='robot' sozinho não distingue entre
-            // plataformas, robot_target_platform sim.
-            .eq('robot_target_platform', defaults.robot_target_platform)
-            .not('apify_api_token', 'is', null)
-            .limit(1),
-          // A conta Apify é do WeGest, não da org — se esta org ainda não tem
-          // nenhuma integração desta plataforma, usa-se a credencial
-          // partilhada (mesma para todas as empresas) em vez de bloquear a
-          // criação com "Não há nenhum token Apify configurado".
-          fetchApifyCredenciaisPartilhadas(defaults.robot_target_platform),
-        ]);
+      // A criação de robots e da conta Via Verde acontece no servidor para a
+      // credencial partilhada nunca atravessar o browser.
+      const { data: insertedRows, error } = await supabase.functions.invoke<{
+        success: boolean;
+        id: string;
+        error?: string;
+      }>('integracao-robot-criar', {
+        body: buildRobotIntegrationPayload({
+          nome: formData.nome,
+          login: formData.login,
+          password: formData.password,
+          robotTargetPlatform: defaults.robot_target_platform,
+        }),
+      });
 
-      if (tokenLookupError) throw tokenLookupError;
-
-      const apifyApiToken: string | null =
-        (existingIntegrations?.[0] as any)?.apify_api_token ||
-        apifyPartilhado?.apify_api_token ||
-        null;
-
-      if (!apifyApiToken) {
+      if (error || !insertedRows?.success) {
         throw new Error(
-          `Não há nenhum token Apify configurado para ${selectedPlatform?.name ?? defaults.robot_target_platform}. ` +
-            'Peça o token ao administrador antes de criar esta integração.'
+          insertedRows?.error || error?.message || 'Não foi possível criar a integração'
         );
-      }
-
-      const insertData: Record<string, any> = {
-        nome: formData.nome,
-        plataforma: isViaVerde ? 'via_verde' : 'robot',
-        ativo: true,
-        // A credencial partilhada é a fonte validada/atual do actor_id; os
-        // valores por-omissão do frontend só servem de último recurso se a
-        // função partilhada falhar (ex.: offline).
-        apify_actor_id: apifyPartilhado?.apify_actor_id ?? defaults.apify_actor_id,
-        apify_api_token: apifyApiToken,
-        auth_mode: (defaults as any).auth_mode || 'password',
-        robot_target_platform: defaults.robot_target_platform,
-      };
-
-      if (!isViaVerde) {
-        insertData.webhook_url = (defaults as any).site_url;
-      }
-
-      insertData.client_id = formData.login;
-      insertData.client_secret = formData.password;
-      insertData.cookies_json = null;
-
-      const { data: insertedRows, error } = await supabase
-        .from('plataformas_configuracao')
-        .insert(insertData)
-        .select('id')
-        .single();
-
-      if (error) throw error;
-
-      // Via Verde: criar também a conta em via_verde_contas com as credenciais
-      // do portal — o robot-execute lê sync_email/sync_password desta tabela.
-      if (isViaVerde && insertedRows?.id) {
-        const { error: contaError } = await supabase.from('via_verde_contas').insert({
-          integracao_id: insertedRows.id,
-          nome_conta: formData.nome,
-          codigo_rac: 'IMPORTAR',
-          ftp_host: '',
-          ftp_utilizador: '',
-          ftp_password: '',
-          ftp_ativo: false,
-          sync_email: formData.login,
-          sync_password: formData.password,
-          sync_ativo: true,
-        });
-        if (contaError) {
-          console.error('Erro ao criar via_verde_contas:', contaError);
-          toast({
-            title: 'Aviso',
-            description:
-              'Integração criada mas a configuração da conta Via Verde falhou. Edite-a manualmente.',
-            variant: 'destructive',
-          });
-        }
       }
 
       if (formData.cron_schedule !== 'disabled' && insertedRows?.id) {

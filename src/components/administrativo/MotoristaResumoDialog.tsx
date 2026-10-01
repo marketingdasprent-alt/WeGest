@@ -5,7 +5,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
+import type { jsPDF } from 'jspdf';
+import {
+  montarMensagemResumo,
+  nomeFicheiroResumo,
+  linkWhatsApp,
+  SEGUNDOS_VALIDADE_LINK,
+} from './motorista-resumo/partilhaWhatsApp';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
+import { gerarCodigoLinkCurto, urlLinkCurto } from '@/lib/linkCurto';
 import { PrintSettingsPanel } from './motorista-resumo/sections/PrintSettingsPanel';
 import { ResumoReportContent } from './motorista-resumo/sections/ResumoReportContent';
 import { ResumoActionBar } from './motorista-resumo/sections/ResumoActionBar';
@@ -15,6 +23,7 @@ import { deriveResumoFinanceiro } from './motorista-resumo/resumoFinanceiro';
 import { generateResumoPrintHTML } from './motorista-resumo/generateResumoPrintHTML';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useOrgId } from '@/contexts/TenantContext';
+import { useGravarLiquidoSemanal } from '@/hooks/useGravarLiquidoSemanal';
 
 // Linha Gorjeta: dados sensíveis (rendimento pessoal do motorista) — só
 // visível para admins da org dona dos dados, nunca para motoristas.
@@ -107,7 +116,6 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     cartaoFrota,
     gestor,
     motoristaEmail,
-    motoristaTelefone,
     motoristaIban,
     extraCosts,
     outrasReceitas,
@@ -126,37 +134,48 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     saveSettings(next);
   };
 
-  if (!motorista) return null;
-
   /* ───────── computed values ───────── */
-  const isImportado = motorista.tem_recibo_importado === true;
-  const gorjetaBolt = isImportado ? 0 : motorista.gorjeta_bolt || 0;
-  const gorjetaUber = isImportado ? 0 : motorista.gorjeta_uber || 0;
+  // Este bloco corre mesmo com motorista===null (o guard fica mais abaixo,
+  // depois do useGravarLiquidoSemanal): esse hook não pode vir depois de um
+  // return condicional — React Rules of Hooks — ou o mesmo dialog já montado
+  // rebenta com "Rendered more hooks than during the previous render" ao
+  // passar de fechado para aberto (motorista null → objecto).
+  const isImportado = motorista?.tem_recibo_importado === true;
+  const gorjetaBolt = isImportado ? 0 : motorista?.gorjeta_bolt || 0;
+  const gorjetaUber = isImportado ? 0 : motorista?.gorjeta_uber || 0;
   const receitas = {
-    bolt: motorista.faturado_bolt,
-    uber: motorista.faturado_uber,
+    bolt: motorista?.faturado_bolt || 0,
+    uber: motorista?.faturado_uber || 0,
     outras_receitas: isImportado ? 0 : outrasReceitas || 0,
   };
   const totalReceitas = receitas.bolt + receitas.uber + receitas.outras_receitas;
 
   const despesas = isImportado
     ? {
-        aluguer: motorista.aluguer || 0,
-        combustivel: motorista.combustivel || 0,
-        portagens: motorista.portagens || 0,
-        outros_custos: motorista.outros_custos || 0,
+        aluguer: motorista?.aluguer || 0,
+        combustivel: motorista?.combustivel || 0,
+        portagens: motorista?.portagens || 0,
+        outros_custos: motorista?.outros_custos || 0,
         caucao: 0,
         seguros: 0,
-        reparacoes: motorista.reparacoes || 0,
+        // recibos_importados (CSV) não distingue slot de outros custos — fica
+        // dentro de outros_custos, tal como sempre esteve neste ramo.
+        slot: 0,
+        reparacoes: motorista?.reparacoes || 0,
       }
     : {
-        aluguer: motorista.aluguer || 0,
-        combustivel: motorista.combustivel || 0,
-        portagens: motorista.portagens || 0,
+        aluguer: motorista?.aluguer || 0,
+        combustivel: motorista?.combustivel || 0,
+        portagens: motorista?.portagens || 0,
         outros_custos: extraCosts.outros,
         caucao: extraCosts.caucao,
         seguros: extraCosts.seguros,
-        reparacoes: motorista.reparacoes || 0,
+        // Categoria 'slot_mensal' — linha própria, não vai para outros_custos.
+        // Ver movimentosMotorista.ts. NÃO confundir com `totalSlot` abaixo, que
+        // é o aluguer pro-rata dos períodos de slot (dias × tarifa) — duas
+        // coisas diferentes com nomes parecidos.
+        slot: extraCosts.slot,
+        reparacoes: motorista?.reparacoes || 0,
       };
   const totalSlot = slotPeriodos.reduce((s, p) => s + p.custo, 0);
   const totalDespesas = Object.values(despesas).reduce((a, b) => a + b, 0);
@@ -179,14 +198,28 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
   const { receitasExibidas, receitaAjustada, totalAReceber, liquido, gorjeta } =
     deriveResumoFinanceiro({
       isImportado,
-      reciboVerde: motorista.recibo_verde,
+      reciboVerde: motorista?.recibo_verde ?? false,
       receitas,
       gorjetaBolt,
       gorjetaUber,
       totalDespesas,
       valoresSemanaAnterior,
-      liquidoImportado: motorista.liquido,
+      liquidoImportado: motorista?.liquido ?? 0,
     });
+
+  // Guarda o líquido desta semana, tal como aparece no relatório. Grava o
+  // valor já calculado acima — não o recalcula — para o histórico nunca
+  // contradizer o que foi mostrado. Ver useGravarLiquidoSemanal.
+  useGravarLiquidoSemanal({
+    motoristaId: motorista?.motorista_id,
+    motoristaNome: motorista?.driver_name,
+    liquido,
+    semanaInicio: dateRange.from,
+    semanaFim: dateRange.to,
+    pronto: open && !loading && !!motorista,
+  });
+
+  if (!motorista) return null;
 
   const fmt = (value: number) =>
     new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(value);
@@ -261,27 +294,108 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     w.document.close();
   };
 
-  const handleSendWhatsApp = () => {
-    const slotDetalhe =
-      slotPeriodos.length > 0
-        ? '\n\n🚗 *Aluguer Slot:*\n' +
-          slotPeriodos
-            .map(
-              (p) =>
-                `  ${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias}d × ${fmt(p.taxaDiaria)}/d = ${fmt(p.custo)}`
-            )
-            .join('\n') +
-          (slotPeriodos.length > 1 ? `\n  Total Slot: ${fmt(totalSlot)}` : '')
-        : '';
-    const message =
-      `*RESUMO FINANCEIRO - WeGest*\n\nOlá *${motorista.driver_name}*,\n` +
-      `Período: ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}\n\n` +
-      `💰 *Receitas:* ${fmt(isImportado ? totalReceitas : receitaAjustada)}\n💸 *Despesas:* ${fmt(totalDespesas)}${slotDetalhe}\n🏁 *Líquido Final:* ${fmt(liquido)}\n\nSe tiver alguma dúvida, por favor contacte-nos.`;
-    const phone = motoristaTelefone?.replace(/\s/g, '') || '';
-    window.open(
-      `https://wa.me/${phone.startsWith('+') ? phone : '+351' + phone}?text=${encodeURIComponent(message)}`,
-      '_blank'
-    );
+  // Um só sítio a montar o PDF: o envio à conta e o WhatsApp mandavam o mesmo
+  // resumo, e antes o payload estava escrito à mão só dentro do envio à conta.
+  const construirPDF = () =>
+    generateFinanceiroPDF({
+      driver_name: motorista.driver_name,
+      matricula,
+      cartaoFrota,
+      dateRange,
+      recibo_verde: motorista.recibo_verde,
+      receitas: {
+        bolt: receitasExibidas.bolt,
+        uber: receitasExibidas.uber,
+        outras_receitas: receitasExibidas.outras_receitas,
+        total: isImportado ? totalReceitas : receitaAjustada,
+      },
+      despesas: {
+        aluguer: despesas.aluguer,
+        combustivel: despesas.combustivel,
+        portagens: despesas.portagens,
+        reparacoes: despesas.reparacoes,
+        // generateFinanceiroPDF só tem uma linha "outros" (sem slot próprio)
+        // — dobra-se aqui como já acontecia com caução/seguros. O total
+        // continua certo; só não é discriminado neste PDF em concreto.
+        outros: despesas.outros_custos + despesas.caucao + despesas.seguros + despesas.slot,
+        total: totalDespesas,
+      },
+      resumo: {
+        totalAReceber,
+        ajuste: motorista.recibo_verde ? undefined : totalAReceber - liquido,
+        liquido,
+      },
+      logoSrc,
+    });
+
+  /**
+   * Sobe o PDF e devolve o link curto (`wegest.pt/r/<codigo>`). Null se não
+   * der — o envio segue à mesma, só com os totais, em vez de morrer por causa
+   * do anexo.
+   *
+   * O URL assinado do Supabase leva um JWT de ~300 caracteres e ocupava metade
+   * da mensagem; aqui guarda-se o destino em `links_curtos` e é a edge function
+   * `link-curto` que assina o ficheiro no momento em que o link é aberto.
+   */
+  const publicarPdfDoResumo = async (pdf: jsPDF, nomeFicheiro: string): Promise<string | null> => {
+    if (!motorista.motorista_id || !orgId) return null;
+    const caminho = `${motorista.motorista_id}/${nomeFicheiro}`;
+    const { error: erroUpload } = await supabase.storage
+      .from('motorista-recibos')
+      // `upsert` porque reenviar o mesmo resumo é normal: sem isto, a segunda
+      // tentativa rebentava com "resource already exists".
+      .upload(caminho, pdf.output('blob'), { upsert: true, contentType: 'application/pdf' });
+    if (erroUpload) return null;
+
+    const codigo = gerarCodigoLinkCurto();
+    const expiraEm = new Date(Date.now() + SEGUNDOS_VALIDADE_LINK * 1000);
+    const { error: erroLink } = await supabase.from('links_curtos').insert({
+      codigo,
+      org_id: orgId,
+      bucket: 'motorista-recibos',
+      caminho,
+      expira_em: expiraEm.toISOString(),
+    });
+    if (erroLink) return null;
+
+    return urlLinkCurto(codigo);
+  };
+
+  const handleSendWhatsApp = async () => {
+    try {
+      setIsSending(true);
+      const nomeFicheiro = nomeFicheiroResumo(dateRange.from);
+      const pdf = await construirPDF();
+      // O link vai no corpo da mensagem, por isso tem de existir antes dela.
+      const linkPdf = await publicarPdfDoResumo(pdf, nomeFicheiro);
+
+      const texto = montarMensagemResumo({
+        nome: motorista.driver_name,
+        inicio: dateRange.from,
+        fim: dateRange.to,
+        receitas: isImportado ? totalReceitas : receitaAjustada,
+        despesas: totalDespesas,
+        liquido,
+        slotPeriodos,
+        fmt,
+        linkPdf: linkPdf ?? undefined,
+      });
+
+      window.open(linkWhatsApp(texto), '_blank', 'noopener');
+
+      if (!linkPdf) {
+        // Falhou o upload: o resumo não fica sem saída — desce para o disco
+        // para poder ser anexado à mão.
+        pdf.save(nomeFicheiro);
+        toast.warning(
+          'Não foi possível criar o link do PDF. O ficheiro está nas transferências — anexa-o à conversa.'
+        );
+      }
+    } catch (erro: any) {
+      toast.error('Não foi possível preparar o resumo: ' + (erro?.message || String(erro)));
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleOpenEmail = () => {
@@ -295,33 +409,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     }
     try {
       setIsSending(true);
-      const pdf = await generateFinanceiroPDF({
-        driver_name: motorista.driver_name,
-        matricula,
-        cartaoFrota,
-        dateRange,
-        recibo_verde: motorista.recibo_verde,
-        receitas: {
-          bolt: receitasExibidas.bolt,
-          uber: receitasExibidas.uber,
-          outras_receitas: receitasExibidas.outras_receitas,
-          total: isImportado ? totalReceitas : receitaAjustada,
-        },
-        despesas: {
-          aluguer: despesas.aluguer,
-          combustivel: despesas.combustivel,
-          portagens: despesas.portagens,
-          reparacoes: despesas.reparacoes,
-          outros: despesas.outros_custos + despesas.caucao + despesas.seguros,
-          total: totalDespesas,
-        },
-        resumo: {
-          totalAReceber,
-          ajuste: motorista.recibo_verde ? undefined : totalAReceber - liquido,
-          liquido,
-        },
-        logoSrc,
-      });
+      const pdf = await construirPDF();
 
       const fileName = `resumo_${motorista.motorista_id}_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`;
       const pdfBlob = pdf.output('blob');

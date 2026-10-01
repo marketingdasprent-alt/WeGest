@@ -13,7 +13,7 @@ function escapeHtml(value: string): string {
 }
 
 export function contactInquiryTemplate(input: ContactInquiry): { subject: string; html: string } {
-  const subject = `Novo pedido de contacto — ${input.nome}`;
+  const subject = `Novo pedido de contacto: ${input.nome}`;
 
   const html = emailLayout({
     titulo: 'Novo pedido de contacto (site)',
@@ -26,7 +26,7 @@ export function contactInquiryTemplate(input: ContactInquiry): { subject: string
         input.mensagem
           ? `<p><strong>Mensagem:</strong></p>
       <p style="white-space: pre-wrap;">${escapeHtml(input.mensagem)}</p>`
-          : '<p><em>Sem mensagem — pedido de contacto direto.</em></p>'
+          : '<p><em>Sem mensagem: pedido de contacto direto.</em></p>'
       }
     `,
     rodape: 'Enviado a partir do formulário "Fale connosco" do site WeGest.',

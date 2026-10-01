@@ -239,7 +239,15 @@ const LinhaCartao: React.FC<{
         </div>
       </div>
 
-      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+      {/* `modal` porque este Popover vive dentro de um Dialog.
+          O Dialog do Radix tranca o scroll com react-remove-scroll e autoriza
+          apenas o próprio conteúdo (`shards: [contentRef]`). O conteúdo do
+          Popover vai por portal para o body, fica fora dessa árvore, e a roda
+          do rato era engolida: a lista mostrava barra de scroll e não mexia.
+          Com `modal`, o Popover monta a sua própria tranca tendo o seu
+          conteúdo como raiz, e volta a deixar rodar lá dentro.
+          Mesmo remédio já usado em MotoristaFormDadosPessoais.tsx. */}
+      <Popover open={popoverOpen} onOpenChange={setPopoverOpen} modal>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-1.5 shrink-0" disabled={associando}>
             {associando ? (

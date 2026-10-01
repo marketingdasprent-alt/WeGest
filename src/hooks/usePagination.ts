@@ -1,28 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
-/** Opções de tamanho de página padrão (estilo Viaturas). 'all' = mostrar tudo. */
 export const PAGE_SIZE_OPTIONS = ['10', '25', '50', '100', 'all'] as const;
 export type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
 
-/**
- * Paginação client-side simples sobre uma lista já filtrada/ordenada.
- * Corta o array em páginas (`pageItems`) para não renderizar centenas/milhares
- * de linhas de uma vez. Passa um `resetKey` (assinatura dos filtros/pesquisa)
- * para voltar à 1ª página quando os filtros mudam — sem reset em refetch.
- *
- * O tamanho de página é selecionável: `pageSizeStr`/`setPageSizeStr` expõem o
- * valor atual (uma das `PAGE_SIZE_OPTIONS`, incl. 'all' = mostrar tudo). O
- * `initialPageSize` define o valor por defeito (mantém-se '50' para não alterar
- * o comportamento das listas que já usavam o pageSize fixo de 50).
- *
- * `persistKey` (opcional): quando definido, a página atual é lembrada em
- * sessionStorage por rota da lista. Assim, ao abrir um detalhe
- * (contrato/reserva/viatura/...) e voltar — pelo botão "Voltar" (que navega
- * para um caminho fixo), pela seta do browser ou pelo menu — a lista reabre na
- * mesma página em vez de saltar para a 1ª. Sem `persistKey`, a página vive só
- * em memória (comportamento de sempre).
- */
 export function usePagination<T>(
   items: T[],
   initialPageSize: PageSizeOption | number = 50,
@@ -30,7 +11,7 @@ export function usePagination<T>(
   persistKey?: string
 ) {
   const { pathname } = useLocation();
-  // Chave por rota da lista → cada lista lembra a sua própria página.
+
   const storageKey = persistKey ? `pg:${pathname}:${persistKey}` : null;
 
   const readStored = (): number => {

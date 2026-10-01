@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { periodosDeContratos, type ContratoParaPeriodo } from './periodosDoContrato';
+import {
+  COLUNAS_CONTRATO_PARA_PERIODO,
+  periodosDeContratos,
+  type ContratoParaPeriodo,
+} from './periodosDoContrato';
 import { buildSlotPeriodos } from './slotPeriodos';
 
 const contratoBase: ContratoParaPeriodo = {
@@ -8,6 +12,7 @@ const contratoBase: ContratoParaPeriodo = {
   data_fim: '2026-09-23',
   valor_total_manual: '275.00',
   tarifa_id: 'tarifa-tvde',
+  regime: 'tvde',
   estado_operacional: 'em_curso',
   substituido_em: null,
   viaturas: { matricula: 'BT-21-UN', modelo_id: 'm1', grupo_id: 'g1' },
@@ -24,12 +29,39 @@ describe('periodosDeContratos', () => {
     expect(periodos[0].data_fim).toBe('2026-09-23');
   });
 
-  it('o preço acordado no contrato manda sobre a tabela de tarifas', () => {
+  it('em TVDE ignora o valor_total_manual: é a renda do cliente, não a do condutor', () => {
+    // O campo guarda o que se factura ao cliente no período — mensal, nos
+    // contratos de renovação mensal. A conta-corrente do condutor é semanal e
+    // sai da tabela, que é o que a edge function `fechar-semana-financeiro`
+    // lança em motorista_resumo_semanal. O ecrã tem de dizer o mesmo.
     const { periodos, estimado } = periodosDeContratos([contratoBase], {
       porTarifaModelo: new Map([['tarifa-tvde|m1', 325]]),
     });
-    expect(periodos[0].preco_semana).toBe(275);
+    expect(periodos[0].preco_semana).toBe(325);
     expect(estimado).toBe(false);
+  });
+
+  it('caso Ricardo #736: 1400 €/mês ao cliente dá 300 €/semana ao condutor', () => {
+    const { periodos } = periodosDeContratos(
+      [
+        {
+          ...contratoBase,
+          data_inicio: '2026-09-01',
+          data_fim: '2026-10-01',
+          valor_total_manual: '1400.00',
+        },
+      ],
+      { porTarifaModelo: new Map([['tarifa-tvde|m1', 300]]) }
+    );
+    const slots = buildSlotPeriodos(
+      periodos,
+      new Date('2026-09-14T00:00:00Z'),
+      new Date('2026-09-20T00:00:00Z'),
+      new Map()
+    );
+    // Semana inteira dentro do contrato: custa exactamente a tarifa semanal.
+    expect(slots[0].dias).toBe(7);
+    expect(slots[0].custo).toBeCloseTo(300, 2);
   });
 
   it('sem valor acordado, usa a tarifa QUE O CONTRATO indica', () => {
@@ -50,13 +82,29 @@ describe('periodosDeContratos', () => {
     expect(estimado).toBe(true);
   });
 
-  it('um preço de 0 é um preço legítimo, não uma ausência', () => {
+  it('em rent-a-car um preço de 0 é um preço legítimo, não uma ausência', () => {
     const { periodos, estimado } = periodosDeContratos(
-      [{ ...contratoBase, valor_total_manual: 0 }],
+      [{ ...contratoBase, regime: 'rent_a_car', valor_total_manual: 0 }],
       { porGrupo: { g1: 200 } }
     );
     expect(periodos[0].preco_semana).toBe(0);
     expect(estimado).toBe(false);
+  });
+
+  it('em rent-a-car o valor_total_manual é o total do período, rateado à semana', () => {
+    // Um mês a 1400 € não são 1400 €/semana. Mesma conta que a edge function
+    // faz com `valorTotalManualRentACar` sobre `diasTotaisContrato`, incluindo
+    // a contagem inclusiva de dias (01/09→01/10 são 31 dias, não 30).
+    const { periodos } = periodosDeContratos([
+      {
+        ...contratoBase,
+        regime: 'rent_a_car',
+        data_inicio: '2026-09-01',
+        data_fim: '2026-10-01',
+        valor_total_manual: '1400.00',
+      },
+    ]);
+    expect(periodos[0].preco_semana).toBeCloseTo((1400 / 31) * 7, 2);
   });
 
   it('ignora um contrato cancelado que nunca foi substituído', () => {
@@ -81,8 +129,10 @@ describe('periodosDeContratos', () => {
     expect(periodos).toHaveLength(0);
   });
 
-  it('caso Paulo Badalo: contrato 24/08→23/09 a 275 €, semana 24–30/08', () => {
-    const { periodos } = periodosDeContratos([contratoBase]);
+  it('caso Paulo Badalo: contrato 24/08→23/09 a 275 €/semana, semana 24–30/08', () => {
+    const { periodos } = periodosDeContratos([contratoBase], {
+      porTarifaModelo: new Map([['tarifa-tvde|m1', 275]]),
+    });
     const slots = buildSlotPeriodos(
       periodos,
       new Date('2026-08-24T00:00:00Z'),
@@ -94,5 +144,27 @@ describe('periodosDeContratos', () => {
     expect(slots[0].dias).toBe(6);
     expect(slots[0].custo).toBeCloseTo((275 / 7) * 6, 2);
     expect(slots[0].matricula).toBe('BT-21-UN');
+  });
+});
+
+describe('COLUNAS_CONTRATO_PARA_PERIODO', () => {
+  it('pede todas as colunas que periodosDeContratos lê do contrato', () => {
+    // Caso real (Ricardo, BN-30-SE, semana 14–20/09): o select de Contas/Resumo
+    // não trazia `regime`, o contrato TVDE de 1400 €/mês caiu no ramo
+    // rent-a-car e saiu 1400 / 31 × 7 = 316,13 € em vez dos 300 € da tarifa.
+    const colunas = COLUNAS_CONTRATO_PARA_PERIODO.split(/,\s*(?![^()]*\))/);
+    for (const coluna of [
+      'viatura_id',
+      'data_inicio',
+      'data_fim',
+      'valor_total_manual',
+      'tarifa_id',
+      'regime',
+      'estado_operacional',
+      'substituido_em',
+      'viaturas(matricula, grupo_id, modelo_id)',
+    ]) {
+      expect(colunas).toContain(coluna);
+    }
   });
 });

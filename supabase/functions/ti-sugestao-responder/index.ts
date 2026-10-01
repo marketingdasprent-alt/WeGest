@@ -1,6 +1,6 @@
 // Resposta do autor a uma sugestão: ajudou ou não. verify_jwt = false, o autor
 // não tem conta; a autorização é o acesso_token do ticket.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

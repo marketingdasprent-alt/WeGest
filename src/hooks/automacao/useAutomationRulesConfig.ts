@@ -1,16 +1,39 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
+import { CHAVE_ESTATISTICAS_POR_REGRA, type RegraEstatistica } from './useAutomacaoStats';
 
 export function useToggleAutomationRule() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
-      const { error } = await supabase.from('automation_rules').update({ ativo }).eq('id', id);
+      // `.select()` deteta UPDATE filtrado por RLS que devolveria `error: null`.
+      const { data, error } = await supabase
+        .from('automation_rules')
+        .update({ ativo })
+        .eq('id', id)
+        .select('id');
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error('A regra não foi actualizada — sem permissão ou já não existe.');
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automacao-estatisticas-por-regra'] });
+    // A vista de estatísticas é cara; mantém o interruptor responsivo até ao refetch.
+    onMutate: async ({ id, ativo }) => {
+      await queryClient.cancelQueries({ queryKey: CHAVE_ESTATISTICAS_POR_REGRA });
+      const anterior = queryClient.getQueryData<RegraEstatistica[]>(CHAVE_ESTATISTICAS_POR_REGRA);
+      queryClient.setQueryData<RegraEstatistica[]>(CHAVE_ESTATISTICAS_POR_REGRA, (regras) =>
+        regras?.map((r) => (r.rule_id === id ? { ...r, ativo } : r))
+      );
+      return { anterior };
+    },
+    onError: (_erro, _variaveis, contexto) => {
+      if (contexto?.anterior) {
+        queryClient.setQueryData(CHAVE_ESTATISTICAS_POR_REGRA, contexto.anterior);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: CHAVE_ESTATISTICAS_POR_REGRA });
     },
   });
 }
@@ -20,34 +43,23 @@ export interface AutomationRuleAcaoConfig {
   titulo: string;
   destinatarios_cargo_ids?: string[];
   destinatarios_estrategia?: string;
-  /** 'grupo' (default): todos os utilizadores dos destinatarios_cargo_ids.
-   * 'individual': só quem estiver em destinatarios_user_ids (sempre um
-   * subconjunto de gente pertencente aos cargos escolhidos). */
+  /** `individual` limita os destinatários aos utilizadores dos cargos selecionados. */
   destinatarios_modo?: 'grupo' | 'individual';
   destinatarios_user_ids?: string[];
   enviar_email?: boolean;
-  /** Agrupa num resumo diário (1 email/dia por pessoa) em vez de enviar
-   * logo — evita repetir o incidente de 1 email por item quando um
-   * backlog grande é processado de uma vez. */
+  /** Evita um email por item quando um backlog é processado. */
   enviar_email_digest?: boolean;
   /** Endereços fora da WeGest — só válido numa acção de email (Fase 2). */
   destinatarios_emails_livres?: string[];
 }
 
-/**
- * A configuração de uma acção interna, exactamente como o motor a espera.
- *
- * `accao` é o id do catálogo; `campo` só existe nas acções que escrevem num
- * campo. Os nomes são os do servidor — traduzi-los aqui só criava um formato
- * que mais ninguém entende.
- */
+/** Usa identificadores do catálogo, consumidos diretamente pelo motor. */
 export interface AcaoInternaConfig {
   accao: string;
   campo?: string;
   valor: string;
 }
 
-/** Uma condição com o valor já no tipo que o catálogo declarou. */
 export interface CondicaoTipada {
   campo: string;
   operador: string;
@@ -58,18 +70,12 @@ export interface AutomationRuleConfig {
   id: string;
   nome: string;
   event_type: string;
-  /** Array de { campo, operador, valor }. Em produção é um objecto vazio na
-   * maioria das regras — o motor só as avalia se forem array. */
   condicoes: unknown;
-  /** 'notificacao' | 'automacao_interna' | 'webhook'. Sem isto o editor não
-   * sabe reconstruir uma automação interna ao abri-la. */
   acao_tipo: string;
   acao_config: AutomationRuleAcaoConfig;
   cooldown_minutos: number;
 }
 
-/** Config completa de UMA regra (acao_config + cooldown) — só pedida quando
- * o editor abre, a estatísticas por regra não a inclui. */
 export function useAutomationRuleConfig(ruleId: string | null) {
   return useQuery({
     queryKey: ['automation-rule-config', ruleId],
@@ -91,10 +97,7 @@ export interface Cargo {
   nome: string;
 }
 
-/** Cargos da organização atual — RLS já limita a query ao org do
- * utilizador autenticado (mesmo padrão de useRBAC.ts), sem filtro
- * explícito aqui. Usado para escolher diretamente que grupos recebem
- * uma automação, em vez de passar por uma permissão como proxy. */
+/** A RLS limita os cargos à organização do utilizador autenticado. */
 export function useCargosDisponiveis() {
   return useQuery({
     queryKey: ['cargos-disponiveis'],
@@ -117,20 +120,13 @@ export interface UtilizadorPorCargo {
   cargo_id: string;
 }
 
-/** Perfil como vem da base de dados: `nome` e `email` são nullable. */
 interface PerfilCru {
   id: string;
   nome: string | null;
   email: string | null;
 }
 
-/**
- * Cola o cargo a cada perfil e garante que `nome` é sempre uma string.
- *
- * O modal de configuração faz `iniciais(u.nome)`, que chama `nome.trim()` — um
- * perfil sem nome deitava abaixo o modal inteiro, não só aquela linha. Cai para
- * o email porque é o que identifica a pessoa a seguir ao nome.
- */
+/** O fallback impede que perfis sem nome quebrem o modal de configuração. */
 export function utilizadoresPorCargo(
   perfis: PerfilCru[],
   cargoPorUser: Record<string, string>
@@ -143,11 +139,7 @@ export function utilizadoresPorCargo(
   }));
 }
 
-/** Utilizadores pertencentes a um ou mais cargos — para o admin poder
- * escolher pessoas específicas dentro de um cargo, em vez do grupo
- * inteiro. Segue o mesmo padrão em 2 passos de UsersTab.tsx: cargo_id
- * real e por-org vive em user_organizacoes, não em profiles.cargo_id
- * (legado single-org). */
+/** O cargo por organização vive em `user_organizacoes`, não no campo legado de perfil. */
 export function useUtilizadoresPorCargo(cargoIds: string[]) {
   return useQuery({
     queryKey: ['utilizadores-por-cargo', cargoIds],
@@ -166,8 +158,6 @@ export function useUtilizadoresPorCargo(cargoIds: string[]) {
         .in('id', userIds);
       if (pErr) throw pErr;
 
-      // `cargo_id` é nullable na tabela; o `.in()` acima já exclui os nulos,
-      // mas o tipo não o sabe — e um Record com null lá dentro passava adiante.
       const cargoPorUser: Record<string, string> = {};
       for (const m of memberships) {
         if (m.cargo_id) cargoPorUser[m.user_id] = m.cargo_id;
@@ -189,14 +179,10 @@ export function useAtualizarConfigRegra() {
       condicoes,
     }: {
       id: string;
-      /** Omitir mantém o tipo actual — é o caso das regras de notificação. */
       acaoTipo?: string;
       acaoConfig: AutomationRuleAcaoConfig | AcaoInternaConfig;
       cooldownMinutos: number;
-      /** Só enviado por quem edita condições; omitir deixa-as intactas.
-       * `valor` é o valor JSON já tipado — número fica número, boolean fica
-       * boolean. Converter para texto aqui reintroduzia o bug que a tipagem
-       * do catálogo existe para fechar. */
+      /** Omitir preserva condições; valores mantêm o tipo declarado. */
       condicoes?: CondicaoTipada[];
     }) => {
       const alteracao: {
@@ -209,8 +195,7 @@ export function useAtualizarConfigRegra() {
         cooldown_minutos: cooldownMinutos,
       };
       if (acaoTipo) alteracao.acao_tipo = acaoTipo;
-      // Omitir e enviar [] são coisas diferentes: quem não edita condições não
-      // pode apagá-las sem saber.
+      // Omitir e enviar `[]` têm semânticas distintas na atualização.
       if (condicoes) alteracao.condicoes = condicoes as unknown as Json;
 
       const { error } = await supabase.from('automation_rules').update(alteracao).eq('id', id);
@@ -229,10 +214,7 @@ export interface AutomationRuleConfigComGrupo extends AutomationRuleConfig {
   org_id: string;
 }
 
-/** Todas as regras-irmãs de UM grupo — dado o id de qualquer uma delas.
- * Duas idas ao servidor: primeiro o grupo_id dessa regra, depois todas as
- * que o partilham. Aceitável aqui — corre só ao abrir o editor, não num
- * caminho quente. */
+/** A consulta dupla só ocorre ao abrir o editor, fora do caminho crítico. */
 export function useGrupoDeRegras(ruleId: string | null) {
   return useQuery({
     queryKey: ['grupo-de-regras', ruleId],
@@ -259,22 +241,36 @@ export function useGrupoDeRegras(ruleId: string | null) {
 }
 
 export interface AccaoParaGravar {
-  /** Presente quando a acção já existe na BD (nó hidratado); ausente para
-   * uma acção nova arrastada nesta sessão. */
   id?: string;
-  /** Sempre conhecido: `configsDoFluxo` já resolve o tipo de cada acção —
-   * ao contrário de `useAtualizarConfigRegra`, aqui não há "omitir para
-   * manter o tipo actual". */
   acaoTipo: string;
   acaoConfig: AutomationRuleAcaoConfig | AcaoInternaConfig;
   cooldownMinutos: number;
   condicoes?: CondicaoTipada[];
 }
 
-/** Sincroniza um conjunto de acções com as regras-irmãs que já existem na
- * BD: as que têm `id` actualizam; as que não têm criam-se com o mesmo
- * `grupo_id`; as regras-irmãs que já existiam e não aparecem na lista nova
- * são apagadas. */
+/** Ações novas exigem código, template e título antes de o servidor as aceitar. */
+export function prepararAccaoNova(
+  accao: AccaoParaGravar,
+  contexto: { eventType: string; nome: string }
+): { codigo: string; acaoConfig: AccaoParaGravar['acaoConfig'] } {
+  // O sufixo aleatório mantém o código único por organização.
+  const codigo = `${contexto.eventType}.${accao.acaoTipo}.${crypto.randomUUID().slice(0, 8)}`;
+
+  if (accao.acaoTipo !== 'email' && accao.acaoTipo !== 'notificacao') {
+    return { codigo, acaoConfig: accao.acaoConfig };
+  }
+
+  const config = accao.acaoConfig as AutomationRuleAcaoConfig;
+  return {
+    codigo,
+    acaoConfig: {
+      ...config,
+      template_codigo: config.template_codigo || codigo,
+      titulo: config.titulo || contexto.nome,
+    } as unknown as AccaoParaGravar['acaoConfig'],
+  };
+}
+
 export function useSincronizarGrupo() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -291,41 +287,54 @@ export function useSincronizarGrupo() {
       eventType: string;
       nome: string;
       acoes: AccaoParaGravar[];
-      /** Todos os ids que este grupo tinha ANTES desta gravação — o que
-       * sobrar depois de tirar os que `acoes` ainda referencia é o que se
-       * apaga. */
       idsExistentes: string[];
     }) => {
       const idsMantidos = new Set(acoes.map((a) => a.id).filter(Boolean));
       const idsParaApagar = idsExistentes.filter((id) => !idsMantidos.has(id));
 
       for (const accao of acoes) {
-        const alteracao = {
-          acao_config: accao.acaoConfig as unknown as Json,
-          acao_tipo: accao.acaoTipo,
-          cooldown_minutos: accao.cooldownMinutos,
-          ...(accao.condicoes ? { condicoes: accao.condicoes as unknown as Json } : {}),
-        };
-
         if (accao.id) {
           const { error } = await supabase
             .from('automation_rules')
-            .update(alteracao)
+            .update({
+              acao_config: accao.acaoConfig as unknown as Json,
+              acao_tipo: accao.acaoTipo,
+              cooldown_minutos: accao.cooldownMinutos,
+              ...(accao.condicoes ? { condicoes: accao.condicoes as unknown as Json } : {}),
+            })
             .eq('id', accao.id);
           if (error) throw error;
-        } else {
-          // codigo tem de ser único por org — sufixo aleatório, como o
-          // padrão já usado pelas regras gémeas da divisão de email.
-          const { error } = await supabase.from('automation_rules').insert({
-            org_id: orgId,
-            grupo_id: grupoId,
-            codigo: `${eventType}.${accao.acaoTipo}.${crypto.randomUUID().slice(0, 8)}`,
-            nome,
-            event_type: eventType,
-            ...alteracao,
-          });
-          if (error) throw error;
+          continue;
         }
+
+        const { codigo: codigoNovo, acaoConfig } = prepararAccaoNova(accao, { eventType, nome });
+
+        // Cria o template antes do editor tentar atualizar o corpo do email.
+        if (accao.acaoTipo === 'email') {
+          const { error: erroTemplate } = await supabase.from('notification_templates').insert({
+            org_id: orgId,
+            codigo: (acaoConfig as AutomationRuleAcaoConfig).template_codigo,
+            canal: 'email',
+            idioma: 'pt-PT',
+            assunto: nome,
+            corpo_template: '',
+            corpo_formato: 'text',
+          });
+          if (erroTemplate) throw erroTemplate;
+        }
+
+        const { error } = await supabase.from('automation_rules').insert({
+          org_id: orgId,
+          grupo_id: grupoId,
+          codigo: codigoNovo,
+          nome,
+          event_type: eventType,
+          acao_config: acaoConfig as unknown as Json,
+          acao_tipo: accao.acaoTipo,
+          cooldown_minutos: accao.cooldownMinutos,
+          ...(accao.condicoes ? { condicoes: accao.condicoes as unknown as Json } : {}),
+        });
+        if (error) throw error;
       }
 
       if (idsParaApagar.length > 0) {
@@ -340,17 +349,8 @@ export function useSincronizarGrupo() {
   });
 }
 
-/**
- * Botão "Correr agora": dispara manualmente os scans (expirações de
- * viatura/motorista, renovação de renting, cobranças atrasadas) e o
- * Rule Engine/Executor, em vez de esperar o próximo ciclo do cron.
- * Rate limit de 5 min é imposto no servidor (RPC) — este hook só reflete
- * o erro que vier de lá.
- */
-/** O resultado de `testar_regra_automacao` — um disparo real da regra. */
 export interface ResultadoTesteRegra {
   run_id: string;
-  /** 'completed', 'failed', ou 'pending' se o lote encheu antes deste run. */
   status: string;
   erro: string | null;
   notificacoes_criadas: number;
@@ -358,14 +358,6 @@ export interface ResultadoTesteRegra {
   destinatarios: { nome: string | null; email: string | null }[];
 }
 
-/**
- * Botão "Testar" no painel de propriedades: cria um run a sério e deixa o
- * executor de produção decidir tudo — os destinatários são exactamente os
- * que um disparo normal teria, incluindo endereços externos.
- *
- * Conta como execução, por isso invalida as estatísticas — ao contrário da
- * primeira versão, que enviava só para quem testava e não mexia em nada.
- */
 export function useTestarRegra() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,3 +1,4 @@
+import { botaoEmail } from './botao.ts';
 import { emailLayout } from './layout.ts';
 
 export interface AssistanceNotificationInput {
@@ -26,12 +27,11 @@ export function assistanceNotificationTemplate(input: AssistanceNotificationInpu
         <p style="margin: 5px 0;"><strong>Título:</strong> ${input.ticketTitulo}</p>
       </div>
       <p>Por favor, anexe a fatura correspondente para garantir o controlo financeiro correto.</p>
-      <div style="text-align: center; margin-top: 30px;">
-        <a href="${input.appUrl}/assistencia/${input.ticketId}"
-           style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
-           Ver Detalhes do Ticket
-        </a>
-      </div>
+      <div style="text-align: center; margin-top: 30px;">${botaoEmail(
+        `${input.appUrl}/assistencia/${input.ticketId}`,
+        'Ver detalhes do ticket',
+        { cor: '#2563eb' },
+      )}</div>
     `,
   });
 

@@ -313,10 +313,10 @@ describe('useFecharContrato', () => {
       })
     );
 
-    // 4. Motorista desactivado (recolha confirmada → vínculo TVDE termina)
-    expect(chains.motoristas_ativos.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status_ativo: false })
-    );
+    // 4. Motorista intocado: fechar um contrato não é decidir sobre o
+    //    motorista. Quem o activa/inactiva é o botão da ficha — ver migração
+    //    20260907170000, que tirou as seis automações que disputavam o campo.
+    expect(chains.motoristas_ativos).toBeUndefined();
 
     // 5. Dívida registada no financeiro do motorista
     expect(chains.motorista_financeiro.insert).toHaveBeenCalledWith(
@@ -334,12 +334,15 @@ describe('useFecharContrato', () => {
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
   });
 
-  it('troca de viatura (manterMotoristaActivo) → fecha com recolha mas NÃO desactiva o motorista', async () => {
+  it('troca de viatura → fecha com recolha mas NÃO desactiva o motorista', async () => {
     // Sentinela da regra: numa troca/upgrade/downgrade o motorista não sai —
     // passa para o contrato sucessor com outra viatura. Desactivá-lo aqui
     // fazia-o desaparecer dos resumos semanais e das listas de cobrança na
     // janela entre o fecho e a criação do sucessor (e, se algo falhasse a
     // meio dos três round-trips da troca, ficava inactivo para sempre).
+    // Havia uma flag `manterMotoristaActivo` para isto que nunca funcionou: as
+    // triggers da BD corriam antes e não a conheciam. Hoje nenhum fecho toca
+    // no motorista, e a troca é só mais um caso disso.
     const chains = setupSupabase({
       estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
       contratos_renting: { data: null, error: null },
@@ -357,7 +360,6 @@ describe('useFecharContrato', () => {
       viaturaId: 'vit-1',
       motoristaId: 'mot-1',
       recolha: { km: '12345', combustivel: 'meio', fotos: [] },
-      manterMotoristaActivo: true,
     };
 
     const { result } = renderHook(() => useFecharContrato(), {
@@ -428,7 +430,7 @@ describe('useFecharContrato', () => {
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Recolha agendada' }));
   });
 
-  it('sem recolha mas fecharAgora=true (viatura slot) → fecha definitivamente e desactiva o motorista', async () => {
+  it('sem recolha mas fecharAgora=true (viatura slot) → fecha definitivamente, motorista intocado', async () => {
     const chains = setupSupabase({
       estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
       contratos_renting: { data: null, error: null },
@@ -464,16 +466,49 @@ describe('useFecharContrato', () => {
       expect.objectContaining({ estado_operacional: 'fechado' })
     );
 
-    // Motorista desactivado mesmo sem recolha física — fecharAgora força o
-    // fecho a ser tratado como definitivo (é isto que estava em falta antes
-    // desta flag existir: o slot fechava o contrato mas deixava o motorista
-    // "Ativo" para sempre).
-    expect(chains.motoristas_ativos.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status_ativo: false })
-    );
+    // `fecharAgora` torna o fecho definitivo (o slot não tem recolha física a
+    // capturar), mas isso é sobre o contrato — o estado do motorista continua
+    // a ser decisão de quem gere, aqui como em qualquer outro fecho.
+    expect(chains.motoristas_ativos).toBeUndefined();
 
     expect(fechouAgora).toBe(true);
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Contrato fechado' }));
+  });
+
+  // Um TVDE vivo não tem data_fim (20260924100000) e o aluguer só pára por ela:
+  // fechar sem a gravar deixava o contrato fechado a cobrar para sempre. Tem de
+  // ir no MESMO update que põe 'fechado' — com o contrato ainda em_curso, a
+  // trigger desviava a data para proxima_renovacao_em.
+  const fecharCom = async (contrato: { regime: string; data_fim: string | null }) => {
+    const chains = setupSupabase({
+      estacoes: { data: { nome: 'Estação A', cidade: 'Lisboa' }, error: null },
+      contratos_renting: { data: contrato, error: null },
+    });
+    const { result } = renderHook(() => useFecharContrato(), { wrapper: createWrapper() });
+    await act(async () => {
+      await result.current.mutateAsync({
+        contratoId: 'c1',
+        contratoCodigo: 821,
+        tipoEvento: 'devolvido',
+        estacaoId: 'est-1',
+        dataEvento: '2026-09-24T15:00:00.000Z',
+      });
+    });
+    // O update do fecho é o que põe 'fechado'.
+    return chains.contratos_renting.update.mock.calls
+      .map(([payload]) => payload as Record<string, unknown>)
+      .find((p) => p.estado_operacional === 'fechado');
+  };
+
+  it('TVDE sem data_fim → grava data_fim = dataEvento no mesmo update do fecho', async () => {
+    const fecho = await fecharCom({ regime: 'tvde', data_fim: null });
+    expect(fecho).toHaveProperty('data_fim', '2026-09-24T15:00:00.000Z');
+  });
+
+  it('rent-a-car → o update do fecho não escreve data_fim', async () => {
+    const fecho = await fecharCom({ regime: 'rent_a_car', data_fim: '2026-09-30T10:00:00.000Z' });
+    expect(fecho).toBeDefined();
+    expect(fecho).not.toHaveProperty('data_fim');
   });
 });
 

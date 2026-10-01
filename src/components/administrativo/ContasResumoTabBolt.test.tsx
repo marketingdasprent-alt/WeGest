@@ -7,6 +7,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
+// O aviso de abastecimentos suspeitos tem testes próprios; aqui só atrapalhava.
+vi.mock('@/hooks/useAbastecimentosSuspeitos', () => ({
+  useAbastecimentosSuspeitos: () => ({ data: undefined }),
+}));
+vi.mock('@/hooks/useCombustivelSemDono', () => ({
+  useCombustivelSemDono: () => ({ data: undefined }),
+}));
+
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasAccessToResource: () => true, isAdmin: true }),
 }));
@@ -36,6 +44,9 @@ vi.mock('./ContasResumoStats', () => ({ ContasResumoStats: () => null }));
 vi.mock('./ContasResumoBulkBar', () => ({ ContasResumoBulkBar: () => null }));
 vi.mock('./MotoristaResumoDialog', () => ({ MotoristaResumoDialog: () => null }));
 vi.mock('./ImportarDadosWizard', () => ({ ImportarDadosWizard: () => null }));
+vi.mock('./importacao-automatica/ImportacaoAutomaticaDialog', () => ({
+  ImportacaoAutomaticaDialog: () => null,
+}));
 vi.mock('./RelatorioPagamentoDialog', () => ({ RelatorioPagamentoDialog: () => null }));
 
 import { ContasResumoTab } from './ContasResumoTab';
@@ -109,7 +120,9 @@ function dadosDoMotorista(reciboVerde: boolean) {
       {
         motorista_id: 'm1',
         motorista_nome: 'João Silva',
-        ganhos_liquidos: 300,
+        // O hook lê liquido_a_pagar — coluna gerada pela base (ver
+        // src/config/bolt.ts). Numa linha vinda do CSV é igual ao líquido.
+        liquido_a_pagar: 300,
         gorjetas: 25,
         viagens_terminadas: 40,
         identificador_motorista: 'B1',

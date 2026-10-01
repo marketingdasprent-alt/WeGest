@@ -7,19 +7,20 @@ interface EmailFolhaDanosParams {
   toNome?: string | null;
   matricula: string;
   momento: 'ENTREGA' | 'RECOLHA';
-  /**
-   * Pode ser null no fluxo de check-in/out por token (motorista sem sessão)
-   * — nesse caso a Edge Function deriva a org a partir de viaturaId.
-   */
+  /** Null no fluxo por token (sem sessão) — a Edge Function deriva de viaturaId. */
   orgId: string | null | undefined;
-  /** Viatura do check-in/check-out — usada para derivar org_id quando orgId é null. */
+  /** Viatura do check-in/check-out — deriva org_id quando orgId é null. */
   viaturaId?: string | null;
+  /** Token de realização (fluxo público). Sem ele, autoriza pela sessão do chamador. */
+  token?: string | null;
 }
 
 /**
  * Envia por email uma cópia da folha de danos já gerada (fire-and-forget).
  * Sem email do condutor/motorista, não faz nada — nunca bloqueia nem falha
  * o handover por causa disto.
+ *
+ * O assunto é composto no servidor a partir de matrícula + momento.
  */
 export async function emailFolhaDanos({
   pdf,
@@ -29,6 +30,7 @@ export async function emailFolhaDanos({
   momento,
   orgId,
   viaturaId,
+  token,
 }: EmailFolhaDanosParams): Promise<void> {
   const destino = to?.trim();
   // Precisa de pelo menos um dos dois: orgId (fluxo autenticado) ou
@@ -40,17 +42,18 @@ export async function emailFolhaDanos({
     if (!pdfBase64) return;
 
     const filename = `folha_danos_${matricula}_${momento.toLowerCase()}.pdf`;
-    const subject = `Folha de Danos — ${momento === 'ENTREGA' ? 'Entrega' : 'Recolha'} — ${matricula}`;
 
     const { error } = await supabase.functions.invoke('send-folha-danos-email', {
       body: {
         to: destino,
         toNome: toNome || undefined,
-        subject,
+        matricula,
+        momento,
         pdfBase64,
         filename,
         org_id: orgId || undefined,
         viaturaId: viaturaId || undefined,
+        token: token || undefined,
       },
     });
     if (error) console.warn('Falha ao enviar cópia da folha de danos por email:', error);

@@ -40,6 +40,15 @@ Deno.test("buildGenericEmailHtml usa o logótipo da WeGest sem emissorNome", () 
   assertStringIncludes(html, "wegest.pt/Logo.png");
 });
 
+Deno.test("buildGenericEmailHtml não abre com saudação", () => {
+  // Um aviso do motor é um painel, não uma carta. Os templates escritos à
+  // mão mantêm o "Olá." — este caminho não.
+  const html = buildGenericEmailHtml("Assunto", "Viatura: BS-96-XP", {
+    destinatarioNome: "Maria",
+  });
+  assertEquals(html.includes("Olá"), false);
+});
+
 // ── O corpo ─────────────────────────────────────────────────────────────────
 
 Deno.test("formatarCorpo transforma linhas 'Etiqueta: valor' numa tabela", () => {

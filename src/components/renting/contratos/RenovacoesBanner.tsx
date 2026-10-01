@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { contratosPorRenovar, prazoRenovacao } from '@/lib/renovacaoContrato';
+
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 interface Props {
@@ -52,6 +53,9 @@ export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }:
             {partes.length > 0 && (
               <span className="text-amber-700/80"> · {partes.join(' · ')}</span>
             )}
+            <span className="block text-amber-700/90 dark:text-amber-300/80">
+              Um contrato por renovar deixa de gerar aluguer nos resumos a partir do fim do período.
+            </span>
           </p>
         </div>
         <Button

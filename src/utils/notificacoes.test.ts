@@ -258,3 +258,51 @@ describe('notificacaoTitulo', () => {
     expect(notificacaoTitulo(fixture({ titulo: undefined as never }))).toBe('Aviso do sistema');
   });
 });
+
+describe('motorista_documento_pendente', () => {
+  it('segue o link do trigger — a aba de documentos do motorista', () => {
+    const n = fixture({
+      tipo: 'motorista_documento_pendente',
+      link: '/motoristas/abc-123?tab=documentos',
+    });
+    expect(notificacaoLink(n)).toBe('/motoristas/abc-123?tab=documentos');
+    expect(notificacaoLabel(n)).toBe('Ver documentos');
+  });
+
+  it('sem link cai na lista de motoristas, nunca nas candidaturas', () => {
+    // Um documento por aprovar não é uma candidatura: mandar para
+    // /motoristas/candidaturas era a mentira que este mapa existe para evitar.
+    const n = fixture({ tipo: 'motorista_documento_pendente', link: null });
+    expect(notificacaoLink(n)).toBe('/motoristas');
+  });
+
+  it('está registado na lista de tipos', () => {
+    expect(TIPOS_NOTIFICACAO).toContain('motorista_documento_pendente');
+  });
+});
+
+describe('contrato_alterado', () => {
+  it('sem link cai na lista de contratos', () => {
+    const n = fixture({ tipo: 'contrato_alterado', link: null });
+    expect(notificacaoLink(n)).toBe('/contratos');
+    expect(notificacaoLabel(n)).toBe('Ver contratos');
+  });
+
+  it('está registado na lista de tipos', () => {
+    expect(TIPOS_NOTIFICACAO).toContain('contrato_alterado');
+  });
+});
+
+describe('cartao_frota_alterado', () => {
+  it('sem link cai na lista de cartões de frota', () => {
+    // O motor não preenche link para este tipo: a supressão por «aviso em
+    // aberto» (tipo + link) esconderia a devolução atrás da atribuição.
+    const n = fixture({ tipo: 'cartao_frota_alterado', link: null });
+    expect(notificacaoLink(n)).toBe('/administrativo/cartoes');
+    expect(notificacaoLabel(n)).toBe('Ver cartões');
+  });
+
+  it('está registado na lista de tipos', () => {
+    expect(TIPOS_NOTIFICACAO).toContain('cartao_frota_alterado');
+  });
+});

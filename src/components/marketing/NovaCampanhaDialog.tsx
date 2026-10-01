@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Loader2, Users } from 'lucide-react';
 import { useMarketingListaContagem } from '@/hooks/useMarketingListaContagem';
 import { useMarketingListas } from '@/hooks/useMarketingListas';
+import { sanitizeRichHtml } from '@/lib/safeHtml';
 // Editor TipTap (~350KB) carregado só quando o diálogo abre (lazy).
 const MarketingEmailEditor = lazy(() => import('./MarketingEmailEditor'));
 
@@ -73,7 +74,7 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
       const payload = {
         nome,
         assunto,
-        conteudo_html: conteudoHtml,
+        conteudo_html: sanitizeRichHtml(conteudoHtml),
         assinatura_id: assinaturaId || null,
         lista_id: listaId || null,
       };
@@ -191,7 +192,9 @@ export const NovaCampanhaDialog = ({ open, onOpenChange, campanha }: Props) => {
             {selectedAssinatura && (
               <div
                 className="text-sm border rounded-md p-3 bg-muted/30 max-h-24 overflow-y-auto prose prose-sm [&_img]:max-w-full [&_img]:h-auto"
-                dangerouslySetInnerHTML={{ __html: selectedAssinatura.conteudo_html }}
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeRichHtml(selectedAssinatura.conteudo_html),
+                }}
               />
             )}
           </div>

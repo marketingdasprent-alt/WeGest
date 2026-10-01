@@ -2,9 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { AuditEntry, EntidadeAuditavel, UseAuditHistoryOptions } from '@/types/audit';
 
-// ── Cast da API ──────────────────────────────────────────────
-// Algumas tabelas de histórico não estão nos tipos gerados do Supabase,
-// por isso usamos um cast mais permissivo (padrão do projecto, cf. useNotificacoes).
+// Algumas tabelas de histórico não constam dos tipos gerados do Supabase.
 const db = supabase as unknown as {
   from: (t: string) => {
     select: (cols: string) => {
@@ -23,27 +21,18 @@ const db = supabase as unknown as {
   };
 };
 
-// ── Configuração de mapeamento tabela → AuditEntry ───────────
-
 interface TableMapping {
   table: string;
   fkColumn: string;
   entidade: string;
-  /** Nome da acção/tipo associado a esta tabela (ex.: 'edicao', 'reimpressao') */
   acaoPadrao: string;
   dateColumn: string;
   actorColumn: string;
   detailColumn: string | null;
-  /** Coluna JSONB para payload (null se não existir) */
   payloadColumn: string | null;
-  /** Coluna a usar como "acao" dinâmica (null = usa acaoPadrao) */
   actionColumn: string | null;
 }
 
-/**
- * Mapeamento de quais tabelas consultar por entidade.
- * ordem importa apenas para consistência visual.
- */
 const TABLES_BY_ENTITY: Record<string, TableMapping[]> = {
   contrato: [
     {
@@ -110,12 +99,6 @@ const TABLES_BY_ENTITY: Record<string, TableMapping[]> = {
   motorista: [],
 };
 
-// ── Helpers ──────────────────────────────────────────────────
-
-/**
- * Converte uma linha de uma tabela de histórico para `AuditEntry`.
- * Lida com diferenças de schema entre tabelas.
- */
 function rowToAuditEntry(row: Record<string, unknown>, mapping: TableMapping): AuditEntry {
   const actorId =
     typeof row[mapping.actorColumn] === 'string' ? (row[mapping.actorColumn] as string) : null;
@@ -125,7 +108,6 @@ function rowToAuditEntry(row: Record<string, unknown>, mapping: TableMapping): A
     acao = row[mapping.actionColumn] as string;
   }
 
-  // Compôr detalhe para calendario_eventos_historico (campo + valor_anterior → valor_novo)
   let detalhe: string | null = null;
   if (mapping.table === 'calendario_eventos_historico') {
     const campo = row['campo'] as string | undefined;
@@ -167,9 +149,6 @@ function rowToAuditEntry(row: Record<string, unknown>, mapping: TableMapping): A
   };
 }
 
-/**
- * Executa uma query a uma tabela de histórico e converte para AuditEntry[].
- */
 async function queryTable(
   mapping: TableMapping,
   entityId: string,
@@ -188,31 +167,12 @@ async function queryTable(
   return (data as Record<string, unknown>[]).map((row) => rowToAuditEntry(row, mapping));
 }
 
-// ── Hook principal ──────────────────────────────────────────
-
 interface UseAuditHistoryParams {
-  /** Entidade a auditar */
   entidade: EntidadeAuditavel;
-  /** ID do registo na entidade */
   id: string;
-  /** Opções adicionais */
   options?: UseAuditHistoryOptions;
 }
 
-/**
- * Hook genérico de histórico de auditoria.
- *
- * Consulta todas as tabelas de histórico associadas a uma entidade,
- * normaliza os resultados para `AuditEntry[]` e ordena por data descendente.
- *
- * @example
- * ```ts
- * const { data, isLoading } = useAuditHistory({
- *   entidade: 'contrato',
- *   id: 'uuid-do-contrato',
- * });
- * ```
- */
 export function useAuditHistory({ entidade, id, options }: UseAuditHistoryParams) {
   const limit = options?.limit ?? 50;
   const mappings = TABLES_BY_ENTITY[entidade] ?? [];
@@ -224,7 +184,6 @@ export function useAuditHistory({ entidade, id, options }: UseAuditHistoryParams
 
       const results = await Promise.all(mappings.map((m) => queryTable(m, id, limit)));
 
-      // Juntar, ordenar por createdAt descendente e limitar
       return results
         .flat()
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

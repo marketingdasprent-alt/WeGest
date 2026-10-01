@@ -15,7 +15,7 @@ export interface ReservaSemCheckinInput {
 export function reservaSemCheckinTemplate(input: ReservaSemCheckinInput): { subject: string; html: string } {
   const { matricula, marcaModelo, motoristaNome, dataHoraPrevistaFmt, destinatarioNome, empresaNome, ctaUrl } =
     input;
-  const veiculo = [matricula, marcaModelo].filter(Boolean).join(' — ');
+  const veiculo = [matricula, marcaModelo].filter(Boolean).join(', ');
 
   const corpo = `
       <p style="margin:0 0 8px"><strong>Viatura:</strong> ${veiculo}</p>
@@ -35,5 +35,5 @@ export function reservaSemCheckinTemplate(input: ReservaSemCheckinInput): { subj
     ctaUrl,
   });
 
-  return { subject: `⚠️ Reserva sem check-in — ${matricula}`, html };
+  return { subject: `⚠️ Reserva sem check-in: ${matricula}`, html };
 }

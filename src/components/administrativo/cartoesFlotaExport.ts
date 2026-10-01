@@ -12,8 +12,9 @@ import {
 export function exportarCartoesExcel(params: {
   filtered: CartaoFrota[];
   consumoOf: (c: CartaoFrota) => number;
+  periodoLabel: string;
 }): void {
-  const { filtered, consumoOf } = params;
+  const { filtered, consumoOf, periodoLabel } = params;
   const rows = filtered.map((c) => ({
     Tipo: TIPO_INFO[c.tipo].label,
     Número: c.numero,
@@ -22,7 +23,7 @@ export function exportarCartoesExcel(params: {
     Titular: c.motorista?.nome || c.cliente?.nome || '',
     'Tipo Titular': c.motorista ? 'Motorista' : c.cliente ? 'Cliente' : '',
     'Plafond (€)': c.limite ?? '',
-    'Consumo mês (€)': consumoOf(c) || '',
+    [`Consumo ${periodoLabel} (€)`]: consumoOf(c) || '',
     Validade: c.data_validade ? fmtDate(c.data_validade) : '',
     Status: STATUS_INFO[c.status]?.label ?? c.status,
     Observações: c.notas || '',
@@ -42,15 +43,17 @@ export async function exportarCartoesPrint(params: {
     disp: number;
     canc: number;
     plafondAtivo: number;
-    consumoMes: number;
+    consumoPeriodo: number;
   };
   tipoFilter: 'todos' | 'bp' | 'repsol' | 'edp';
   statusSel: string;
   search: string;
   consumoOf: (c: CartaoFrota) => number;
   titularLabel: (c: CartaoFrota) => { texto: string; tipo: 'motorista' | 'cliente' } | null;
+  periodoLabel: string;
 }): Promise<void> {
-  const { filtered, kpis, tipoFilter, statusSel, search, consumoOf, titularLabel } = params;
+  const { filtered, kpis, tipoFilter, statusSel, search, consumoOf, titularLabel, periodoLabel } =
+    params;
   let logoUrl = '';
   try {
     const res = await fetch('/Logo.png');
@@ -70,6 +73,7 @@ export async function exportarCartoesPrint(params: {
   );
   const filtroDesc =
     [
+      `Consumo de ${periodoLabel}`,
       tipoFilter !== 'todos' ? `Tipo: ${TIPO_INFO[tipoFilter].label}` : null,
       statusSel === 'ativos'
         ? 'Estado: ativos (sem cancelados)'
@@ -151,10 +155,10 @@ export async function exportarCartoesPrint(params: {
         <div class="stat"><div class="lbl">Disponíveis</div><div class="val">${kpis.disp}</div></div>
         <div class="stat"><div class="lbl">Cancelados</div><div class="val">${kpis.canc}</div></div>
         <div class="stat"><div class="lbl">Plafond ativo</div><div class="val">${fmtEur(kpis.plafondAtivo)}</div></div>
-        <div class="stat"><div class="lbl">Consumo do mês</div><div class="val">${fmtEur(kpis.consumoMes)}</div></div>
+        <div class="stat"><div class="lbl">Consumo do período</div><div class="val">${fmtEur(kpis.consumoPeriodo)}</div></div>
       </div>
       <table>
-        <thead><tr><th>Tipo</th><th>Número</th><th>Detentor</th><th>Titular</th><th style="text-align:right">Plafond</th><th style="text-align:right">Consumo (mês)</th><th>Validade</th><th>Status</th></tr></thead>
+        <thead><tr><th>Tipo</th><th>Número</th><th>Detentor</th><th>Titular</th><th style="text-align:right">Plafond</th><th style="text-align:right">Consumo</th><th>Validade</th><th>Status</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="footer"><span>WeGest — Sistema de Gestão de Frotas</span><span>Gerado automaticamente em ${date}</span></div>

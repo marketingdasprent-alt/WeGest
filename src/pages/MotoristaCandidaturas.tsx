@@ -89,6 +89,7 @@ interface Candidatura {
   licenca_tvde_ficheiro_url: string | null;
   registo_criminal_url: string | null;
   comprovativo_morada_url: string | null;
+  iban: string | null;
   comprovativo_iban_url: string | null;
   outros_documentos: any[];
   status: 'rascunho' | 'submetido' | 'em_analise' | 'aprovado' | 'rejeitado';
@@ -260,7 +261,14 @@ const MotoristaCandidaturas: React.FC = () => {
 
       if (error) throw error;
 
-      // Buscar o motorista recém-criado para mostrar no modal de sucesso
+      // A RPC procura ficha existente pelo NIF antes de criar outra, e diz
+      // qual dos dois caminhos seguiu. Importa distinguir: "associado" quer
+      // dizer que a pessoa já cá estava e a conta entrou na ficha antiga, com
+      // o histórico todo — contratos, contas, danos.
+      const resultado = data as { motorista_id?: string; accao?: string } | null;
+      const associado = resultado?.accao === 'associado';
+
+      // Buscar o motorista para mostrar no modal de sucesso
       const { data: motoristaData } = await supabase
         .from('motoristas_ativos')
         .select('*')
@@ -268,8 +276,10 @@ const MotoristaCandidaturas: React.FC = () => {
         .single();
 
       toast({
-        title: 'Candidatura aprovada',
-        description: `${candidatura.nome} foi adicionado à frota.`,
+        title: associado ? 'Candidatura associada' : 'Candidatura aprovada',
+        description: associado
+          ? `${candidatura.nome} já existia (mesmo NIF) — a conta foi ligada à ficha que já cá estava.`
+          : `${candidatura.nome} foi adicionado à frota.`,
       });
 
       loadCandidaturas();
@@ -706,6 +716,10 @@ const MotoristaCandidaturas: React.FC = () => {
                         <div>
                           <span className="text-muted-foreground text-xs">Cidade</span>
                           <p className="font-medium">{selectedCandidatura.cidade || '-'}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground text-xs">IBAN</span>
+                          <p className="font-medium truncate">{selectedCandidatura.iban || '-'}</p>
                         </div>
                         <div className="col-span-2">
                           <span className="text-muted-foreground text-xs">Morada</span>

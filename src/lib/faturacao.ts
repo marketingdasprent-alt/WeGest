@@ -47,6 +47,31 @@ export function clienteRowToFatura(
 const FN = 'faturacao-emitir';
 
 /** Emite um documento (FT / FR / NC / RC) no provider configurado. A função grava em `invoices`. */
+/**
+ * Cabeçalho fiscal de uma cobrança já criada: os dados do documento saem da
+ * própria cobrança (destinatário, taxa, valor, descrição) e da ficha do cliente
+ * dela — nunca recalculados por quem emite.
+ *
+ * É o que impede o documento fiscal de divergir do registo contabilístico: quem
+ * criou a cobrança já decidiu a quem se cobra e quanto; aqui só se lê.
+ */
+export async function carregarCobrancaParaEmitir(cobrancaId: string) {
+  const { data: cobranca, error } = await supabase
+    .from('contrato_cobrancas')
+    .select('destinatario_id, destinatario_nome, taxa_iva, valor_sem_iva, descricao')
+    .eq('id', cobrancaId)
+    .single();
+  if (error || !cobranca) throw error ?? new Error('Cobrança não encontrada.');
+
+  const { data: cli } = await supabase
+    .from('clientes')
+    .select('nome, nif, email, morada, codigo_postal, localidade')
+    .eq('id', cobranca.destinatario_id)
+    .single();
+
+  return { cobranca, cliente: clienteRowToFatura(cli, cobranca.destinatario_nome) };
+}
+
 export async function emitirDocumento(payload: CreateFaturaPayload): Promise<EmitResult> {
   const { data, error } = await supabase.functions.invoke<EmitResult>(FN, {
     body: { action: 'emit', ...payload },

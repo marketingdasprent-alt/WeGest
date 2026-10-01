@@ -1,4 +1,10 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import {
+  authenticateUser,
+  AuthorizationError,
+  isInternalRequest,
+  requireOrgAdmin,
+} from '../_shared/auth/edgeAuthorization.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,7 +60,18 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const isInternal = isInternalRequest(req, supabaseServiceKey);
+    let actorId: string | null = null;
+    if (!isInternal) {
+      const authClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!);
+      const user = await authenticateUser(req, {
+        getUser: async (token) => {
+          const { data, error } = await authClient.auth.getUser(token);
+          return { user: error || !data.user ? null : { id: data.user.id } };
+        },
+      });
+      actorId = user.id;
+    }
 
     const { integracao_id } = await req.json();
 
@@ -65,7 +82,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`[bolt-auto-map-drivers] Iniciando auto-mapeamento para integração: ${integracao_id}`);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 0. Obter org_id da integração para filtrar motoristas da mesma org
     const { data: integConfig } = await supabase
@@ -81,6 +98,20 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    if (actorId) {
+      await requireOrgAdmin(actorId, orgId, async (userId, integrationOrgId) => {
+        const { data, error } = await supabase
+          .from('user_organizacoes')
+          .select('is_admin')
+          .eq('user_id', userId)
+          .eq('org_id', integrationOrgId)
+          .maybeSingle();
+        return error ? null : data;
+      });
+    }
+
+    console.log(`[bolt-auto-map-drivers] Iniciando auto-mapeamento para integração: ${integracao_id}`);
 
     // 1. Buscar todos os bolt_drivers sem mapeamento para esta integração
     const { data: unmappedDrivers, error: driversError } = await supabase
@@ -328,12 +359,13 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error("[bolt-auto-map-drivers] Erro geral:", error);
+    const status = error instanceof AuthorizationError ? error.status : 500;
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: error instanceof Error ? error.message : "Erro desconhecido" 
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

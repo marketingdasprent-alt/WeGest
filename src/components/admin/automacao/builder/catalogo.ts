@@ -1,60 +1,32 @@
 import type { AutomationNode as Node, PosicaoNo as XYPosition } from './dominio/tipos';
 import { Bell, Filter, Mail, ToggleRight, Zap, type LucideIcon } from 'lucide-react';
-// A identidade dos módulos — nome, cor e ícone — vive num sítio só.
 import { identidadeDoModulo } from '../rotulos';
 
-/**
- * Os blocos que o utilizador pode arrastar para o canvas.
- *
- * Os gatilhos são os MÓDULOS do WeGest, não eventos concretos: escolher o
- * evento é a primeira coisa que se faz no painel de propriedades, e uma lista
- * de 19 eventos na barra lateral seria uma parede em vez de uma paleta.
- */
+// Os gatilhos representam módulos; o evento é escolhido no painel de propriedades.
+// Assim a paleta não mostra todos os eventos concretos.
 
 export type TipoDeNo = 'trigger' | 'condicao' | 'accao';
 
 export interface TemplateDeNo {
-  /** Identificador estável — é o que viaja no dataTransfer do drag. */
   chave: string;
   tipo: TipoDeNo;
   rotulo: string;
   descricao: string;
   Icone: LucideIcon;
-  /**
-   * Nome do token CSS da cor do bloco (ver `index.css`).
-   *
-   * Fora de `dados` de propósito: o `serializarFluxo` copia `data` inteiro
-   * para o payload, e nem a cor nem o ícone são lógica.
-   */
+  /** Fica fora de `dados` para não serializar metadados visuais no fluxo. */
   cor: string;
-  /** Configuração inicial. Copiada a cada instância, nunca partilhada. */
   dados: Record<string, unknown>;
 }
 
-/** Uma vez por dia. É o mesmo valor por omissão das regras que já existem. */
 const COOLDOWN_PADRAO_MINUTOS = 1440;
 
-/**
- * Os únicos operadores que `process_domain_events` sabe avaliar.
- *
- * A função tem um ramo para '=' e outro para '!='. Qualquer outro operador
- * não entra em nenhum dos dois, `v_matches` fica true e a condição passa
- * SEMPRE — um filtro que parece funcionar e não filtra nada. Por isso a lista
- * é fechada e não texto livre.
- */
+// O motor só avalia estes operadores; outro valor faria a condição passar sem filtrar.
 export const OPERADORES = [
   { valor: '=', rotulo: 'é igual a' },
   { valor: '!=', rotulo: 'é diferente de' },
 ] as const;
 
-/**
- * Um gatilho da paleta, com a identidade do módulo lida de `rotulos.ts`.
- *
- * O nome, a cor e o ícone estavam escritos aqui E lá. Duas cópias da mesma
- * coisa divergem sempre — e já tinham divergido: a lista mostrava o módulo a
- * cinzento enquanto o canvas o mostrava a cores. Aqui fica só o que é próprio
- * da paleta: a chave do bloco e a descrição do que aquele gatilho vigia.
- */
+// A identidade vem de `rotulos.ts` para paleta e canvas não divergirem.
 function gatilho(chaveDoBloco: string, chaveDoModulo: string, descricao: string): TemplateDeNo {
   const modulo = identidadeDoModulo(chaveDoModulo);
   return {
@@ -72,8 +44,10 @@ export const CATALOGO: TemplateDeNo[] = [
   gatilho('trigger-renting', 'contrato_renting', 'Contratos, reservas e devoluções'),
   gatilho('trigger-motoristas', 'motorista', 'Cartas, licenças, candidaturas e fichas'),
   gatilho('trigger-viaturas', 'viatura', 'Seguro, inspeção, IUC e manutenção'),
-  gatilho('trigger-financeiro', 'cobranca', 'Cobranças geradas e faturas por enviar'),
+  gatilho('trigger-financeiro', 'cobranca', 'Cobranças, faturas, recibos e custos por imputar'),
   gatilho('trigger-assistencia', 'assistencia_ticket', 'Tickets abertos há demasiado tempo'),
+  gatilho('trigger-seguranca', 'seguranca', 'Tentativas de login suspeitas'),
+  gatilho('trigger-utilizadores', 'utilizador', 'Entrada de novos utilizadores'),
   {
     chave: 'condicao',
     tipo: 'condicao',
@@ -87,9 +61,6 @@ export const CATALOGO: TemplateDeNo[] = [
     chave: 'notificacao',
     tipo: 'accao',
     rotulo: 'Enviar notificação',
-    // Já não é "com email opcional": o email tem acção própria desde a
-    // divisão de 2026-09-01. Duas coisas, dois blocos — não um interruptor
-    // escondido dentro de outra acção.
     descricao: 'Avisa cargos ou pessoas dentro da aplicação',
     Icone: Bell,
     cor: '--fluxo-notificacao',
@@ -124,9 +95,7 @@ export const CATALOGO: TemplateDeNo[] = [
     Icone: ToggleRight,
     cor: '--fluxo-estado',
     dados: {
-      // `accao` vazio até o utilizador escolher no painel: as acções
-      // disponíveis vêm de `automation_catalogo()`, e escrever aqui um id
-      // fixo era duplicar o catálogo do servidor.
+      // As ações vêm do catálogo do servidor; não duplicar um id neste template.
       accao: '',
       acaoTipo: 'automacao_interna',
       rotulo: 'Executar acção',
@@ -137,18 +106,22 @@ export const CATALOGO: TemplateDeNo[] = [
   },
 ];
 
-/**
- * Os `event_type` que o motor conhece, agrupados pelo prefixo do módulo.
- *
- * Lista fechada de propósito: `process_domain_events` só casa eventos que
- * alguém emite: um event_type inventado no construtor daria uma regra que
- * nunca dispara e não teria como avisar disso. Verificado em produção a
- * 2026-08-26 — 19 distintos.
- */
+// Lista fechada: um evento que o motor não emite criaria uma regra silenciosa.
 const EVENTOS_POR_MODULO: Record<string, string[]> = {
   assistencia_ticket: ['assistencia_ticket.aberto_demasiado_tempo'],
-  cobranca: ['cobranca.gerada', 'invoice.nao_enviada_ao_cliente'],
+  cobranca: [
+    'cobranca.em_atraso',
+    // O cartão de combustível é um instrumento de despesa: quem muda de titular muda de quem paga.
+    'cartao_frota.alterado',
+    'custo.sem_viatura',
+    'cobranca.gerada',
+    'invoice.nao_enviada_ao_cliente',
+    // A validação do recibo é financeira, embora o evento use o prefixo motorista.
+    'motorista_recibo.por_validar',
+  ],
   contrato_renting: [
+    // Contrato de motorista (TVDE): vive com os contratos, não com a ficha.
+    'contrato.alterado',
     'contrato_renting.criado',
     'contrato_renting.fechado_com_danos',
     'contrato_renting.renovacao_proxima',
@@ -161,6 +134,8 @@ const EVENTOS_POR_MODULO: Record<string, string[]> = {
     'motorista.licenca_tvde_expirando',
     'motorista.reparacao_cobranca',
   ],
+  seguranca: ['seguranca.login_suspeito'],
+  utilizador: ['utilizador.criado'],
   viatura: [
     'viatura.extintor_expirando',
     'viatura.inspecao_expirando',
@@ -181,13 +156,7 @@ export interface VisualDoBloco {
 
 const VISUAL_RECURSO: VisualDoBloco = { Icone: Zap, cor: '--fluxo-viaturas' };
 
-/**
- * O ícone e a cor de um nó, a partir do que ele guarda em `data`.
- *
- * O nó só guarda o `modulo` (gatilho) ou a `accao` — dados a sério. O resto do
- * visual é resolvido aqui, para que a paleta e o canvas mostrem sempre o mesmo
- * símbolo e a mesma cor sem duplicar a informação em dois sítios.
- */
+// Resolve metadados visuais a partir dos dados persistidos, sem os duplicar no nó.
 export function visualDoBloco(
   tipo: TipoDeNo,
   dados: { modulo?: string; accao?: string; acaoTipo?: string }
@@ -196,9 +165,7 @@ export function visualDoBloco(
     if (t.tipo !== tipo) return false;
     if (tipo === 'trigger') return (t.dados as { modulo?: string }).modulo === dados.modulo;
     if (tipo === 'accao') {
-      // Uma acção interna não casa por `accao`: o id vem de
-      // `automation_catalogo()` e a paleta tem uma entrada só, com `accao`
-      // vazio. Sem este ramo, cada acção interna caía no visual genérico.
+      // A ação interna não tem id no template e precisa da entrada genérica.
       if (dados.acaoTipo === 'automacao_interna') return t.chave === 'accao-interna';
       return (t.dados as { accao?: string }).accao === dados.accao;
     }
@@ -212,14 +179,7 @@ export function templatePorChave(chave: string): TemplateDeNo | undefined {
   return CATALOGO.find((t) => t.chave === chave);
 }
 
-/**
- * Instancia um bloco no sítio onde foi largado.
- *
- * `sequencia` vem de um contador do componente e não de Date.now()/random:
- * ids previsíveis tornam o estado do canvas reproduzível nos testes.
- * `structuredClone` porque partilhar o objecto `dados` do template fazia
- * editar um bloco editar todos os irmãos.
- */
+// Ids sequenciais tornam o canvas reproduzível; cada nó recebe dados independentes.
 export function criarNoDoTemplate(
   template: TemplateDeNo,
   posicao: XYPosition,
@@ -233,14 +193,7 @@ export function criarNoDoTemplate(
   };
 }
 
-/**
- * O módulo do catálogo a que um `event_type` pertence.
- *
- * Não é o prefixo cru: 'invoice.nao_enviada_ao_cliente' pertence ao módulo
- * Financeiro, cuja chave é 'cobranca'. Usar o prefixo dava um módulo que o
- * catálogo não conhece, e o bloco abria sem ícone, sem cor e sem lista de
- * eventos onde escolher.
- */
+// Usa o catálogo, não só o prefixo: `invoice` pertence ao módulo `cobranca`.
 export function moduloDoEventType(eventType: string): string {
   const encontrado = Object.entries(EVENTOS_POR_MODULO).find(([, eventos]) =>
     eventos.includes(eventType)
@@ -248,22 +201,15 @@ export function moduloDoEventType(eventType: string): string {
   return encontrado?.[0] ?? eventType.split('.')[0];
 }
 
-/**
- * Nome legível de cada evento.
- *
- * Escrito à mão, não gerado. Uma tradução mecânica do identificador — trocar
- * `_` por espaços e capitalizar — dava "Iuc a pagar" e "Licenca tvde
- * expirando": a coluna `event_type` não tem acentos nem sabe o que é um
- * acrónimo. Com 19 eventos, um mapa é mais barato do que qualquer heurística
- * e não erra.
- *
- * O identificador continua visível ao lado, em monoespaçado: é ele que o motor
- * casa, e é o que se copia para depurar.
- */
+// Rótulos manuais preservam acentos e acrónimos que o identificador não contém.
 const ROTULOS: Record<string, string> = {
   'assistencia_ticket.aberto_demasiado_tempo': 'Ticket aberto há demasiado tempo',
+  'cartao_frota.alterado': 'Cartão de frota alterado',
+  'cobranca.em_atraso': 'Cobrança em atraso',
   'cobranca.gerada': 'Cobrança gerada',
+  'custo.sem_viatura': 'Custo importado sem viatura atribuída',
   'invoice.nao_enviada_ao_cliente': 'Fatura emitida sem ser enviada',
+  'contrato.alterado': 'Contrato alterado',
   'contrato_renting.criado': 'Contrato criado',
   'contrato_renting.fechado_com_danos': 'Contrato fechado com danos',
   'contrato_renting.renovacao_proxima': 'Renovação a aproximar-se',
@@ -273,6 +219,7 @@ const ROTULOS: Record<string, string> = {
   'motorista.ficha_incompleta': 'Ficha do motorista incompleta',
   'motorista.licenca_tvde_expirando': 'Licença TVDE a expirar',
   'motorista.reparacao_cobranca': 'Reparação com valor a cobrar',
+  'motorista_recibo.por_validar': 'Recibo verde por validar',
   'viatura.extintor_expirando': 'Extintor a expirar',
   'viatura.inspecao_expirando': 'Inspeção periódica (IPO) a expirar',
   'viatura.iuc_a_pagar': 'IUC por pagar',
@@ -282,7 +229,10 @@ const ROTULOS: Record<string, string> = {
   'utilizador.criado': 'Novo utilizador criado',
 };
 
-/** Cai para o identificador: um evento novo no motor não pode dar ecrã vazio. */
+// O teste exige que cada evento com rótulo seja escolhível na paleta.
+export const EVENTOS_COM_ROTULO = Object.keys(ROTULOS);
+
+// Um evento novo mantém o identificador para não produzir uma área vazia.
 export function rotuloDoEvento(eventType: string): string {
   return ROTULOS[eventType] ?? eventType;
 }

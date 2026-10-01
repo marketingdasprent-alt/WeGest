@@ -7,8 +7,27 @@ insert into public.organizacoes (id, nome, codigo) values
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000b0001', 'admin@dual-write.pt');
 
-insert into public.user_organizacoes (user_id, org_id, is_admin) values
-  ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000', true);
+-- O destinatário tem de estar num CARGO que as regras nomeiem.
+--
+-- Até 20260909120000 chegava-lhe tudo por `is_admin = true`, e as regras abaixo
+-- nem precisavam de dizer quem avisar. Esse ramo saiu do laço de destinatários
+-- — quem recebe é exactamente quem a regra configurou — e sem cargo nenhuma
+-- destas regras resolveria ninguém.
+--
+-- O cargo tem nome PRÓPRIO do teste, e não "Administrador": inserir uma
+-- organização dispara `ensure_base_cargos`, que já semeia "Administrador",
+-- "Gestor TVDE" e "Supervisor Gestor TVDE", e `idx_cargos_nome_org_id` é único
+-- por (nome, org_id) — reutilizar o nome rebenta a fixture inteira antes da
+-- primeira asserção.
+--
+-- `is_admin` fica `true` de propósito: se a cópia automática voltar, este
+-- utilizador passa a ser resolvido por duas vias e as contagens denunciam-no.
+insert into public.cargos (id, nome, org_id) values
+  ('00000000-0000-0000-0000-0000000bc001', 'Cargo Dual Write', '00000000-0000-0000-0000-0000000b0000');
+
+insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
+  ('00000000-0000-0000-0000-0000000b0001', '00000000-0000-0000-0000-0000000b0000', true,
+   '00000000-0000-0000-0000-0000000bc001');
 
 -- get_current_org_id() (usado pela RLS de notificacoes) resolve por
 -- user_org_ativa, não por user_organizacoes — necessário para o Cenário D.
@@ -18,7 +37,7 @@ insert into public.user_org_ativa (user_id, org_id) values
 -- Cenário A: event_type conhecido (viatura.seguro_expirando) gera notificacoes.tipo mapeado.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b1', '00000000-0000-0000-0000-0000000b0000', 'teste.seguro', 'Seguro Teste', 'viatura.seguro_expirando', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_recurso":"motoristas_gestao","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"cargo","destinatarios_cargo_ids":["00000000-0000-0000-0000-0000000bc001"],"enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c00b1', '00000000-0000-0000-0000-0000004600b1', '00000000-0000-0000-0000-0000000b0000', 'viaturas', '00000000-0000-0000-0000-00000ef700b1');
@@ -49,7 +68,7 @@ select is(
 -- Cenário B: event_type desconhecido não gera notificacoes (whitelist), mas não falha.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b2', '00000000-0000-0000-0000-0000000b0000', 'teste.desconhecido', 'Evento Desconhecido', 'teste.evento_desconhecido', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_recurso":"motoristas_gestao","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"teste.notif","destinatarios_estrategia":"cargo","destinatarios_cargo_ids":["00000000-0000-0000-0000-0000000bc001"],"enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id) values
   ('00000000-0000-0000-0000-0000004c00b2', '00000000-0000-0000-0000-0000004600b2', '00000000-0000-0000-0000-0000000b0000');
@@ -71,7 +90,7 @@ select is(
 -- Cenário C: cobranca.gerada (I1/I2, só aviso interno — sem emitir/enviar fatura).
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b3', '00000000-0000-0000-0000-0000000b0000', 'teste.cobranca', 'Cobrança Teste', 'cobranca.gerada', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"cobranca.gerada","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"cobranca.gerada","destinatarios_estrategia":"cargo","destinatarios_cargo_ids":["00000000-0000-0000-0000-0000000bc001"],"enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c00b3', '00000000-0000-0000-0000-0000004600b3', '00000000-0000-0000-0000-0000000b0000', 'contrato_cobrancas', '00000000-0000-0000-0000-00000ef700b3');
@@ -96,9 +115,9 @@ select is(
 -- sino real, até este fix).
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-0000004600b4', '00000000-0000-0000-0000-0000000b0000', 'teste.utilizador', 'Utilizador Teste', 'utilizador.criado', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"utilizador.criado","destinatarios_recurso":"admin_utilizadores","enviar_email":false}'::jsonb),
+   '{"titulo":"Titulo de Teste","template_codigo":"utilizador.criado","destinatarios_estrategia":"cargo","destinatarios_cargo_ids":["00000000-0000-0000-0000-0000000bc001"],"enviar_email":false}'::jsonb),
   ('00000000-0000-0000-0000-0000004600b5', '00000000-0000-0000-0000-0000000b0000', 'teste.renovacao', 'Renovação Teste', 'contrato_renting.renovacao_proxima', 'notificacao',
-   '{"titulo":"Titulo de Teste","template_codigo":"contrato_renting.renovacao_proxima","destinatarios_recurso":"renting_contratos","enviar_email":false}'::jsonb);
+   '{"titulo":"Titulo de Teste","template_codigo":"contrato_renting.renovacao_proxima","destinatarios_estrategia":"cargo","destinatarios_cargo_ids":["00000000-0000-0000-0000-0000000bc001"],"enviar_email":false}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c00b4', '00000000-0000-0000-0000-0000004600b4', '00000000-0000-0000-0000-0000000b0000', 'profiles', '00000000-0000-0000-0000-0000000b0001'),

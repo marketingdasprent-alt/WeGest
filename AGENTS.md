@@ -318,6 +318,24 @@ CREATE POLICY "soft_delete_only" ON public.motoristas
   WITH CHECK (deleted_at IS NOT NULL OR public.is_current_user_admin());
 ```
 
+### Toda a migração que mexe em estrutura acaba com `NOTIFY pgrst`
+
+Sempre que uma migração criar ou alterar tabelas, colunas, tipos ou funções expostas na API, **termina com**:
+
+```sql
+NOTIFY pgrst, 'reload schema';
+```
+
+O Supabase serve a API a partir de um **cache do desenho da base**. Enquanto esse cache não recarrega, a API rejeita colunas que existem mesmo, com o erro:
+
+```
+Could not find the 'X' column of 'Y' in the schema cache
+```
+
+Isso não distingue "a coluna falta" de "o cache está velho" — e o segundo é muito mais comum. **A 2026-09-08 apanhou um motorista a submeter a candidatura**: as 25 colunas do formulário estavam todas na tabela, e a mensagem mandava o administrador procurar migrações que não faltavam. Resolveu-se com este `NOTIFY`.
+
+A linha é inofensiva quando é redundante. Custa nada e evita que o próximo a apanhar o problema seja um utilizador final.
+
 ### Regras de migração para tabelas novas
 
 1. **Toda a tabela nova** deve ter `deleted_at TIMESTAMPTZ` (nullable).
@@ -480,6 +498,7 @@ if (admins.find(a => a.id === user.id)) { /* ... */ }
 
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` — públicos, bundled no client.
 - `SUPABASE_SERVICE_ROLE_KEY` — **nunca** prefixar com `VITE_`. Só em Edge Functions e CI.
+- `TURNSTILE_SECRET_KEY` (segredos das Edge Functions) — CAPTCHA Cloudflare Turnstile no registo, contacto e tickets TI. Sem o segredo o servidor não exige CAPTCHA e as quotas globais ficam em 100/h. A chave pública está em `src/lib/turnstile.ts` e só se usa na build de produção em `wegest.pt`/subdomínios; `VITE_TURNSTILE_SITE_KEY` sobrepõe-na (vazia desliga o widget). `TURNSTILE_HOSTNAMES` (opcional) muda os domínios aceites pelo servidor (omissão `wegest.pt,*.wegest.pt`).
 - `.env.local` git-ignored.
 
 ### Permissões granulares
@@ -512,6 +531,7 @@ if (admins.find(a => a.id === user.id)) { /* ... */ }
 | Hardcoded routes em strings                | Constantes (criar `lib/routes.ts` quando crescer) |
 | Default export para componentes não-página | Named export                                      |
 | Tipo duplicado à mão                       | `z.infer<typeof schema>` ou `Pick`/`Omit`         |
+| Bloco de comentário gigante/tipo relatório  | 1-3 linhas, só o "porquê"                         |
 
 ---
 
@@ -669,6 +689,12 @@ Antes de criar código novo:
 Evitar duplicação de lógica.
 
 Se existir uma implementação compatível, reutilizá-la.
+
+---
+
+### Comentários
+
+Comentário é curto e explica o "porquê", não o "o quê". 1-3 linhas. Nunca blocos de texto tipo relatório, nem repetir o que o código já diz.
 
 ---
 

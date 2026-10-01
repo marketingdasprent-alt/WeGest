@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { filtroDataFimViva } from '@/utils/associacaoViatura';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
@@ -367,7 +368,7 @@ export const GenerateDocumentsDialog = ({
             .select('viatura_id')
             .eq('motorista_id', activeMotorista.id)
             .eq('status', 'ativo')
-            .is('data_fim', null)
+            .or(filtroDataFimViva())
             .order('data_inicio', { ascending: false })
             .limit(1)
             .maybeSingle();

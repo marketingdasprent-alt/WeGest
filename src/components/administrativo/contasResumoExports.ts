@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
+import { escapeHtml } from '@/lib/safeHtml';
 
 export interface MotoristaResumo {
   _uid?: string;
@@ -24,6 +25,9 @@ export interface MotoristaResumo {
   portagens: number;
   reparacoes: number;
   outros_custos: number;
+  /** Mensalidade de slot (categoria 'slot_mensal') — linha própria, já não
+   *  vai dentro de outros_custos. Ver movimentosMotorista.ts. */
+  slot: number;
   aluguer: number;
   /** Saldo pendente ACTUAL (não limitado a esta semana) — motorista_saldo_pendente,
    *  mesmo valor mostrado no separador Financeiro do motorista e no portal
@@ -35,7 +39,7 @@ export interface MotoristaResumo {
 const fmtEur = (v: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v);
 
-async function fetchLogoDataUrl(): Promise<string> {
+export async function fetchLogoDataUrl(): Promise<string> {
   try {
     const res = await fetch('/Logo.png');
     const blob = await res.blob();
@@ -132,8 +136,16 @@ export async function gerarRelatoriosIndividuaisPDF(params: {
       // motor de recorrências) além do legado motorista_custos_adicionais
       // (extraCosts). Não duplicam: após a migração para o motor de recorrências,
       // uma semana nunca tem o mesmo custo nas duas fontes.
+      // O slot (motorista.slot) entra aqui também: este PDF em lote só tem uma
+      // linha "outros", sem discriminar slot à parte como o resumo individual
+      // e a tabela principal já fazem — o total fica certo, só não é
+      // discriminado neste documento em concreto.
       const outrosCustosTotal =
-        extraCosts.outros + extraCosts.caucao + extraCosts.seguros + motorista.outros_custos;
+        extraCosts.outros +
+        extraCosts.caucao +
+        extraCosts.seguros +
+        motorista.outros_custos +
+        motorista.slot;
       const totalDespesas =
         motorista.aluguer +
         motorista.combustivel +
@@ -217,12 +229,13 @@ export async function gerarRelatorioConsolidadoPrint(params: {
   const rows = selectedResumos
     .map(
       (r) => `<tr>
-      <td>${r.driver_name}</td>
+      <td>${escapeHtml(r.driver_name)}</td>
       <td style="text-align:right">${fmtEur(r.total_faturado)}</td>
       <td style="text-align:right">${fmtEur(r.combustivel)}</td>
       <td style="text-align:right">${fmtEur(r.portagens)}</td>
       <td style="text-align:right">${fmtEur(r.reparacoes)}</td>
       <td style="text-align:right">${fmtEur(r.outros_custos)}</td>
+      <td style="text-align:right">${fmtEur(r.slot)}</td>
       <td style="text-align:right">${fmtEur(r.aluguer)}</td>
       <td style="text-align:right;font-weight:600">${fmtEur(r.liquido)}</td>
     </tr>`
@@ -279,7 +292,7 @@ export async function gerarRelatorioConsolidadoPrint(params: {
         <thead><tr>
           <th>Motorista</th><th class="r">Faturado</th><th class="r">Combustível</th>
           <th class="r">Portagens</th><th class="r">Reparações</th><th class="r">Outros</th>
-          <th class="r">Aluguer</th><th class="r">Líquido</th>
+          <th class="r">Slot</th><th class="r">Aluguer</th><th class="r">Líquido</th>
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr>
@@ -289,6 +302,7 @@ export async function gerarRelatorioConsolidadoPrint(params: {
           <td class="r">${fmtEur(selectedResumos.reduce((s, r) => s + r.portagens, 0))}</td>
           <td class="r">${fmtEur(selectedResumos.reduce((s, r) => s + r.reparacoes, 0))}</td>
           <td class="r">${fmtEur(selectedResumos.reduce((s, r) => s + r.outros_custos, 0))}</td>
+          <td class="r">${fmtEur(selectedResumos.reduce((s, r) => s + r.slot, 0))}</td>
           <td class="r">${fmtEur(totalAluguer)}</td>
           <td class="r">${fmtEur(totalLiquido)}</td>
         </tr></tfoot>
@@ -339,20 +353,21 @@ export async function gerarPrintCompleto(params: {
     .map((r) => {
       const extraTds = [
         printSettings.mostrarMatricula
-          ? `<td>${r.motorista_id ? matriculaMap[r.motorista_id] || '—' : '—'}</td>`
+          ? `<td>${escapeHtml(r.motorista_id ? matriculaMap[r.motorista_id] || '—' : '—')}</td>`
           : '',
         printSettings.mostrarGestor
-          ? `<td>${r.motorista_id ? gestorMap[r.motorista_id] || '—' : '—'}</td>`
+          ? `<td>${escapeHtml(r.motorista_id ? gestorMap[r.motorista_id] || '—' : '—')}</td>`
           : '',
       ].join('');
       const liquidoColor = r.liquido < 0 ? '#dc2626' : '#15803d';
       return `<tr>
-        <td style="font-weight:500">${r.driver_name}</td>
+        <td style="font-weight:500">${escapeHtml(r.driver_name)}</td>
         <td style="text-align:right">${fmtEur(r.total_faturado)}</td>
         <td style="text-align:right;color:#16a34a">${fmtEur(r.combustivel)}</td>
         <td style="text-align:right;color:#16a34a">${fmtEur(r.portagens)}</td>
         <td style="text-align:right;color:#16a34a">${fmtEur(r.reparacoes)}</td>
         <td style="text-align:right;color:#16a34a">${fmtEur(r.outros_custos)}</td>
+        <td style="text-align:right;color:#16a34a">${fmtEur(r.slot)}</td>
         <td style="text-align:right;color:#16a34a">${fmtEur(r.aluguer)}</td>
         ${extraTds}
         <td style="text-align:right;font-weight:700;color:${liquidoColor}">${fmtEur(r.liquido)}</td>
@@ -413,6 +428,7 @@ export async function gerarPrintCompleto(params: {
           <th>Motorista</th>
           <th class="r">Faturado</th><th class="r">Combustível</th>
           <th class="r">Portagens</th><th class="r">Reparações</th><th class="r">Outros</th>
+          <th class="r">Slot</th>
           <th class="r">Aluguer</th>${extraCols}<th class="r">Líquido</th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -423,6 +439,7 @@ export async function gerarPrintCompleto(params: {
           <td class="r">${fmtEur(list.reduce((s, r) => s + r.portagens, 0))}</td>
           <td class="r">${fmtEur(list.reduce((s, r) => s + r.reparacoes, 0))}</td>
           <td class="r">${fmtEur(list.reduce((s, r) => s + r.outros_custos, 0))}</td>
+          <td class="r">${fmtEur(list.reduce((s, r) => s + r.slot, 0))}</td>
           <td class="r">${fmtEur(totalAluguer)}</td>
           ${footerExtras}
           <td class="r">${fmtEur(totalLiquido)}</td>
@@ -447,6 +464,7 @@ export function exportarExcel(params: {
     'Portagens (€)': fmt(r.portagens),
     'Reparações (€)': fmt(r.reparacoes),
     'Outros (€)': fmt(r.outros_custos),
+    'Slot (€)': fmt(r.slot),
     'Aluguer (€)': fmt(r.aluguer),
     'Líquido (€)': fmt(r.liquido),
     'Recibo Verde': r.recibo_verde ? 'Sim' : 'Não',

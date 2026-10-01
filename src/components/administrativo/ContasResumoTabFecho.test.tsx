@@ -17,6 +17,28 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
+// Os avisos têm testes próprios. Os mocks usam um hook a sério: um aviso
+// chamado depois do "return" de carregamento dava "Rendered more hooks" no
+// ecrã (2026-10-01) e um mock sem hooks escondia-o.
+vi.mock('@/hooks/useAbastecimentosSuspeitos', async () => {
+  const { useState } = await import('react');
+  return {
+    useAbastecimentosSuspeitos: () => {
+      useState(0);
+      return { data: undefined };
+    },
+  };
+});
+vi.mock('@/hooks/useCombustivelSemDono', async () => {
+  const { useState } = await import('react');
+  return {
+    useCombustivelSemDono: () => {
+      useState(0);
+      return { data: undefined };
+    },
+  };
+});
+
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasAccessToResource: () => true, isAdmin: true }),
 }));
@@ -41,6 +63,9 @@ vi.mock('./ContasResumoStats', () => ({ ContasResumoStats: () => null }));
 vi.mock('./ContasResumoBulkBar', () => ({ ContasResumoBulkBar: () => null }));
 vi.mock('./MotoristaResumoDialog', () => ({ MotoristaResumoDialog: () => null }));
 vi.mock('./ImportarDadosWizard', () => ({ ImportarDadosWizard: () => null }));
+vi.mock('./importacao-automatica/ImportacaoAutomaticaDialog', () => ({
+  ImportacaoAutomaticaDialog: () => null,
+}));
 vi.mock('./RelatorioPagamentoDialog', () => ({ RelatorioPagamentoDialog: () => null }));
 
 import { ContasResumoTab } from './ContasResumoTab';

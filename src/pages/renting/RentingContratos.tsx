@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
+import { AmbitoFrotaAviso } from '@/components/viaturas/AmbitoFrotaAviso';
+import { SEM_VIATURAS, useAmbitoViaturas, useViaturasDoAmbito } from '@/hooks/useAmbitoViaturas';
+import { negocioNoAmbito } from '@/utils/ambitoViaturas';
 
 import { useClientes } from '@/hooks/useClientes';
 import { useContratosRenting } from '@/hooks/useContratosRenting';
@@ -36,6 +39,9 @@ import {
 } from '@/components/renting/contratos/contratosUtils';
 import { RenovacoesBanner } from '@/components/renting/contratos/RenovacoesBanner';
 import { AnyRentPendentesBanner } from '@/components/renting/contratos/AnyRentPendentesBanner';
+import { FolhaDanosPendentesBanner } from '@/components/renting/contratos/FolhaDanosPendentesBanner';
+import { ExpiradosSemRenovacaoBanner } from '@/components/renting/contratos/ExpiradosSemRenovacaoBanner';
+import { ContratosTerminamHojeDialog } from '@/components/renting/contratos/ContratosTerminamHojeDialog';
 
 import {
   CONTRATO_ESTADO_FIN_LABELS,
@@ -60,6 +66,25 @@ const RentingContratos = () => {
   const { data: estacoes = [] } = useEstacoes({ apenasAtivas: false });
   const { data: clientes = [] } = useClientes();
   const { data: contratos = [], isLoading } = useContratosRenting({ limit: HARD_LIMIT });
+  // Âmbito do cargo: entra pelo regime (TVDE/slot) ou pela viatura.
+  const ambito = useAmbitoViaturas();
+  const { data: doAmbito, isLoading: aCarregarAmbito } = useViaturasDoAmbito(
+    ambito.ambito,
+    ambito.activo
+  );
+  const contratosVisiveis = useMemo(
+    () =>
+      ambito.activo
+        ? contratos.filter((c) =>
+            negocioNoAmbito(
+              { regime: c.regime, viaturaId: c.viatura_id },
+              ambito.ambito,
+              doAmbito?.ids ?? SEM_VIATURAS
+            )
+          )
+        : contratos,
+    [contratos, ambito.activo, ambito.ambito, doAmbito]
+  );
   const { data: condutoresPrincipais = [] } = useContratoCondutoresPrincipais();
 
   const [search, setSearch] = useState('');
@@ -124,7 +149,7 @@ const RentingContratos = () => {
       ? new Date(`${filtros.dataFim}T23:59:59.999`).getTime()
       : null;
 
-    const result = contratos.filter((c) => {
+    const result = contratosVisiveis.filter((c) => {
       if (searchRaw) {
         const condutor = condutorInfoByContratoId.get(c.id);
         const clienteNif = clienteNifById.get(c.cliente_id ?? '') ?? '';
@@ -183,7 +208,7 @@ const RentingContratos = () => {
 
     return result;
   }, [
-    contratos,
+    contratosVisiveis,
     search,
     filtros,
     sortColumn,
@@ -272,14 +297,28 @@ const RentingContratos = () => {
         icon={FileText}
       />
 
+      <AmbitoFrotaAviso ambito={ambito} oQue="contratos" className="mb-3" />
+
       <RenovacoesBanner
-        contratos={contratos}
+        contratos={contratosVisiveis}
+        getClienteNome={getClienteNome}
+        getCondutorNome={getCondutorNome}
+      />
+
+      <ExpiradosSemRenovacaoBanner
+        contratos={contratosVisiveis}
         getClienteNome={getClienteNome}
         getCondutorNome={getCondutorNome}
       />
 
       <AnyRentPendentesBanner
-        contratos={contratos}
+        contratos={contratosVisiveis}
+        getClienteNome={getClienteNome}
+        getCondutorNome={getCondutorNome}
+      />
+
+      <FolhaDanosPendentesBanner
+        contratos={contratosVisiveis}
         getClienteNome={getClienteNome}
         getCondutorNome={getCondutorNome}
       />
@@ -297,6 +336,12 @@ const RentingContratos = () => {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+              {/* Só aparece quando há algo a terminar hoje — ver o componente. */}
+              <ContratosTerminamHojeDialog
+                contratos={contratosVisiveis}
+                getClienteNome={getClienteNome}
+                getCondutorNome={getCondutorNome}
+              />
               <Button onClick={handleCreateClick} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Criar Contrato
@@ -323,7 +368,7 @@ const RentingContratos = () => {
 
           <ContratosTabela
             contratos={pageItems}
-            isLoading={isLoading}
+            isLoading={isLoading || (ambito.activo && aCarregarAmbito)}
             totalSemFiltros={contratos.length}
             sortColumn={sortColumn}
             sortDir={sortDir}

@@ -39,6 +39,9 @@ export default {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+          // Teal seguro como texto solto — separado do --primary do botão
+          // porque no tema escuro os dois papéis exigem valores diferentes.
+          text: 'hsl(var(--primary-text))',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',

@@ -1,13 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = "https://hkqzzxgeedsmjnhyquke.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY; 
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+if (!SUPABASE_KEY) throw new Error('Configure SUPABASE_SERVICE_ROLE_KEY ou VITE_SUPABASE_PUBLISHABLE_KEY');
 
-// If service role key is not available, try to find it in the environment or files.
-// For now, I'll use the anon key if service role is missing, but it might not have access to some tables.
-const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXp6eGdlZWRzbWpuaHlxdWtlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg4ODQyMTAsImV4cCI6MjA2NDQ2MDIxMH0.E-x-p5RjQoZfyw6YVwQlWC-Ao27-IPWvyqRIM0PzA-U";
-
-const supabase = createClient(SUPABASE_URL, ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 async function listIntegrations() {
   console.log("Listing all integrations...");

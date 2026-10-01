@@ -2,19 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
- * Extrato do motorista num período, para o painel dele.
- *
- * Chama `motorista_extrato_periodo`, que calcula no servidor e verifica lá
- * dentro que quem pede é mesmo aquele motorista — o id que vai no pedido é o
- * alvo, nunca a autorização.
- *
- * Recebe início e fim (não "a semana") porque a função também os recebe:
- * acrescentar semana anterior, mês ou período personalizado passa a ser
- * trabalho de interface, sem tocar no servidor.
- *
- * Não confundir com `useMotoristaResumoSemanal`, que lê a tabela do fecho de
- * semana — essa é a base dos acertos enviados ao motorista. As duas contas
- * podem divergir, e o cartão mostra ambas quando isso acontece.
+ * Extrato do motorista num período. Chama `motorista_extrato_periodo`, que verifica no
+ * servidor que quem pede é mesmo aquele motorista (o id no pedido nunca é a autorização).
+ * Não confundir com `useMotoristaResumoSemanal` (fecho de semana, base dos acertos) — as
+ * duas contas podem divergir, e o cartão mostra ambas quando isso acontece.
  */
 export interface ExtratoMotorista {
   periodoInicio: string;

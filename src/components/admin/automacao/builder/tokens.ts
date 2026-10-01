@@ -8,12 +8,21 @@
  * nunca vai existir — daí este ficheiro repetir a regra em vez de a melhorar.
  */
 
+import { escapeHtml } from '@/lib/safeHtml';
+
 const PADRAO = /\{\{\s*(\w+)\s*\}\}/g;
 
 export function substituirTokens(texto: string, vars: Record<string, unknown>): string {
   return texto.replace(PADRAO, (_todo, campo: string) => {
     const valor = vars[campo];
     return valor === undefined || valor === null ? '' : String(valor);
+  });
+}
+
+export function substituirTokensHtml(texto: string, vars: Record<string, unknown>): string {
+  return texto.replace(PADRAO, (_todo, campo: string) => {
+    const valor = vars[campo];
+    return valor === undefined || valor === null ? '' : escapeHtml(valor);
   });
 }
 

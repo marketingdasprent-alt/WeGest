@@ -52,6 +52,11 @@
 begin;
 select plan(26);
 
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" para não
+-- colidir com os inserts manuais de user_organizacoes/user_org_ativa abaixo.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000f3ff', 'bootstrap@f3.pt');
+
 -- ── Cenário base ────────────────────────────────────────────
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000f3000', 'Org Snapshot A', 'f3-a'),

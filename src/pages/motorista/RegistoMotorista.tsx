@@ -234,8 +234,10 @@ const RegistoMotorista: React.FC = () => {
         password,
         options: {
           emailRedirectTo: getEmailRedirectUrl('/motorista/login'),
+          // O servidor (handle_new_user_org) só lê daqui "é motorista?" e a
+          // org escolhida; o cargo Motorista é fixado lá. Nunca enviar
+          // cargo_id: o trigger ignora-o de propósito (auditoria 2026-09-16).
           data: {
-            cargo_id: CARGO_MOTORISTA_ID,
             cargo_nome: 'Motorista',
             tipo_utilizador: 'motorista',
             org_id: orgToUse.id,

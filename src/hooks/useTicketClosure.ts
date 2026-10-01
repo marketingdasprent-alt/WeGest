@@ -41,22 +41,6 @@ interface UseTicketClosureArgs {
   motorista: Motorista | null;
 }
 
-/**
- * Encapsula o fecho de um ticket de assistência:
- *
- *  1. Cria/actualiza `viatura_reparacoes`
- *  2. Upload de fatura (se aplicável)
- *  3. Salva anexos de saída + entrada em `viatura_danos`
- *  4. Lançamento em `motorista_financeiro` (se cobrar motorista)
- *  5. Actualiza `assistencia_tickets` (status='resolvido' + km_fim + ...)
- *  6. Actualiza estado da viatura original
- *  7. Reassociação de motorista e tratamento de viatura substituta
- *  8. Mensagem de status_change com sumário
- *  9. Notificação se ficar sem fatura
- *
- * Mantido como hook (não componente) porque o estado de form vive no caller
- * — aqui só queremos a transacção e o flag `isClosing`.
- */
 export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosureArgs) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -73,10 +57,7 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
     }: CloseTicketInput): Promise<boolean> => {
       if (!ticket || !viatura) return false;
 
-      // Validações
-      // O KM só é obrigatório quando está disponível. Se o gestor marcou
-      // "KM não disponível" (ex.: viatura não liga), o campo fica opcional e
-      // km_fim vai a NULL — sem atualizar o km_atual da viatura.
+      // Sem leitura, preserve o km atual em vez de inventar um valor.
       if (!closureData.km_fim_indisponivel && !closureData.km_fim) {
         toast({
           title: 'Erro',
@@ -113,9 +94,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
         });
         return false;
       }
-      // Nº de fatura e o ficheiro anexado são opcionais — nem sempre a fatura
-      // está disponível no momento do fecho. Ver passo 9: se ficar sem
-      // fatura, os gestores são notificados para o fazer depois.
 
       try {
         setIsClosing(true);
@@ -125,7 +103,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
 
         let reparacaoId = (ticket as any).reparacao_id;
 
-        // 1. Criar/actualizar reparação
         if (isEditMode && reparacaoId) {
           const { error: repError } = await supabase
             .from('viatura_reparacoes')
@@ -164,12 +141,7 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           reparacaoId = novoReparacao?.id;
         }
 
-        // 2. Upload fatura
-        // Bucket 'assistencia-anexos' (não 'viatura-documentos'): quem fecha o
-        // ticket é gestor de assistência e o bucket de viaturas exige
-        // 'viaturas_editar'/admin — a fatura falhava silenciosamente por RLS
-        // para quem não tinha essa permissão. Este bucket já é o usado pelo
-        // resto do fluxo (chat, multimédia) e é público.
+        // Este bucket permite anexos sem a permissão de viaturas exigida pelo outro.
         let faturaUrl: string | null = (ticket as any).fatura_url || null;
         if (faturaFile) {
           const fileExt = faturaFile.name.split('.').pop();
@@ -185,7 +157,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           faturaUrl = publicUrl;
         }
 
-        // 3. Anexos de saída + dano de checkout
         if (exitMediaFiles.length > 0) {
           const anexosSaida = exitMediaFiles.map((file) => ({
             ticket_id: ticketId,
@@ -226,7 +197,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
                 uploaded_by: user?.id,
               }));
 
-            // Adicionar fatura também aos danos
             if (faturaUrl) {
               fotosDano.push({
                 dano_id: novoDano.id,
@@ -245,7 +215,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           }
         }
 
-        // 4. Lançamento financeiro
         if (reparacaoId) {
           if (isEditMode) {
             const { data: existingFin } = await supabase
@@ -298,7 +267,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           }
         }
 
-        // 5. Actualizar ticket
         const ticketUpdates: any = {
           km_fim: kmFim,
           km_fim_indisponivel: closureData.km_fim_indisponivel,
@@ -320,11 +288,8 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           .eq('id', ticketId);
         if (ticketUpdateError) throw ticketUpdateError;
 
-        // 6 + 7 + 8. Viatura, reassociação e log (apenas se não for edit)
         if (!isEditMode) {
           const viaturaOriginalStatus = motorista?.id ? 'em_uso' : 'disponivel';
-          // Só atualiza o km_atual da viatura se o KM foi mesmo lido; se ficou
-          // indisponível (kmFim null), preserva o valor anterior.
           const viaturaUpdate: { status: string; km_atual?: number } = {
             status: viaturaOriginalStatus,
           };
@@ -335,7 +300,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
             .eq('id', viatura.id);
           if (viaturaUpdateError) throw viaturaUpdateError;
 
-          // 7a. Reassociar motorista
           if (motorista?.id) {
             const { data: existingAssoc } = await supabase
               .from('motorista_viaturas')
@@ -358,7 +322,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
             }
           }
 
-          // 7b. Tratar viatura substituta
           if (ticket.viatura_substituta_id && motorista?.id) {
             if (substDecisao === 'devolver') {
               const { error: encerraSubstitutaError } = await supabase
@@ -390,7 +353,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
             }
           }
 
-          // 8. Mensagem de status_change
           const checkoutMessage =
             `Viatura reparada com check-out completo - ` +
             `KM Final: ${kmFim != null ? kmFim : 'não disponível'} - ` +
@@ -417,7 +379,6 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
             : 'Viatura reparada e assistência concluída.',
         });
 
-        // 9. Notificar gestores se ficar sem fatura
         if (!isEditMode && !faturaUrl && !faturaFile) {
           supabase.functions
             .invoke('send-assistance-notification', {

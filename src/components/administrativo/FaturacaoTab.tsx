@@ -31,7 +31,7 @@ import {
 import { formatCurrency, formatDateTime } from '@/utils/formatters';
 import { fmtDay, capitalize, emptyResumo, getWeekShortcuts } from '@/utils/financeiro';
 import type { InvoiceMetadata } from '@/types/faturacao';
-import type { FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import type { ReciboCobrancaAlvo } from '@/components/faturacao/RecibosDialog';
 import type { NotaCreditoCobranca } from '@/components/renting/contratos/NotaCreditoDialog';
 import {

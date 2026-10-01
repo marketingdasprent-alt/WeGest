@@ -32,6 +32,7 @@ import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 import { AnyRentDadosSaidaAlert } from '@/components/renting/contratos/AnyRentDadosSaidaAlert';
+import { FolhaDanosPendenteAlert } from '@/components/renting/contratos/FolhaDanosPendenteAlert';
 import { ClienteDialog } from '@/components/renting/ClienteDialog';
 import { MotoristaDialog } from '@/components/motoristas/MotoristaDialog';
 import { ContratoDocumentosDialog } from '@/components/renting/contratos/ContratoDocumentosDialog';
@@ -130,6 +131,35 @@ const ContratoForm = () => {
 
   const motoristaIdPrincipal =
     condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null;
+
+  // Um contrato já existente não se edita por aqui — só as acções dedicadas
+  // (Prolongar, Renovar, Fechar, Reverter para reserva) mexem nos valores.
+  // Na criação (isEdit=false) os campos continuam livres, para dar para
+  // preencher o contrato pela primeira vez.
+  const camposTravados = isEdit && !!contrato;
+  // pointer-events-none é o reforço: o Select da Radix decide se abre pelo
+  // seu próprio estado em JS, não só pelo atributo disabled nativo, por isso
+  // o fieldset sozinho não lhe chega. O cinzento dos campos já vem do próprio
+  // componente (disabled:opacity-*) — não se acrescenta opacidade ao bloco
+  // inteiro, que escurecia tudo lá dentro (labels, cartões) no tema escuro.
+  // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
+  // que partia os grids lá dentro.
+  const camposFieldsetClass = camposTravados
+    ? 'min-w-0 border-0 p-0 m-0 pointer-events-none select-none'
+    : 'min-w-0 border-0 p-0 m-0';
+
+  // A excepção ao bloqueio: a viatura. Sem isto o botão Guardar continuava
+  // desactivado e a troca não chegava a lado nenhum — dava para escolher o
+  // carro novo e não dava para o gravar.
+  //
+  // O `!!viaturaEscolhida` fecha a janela entre o contrato chegar e o
+  // formulário hidratar: nesse instante o campo ainda tem o '' por omissão e
+  // o contrato já tem uuid, o que dava a diferença por boa e activava o botão
+  // sozinho. A validação apanhava-o a seguir (o schema exige uuid), mas um
+  // botão que pisca activo sem nada ter mudado convida ao clique.
+  const viaturaEscolhida = form.watch('viatura_id');
+  const viaturaTrocada =
+    camposTravados && !!viaturaEscolhida && viaturaEscolhida !== contrato?.viatura_id;
 
   const abriuEntregaAoCriarRef = useRef(false);
 
@@ -273,7 +303,12 @@ const ContratoForm = () => {
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0}
+          disabled={
+            isPending ||
+            contrato?.substituido_em != null ||
+            condutoresRascunho.length > 0 ||
+            (camposTravados && !viaturaTrocada)
+          }
           className="gap-2"
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -318,6 +353,7 @@ const ContratoForm = () => {
       )}
 
       {contrato && <AnyRentDadosSaidaAlert contrato={contrato} />}
+      {contrato && <FolhaDanosPendenteAlert contrato={contrato} />}
 
       {realizacaoPendente && (
         <div className="mb-3 flex flex-col gap-2 rounded-md border border-primary/40 bg-primary/5 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -373,6 +409,10 @@ const ContratoForm = () => {
                     <TabsTrigger value="anexos">Anexos</TabsTrigger>
                   </TabsList>
 
+                  {/* Sem fieldset à volta: aqui o bloqueio é por dentro
+                      (prop `travado`), para a secção da Viatura poder ficar de
+                      fora dele. Um fieldset desactivado desactiva todos os
+                      descendentes e um aninhado não os reactiva. */}
                   <TabsContent value="geral" className="mt-4">
                     <ContratoTabGeral
                       form={form}
@@ -388,22 +428,30 @@ const ContratoForm = () => {
                       contratoId={contrato?.id ?? null}
                       onCriarNovoCliente={() => setClienteDialogOpen(true)}
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
+                      travado={camposTravados}
+                      proximaRenovacaoEm={contrato?.proxima_renovacao_em ?? null}
                     />
                   </TabsContent>
 
                   {isEdit && contrato && (
                     <TabsContent value="coberturas" className="mt-4">
-                      <ContratoTabCoberturas form={form} coberturas={coberturas} />
+                      <fieldset disabled={camposTravados} className={camposFieldsetClass}>
+                        <ContratoTabCoberturas form={form} coberturas={coberturas} />
+                      </fieldset>
                     </TabsContent>
                   )}
 
                   <TabsContent value="extras" className="mt-4">
-                    <ContratoTabExtras form={form} extras={extrasCatalogo} />
+                    <fieldset disabled={camposTravados} className={camposFieldsetClass}>
+                      <ContratoTabExtras form={form} extras={extrasCatalogo} />
+                    </fieldset>
                   </TabsContent>
 
                   {isEdit && contrato && (
                     <TabsContent value="taxas" className="mt-4">
-                      <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
+                      <fieldset disabled={camposTravados} className={camposFieldsetClass}>
+                        <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
+                      </fieldset>
                     </TabsContent>
                   )}
 
@@ -445,7 +493,7 @@ const ContratoForm = () => {
           </CardContent>
         </Card>
 
-        <aside>
+        <aside className="sticky top-4 space-y-4 self-start">
           <ResumoContrato
             dataInicio={dataInicio}
             dataFim={dataFim}
@@ -461,7 +509,7 @@ const ContratoForm = () => {
             totalSnapshot={contrato?.total_final}
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
-            editavel
+            editavel={!camposTravados}
             onValorTotalManualChange={(valor) =>
               // Nota sobre shouldDirty: o que se escreve aqui sobrevive aos
               // `form.reset` dos efeitos de hidratação das relações (condutores,

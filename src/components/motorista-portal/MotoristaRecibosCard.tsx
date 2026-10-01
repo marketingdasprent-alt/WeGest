@@ -380,12 +380,12 @@ export function MotoristaRecibosCard({
   }
 
   return (
-    <Card className="shadow-sm rounded-[2rem] overflow-hidden leading-relaxed border-border">
-      <CardHeader className="p-4 md:p-8 pb-4">
+    <Card className="shadow-sm overflow-hidden leading-relaxed border-border">
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-lg font-black flex items-center gap-3 min-w-0">
-            <div className="p-2 bg-primary/10 rounded-xl shrink-0">
-              <Receipt className="w-5 h-5 text-primary" />
+          <CardTitle className="flex min-w-0 items-center gap-2 text-sm">
+            <div className="shrink-0 rounded-md bg-primary/10 p-1.5">
+              <Receipt className="h-4 w-4 text-primary" />
             </div>
             <span className="truncate">Recibos Verdes</span>
           </CardTitle>
@@ -397,7 +397,7 @@ export function MotoristaRecibosCard({
                 <span className="hidden md:inline">Submeter Recibo Verde</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="rounded-[2rem] border-border bg-background">
+            <DialogContent className=" border-border bg-background">
               <DialogHeader>
                 <DialogTitle className="text-xl font-black">Submeter Recibo Verde</DialogTitle>
               </DialogHeader>
@@ -451,11 +451,11 @@ export function MotoristaRecibosCard({
                   <Label className="text-xs font-black uppercase tracking-widest text-muted-foreground px-1">
                     Ficheiro do Recibo Verde
                   </Label>
-                  <div className="border-2 border-dashed border-border rounded-[2rem] p-8 bg-muted/30 hover:bg-muted/50 transition-colors">
+                  <div className="border-2 border-dashed border-border p-6 bg-muted/30 hover:bg-muted/50 transition-colors">
                     {ficheiro ? (
                       <div className="flex items-center justify-between p-4 bg-background rounded-2xl border border-border shadow-sm">
                         <div className="flex items-center gap-3">
-                          <FileText className="w-5 h-5 text-primary" />
+                          <FileText className="h-4 w-4 text-primary" />
                           <span className="text-sm font-bold truncate max-w-[200px]">
                             {ficheiro.name}
                           </span>
@@ -513,7 +513,7 @@ export function MotoristaRecibosCard({
             {recibos.map((recibo) => (
               <div
                 key={recibo.id}
-                className="flex items-center justify-between px-4 md:px-8 py-4 gap-3 hover:bg-muted/30 transition-colors"
+                className="flex items-center justify-between px-4 py-3 gap-3 hover:bg-muted/30 transition-colors"
               >
                 <div className="flex flex-col gap-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -577,7 +577,7 @@ export function MotoristaRecibosCard({
         )}
 
         <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent className="rounded-[2rem] border-border bg-background">
+          <AlertDialogContent className=" border-border bg-background">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-xl font-black">
                 Apagar Recibo Verde?
@@ -610,7 +610,7 @@ export function MotoristaRecibosCard({
 
         {/* Motivo da recusa — mostrado ao clicar num recibo recusado */}
         <Dialog open={!!motivoRecibo} onOpenChange={(open) => !open && setMotivoRecibo(null)}>
-          <DialogContent className="rounded-[2rem] border-border bg-background">
+          <DialogContent className=" border-border bg-background">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg font-black text-destructive">
                 <AlertCircle className="w-5 h-5" />

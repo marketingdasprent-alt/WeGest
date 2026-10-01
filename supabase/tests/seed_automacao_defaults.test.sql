@@ -24,13 +24,33 @@
 -- A contagem exacta fica aqui à mesma, num único sítio e com o motivo escrito:
 -- serve para dar por uma regra removida sem querer. Se acrescentares uma regra
 -- ao seed, actualiza REGRAS_ESPERADAS e mais nada.
+--
+-- ── 20.ª regra (2026-09-15) ─────────────────────────────────────────────────
+-- 'plataforma.semana_em_falta' NÃO vem do seed_automacao_defaults(): vem da
+-- seed_alerta_semana_em_falta(), semeada pelo seu próprio trigger na criação
+-- da organização (migração 20260915100000). Como este teste conta as regras da
+-- organização — e não as que aquela função em particular criou —, ela entra na
+-- contagem à mesma.
+--
+-- Ficou em função separada de propósito: o seed_automacao_defaults() tem quase
+-- 14 000 caracteres e reescrevê-lo por inteiro para acrescentar uma regra é um
+-- risco de transcrição maior do que o problema que resolve.
+--
+-- ── 21.ª regra (2026-09-22) ─────────────────────────────────────────────────
+-- 'cartao_frota.alterado' vem da seed_alerta_cartao_frota_alterado() (migração
+-- 20260922130000), pelo mesmo padrão. Semeia duas linhas gémeas; só a
+-- 'notificacao' entra nesta contagem, a 'email' fica fora pelo filtro abaixo.
+--
+-- ── 22.ª regra (2026-09-23) ─────────────────────────────────────────────────
+-- 'contrato.alterado' vem da seed_alerta_contrato_alterado() (migração
+-- 20260923100000), pelo mesmo padrão das duas anteriores.
 -- ============================================================
 
 begin;
 select plan(6);
 
--- Actualizar ao acrescentar/remover uma regra em seed_automacao_defaults().
-create temp table _esperado as select 19::int as regras_esperadas;
+-- Actualizar ao acrescentar/remover uma regra semeada na criação da organização.
+create temp table _esperado as select 22::int as regras_esperadas;
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org Seed A', 'seed-automacao-a');

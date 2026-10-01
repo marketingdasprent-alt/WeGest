@@ -1,4 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { RequestBodyError } from '../_shared/http/boundedJson.ts';
+import { readBoundedObject } from '../_shared/rate-limit/requestBody.ts';
+import { consumeRateLimit, trustedRequestIp } from '../_shared/rate-limit/rateLimit.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+
+type UntypedSupabaseClient = ReturnType<typeof createClient<any>>;
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 
@@ -72,7 +77,7 @@ function getPagination(url: URL): { page: number; perPage: number; from: number;
 
 async function authenticate(
   req: Request,
-  supabase: ReturnType<typeof createClient>
+  supabase: UntypedSupabaseClient
 ): Promise<ApiContext | Response> {
   // Extract API key from headers
   const apiKey =
@@ -107,13 +112,32 @@ async function authenticate(
 
   // IP whitelist check
   if (k.ip_whitelist && k.ip_whitelist.length > 0) {
-    const clientIp =
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
+    const clientIp = trustedRequestIp(req);
     if (!k.ip_whitelist.includes(clientIp)) {
       return error('FORBIDDEN', `IP ${clientIp} não autorizado.`, 403);
     }
+  }
+
+  // A coluna não tem CHECK: fora de 1..10000 a RPC recusa e a chave ficava em 503.
+  const limitePorMinuto = Math.min(
+    Math.max(Math.trunc(Number(k.rate_limit_per_minute) || 1), 1),
+    10000
+  );
+  const quota = await consumeRateLimit(supabase, {
+    operation: 'primavera-api',
+    identity: k.org_id + ':' + k.id,
+    limit: limitePorMinuto,
+    windowSeconds: 60,
+  });
+  if (!quota.allowed) {
+    const response = error(
+      quota.status === 429 ? 'RATE_LIMITED' : 'SERVICE_UNAVAILABLE',
+      quota.status === 429 ? 'Quota por minuto excedida.' : 'Serviço temporariamente indisponível.',
+      quota.status
+    );
+    response.headers.set('Retry-After', String(quota.retryAfter));
+    response.headers.set('Access-Control-Expose-Headers', 'Retry-After');
+    return response;
   }
 
   // Update usage stats (fire & forget)
@@ -148,7 +172,7 @@ function handleHealth(): Response {
 async function handleClientes(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -228,7 +252,7 @@ async function handleClientes(
     if (!hasPermission(ctx, 'clientes', 'write'))
       return error('FORBIDDEN', 'Sem permissão para criar clientes.', 403);
 
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     const { data, error: qErr } = await supabase
       .from('motoristas_ativos')
       .insert({ ...body, org_id: ctx.orgId })
@@ -244,7 +268,7 @@ async function handleClientes(
     if (!hasPermission(ctx, 'clientes', 'write'))
       return error('FORBIDDEN', 'Sem permissão para atualizar clientes.', 403);
 
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     delete body.id;
     delete body.org_id;
 
@@ -268,7 +292,7 @@ async function handleClientes(
 async function handleContratos(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -325,7 +349,7 @@ async function handleContratos(
 async function handleFaturas(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -377,7 +401,7 @@ async function handleFaturas(
 
   // POST /faturas
   if (method === 'POST' && !id) {
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     const { data, error: qErr } = await supabase
       .from('recibos_importados')
       .insert({ ...body, org_id: ctx.orgId })
@@ -390,7 +414,7 @@ async function handleFaturas(
 
   // PUT /faturas/:id
   if (method === 'PUT' && id) {
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     delete body.id;
     delete body.org_id;
 
@@ -414,7 +438,7 @@ async function handleFaturas(
 async function handleRecibos(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -464,7 +488,7 @@ async function handleRecibos(
 
   // POST /recibos
   if (method === 'POST' && !id) {
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     const { data, error: qErr } = await supabase
       .from('motorista_recibos')
       .insert({ ...body, org_id: ctx.orgId })
@@ -477,7 +501,7 @@ async function handleRecibos(
 
   // PUT /recibos/:id
   if (method === 'PUT' && id) {
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     delete body.id;
     delete body.org_id;
 
@@ -501,7 +525,7 @@ async function handleRecibos(
 async function handleContasCorrentes(
   req: Request,
   ctx: ApiContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   pathParts: string[],
   url: URL
 ): Promise<Response> {
@@ -582,7 +606,7 @@ async function handleContasCorrentes(
 
   // POST /contas-correntes
   if (method === 'POST' && !subRoute) {
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     const { data, error: qErr } = await supabase
       .from('motorista_financeiro')
       .insert({ ...body, org_id: ctx.orgId })
@@ -595,7 +619,7 @@ async function handleContasCorrentes(
 
   // PUT /contas-correntes/:id
   if (method === 'PUT' && id) {
-    const body = await req.json();
+    const body = await readBoundedObject(req, 64 * 1024);
     delete body.id;
     delete body.org_id;
 
@@ -617,7 +641,7 @@ async function handleContasCorrentes(
 // ─── Request Logger ──────────────────────────────────────────────────────────
 
 async function logRequest(
-  supabase: ReturnType<typeof createClient>,
+  supabase: UntypedSupabaseClient,
   ctx: ApiContext | null,
   req: Request,
   endpoint: string,
@@ -643,10 +667,7 @@ async function logRequest(
     method: req.method,
     status_code: statusCode,
     request_body: requestBody,
-    ip_address:
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown',
+    ip_address: trustedRequestIp(req),
     duration_ms: Date.now() - startTime,
     error_message: errorMsg || null,
   });
@@ -716,6 +737,7 @@ Deno.serve(async (req) => {
         );
     }
   } catch (err) {
+    if (err instanceof RequestBodyError) return error('INVALID_BODY', err.message, err.status);
     const msg = err instanceof Error ? err.message : 'Erro interno';
     response = error('INTERNAL_ERROR', msg, 500);
   }

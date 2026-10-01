@@ -6,33 +6,13 @@ import type { Motorista } from '@/types/motorista';
 
 const QUERY_KEY = ['motoristas'] as const;
 
-/**
- * A tabela é `motoristas_ativos`, não `motoristas`.
- *
- * Existem as duas, e não são a mesma coisa: `motoristas` tem 265 linhas,
- * `motoristas_ativos` tem 532, e NÃO PARTILHAM UM ÚNICO id. A aplicação lê e
- * escreve `motoristas_ativos` em 47 ficheiros; `motoristas` é a tabela legada,
- * escrita pela última vez a 2026-04-14 pelo excel-import.
- *
- * Este ficheiro lia de uma e escrevia na outra: a lista vinha de
- * `motoristas_ativos` e o criar/actualizar/eliminar ia para `motoristas`. Como
- * os ids não coincidem, eliminar um motorista acertava em ZERO linhas e não
- * dava erro — o ecrã dizia "Motorista eliminado" e não eliminava nada. Criar
- * inseria numa tabela que a lista não lê, portanto o motorista novo nunca
- * aparecia.
- *
- * Nenhuma das três mutações está ligada a um ecrã hoje, por isso isto nunca
- * chegou a partir nada em produção. Ficava à espera de quem ligasse o botão.
- */
 const TABELA = 'motoristas_ativos' as const;
 
 interface UseMotoristaOptions {
-  /** Se true, retorna apenas motoristas com status_ativo=true (padrão: false) */
   apenasAtivos?: boolean;
-  /** Se true, retorna apenas motoristas de slot (is_slot=true), independente
-   *  do status — os carros são do motorista, o slot não depende de estar "ativo". */
+
   apenasSlot?: boolean;
-  /** Se false, a query não é executada */
+
   enabled?: boolean;
 }
 
@@ -44,8 +24,6 @@ export function useMotoristas(options: UseMotoristaOptions = {}) {
     queryFn: async () => {
       let q = supabase.from(TABELA).select('*').order('nome');
 
-      // Slot: tolerante ao desync flag/valor — mostra quem tem is_slot=true
-      // OU um valor semanal de slot definido (slot_valor_semanal > 0).
       if (apenasSlot) q = q.or('is_slot.eq.true,slot_valor_semanal.gt.0');
       else if (apenasAtivos) q = q.eq('status_ativo', true);
 
@@ -56,8 +34,6 @@ export function useMotoristas(options: UseMotoristaOptions = {}) {
     enabled,
   });
 }
-
-// ── Mutation: criar ──────────────────────────────────────────
 
 export function useCreateMotorista() {
   const qc = useQueryClient();
@@ -79,8 +55,6 @@ export function useCreateMotorista() {
     },
   });
 }
-
-// ── Mutation: actualizar ─────────────────────────────────────
 
 export function useUpdateMotorista() {
   const qc = useQueryClient();
@@ -107,8 +81,6 @@ export function useUpdateMotorista() {
     },
   });
 }
-
-// ── Mutation: eliminar ───────────────────────────────────────
 
 export function useDeleteMotorista() {
   const qc = useQueryClient();

@@ -1,20 +1,5 @@
-/**
- * Armazenamento de rascunhos de formulários.
- *
- * PORQUE INDEXEDDB E NÃO localStorage
- * O padrão que já existia (utils/entrega.ts, página do QR) guarda fotos em
- * localStorage como base64. Uma foto de telemóvel são ~3 MB, que em base64
- * passam a ~4 MB, e o localStorage tem um tecto de ~5 MB por origem — ou seja,
- * numa folha de danos com meia dúzia de fotos aquele cache estoira em silêncio.
- *
- * O IndexedDB guarda objectos `File` e `Blob` nativamente, por structured
- * clone: sem conversão, sem inflação de 33%, sem tecto prático. É a razão de
- * ser deste módulo.
- *
- * O acesso é por interface para o hook poder ser testado contra memória — o
- * jsdom não implementa IndexedDB e não vale a pena uma dependência só para
- * isso.
- */
+// IndexedDB mantém File/Blob sem a inflação base64 e a interface permite testes
+// sem IndexedDB, que o jsdom não implementa.
 
 export interface RascunhoStore {
   ler<T>(chave: string): Promise<T | null>;
@@ -26,7 +11,6 @@ const DB_NOME = 'wegest-rascunhos';
 const DB_VERSAO = 1;
 const LOJA = 'rascunhos';
 
-/** Quanto tempo um rascunho sobrevive sem ser tocado. */
 export const VALIDADE_DIAS = 7;
 
 interface Envelope<T> {
@@ -61,11 +45,7 @@ function transacao<T>(
   );
 }
 
-/**
- * Store real. Nunca rejeita: um rascunho perdido é um contratempo, um ecrã em
- * branco por causa de uma excepção de armazenamento é um bug. Em navegação
- * privada ou com quota esgotada, degrada para "não guarda" em silêncio.
- */
+// Falhas de armazenamento não podem impedir o formulário de funcionar.
 export function criarStoreIndexedDB(): RascunhoStore {
   const disponivel = typeof indexedDB !== 'undefined';
 
@@ -106,7 +86,6 @@ export function criarStoreIndexedDB(): RascunhoStore {
   };
 }
 
-/** Store em memória — para testes, e para quando o IndexedDB não existe. */
 export function criarStoreMemoria(): RascunhoStore {
   const mapa = new Map<string, unknown>();
   return {

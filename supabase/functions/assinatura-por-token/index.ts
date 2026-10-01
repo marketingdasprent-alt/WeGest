@@ -5,7 +5,7 @@
 // devolve-se apenas o que é preciso para desenhar aquele documento — nunca
 // acesso ao contrato, ao cliente ou a seja o que for à volta.
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

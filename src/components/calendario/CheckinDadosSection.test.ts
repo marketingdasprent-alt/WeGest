@@ -81,7 +81,7 @@ describe('validateCheckinDados', () => {
       const msg = validateCheckinDados(
         base({
           combustivel: '50',
-          novosDanos: [{ id: '1', descricao: '   ', localizacao: '', files: [] }],
+          novosDanos: [{ id: '1', descricao: '   ', localizacao: '', valor: '', files: [] }],
         }),
         0,
         'diesel'
@@ -95,7 +95,13 @@ describe('validateCheckinDados', () => {
           base({
             combustivel: '50',
             novosDanos: [
-              { id: '1', descricao: 'Risco no para-choques', localizacao: 'frente', files: [] },
+              {
+                id: '1',
+                descricao: 'Risco no para-choques',
+                localizacao: 'frente',
+                valor: '',
+                files: [],
+              },
             ],
           }),
           0,

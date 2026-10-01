@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { findField, findNumericField, parseNumber } from './campos.ts';
+import { findField, findFieldAny, findNumericField, parseNumber } from './campos.ts';
 
 const CANDIDATOS_MONTANTE = ['importe', 'imp_total', 'imp', 'montante', 'valor', 'total', 'amount'];
 
@@ -56,4 +56,46 @@ Deno.test('parseNumber aguenta os separadores dos vários exports', () => {
   assertEquals(parseNumber('15.96'), 15.96);
   assertEquals(parseNumber('1.596'), 1596);
   assertEquals(parseNumber(''), null);
+});
+
+// ── Colunas que este export escreve de forma que os candidatos não apanhavam ──
+
+// Export português de Setembro/2026: o produto vem em `NOME PROD.` e o código
+// em `CÓD. PROD.`. Nenhum contém a substring "produ" — "prod." tem o ponto no
+// meio — por isso o fuel_type ficava NULL em 100% das linhas.
+const CANDIDATOS_PRODUTO = [
+  'des_produ',
+  'nome prod',
+  'cod_produ',
+  'produ',
+  'producto',
+  'produto',
+  'product',
+];
+
+Deno.test('o produto vem de NOME PROD., não do código', () => {
+  const linha = { 'CÓD. PROD.': '134', 'NOME PROD.': 'DSL' };
+  assertEquals(findField(linha, CANDIDATOS_PRODUTO), 'DSL');
+});
+
+Deno.test('o produto do export espanhol continua a ser lido', () => {
+  assertEquals(findField({ DES_PRODU: 'GASOLEO A' }, CANDIDATOS_PRODUTO), 'GASOLEO A');
+});
+
+Deno.test('findField desiste na primeira coluna que combina, mesmo vazia', () => {
+  // O defeito: `MATRÍCULA` vem sempre vazia neste export e a matrícula real
+  // está em `MATRÍCULA/CONDUTOR TICKET`. As duas combinam com "matricula", e
+  // findField só olha para a primeira → viatura_id NULL em 100% das linhas.
+  const linha = { MATRÍCULA: '', 'MATRÍCULA/CONDUTOR TICKET': 'BI93IV' };
+  assertEquals(findField(linha, ['matricula']), '');
+});
+
+Deno.test('findFieldAny percorre todas as colunas que combinam', () => {
+  const linha = { MATRÍCULA: '', 'MATRÍCULA/CONDUTOR TICKET': 'BI93IV' };
+  assertEquals(findFieldAny(linha, ['matricula']), 'BI93IV');
+});
+
+Deno.test('findFieldAny respeita a ordem dos candidatos', () => {
+  const linha = { VIATURA: 'AA00AA', 'MATRÍCULA/CONDUTOR TICKET': 'BI93IV' };
+  assertEquals(findFieldAny(linha, ['matricula', 'viatura']), 'BI93IV');
 });

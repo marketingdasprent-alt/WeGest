@@ -183,12 +183,12 @@ export function MotoristaDanosCard({ motoristaId, semMoldura = false }: Motorist
           'leading-relaxed',
           semMoldura
             ? 'border-0 bg-transparent shadow-none rounded-none'
-            : 'shadow-sm rounded-[2rem] overflow-hidden border-border bg-background'
+            : 'shadow-sm overflow-hidden border-border bg-background'
         )}
       >
-        <CardHeader className={cn('pb-4', semMoldura ? 'p-0' : 'p-8')}>
+        <CardHeader className={cn('pb-2', semMoldura ? 'p-0' : 'p-4')}>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-black flex items-center gap-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
               <div className="p-2 bg-destructive/10 rounded-xl">
                 <AlertTriangle className="h-5 w-5 text-destructive" />
               </div>

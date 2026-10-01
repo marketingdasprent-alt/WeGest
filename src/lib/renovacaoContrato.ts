@@ -1,14 +1,7 @@
-/**
- * Lógica pura de renovação de contratos de renting de longa duração (Rent-a-Car e TVDE).
- * A renovação em si corre server-side (RPC renovar_contrato_renting); aqui vive
- * só o cálculo da próxima data de renovação e a deteção de contratos por renovar,
- * usados pelo banner de avisos e pelo diálogo de confirmação.
- */
 import type { ContratoRenting } from '@/types/contratoRenting';
 
 export type EstadoRenovacao = 'hoje' | 'atraso';
 
-/** Subconjunto de um contrato necessário para avaliar a renovação. */
 export type ContratoRenovavelInput = Pick<
   ContratoRenting,
   | 'regime'
@@ -20,6 +13,7 @@ export type ContratoRenovavelInput = Pick<
   | 'renovacao_opcao'
   | 'renovacao_intervalo_dias'
   | 'deleted_at'
+  | 'proxima_renovacao_em'
 >;
 
 function inicioDoDia(d: Date): Date {
@@ -28,13 +22,6 @@ function inicioDoDia(d: Date): Date {
   return x;
 }
 
-/**
- * Próxima data de renovação (fim do período) — espelha a função SQL
- * `proxima_data_renovacao`:
- *   mesmo_dia_cada_mes → +1 mês (mesmo dia)
- *   primeiro_dia_mes   → 1.º dia do mês seguinte
- *   intervalo_dias / — → +N dias (default 30)
- */
 export function proximaDataRenovacao(
   dataInicio: string | Date,
   opcao: string | null | undefined,
@@ -51,13 +38,6 @@ export function proximaDataRenovacao(
   return new Date(d.getTime() + dias * 24 * 60 * 60 * 1000);
 }
 
-/**
- * Data de "próxima renovação" a gravar em `data_fim` quando o contrato é de
- * longa duração — null caso contrário (comportamento inalterado). Aplica-se
- * a qualquer regime: um TVDE de longa duração não tem "fim de contrato" real
- * (o motorista decide quando encerra), mas tem um ciclo de renovação/papelada
- * que precisa de uma data de referência, exactamente como o Rent-a-Car.
- */
 export function calcularDataFimLongaDuracao(
   dataInicio: string,
   isLongaDuracao: boolean | null | undefined,
@@ -68,17 +48,127 @@ export function calcularDataFimLongaDuracao(
   return proximaDataRenovacao(dataInicio, renovacaoOpcao, renovacaoIntervaloDias);
 }
 
-/** Um contrato é renovável se for rent-a-car ou TVDE de longa duração, versão
- *  actual e **em curso**. Rent-a-car exige data_fim; TVDE pode não ter (contratos
- *  antigos, criados antes da data_fim automática de longa duração) — nesse
- *  caso a 1.ª renovação arranca o ciclo a partir de hoje (a RPC usa
- *  COALESCE(data_fim, now())) e daí em diante comporta-se como rent-a-car.
- *
- *  Exige 'em_curso' (e não 'agendado'): renovar pressupõe que a viatura está
- *  com o cliente e que o período anterior correu. Renovar um contrato apenas
- *  agendado propagava o estado 'agendado' para o período novo — era assim que
- *  contratos renovados ficavam por abrir. A RPC renovar_contrato_renting
- *  aplica a mesma regra server-side. */
+/** Dias antes do prazo a partir dos quais a BD aceita renovar um TVDE. */
+export const JANELA_RENOVACAO_DIAS = 7;
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+type CicloOpcao = string | null | undefined;
+type CicloIntervalo = number | null | undefined;
+
+export type CicloRenovacaoInput = Pick<
+  ContratoRenovavelInput,
+  'data_inicio' | 'renovacao_opcao' | 'renovacao_intervalo_dias' | 'proxima_renovacao_em'
+>;
+
+function diasNoMes(ano: number, mes: number): number {
+  return new Date(ano, mes + 1, 0).getDate();
+}
+
+// Âncora + n meses no relógio local, dia preso ao último do mês como o
+// `+ interval '1 month'` do Postgres. Conta sempre da âncora: o 31 não escorrega.
+function somarMeses(ancora: Date, n: number): Date {
+  const ano = ancora.getFullYear();
+  const mes = ancora.getMonth() + n;
+  const dia = Math.min(ancora.getDate(), diasNoMes(ano, mes));
+  return new Date(
+    ano,
+    mes,
+    dia,
+    ancora.getHours(),
+    ancora.getMinutes(),
+    ancora.getSeconds(),
+    ancora.getMilliseconds()
+  );
+}
+
+// Dias de calendário, não 24 h: a hora da âncora mantém-se na mudança de hora.
+function somarDias(ancora: Date, n: number): Date {
+  return new Date(
+    ancora.getFullYear(),
+    ancora.getMonth(),
+    ancora.getDate() + n,
+    ancora.getHours(),
+    ancora.getMinutes(),
+    ancora.getSeconds(),
+    ancora.getMilliseconds()
+  );
+}
+
+function diasDeCalendario(de: Date, ate: Date): number {
+  const a = Date.UTC(de.getFullYear(), de.getMonth(), de.getDate());
+  const b = Date.UTC(ate.getFullYear(), ate.getMonth(), ate.getDate());
+  return Math.round((b - a) / DIA_MS);
+}
+
+/**
+ * Espelha `public.proxima_renovacao_no_ciclo`: a data mais cedo da série do
+ * ciclo que fica ESTRITAMENTE depois de `depoisDe`. Hora local do browser
+ * (Lisboa na prática); a BD faz a mesma conta em Europe/Lisbon.
+ */
+export function proximaRenovacaoNoCiclo(
+  ancora: string | Date,
+  opcao: CicloOpcao,
+  intervalo: CicloIntervalo,
+  depoisDe: string | Date
+): Date {
+  const a = new Date(ancora);
+  const ref = new Date(depoisDe);
+
+  if (opcao === 'mesmo_dia_cada_mes') {
+    const meses = (ref.getFullYear() - a.getFullYear()) * 12 + ref.getMonth() - a.getMonth();
+    if (meses < 0) return new Date(a);
+    const candidato = somarMeses(a, meses);
+    return candidato.getTime() > ref.getTime() ? candidato : somarMeses(a, meses + 1);
+  }
+
+  if (opcao === 'primeiro_dia_mes') {
+    return new Date(ref.getFullYear(), ref.getMonth() + 1, 1);
+  }
+
+  const passo = intervalo && intervalo > 0 ? intervalo : 30;
+  const dias = diasDeCalendario(a, ref);
+  if (dias < 0) return new Date(a);
+  const n = Math.floor(dias / passo);
+  const candidato = somarDias(a, n * passo);
+  return candidato.getTime() > ref.getTime() ? candidato : somarDias(a, (n + 1) * passo);
+}
+
+/** O prazo que a próxima renovação fecha — o mesmo `v_ancora` da RPC. */
+export function ancoraRenovacao(c: CicloRenovacaoInput): Date {
+  if (c.proxima_renovacao_em) return new Date(c.proxima_renovacao_em);
+  return proximaDataRenovacao(c.data_inicio, c.renovacao_opcao, c.renovacao_intervalo_dias);
+}
+
+export interface JanelaRenovacao {
+  ancora: Date;
+  /** Primeiro dia (00:00) em que a BD aceita a renovação. */
+  abreEm: Date;
+  podeRenovar: boolean;
+}
+
+/** Comparação ao dia, como a guarda da RPC: renova-se de 7 dias antes em diante. */
+export function janelaRenovacaoTvde(
+  c: CicloRenovacaoInput,
+  agora: Date = new Date()
+): JanelaRenovacao {
+  const ancora = ancoraRenovacao(c);
+  const abreEm = new Date(
+    ancora.getFullYear(),
+    ancora.getMonth(),
+    ancora.getDate() - JANELA_RENOVACAO_DIAS
+  );
+  return { ancora, abreEm, podeRenovar: inicioDoDia(agora).getTime() >= abreEm.getTime() };
+}
+
+/** Nova proxima_renovacao_em de um TVDE: segue o ciclo a partir do prazo, e
+ *  quem renova atrasado salta logo para a ocorrência seguinte a hoje. */
+export function proximaRenovacaoTvde(c: CicloRenovacaoInput, agora: Date = new Date()): Date {
+  const ancora = ancoraRenovacao(c);
+  const depoisDe = agora.getTime() > ancora.getTime() ? agora : ancora;
+  return proximaRenovacaoNoCiclo(ancora, c.renovacao_opcao, c.renovacao_intervalo_dias, depoisDe);
+}
+
 export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
   return (
     (c.regime === 'rent_a_car' || c.regime === 'tvde') &&
@@ -90,15 +180,10 @@ export function contratoRenovavel(c: ContratoRenovavelInput): boolean {
   );
 }
 
-/**
- * Prazo de renovação EFECTIVO de um contrato:
- *   · com data_fim → a própria data_fim (rent-a-car e TVDE já ciclados);
- *   · TVDE de longa duração SEM data_fim → prazo VIRTUAL = data_início + ciclo
- *     de renovação (default 30 dias). Regra do negócio: TODO o TVDE renova a
- *     cada 30 dias, por isso mesmo sem data_fim gravada tem um prazo a cumprir.
- *     A 1.ª renovação grava a data_fim real (a RPC usa COALESCE(data_fim, now())).
- */
 export function prazoRenovacao(c: ContratoRenovavelInput): Date | null {
+  // TVDE: renovar avança proxima_renovacao_em no mesmo contrato (ver
+  // 20260908093000); um data_fim que lá esteja é legado das versões de 30 dias.
+  if (c.regime === 'tvde' && c.proxima_renovacao_em) return new Date(c.proxima_renovacao_em);
   if (c.data_fim) return new Date(c.data_fim);
   if (c.regime === 'tvde' && c.is_longa_duracao && c.data_inicio) {
     return proximaDataRenovacao(c.data_inicio, c.renovacao_opcao, c.renovacao_intervalo_dias);
@@ -106,10 +191,6 @@ export function prazoRenovacao(c: ContratoRenovavelInput): Date | null {
   return null;
 }
 
-/**
- * Estado de renovação de um contrato face a uma data de referência:
- * 'hoje' (renova hoje), 'atraso' (renovação já passou) ou null (ainda não / N/A).
- */
 export function estadoRenovacaoContrato(
   c: ContratoRenovavelInput,
   hoje: Date = new Date()
@@ -128,11 +209,6 @@ export interface ContratoPorRenovar<T> {
   estado: EstadoRenovacao;
 }
 
-/**
- * Filtra e ordena os contratos por renovar (hoje + em atraso). Em atraso primeiro
- * e, dentro de cada grupo, por prazo ascendente (o mais antigo no topo). O prazo
- * é a data_fim ou, em TVDE sem data_fim, o prazo virtual (ver prazoRenovacao).
- */
 export function contratosPorRenovar<T extends ContratoRenovavelInput>(
   contratos: T[],
   hoje: Date = new Date()
@@ -147,5 +223,52 @@ export function contratosPorRenovar<T extends ContratoRenovavelInput>(
     return (
       (prazoRenovacao(a.contrato)?.getTime() ?? 0) - (prazoRenovacao(b.contrato)?.getTime() ?? 0)
     );
+  });
+}
+
+export function contratosExpiradosSemRenovacao<T extends ContratoRenovavelInput>(
+  contratos: T[],
+  hoje: Date = new Date()
+): T[] {
+  const ref = inicioDoDia(hoje);
+  return contratos
+    .filter(
+      (c) =>
+        !contratoRenovavel(c) &&
+        !c.substituido_em &&
+        !c.deleted_at &&
+        c.estado_operacional === 'em_curso' &&
+        !!c.data_fim &&
+        inicioDoDia(new Date(c.data_fim)).getTime() < ref.getTime()
+    )
+    .sort((a, b) => new Date(a.data_fim!).getTime() - new Date(b.data_fim!).getTime());
+}
+
+/**
+ * Contratos que TERMINAM no dia de referência — o botão "Terminam hoje" da
+ * lista de contratos.
+ *
+ * Ao contrário de `contratosPorRenovar`, não filtra por renovável: entra tudo
+ * o que acaba nesse dia, longa ou curta duração, TVDE ou rent-a-car. A
+ * pergunta aqui não é "há renovação a propor?" mas "o que é que acaba hoje?"
+ * — e a resposta a isso pode ser renovar, fechar, ou acordar datas novas.
+ *
+ * Fica de fora o que já não tem nada a fazer: fechado, cancelado, devolvido,
+ * substituído por outra versão, apagado. Um contrato agendado ainda conta —
+ * é um contrato vivo.
+ *
+ * A comparação é ao DIA, em hora local, como `estadoRenovacaoContrato`: um
+ * contrato que acaba às 23:50 de hoje termina hoje.
+ */
+export function contratosTerminamHoje<T extends ContratoRenovavelInput>(
+  contratos: T[],
+  hoje: Date = new Date()
+): T[] {
+  const ref = inicioDoDia(hoje).getTime();
+  return contratos.filter((c) => {
+    if (!c.data_fim) return false;
+    if (c.deleted_at || c.substituido_em) return false;
+    if (c.estado_operacional !== 'em_curso' && c.estado_operacional !== 'agendado') return false;
+    return inicioDoDia(new Date(c.data_fim)).getTime() === ref;
   });
 }

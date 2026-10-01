@@ -1,0 +1,14 @@
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+API_KEY_21ST = "21st_sk_7716765254560737dfe13d55be2683c813dbfb739fac36b24b0c683ddc03d31c"
+
+[mcp_servers.21st]
+url = "https://21st.dev/api/mcp"
+
+[mcp_servers.21st.env_http_headers]
+x-api-key = "API_KEY_21ST"
+
+[mcp_servers.supabase]
+url = "https://mcp.supabase.com/mcp?project_ref=hkqzzxgeedsmjnhyquke&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"

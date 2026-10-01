@@ -12,6 +12,7 @@ import {
   Fuel,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { filtroDataFimViva } from '@/utils/associacaoViatura';
 import { MotoristaStatusBadge } from '@/lib/statusBadges';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SectionCard } from '@/components/ui/section-card';
@@ -53,7 +54,7 @@ export function MotoristaDetailsDrawer({
       .select('data_inicio, viaturas(matricula, marca, modelo, ano, cor, categoria)')
       .eq('motorista_id', motorista.id)
       .eq('status', 'ativo')
-      .is('data_fim', null)
+      .or(filtroDataFimViva())
       .order('data_inicio', { ascending: false })
       .limit(1)
       .maybeSingle()

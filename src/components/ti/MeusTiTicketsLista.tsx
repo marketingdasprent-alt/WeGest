@@ -19,16 +19,9 @@ import { ESTADO_TICKET_ROTULO } from '@/lib/tiTicketEstados';
 const TAMANHO_PAGINA = 5;
 
 /**
- * Histórico de quem NÃO gere tickets: só os próprios pedidos, em modo
- * leitura. As acções de gerir (sugerir, marcar resolvido, reabrir) ficam de
- * fora de propósito — quem vê isto não tem essa permissão, e mesmo que a
- * tivesse, responder à própria sugestão é o papel da página do link por
- * email (TicketTIAutor), não daqui.
- *
- * Mesmo painel que a lista do admin (cartão, scroll interno, paginação) —
- * só o conteúdo muda, para os dois ecrãs não parecerem coisas diferentes.
- * Sem pesquisa nem filtro de empresa: numa lista de "os meus pedidos" (uma
- * só organização, tipicamente poucos) não fazem falta.
+ * Histórico só de leitura dos próprios tickets. Sem acções de gerir de
+ * propósito — responder a sugestões é o papel de TicketTIAutor (link por
+ * email), não daqui. Mesmo layout da lista do admin, sem pesquisa/filtro.
  */
 export function MeusTiTicketsLista() {
   const { data = [], isLoading, error } = useMeusTiTickets();

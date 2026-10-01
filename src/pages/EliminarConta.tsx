@@ -15,19 +15,6 @@ const DADOS_ELIMINADOS = [
   'Todas as preferências e configurações pessoais',
 ];
 
-/**
- * Eliminação de conta (RGPD, e requisito das lojas de aplicações).
- *
- * A lógica do pedido não mudou — continua a chamar a edge function
- * `solicitar-eliminacao` com email e nome opcional. O que mudou é a casca:
- * usava o cabeçalho e o rodapé antigos (que anunciavam "a empresa TVDE que
- * mais cresce em Portugal") e cores fixas `amber-*` / `green-500` em vez dos
- * tokens `warning` e `primary`.
- *
- * Também saíram as animações de entrada: esta página é um formulário
- * destrutivo, e fazer os avisos aparecerem com atraso é exatamente o que não
- * se quer quando o utilizador está a ler consequências irreversíveis.
- */
 export default function EliminarConta() {
   const [email, setEmail] = useState('');
   const [nome, setNome] = useState('');

@@ -5,6 +5,7 @@ import {
   validarCartaConducao,
   validarTelefone,
   validarEmail,
+  validarIBAN,
 } from '@/lib/pt-validators';
 
 export const CATEGORIAS_CARTA = [
@@ -54,6 +55,7 @@ export interface CandidaturaCampos {
   licencaTvdeFicheiroUrl: string;
   registoCriminalUrl: string;
   comprovativoMoradaUrl: string;
+  iban: string;
   comprovativoIbanUrl: string;
 }
 
@@ -68,8 +70,12 @@ export function traduzirErro(msg?: string, fallback = 'Ocorreu um erro. Tente no
     m.includes('rls')
   )
     return 'Não tem permissão para esta ação. Inicie sessão novamente e tente outra vez.';
+  // "Could not find column" pode ser coluna em falta ou cache do PostgREST por
+  // atualizar — o cliente não distingue. Caso real (2026-09-08): a coluna
+  // faltava mesmo e dois candidatos tentaram 12x porque a mensagem mandava
+  // esperar. Por isso não se manda repetir; diz-se para avisar-nos.
   if (m.includes('could not find') && m.includes('column'))
-    return 'Erro de base de dados: uma coluna está em falta. O administrador precisa de aplicar a migration mais recente no Supabase.';
+    return 'Não foi possível guardar: o sistema não reconheceu um dos campos do formulário. Não é nada que tenha preenchido mal, e repetir não resolve — avise-nos, por favor. (Para quem gere o sistema: falta a coluna na tabela, ou o schema do PostgREST precisa de ser recarregado.)';
   if (m.includes('duplicate') || m.includes('already exists') || m.includes('unique'))
     return 'Já existe um registo com estes dados.';
   if (m.includes('network') || m.includes('failed to fetch') || m.includes('fetch'))
@@ -159,6 +165,12 @@ export function buildValidationErrors(campos: CandidaturaCampos): Record<string,
 
   // Documentos Adicionais
   if (!campos.registoCriminalUrl) errors.registoCriminalUrl = `Registo Criminal: ${UPLOAD_HINT}`;
+  if (!campos.iban.trim()) {
+    errors.iban = 'Documentos Adicionais — IBAN: indique o seu IBAN.';
+  } else {
+    const r = validarIBAN(campos.iban);
+    if (!r.valid) errors.iban = `Documentos Adicionais — IBAN: ${r.message}`;
+  }
   if (!campos.comprovativoIbanUrl)
     errors.comprovativoIbanUrl = `Comprovativo de IBAN: ${UPLOAD_HINT}`;
 

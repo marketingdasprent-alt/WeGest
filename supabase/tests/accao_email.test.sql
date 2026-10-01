@@ -70,8 +70,11 @@ select ok(
   'e mantém o caminho antigo, enquanto houver regras por migrar'
 );
 
+-- Desde 20260905120000 o corpo por-run vive em `processar_automation_run`
+-- (partilhada por `execute_automation_runs` e por `testar_regra_automacao`)
+-- — `execute_automation_runs` ficou reduzida ao loop de `automation_runs_claim`.
 select ok(
-  pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure)
+  pg_get_functiondef('public.processar_automation_run(public.automation_runs)'::regprocedure)
     like '%jsonb_populate_record%',
   'o executor continua a ler a definição congelada, não a regra viva'
 );
@@ -142,14 +145,14 @@ select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claims', '', true);
 
 select ok(
-  pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure)
+  pg_get_functiondef('public.processar_automation_run(public.automation_runs)'::regprocedure)
     like '%v_enviar_email := (v_rule.acao_tipo = ''email'')%',
   'o executor decide o email pelo tipo da acção, não pela config'
 );
 
 select ok(
-  (length(pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure))
-   - length(replace(pg_get_functiondef('public.execute_automation_runs(integer)'::regprocedure),
+  (length(pg_get_functiondef('public.processar_automation_run(public.automation_runs)'::regprocedure))
+   - length(replace(pg_get_functiondef('public.processar_automation_run(public.automation_runs)'::regprocedure),
                     'acao_tipo = ''notificacao'' and v_tipo_legado', '')))
   / length('acao_tipo = ''notificacao'' and v_tipo_legado') = 2,
   'os dois inserts em notificacoes ficam restritos a regras de notificação'

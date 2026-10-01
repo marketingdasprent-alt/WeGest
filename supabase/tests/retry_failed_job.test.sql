@@ -12,6 +12,11 @@
 begin;
 select plan(7);
 
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" para não
+-- colidir com os inserts manuais de user_organizacoes/user_org_ativa abaixo.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000a0ff', 'bootstrap@retry.pt');
+
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'retry-a'),
   ('00000000-0000-0000-0000-0000000b0000', 'Org B', 'retry-b');

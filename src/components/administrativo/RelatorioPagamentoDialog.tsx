@@ -12,14 +12,25 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  AlertTriangle,
+  Gauge,
+  Printer,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { format } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { colunaDoMovimento, type ColunaFinanceira } from './relatorioPagamentoCategorias';
+import { gerarRelatorioPagamentoPrint } from './relatorioPagamentoPrint';
 
 interface ResumoBase {
   motorista_id?: string;
+  /** Chave estável da linha nos Resumos. Existe mesmo sem `motorista_id` — é
+   *  o que permite mostrar aqui um motorista ainda sem ficha no CRM. */
+  _uid?: string;
+  driver_uuid?: string;
   driver_name: string;
+  /** Passa recibo verde. `false` = "vermelho" — o nome sai a vermelho e o
+   *  filtro do cabeçalho separa uns dos outros. */
+  recibo_verde?: boolean;
   liquido: number;
   aluguer: number;
   combustivel: number;
@@ -37,23 +48,29 @@ interface RelatorioPagamentoDialogProps {
 }
 
 interface LinhaRelatorio {
-  motorista_id: string;
+  /** Identidade da linha na tabela (ordenação, arrasto, React key). Vem do
+   *  `_uid` dos Resumos, por isso existe mesmo sem ficha no CRM. */
+  key: string;
+  /** `null` = motorista de plataforma que ainda não está casado com uma ficha
+   *  do CRM. Sem ficha não há IBAN, não há movimentos financeiros e não dá
+   *  para marcar como pago (a tabela `relatorio_pagamento_pagos` guarda o id
+   *  da ficha). A linha aparece na mesma — ver o aviso no cabeçalho. */
+  motorista_id: string | null;
   nome: string;
   iban: string;
+  reciboVerde: boolean;
   liquido: number;
   viatura: number;
   combustivel: number;
   portagens: number;
-  rnvat: number;
   seguros: number;
   acordos: number;
   danos: number;
   caucao: number;
-  negativoAnterior: number;
-  devCaucao: number;
   bonificacao: number;
   ajudaCusto: number;
   outrasDevolucoes: number;
+  outrosDebitos: number;
 }
 
 const fmtEur = (v: number) =>
@@ -66,16 +83,14 @@ type SortKey =
   | 'viatura'
   | 'combustivel'
   | 'portagens'
-  | 'rnvat'
   | 'seguros'
   | 'acordos'
   | 'danos'
   | 'caucao'
-  | 'negativoAnterior'
-  | 'devCaucao'
   | 'bonificacao'
   | 'ajudaCusto'
-  | 'outrasDevolucoes';
+  | 'outrasDevolucoes'
+  | 'outrosDebitos';
 
 export function RelatorioPagamentoDialog({
   open,
@@ -93,6 +108,11 @@ export function RelatorioPagamentoDialog({
   // Motoristas marcados como "já pago" (só visual, ajuda a acompanhar os
   // pagamentos durante a sessão — risca a linha; não persiste).
   const [pagos, setPagos] = useState<Set<string>>(new Set());
+  // Motoristas que já entregaram o KM desta semana. Quem não está aqui aparece
+  // assinalado — não bloqueia o pagamento, porque há faltas legítimas (baixa,
+  // viatura na oficina) e travar o acerto por isso fazia mais estragos do que
+  // resolvia. Quem decide é o gestor, com a informação à frente.
+  const [comKmSemana, setComKmSemana] = useState<Set<string>>(new Set());
   // Ordem manual (array de motorista_id). Vazio = ordem alfabética.
   // Arrastar uma linha preenche esta ordem e passa a sobrepor a alfabética.
   const [ordemManual, setOrdemManual] = useState<string[]>([]);
@@ -101,6 +121,10 @@ export function RelatorioPagamentoDialog({
   // ordem manual; arrastar uma linha limpa a ordenação (ver handleDrop).
   const [sortCol, setSortCol] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  // Recibo verde: 'verde' = passa recibo, 'vermelho' = não passa. O filtro
+  // mexe também nos totais e no que vai para a impressão e para o Excel — é
+  // deliberado: quem filtra quer o total daquele grupo, não o da lista toda.
+  const [filtroRecibo, setFiltroRecibo] = useState<'todos' | 'verde' | 'vermelho'>('todos');
 
   // Reset da ordenação ao fechar (os "pagos" são recarregados da BD ao abrir).
   useEffect(() => {
@@ -110,6 +134,7 @@ export function RelatorioPagamentoDialog({
       setDragId(null);
       setSortCol(null);
       setSortDir('asc');
+      setFiltroRecibo('todos');
     }
   }, [open]);
 
@@ -186,30 +211,71 @@ export function RelatorioPagamentoDialog({
     }
   };
 
-  const comMotoristaId = useMemo(
-    () => resumos.filter((r): r is ResumoBase & { motorista_id: string } => !!r.motorista_id),
+  // Chave estável por linha. Sem ficha no CRM não há `motorista_id`, mas há
+  // sempre `_uid` (é o mesmo que a lista dos Resumos usa para seleccionar e
+  // para as keys do React).
+  const chaveDaLinha = (r: ResumoBase) =>
+    r.motorista_id || r._uid || r.driver_uuid || `sem-ficha:${r.driver_name}`;
+
+  // TODOS os motoristas dos Resumos, com ficha no CRM ou sem ela. Antes esta
+  // lista era `resumos.filter(r => !!r.motorista_id)` e os outros
+  // desapareciam do relatório e do Excel sem aviso nenhum — na semana
+  // 31/08–06/09 eram 21 pessoas e 5.352 € de faturado. O relatório de
+  // pagamento é onde se confere quem recebe o quê; faltar lá gente é pior do
+  // que mostrá-la incompleta.
+  const linhasBase = useMemo(
+    () =>
+      resumos.map((r) => ({
+        resumo: r,
+        key: chaveDaLinha(r),
+        motoristaId: r.motorista_id ?? null,
+      })),
     [resumos]
   );
 
+  const semFicha = useMemo(() => linhasBase.filter((l) => !l.motoristaId), [linhasBase]);
+
   useEffect(() => {
-    if (!open || comMotoristaId.length === 0) return;
+    if (!open || linhasBase.length === 0) return;
     let cancelled = false;
 
     (async () => {
       setLoading(true);
       try {
-        const ids = comMotoristaId.map((r) => r.motorista_id);
+        const ids = linhasBase.map((l) => l.motoristaId).filter((id): id is string => !!id);
+        if (ids.length === 0) {
+          setIbanMap({});
+          setFinanceiroMap({});
+          return;
+        }
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
         const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
-        const [ibanResult, financeiroResult] = await Promise.all([
+        const [ibanResult, financeiroResult, kmResult] = await Promise.all([
           supabase.from('motoristas_ativos').select('id, iban').in('id', ids),
           supabase
             .from('motorista_financeiro')
             .select('motorista_id, valor, categoria, tipo')
             .gte('data_movimento', weekStartStr)
             .lte('data_movimento', weekEndStr)
-            .eq('status', 'pendente')
+            // O MESMO critério do cálculo dos Resumos (useContasResumoSemana):
+            // conta tudo menos o cancelado. Com `.eq('status','pendente')` um
+            // débito já marcado como pago continuava a pesar no "Valor a
+            // Pagar" — que vem dos Resumos — e não tinha linha nenhuma no
+            // detalhe. Desde 01/08 eram 46 movimentos, 7.168,59 €.
+            .neq('status', 'cancelado')
+            .in('motorista_id', ids),
+          // Quem entregou os quilómetros desta semana. O KM é condição para o
+          // acerto ser processado — sem ele não se sabe quanto a viatura andou
+          // — por isso a falta aparece aqui, ao lado do valor a pagar, e não
+          // num ecrã que ninguém abre na hora de pagar.
+          supabase
+            .from('viatura_km_leituras')
+            .select('motorista_id')
+            .gte('created_at', weekStartStr + 'T00:00:00')
+            // Limite exclusivo: `created_at` é timestamptz e um `lte` pela data
+            // do domingo cortaria fora o domingo inteiro.
+            .lt('created_at', format(addDays(weekEnd, 1), 'yyyy-MM-dd') + 'T00:00:00')
             .in('motorista_id', ids),
         ]);
 
@@ -220,6 +286,10 @@ export function RelatorioPagamentoDialog({
           if (m.iban) ibans[m.id] = m.iban;
         });
         setIbanMap(ibans);
+
+        setComKmSemana(
+          new Set((kmResult.data || []).map((r: any) => r.motorista_id).filter(Boolean))
+        );
 
         const fin: Record<string, Partial<Record<ColunaFinanceira, number>>> = {};
         (financeiroResult.data || []).forEach((m: any) => {
@@ -241,33 +311,37 @@ export function RelatorioPagamentoDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, comMotoristaId, weekStart, weekEnd]);
+  }, [open, linhasBase, weekStart, weekEnd]);
 
   const linhas: LinhaRelatorio[] = useMemo(
     () =>
-      comMotoristaId.map((r) => {
-        const fin = financeiroMap[r.motorista_id] || {};
+      linhasBase.map(({ resumo: r, key, motoristaId }) => {
+        const fin = (motoristaId && financeiroMap[motoristaId]) || {};
         return {
-          motorista_id: r.motorista_id,
+          key,
+          motorista_id: motoristaId,
           nome: r.driver_name,
-          iban: ibanMap[r.motorista_id] || '',
+          iban: (motoristaId && ibanMap[motoristaId]) || '',
+          // Por omissão VERDE. O campo vem dos Resumos, que já o resolvem a
+          // partir da ficha; só fica indefinido em linhas sem ficha no CRM, e
+          // aí não há como saber — melhor não acusar ninguém de não passar
+          // recibo por falta de dados.
+          reciboVerde: r.recibo_verde !== false,
           liquido: r.liquido,
           viatura: r.aluguer,
           combustivel: r.combustivel,
           portagens: r.portagens,
-          rnvat: fin.rnvat || 0,
           seguros: fin.seguros || 0,
           acordos: fin.acordos || 0,
           danos: r.reparacoes,
           caucao: fin.caucao || 0,
-          negativoAnterior: fin.negativoAnterior || 0,
-          devCaucao: fin.devCaucao || 0,
           bonificacao: fin.bonificacao || 0,
           ajudaCusto: fin.ajudaCusto || 0,
           outrasDevolucoes: fin.outrasDevolucoes || 0,
+          outrosDebitos: fin.outrosDebitos || 0,
         };
       }),
-    [comMotoristaId, financeiroMap, ibanMap]
+    [linhasBase, financeiroMap, ibanMap]
   );
 
   // Ordenação, por prioridade:
@@ -276,7 +350,9 @@ export function RelatorioPagamentoDialog({
   // Motoristas fora da ordem manual (ex.: dados que carregaram depois) vão para
   // o fim, alfabéticos.
   const linhasOrdenadas = useMemo(() => {
-    const arr = [...linhas];
+    const arr = linhas.filter((l) =>
+      filtroRecibo === 'todos' ? true : filtroRecibo === 'verde' ? l.reciboVerde : !l.reciboVerde
+    );
 
     if (sortCol) {
       arr.sort((a, b) => {
@@ -295,16 +371,16 @@ export function RelatorioPagamentoDialog({
     if (ordemManual.length === 0) return alfabetica;
     const pos = new Map(ordemManual.map((id, i) => [id, i]));
     return alfabetica.sort((a, b) => {
-      const pa = pos.has(a.motorista_id) ? pos.get(a.motorista_id)! : Number.MAX_SAFE_INTEGER;
-      const pb = pos.has(b.motorista_id) ? pos.get(b.motorista_id)! : Number.MAX_SAFE_INTEGER;
+      const pa = pos.has(a.key) ? pos.get(a.key)! : Number.MAX_SAFE_INTEGER;
+      const pb = pos.has(b.key) ? pos.get(b.key)! : Number.MAX_SAFE_INTEGER;
       return pa - pb;
     });
-  }, [linhas, ordemManual, sortCol, sortDir]);
+  }, [linhas, ordemManual, sortCol, sortDir, filtroRecibo]);
 
   // Drag-n-drop (HTML5 nativo — mesmo padrão do kanban-board do projeto).
   const handleDrop = (targetId: string) => {
     if (!dragId || dragId === targetId) return;
-    const base = linhasOrdenadas.map((l) => l.motorista_id);
+    const base = linhasOrdenadas.map((l) => l.key);
     const from = base.indexOf(dragId);
     const to = base.indexOf(targetId);
     if (from === -1 || to === -1) return;
@@ -320,57 +396,91 @@ export function RelatorioPagamentoDialog({
       viatura: 0,
       combustivel: 0,
       portagens: 0,
-      rnvat: 0,
       seguros: 0,
       acordos: 0,
       danos: 0,
       caucao: 0,
-      negativoAnterior: 0,
-      devCaucao: 0,
       bonificacao: 0,
       ajudaCusto: 0,
       outrasDevolucoes: 0,
+      outrosDebitos: 0,
     };
     linhasOrdenadas.forEach((l) => {
       t.liquido += l.liquido;
       t.viatura += l.viatura;
       t.combustivel += l.combustivel;
       t.portagens += l.portagens;
-      t.rnvat += l.rnvat;
       t.seguros += l.seguros;
       t.acordos += l.acordos;
       t.danos += l.danos;
       t.caucao += l.caucao;
-      t.negativoAnterior += l.negativoAnterior;
-      t.devCaucao += l.devCaucao;
       t.bonificacao += l.bonificacao;
       t.ajudaCusto += l.ajudaCusto;
       t.outrasDevolucoes += l.outrasDevolucoes;
+      t.outrosDebitos += l.outrosDebitos;
     });
     return t;
   }, [linhasOrdenadas]);
+
+  // Contadores dos botões — sobre a lista INTEIRA, para continuarem a fazer
+  // sentido com um filtro activo.
+  const nVerdes = useMemo(() => linhas.filter((l) => l.reciboVerde).length, [linhas]);
+  const nVermelhos = linhas.length - nVerdes;
+  // Quantos faltam entregar o KM desta semana. Vai ao cabeçalho para o gestor
+  // ver de relance, sem ter de percorrer a lista à procura das etiquetas.
+  const nSemKm = useMemo(
+    () => linhas.filter((l) => l.motorista_id && !comKmSemana.has(l.motorista_id)).length,
+    [linhas, comKmSemana]
+  );
+
+  // Só descritivo — o que sai no cabeçalho do papel, para uma folha filtrada
+  // não se fazer passar pela lista completa.
+  const filtroLabel =
+    filtroRecibo === 'verde'
+      ? 'Apenas com recibo verde'
+      : filtroRecibo === 'vermelho'
+        ? 'Apenas sem recibo verde'
+        : undefined;
+
+  const handlePrint = () =>
+    gerarRelatorioPagamentoPrint({
+      // A MESMA lista do ecrã, na mesma ordem e com o mesmo filtro: a
+      // impressão não recalcula nada.
+      linhas: linhasOrdenadas.map((l) => ({
+        ...l,
+        pago: !!l.motorista_id && pagos.has(l.motorista_id),
+      })),
+      weekLabel,
+      filtroLabel,
+    });
 
   const handleExport = () => {
     const rows = linhasOrdenadas.map((l) => ({
       Nome: l.nome,
       IBAN: l.iban,
+      'Recibo Verde': l.reciboVerde ? 'Sim' : 'Não',
+      'KM da semana': l.motorista_id && comKmSemana.has(l.motorista_id) ? 'Sim' : 'Não',
       Semana: weekLabel,
-      Pago: pagos.has(l.motorista_id) ? 'Sim' : '',
+      Pago: l.motorista_id && pagos.has(l.motorista_id) ? 'Sim' : '',
       'Valor a Pagar (€)': l.liquido,
       Negativos: l.liquido < 0 ? l.liquido : '',
       'Viatura (€)': l.viatura,
       'Combustível (€)': l.combustivel,
       'Portagens (€)': l.portagens,
-      'RNVAT (€)': l.rnvat,
       'Seguros (€)': l.seguros,
       'Acordos (€)': l.acordos,
       'Danos (€)': l.danos,
       'Caução (€)': l.caucao,
-      'Negativo Anterior (€)': l.negativoAnterior,
-      'Dev. Caução (€)': l.devCaucao,
       'Bonificação Motorista (€)': l.bonificacao,
       'Ajuda Custo (€)': l.ajudaCusto,
       'Outras Devoluções (€)': l.outrasDevolucoes,
+      'Outros Débitos (€)': l.outrosDebitos,
+      // O Excel sai destas salas para fora — quem o abre tem de perceber
+      // porque é que a linha não tem IBAN nem detalhe, sem ter de vir
+      // perguntar.
+      Observação: l.motorista_id
+        ? ''
+        : 'Motorista de plataforma sem ficha no CRM — sem IBAN e sem movimentos financeiros',
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -441,12 +551,98 @@ export function RelatorioPagamentoDialog({
                   Ordem alfabética
                 </Button>
               )}
+              {/* Verdes/Vermelhos = passa ou não passa recibo verde. Os
+                  contadores vêm de `linhas` (a lista toda), não de
+                  `linhasOrdenadas`, senão o grupo activo mostrava o seu
+                  próprio número e o outro ficava a zero. */}
+              <div className="flex items-center rounded-md border p-0.5">
+                {(
+                  [
+                    ['todos', `Todos (${linhas.length})`, ''],
+                    ['verde', `Verdes (${nVerdes})`, 'text-emerald-700 dark:text-emerald-400'],
+                    ['vermelho', `Vermelhos (${nVermelhos})`, 'text-red-600 dark:text-red-400'],
+                  ] as const
+                ).map(([valor, rotulo, cor]) => (
+                  <button
+                    key={valor}
+                    type="button"
+                    onClick={() => setFiltroRecibo(valor)}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                      filtroRecibo === valor
+                        ? 'bg-primary text-primary-foreground'
+                        : `hover:bg-muted ${cor}`
+                    }`}
+                    title={
+                      valor === 'vermelho'
+                        ? 'Motoristas que não passam recibo verde'
+                        : valor === 'verde'
+                          ? 'Motoristas que passam recibo verde'
+                          : 'Sem filtro de recibo'
+                    }
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrint}
+                disabled={loading || linhasOrdenadas.length === 0}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir
+              </Button>
               <Button variant="outline" size="sm" onClick={handleExport} disabled={loading}>
                 <FileDown className="h-4 w-4 mr-2" />
                 Exportar Excel
               </Button>
             </div>
           </div>
+
+          {nSemKm > 0 && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-xs text-orange-900 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-200">
+              <Gauge className="mt-px h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">
+                  {nSemKm} {nSemKm === 1 ? 'motorista não registou' : 'motoristas não registaram'}{' '}
+                  os quilómetros desta semana.
+                </p>
+                <p>
+                  Estão assinalados com <strong>sem KM</strong> na lista. Não impede o pagamento —
+                  há faltas legítimas (baixa, viatura na oficina) — mas sem a leitura não se sabe
+                  quanto a viatura andou.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {semFicha.length > 0 && (
+            <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+              <AlertTriangle className="mt-px h-4 w-4 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-medium">
+                  {semFicha.length}{' '}
+                  {semFicha.length === 1
+                    ? 'motorista aparece sem ficha no CRM'
+                    : 'motoristas aparecem sem ficha no CRM'}{' '}
+                  — linha incompleta, não em falta.
+                </p>
+                <p>
+                  Vêm da Bolt/Uber e ainda não estão associados a um motorista. Contam no total, mas
+                  ficam sem IBAN, sem detalhe de movimentos e não dá para marcar como pagos.
+                  Associa-os na ficha do motorista para o relatório ficar completo.
+                </p>
+                <p className="text-amber-800/90 dark:text-amber-300/90">
+                  {semFicha
+                    .map((l) => l.resumo.driver_name)
+                    .slice(0, 8)
+                    .join(', ')}
+                  {semFicha.length > 8 ? ` e mais ${semFicha.length - 8}` : ''}
+                </p>
+              </div>
+            </div>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-auto">
@@ -462,7 +658,7 @@ export function RelatorioPagamentoDialog({
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-primary text-primary-foreground">
-                  <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap sticky left-0 bg-primary z-20">
+                  <th className="px-3 py-2 text-left text-xs font-semibold whitespace-nowrap rp-coluna-fixa-cabecalho">
                     <span className="inline-flex items-center gap-1.5">
                       <span title="Marcar como pago">Pago</span>
                       <span className="opacity-60">·</span>
@@ -490,13 +686,11 @@ export function RelatorioPagamentoDialog({
                   <Th col="viatura" label="Viatura" />
                   <Th col="combustivel" label="Combustível" />
                   <Th col="portagens" label="Portagens" />
-                  <Th col="rnvat" label="RNVAT" />
                   <Th col="seguros" label="Seguros" />
                   <Th col="acordos" label="Acordos" />
                   <Th col="danos" label="Danos" />
                   <Th col="caucao" label="Caução" />
-                  <Th col="negativoAnterior" label="Neg. Anterior" />
-                  <Th col="devCaucao" label="Dev. Caução" />
+                  <Th col="outrosDebitos" label="Outros Débitos" />
                   <Th col="bonificacao" label="Bonificação" />
                   <Th col="ajudaCusto" label="Ajuda Custo" />
                   <Th col="outrasDevolucoes" label="Outras Devol." />
@@ -505,28 +699,36 @@ export function RelatorioPagamentoDialog({
               <tbody>
                 {linhasOrdenadas.map((l, idx) => {
                   const negativo = l.liquido < 0;
-                  const pago = pagos.has(l.motorista_id);
+                  const semFichaCrm = !l.motorista_id;
+                  // Só se assinala quem TEM ficha: sem ela não há como saber
+                  // se entregou, e a marca seria ruído em cima do "sem ficha".
+                  const semKm = !!l.motorista_id && !comKmSemana.has(l.motorista_id);
+                  const pago = !!l.motorista_id && pagos.has(l.motorista_id);
+                  // O tom da linha vai na <tr>; a classe rp-linha-* repõe o mesmo
+                  // tom, já opaco, na célula fixa do nome (ver index.css).
                   const rowBg = pago
-                    ? 'bg-emerald-100 dark:bg-emerald-950/50'
-                    : idx % 2 === 0
-                      ? 'bg-background'
-                      : 'bg-muted/20';
+                    ? 'bg-emerald-100 dark:bg-emerald-950/50 rp-linha-paga'
+                    : semFichaCrm
+                      ? 'bg-amber-50/70 dark:bg-amber-950/25 rp-linha-sem-ficha'
+                      : idx % 2 === 0
+                        ? 'bg-background'
+                        : 'bg-muted/20 rp-linha-zebra';
                   return (
                     <tr
-                      key={l.motorista_id}
+                      key={l.key}
                       onDragOver={(e) => dragId && e.preventDefault()}
-                      onDrop={() => handleDrop(l.motorista_id)}
+                      onDrop={() => handleDrop(l.key)}
                       className={`border-b transition-colors ${rowBg} ${
                         negativo && !pago ? 'ring-1 ring-inset ring-red-300 dark:ring-red-900' : ''
-                      } ${dragId === l.motorista_id ? 'opacity-50' : ''}`}
+                      } ${dragId === l.key ? 'opacity-50' : ''}`}
                     >
-                      <td className="px-3 py-2 text-xs font-medium whitespace-nowrap sticky left-0 bg-inherit">
+                      <td className="px-3 py-2 text-xs font-medium whitespace-nowrap rp-coluna-fixa">
                         <div className="flex items-center gap-2">
                           {/* Só o grip inicia o arrasto — não interfere com o clique
                               na checkbox nem na seleção do nome. */}
                           <span
                             draggable
-                            onDragStart={() => setDragId(l.motorista_id)}
+                            onDragStart={() => setDragId(l.key)}
                             onDragEnd={() => setDragId(null)}
                             className="cursor-grab shrink-0 text-muted-foreground/40"
                             aria-label={`Arrastar ${l.nome} para reordenar`}
@@ -535,16 +737,52 @@ export function RelatorioPagamentoDialog({
                           </span>
                           <Checkbox
                             checked={pago}
-                            onCheckedChange={() => togglePago(l.motorista_id)}
-                            aria-label={`Marcar ${l.nome} como pago`}
+                            disabled={semFichaCrm}
+                            onCheckedChange={() => l.motorista_id && togglePago(l.motorista_id)}
+                            aria-label={
+                              semFichaCrm
+                                ? `${l.nome} não pode ser marcado como pago: sem ficha no CRM`
+                                : `Marcar ${l.nome} como pago`
+                            }
+                            title={
+                              semFichaCrm
+                                ? 'Sem ficha no CRM — associa o motorista para poder marcar como pago'
+                                : undefined
+                            }
                           />
+                          {/* Nome a vermelho = não passa recibo verde. O verde
+                              do "pago" ganha-lhe: uma linha já paga deixa de
+                              ser um aviso. */}
                           <span
                             className={
-                              pago ? 'font-semibold text-emerald-800 dark:text-emerald-200' : ''
+                              pago
+                                ? 'font-semibold text-emerald-800 dark:text-emerald-200'
+                                : !l.reciboVerde
+                                  ? 'font-semibold text-red-600 dark:text-red-400'
+                                  : ''
                             }
+                            title={l.reciboVerde ? undefined : 'Não passa recibo verde'}
                           >
                             {l.nome}
                           </span>
+                          {semFichaCrm && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/50 dark:text-amber-200"
+                              title="Motorista de plataforma ainda não associado a uma ficha do CRM: sem IBAN e sem movimentos financeiros."
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              sem ficha
+                            </span>
+                          )}
+                          {semKm && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-900 dark:bg-orange-900/50 dark:text-orange-200"
+                              title="Não registou os quilómetros da viatura nesta semana. Sem KM não se sabe quanto a viatura andou — confirme antes de pagar."
+                            >
+                              <Gauge className="h-3 w-3" />
+                              sem KM
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-xs font-mono text-muted-foreground whitespace-nowrap">
@@ -578,13 +816,11 @@ export function RelatorioPagamentoDialog({
                       <Cell value={l.viatura} cls={custoCls} pago={pago} />
                       <Cell value={l.combustivel} cls={custoCls} pago={pago} />
                       <Cell value={l.portagens} cls={custoCls} pago={pago} />
-                      <Cell value={l.rnvat} cls={custoCls} pago={pago} />
                       <Cell value={l.seguros} cls={custoCls} pago={pago} />
                       <Cell value={l.acordos} cls={custoCls} pago={pago} />
                       <Cell value={l.danos} cls={custoCls} pago={pago} />
                       <Cell value={l.caucao} cls={custoCls} pago={pago} />
-                      <Cell value={l.negativoAnterior} cls={custoCls} pago={pago} />
-                      <Cell value={l.devCaucao} cls={creditoCls} pago={pago} />
+                      <Cell value={l.outrosDebitos} cls={custoCls} pago={pago} />
                       <Cell value={l.bonificacao} cls={creditoCls} pago={pago} />
                       <Cell value={l.ajudaCusto} cls={creditoCls} pago={pago} />
                       <Cell value={l.outrasDevolucoes} cls={creditoCls} pago={pago} />
@@ -593,8 +829,8 @@ export function RelatorioPagamentoDialog({
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-primary/40 bg-muted/40 font-semibold">
-                  <td className="px-3 py-2 text-xs bg-muted/40">Total</td>
+                <tr className="border-t-2 border-primary/40 bg-muted/40 font-semibold rp-linha-total">
+                  <td className="px-3 py-2 text-xs rp-coluna-fixa">Total</td>
                   <td className="px-3 py-2" />
                   <td className="px-3 py-2" />
                   <td
@@ -610,13 +846,11 @@ export function RelatorioPagamentoDialog({
                   <Cell value={totais.viatura} />
                   <Cell value={totais.combustivel} />
                   <Cell value={totais.portagens} />
-                  <Cell value={totais.rnvat} />
                   <Cell value={totais.seguros} />
                   <Cell value={totais.acordos} />
                   <Cell value={totais.danos} />
                   <Cell value={totais.caucao} />
-                  <Cell value={totais.negativoAnterior} />
-                  <Cell value={totais.devCaucao} />
+                  <Cell value={totais.outrosDebitos} />
                   <Cell value={totais.bonificacao} />
                   <Cell value={totais.ajudaCusto} />
                   <Cell value={totais.outrasDevolucoes} />

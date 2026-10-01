@@ -4,6 +4,21 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TiTicketFormulario } from './TiTicketFormulario';
 import { supabase } from '@/integrations/supabase/client';
 
+// O widget real carrega um script da Cloudflare; aqui basta entregar um token.
+vi.mock('@/components/auth/TurnstileCaptcha', () => ({
+  TurnstileCaptcha: ({
+    acao,
+    onToken,
+  }: {
+    acao: string;
+    onToken: (token: string | null) => void;
+  }) => (
+    <button type="button" data-acao={acao} onClick={() => onToken('captcha-ok')}>
+      resolver captcha
+    </button>
+  ),
+}));
+
 function preencher() {
   fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Bruno Paulo' } });
   fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'bruno@exemplo.pt' } });
@@ -99,6 +114,34 @@ describe('TiTicketFormulario', () => {
 
     await waitFor(() => expect(screen.getByText('Pedido #9 registado')).toBeInTheDocument());
     expect(screen.getByText(/não foi possível guardar os ficheiros anexados/)).toBeInTheDocument();
+  });
+
+  it('com CAPTCHA ligado, só envia depois de resolvido e manda o token', async () => {
+    vi.stubEnv('VITE_TURNSTILE_SITE_KEY', 'site-key-teste');
+    try {
+      (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
+        data: { success: true, numero: 11, anexosFalhou: false },
+        error: null,
+      });
+
+      render(<TiTicketFormulario token="tok-1" />);
+      preencher();
+      const enviar = screen.getByRole('button', { name: 'Enviar pedido' }) as HTMLButtonElement;
+      expect(enviar.disabled).toBe(true);
+
+      expect(screen.getByRole('button', { name: 'resolver captcha' }).dataset.acao).toBe(
+        'ticket_ti'
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'resolver captcha' }));
+      expect(enviar.disabled).toBe(false);
+      fireEvent.click(enviar);
+
+      await waitFor(() => expect(supabase.functions.invoke).toHaveBeenCalled());
+      const chamada = (supabase.functions.invoke as ReturnType<typeof vi.fn>).mock.calls[0][1];
+      expect(chamada.body.captcha_token).toBe('captcha-ok');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('mostra o erro do servidor quando a submissão falha', async () => {

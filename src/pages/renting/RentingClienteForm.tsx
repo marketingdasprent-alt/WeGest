@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Banknote,
   CalendarCheck,
+  Fuel,
   Loader2,
   Paperclip,
   Trash2,
@@ -40,6 +41,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteAnexosTab } from '@/components/renting/ClienteAnexosTab';
 import { ClienteContaCorrenteTab } from '@/components/renting/ClienteContaCorrenteTab';
+import { ClienteCombustivelTab } from '@/components/renting/ClienteCombustivelTab';
 import { ClienteReservasContratosTab } from '@/components/renting/ClienteReservasContratosTab';
 import { RequiredMark } from '@/components/renting/ValidatedTextField';
 import { SeccaoAnuncios } from '@/components/renting/SeccaoAnuncios';
@@ -77,7 +79,7 @@ const RentingClienteForm = () => {
   const podeEliminar = canEdit('renting_clientes');
 
   const [activeTab, setActiveTab] = useState<
-    'dados' | 'reservas_contratos' | 'conta_corrente' | 'anexos'
+    'dados' | 'reservas_contratos' | 'conta_corrente' | 'combustivel' | 'anexos'
   >('dados');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -270,7 +272,9 @@ const RentingClienteForm = () => {
             <Tabs
               value={activeTab}
               onValueChange={(v) =>
-                setActiveTab(v as 'dados' | 'reservas_contratos' | 'conta_corrente' | 'anexos')
+                setActiveTab(
+                  v as 'dados' | 'reservas_contratos' | 'conta_corrente' | 'combustivel' | 'anexos'
+                )
               }
               className="w-full"
             >
@@ -302,6 +306,19 @@ const RentingClienteForm = () => {
                 >
                   <Banknote className="h-4 w-4" />
                   Conta Corrente
+                  {!cliente && (
+                    <span className="text-[10px] text-muted-foreground font-normal">
+                      (após guardar)
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="combustivel"
+                  disabled={!cliente}
+                  className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-primary data-[state=active]:border-primary border-b-2 border-transparent rounded-none px-1 pb-2 font-medium gap-2"
+                >
+                  <Fuel className="h-4 w-4" />
+                  Combustível
                   {!cliente && (
                     <span className="text-[10px] text-muted-foreground font-normal">
                       (após guardar)
@@ -350,6 +367,10 @@ const RentingClienteForm = () => {
 
               <TabsContent value="conta_corrente" className="pt-4">
                 <ClienteContaCorrenteTab clienteId={cliente?.id ?? null} />
+              </TabsContent>
+
+              <TabsContent value="combustivel" className="pt-4">
+                <ClienteCombustivelTab clienteId={cliente?.id ?? null} />
               </TabsContent>
 
               <TabsContent value="anexos" className="pt-4">

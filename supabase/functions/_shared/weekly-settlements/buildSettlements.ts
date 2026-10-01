@@ -29,26 +29,25 @@ export interface SettlementData {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-/**
- * motorista_resumo_semanal pode ter mais que uma linha por motorista na
- * mesma semana (troca de viatura a meio, ver comentário da própria
- * migração) — soma-se por motorista_id antes de construir o acerto.
- *
- * combustivel/reparacoes ficam de fora deliberadamente: não são agregados
- * em motorista_resumo_semanal (só em cartões-frota e viatura_reparacoes,
- * por viatura, não por motorista/semana) — enviar "€0" fingiria um dado
- * que não temos.
- */
 export function buildSettlements(
   resumoRows: ResumoSemanalRow[],
   motoristas: MotoristaInfo[],
   periodo: string,
+  liquidoPorMotorista: Map<string, number>
 ): SettlementData[] {
   const motoristaById = new Map(motoristas.map((m) => [m.id, m]));
 
   const totals = new Map<
     string,
-    { aluguer: number; bolt: number; uber: number; outras: number; caucao: number; seguros: number; outros: number }
+    {
+      aluguer: number;
+      bolt: number;
+      uber: number;
+      outras: number;
+      caucao: number;
+      seguros: number;
+      outros: number;
+    }
   >();
 
   for (const row of resumoRows) {
@@ -76,6 +75,9 @@ export function buildSettlements(
     const motorista = motoristaById.get(motoristaId);
     if (!motorista?.email) continue;
 
+    const liquido = liquidoPorMotorista.get(motoristaId);
+    if (liquido === undefined) continue;
+
     const total_faturado = round2(acc.bolt + acc.uber + acc.outras);
     const outros_custos = round2(acc.caucao + acc.seguros + acc.outros);
     const aluguer = round2(acc.aluguer);
@@ -86,7 +88,7 @@ export function buildSettlements(
       total_faturado,
       faturado_bolt: round2(acc.bolt),
       faturado_uber: round2(acc.uber),
-      liquido: round2(total_faturado - aluguer - outros_custos),
+      liquido: round2(liquido),
       aluguer,
       outros_custos,
       periodo,

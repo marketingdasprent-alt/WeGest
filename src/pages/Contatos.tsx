@@ -261,264 +261,263 @@ const Contatos = () => {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent hidden dark:block" />
       <div className="absolute inset-0 bg-grid-foreground/[0.02] bg-[size:60px_60px] hidden dark:block" />
 
-      <div className="relative z-10 p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 rounded-full bg-gradient-to-r from-primary/20 to-primary/20 border border-primary/30">
-                <Users className="h-8 w-8 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold text-foreground">Contatos</h1>
-                <p className="text-xl text-muted-foreground">
-                  {totalCount.toLocaleString()} leads registrados
-                </p>
-              </div>
+      {/* Sem tecto de largura nem padding horizontal proprio: o `main` do
+          DashboardLayout ja traz `p-4 md:p-8` e o `max-w-[1920px]`. O
+          `max-w-7xl` (1280px) prendia a pagina a meio em qualquer ecra maior
+          do que isso, e o kanban e das vistas que mais agradece a largura. */}
+      <div className="relative z-10 py-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-3 rounded-full bg-gradient-to-r from-primary/20 to-primary/20 border border-primary/30">
+              <Users className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-4xl font-bold text-foreground">Contatos</h1>
+              <p className="text-xl text-muted-foreground">
+                {totalCount.toLocaleString()} leads registrados
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* Filtros Avançados */}
-          <CRMFilters
-            filters={filters} // Passar filtros atuais
-            onFilterChange={handleFilterChange}
-            statusColumns={statusColumns}
-            totalLeads={totalCount}
-            filteredCount={leads.length}
-            availableTags={availableTags}
-          />
+        {/* Filtros Avançados */}
+        <CRMFilters
+          filters={filters} // Passar filtros atuais
+          onFilterChange={handleFilterChange}
+          statusColumns={statusColumns}
+          totalLeads={totalCount}
+          filteredCount={leads.length}
+          availableTags={availableTags}
+        />
 
-          {/* Tabela de Leads */}
-          <Card className="bg-card border-border">
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-border">
-                      <SortableTableHead
-                        field="nome"
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                        className="text-muted-foreground"
-                      >
-                        Nome
-                      </SortableTableHead>
-                      <SortableTableHead
-                        field="email"
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                        className="text-muted-foreground"
-                      >
-                        Email
-                      </SortableTableHead>
-                      <SortableTableHead
-                        field="telefone"
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                        className="text-muted-foreground"
-                      >
-                        Telefone
-                      </SortableTableHead>
-                      <SortableTableHead
-                        field="zona"
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                        className="text-muted-foreground"
-                      >
-                        Zona
-                      </SortableTableHead>
-                      <SortableTableHead
-                        field="status"
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                        className="text-muted-foreground"
-                      >
-                        Status
-                      </SortableTableHead>
-                      <SortableTableHead
-                        field="created_at"
-                        sortField={sortField}
-                        sortDir={sortDir}
-                        onSort={handleSort}
-                        className="text-muted-foreground"
-                      >
-                        Data
-                      </SortableTableHead>
-                      <TableHead className="text-muted-foreground">Tags</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedLeads.map((lead) => {
-                      const displayData = getLeadDisplayData(lead);
-                      return (
-                        <TableRow key={lead.id} className="border-border hover:bg-muted/30">
-                          <TableCell className="text-foreground font-medium">
-                            {displayData.nome || 'Nome não informado'}
-                          </TableCell>
-                          <TableCell className="text-foreground">
-                            {displayData.email ? (
-                              <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4" />
-                                <span className="truncate max-w-[200px]" title={displayData.email}>
-                                  {displayData.email}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground italic">
-                                Email não informado
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-foreground">
-                            {displayData.telefone ? (
-                              <div className="flex items-center gap-2">
-                                <Phone className="h-4 w-4" />
-                                {displayData.telefone}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground italic">
-                                Telefone não informado
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-foreground">
-                            {lead.zona ? (
-                              <div className="flex items-center gap-2">
-                                <MapPin className="h-4 w-4" />
-                                {lead.zona}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground italic">
-                                Zona não informada
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={`${statusColors[lead.status as keyof typeof statusColors]} text-white`}
-                            >
-                              {statusLabels[lead.status as keyof typeof statusLabels]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
+        {/* Tabela de Leads */}
+        <Card className="bg-card border-border">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border">
+                    <SortableTableHead
+                      field="nome"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-muted-foreground"
+                    >
+                      Nome
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="email"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-muted-foreground"
+                    >
+                      Email
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="telefone"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-muted-foreground"
+                    >
+                      Telefone
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="zona"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-muted-foreground"
+                    >
+                      Zona
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="status"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-muted-foreground"
+                    >
+                      Status
+                    </SortableTableHead>
+                    <SortableTableHead
+                      field="created_at"
+                      sortField={sortField}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      className="text-muted-foreground"
+                    >
+                      Data
+                    </SortableTableHead>
+                    <TableHead className="text-muted-foreground">Tags</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedLeads.map((lead) => {
+                    const displayData = getLeadDisplayData(lead);
+                    return (
+                      <TableRow key={lead.id} className="border-border hover:bg-muted/30">
+                        <TableCell className="text-foreground font-medium">
+                          {displayData.nome || 'Nome não informado'}
+                        </TableCell>
+                        <TableCell className="text-foreground">
+                          {displayData.email ? (
                             <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4" />
-                              {new Date(lead.created_at).toLocaleDateString('pt-BR', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
+                              <Mail className="h-4 w-4" />
+                              <span className="truncate max-w-[200px]" title={displayData.email}>
+                                {displayData.email}
+                              </span>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            {lead.campaign_tags && lead.campaign_tags.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {lead.campaign_tags.slice(0, 2).map((tag, index) => (
-                                  <Badge key={index} variant="outline" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                                {lead.campaign_tags.length > 2 && (
-                                  <Badge variant="outline" className="text-xs">
-                                    +{lead.campaign_tags.length - 2}
-                                  </Badge>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground italic text-xs">Sem tags</span>
-                            )}
-                          </TableCell>
-                        </TableRow>
+                          ) : (
+                            <span className="text-muted-foreground italic">
+                              Email não informado
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-foreground">
+                          {displayData.telefone ? (
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4" />
+                              {displayData.telefone}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground italic">
+                              Telefone não informado
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-foreground">
+                          {lead.zona ? (
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4" />
+                              {lead.zona}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground italic">Zona não informada</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={`${statusColors[lead.status as keyof typeof statusColors]} text-white`}
+                          >
+                            {statusLabels[lead.status as keyof typeof statusLabels]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            {new Date(lead.created_at).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {lead.campaign_tags && lead.campaign_tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {lead.campaign_tags.slice(0, 2).map((tag, index) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                              {lead.campaign_tags.length > 2 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{lead.campaign_tags.length - 2}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground italic text-xs">Sem tags</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {leads.length === 0 &&
+              !loading &&
+              (temFiltrosAtivos ? (
+                <EmptyState
+                  icon={Users}
+                  title="Nenhum contacto com estes filtros"
+                  description="Nenhum dos contactos registados corresponde à pesquisa."
+                />
+              ) : (
+                <EmptyState
+                  icon={Users}
+                  title="Ainda não há contactos"
+                  description="Os contactos que chegarem pelos formulários e campanhas aparecem aqui, prontos a trabalhar."
+                />
+              ))}
+
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="p-4 border-t border-border">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+                        className={
+                          currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                        }
+                      />
+                    </PaginationItem>
+
+                    {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                      const page = i + 1;
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            onClick={() => handlePageChange(page)}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
                       );
                     })}
-                  </TableBody>
-                </Table>
-              </div>
 
-              {leads.length === 0 &&
-                !loading &&
-                (temFiltrosAtivos ? (
-                  <EmptyState
-                    icon={Users}
-                    title="Nenhum contacto com estes filtros"
-                    description="Nenhum dos contactos registados corresponde à pesquisa."
-                  />
-                ) : (
-                  <EmptyState
-                    icon={Users}
-                    title="Ainda não há contactos"
-                    description="Os contactos que chegarem pelos formulários e campanhas aparecem aqui, prontos a trabalhar."
-                  />
-                ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        onClick={() =>
+                          currentPage < totalPages && handlePageChange(currentPage + 1)
+                        }
+                        className={
+                          currentPage === totalPages
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'cursor-pointer'
+                        }
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
 
-              {/* Paginação */}
-              {totalPages > 1 && (
-                <div className="p-4 border-t border-border">
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
-                          className={
-                            currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                          }
-                        />
-                      </PaginationItem>
-
-                      {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                        const page = i + 1;
-                        return (
-                          <PaginationItem key={page}>
-                            <PaginationLink
-                              onClick={() => handlePageChange(page)}
-                              isActive={currentPage === page}
-                              className="cursor-pointer"
-                            >
-                              {page}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      })}
-
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() =>
-                            currentPage < totalPages && handlePageChange(currentPage + 1)
-                          }
-                          className={
-                            currentPage === totalPages
-                              ? 'opacity-50 cursor-not-allowed'
-                              : 'cursor-pointer'
-                          }
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-
-                  <div className="text-center mt-4">
-                    <p className="text-muted-foreground text-sm">
-                      Página {currentPage} de {totalPages} • {totalCount.toLocaleString()} leads
-                      total
-                    </p>
-                  </div>
+                <div className="text-center mt-4">
+                  <p className="text-muted-foreground text-sm">
+                    Página {currentPage} de {totalPages} • {totalCount.toLocaleString()} leads total
+                  </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-          {loading && currentPage > 1 && (
-            <div className="text-center py-4">
-              <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
-            </div>
-          )}
-        </div>
+        {loading && currentPage > 1 && (
+          <div className="text-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto" />
+          </div>
+        )}
       </div>
     </div>
   );

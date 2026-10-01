@@ -7,24 +7,6 @@ export interface ContratoResumoLink {
   codigo: number | null;
 }
 
-/**
- * Contratos desta viatura, agrupados pelo motorista que os conduziu.
- *
- * Serve o histórico da viatura, que lista vínculos de `motorista_viaturas` —
- * tabela que não tem ligação nenhuma a contratos. Sem isto não havia como
- * mostrar o número do contrato nem abri-lo, e era preciso ir procurá-lo à mão
- * na lista de contratos.
- *
- * A ligação é viatura + motorista (via contrato_condutores), SEM filtro de
- * datas. Filtrar por sobreposição de períodos parecia mais correcto, mas
- * testado contra produção não desambigua nada e arriscava esconder contratos
- * — que é exactamente a queixa que isto veio resolver. As datas dos contratos
- * são pouco fiáveis (ver as cadeias de troca), por isso mostra-se tudo o que
- * liga aquele motorista àquela viatura e deixa-se a leitura a quem sabe.
- *
- * Um motorista pode ter mais do que um contrato na mesma viatura (renovações,
- * regressos) — daí devolver lista e não um só.
- */
 export function useContratosDaViaturaPorMotorista(viaturaId?: string | null) {
   return useQuery({
     queryKey: ['viatura-contratos-por-motorista', viaturaId],
@@ -46,8 +28,7 @@ export function useContratosDaViaturaPorMotorista(viaturaId?: string | null) {
         for (const cond of condutores) {
           if (!cond.motorista_id) continue;
           const lista = porMotorista.get(cond.motorista_id) ?? [];
-          // Um condutor pode aparecer duas vezes no mesmo contrato (períodos
-          // distintos em contrato_condutores) — o link seria o mesmo.
+
           if (!lista.some((x) => x.id === contrato.id)) lista.push(contrato);
           porMotorista.set(cond.motorista_id, lista);
         }

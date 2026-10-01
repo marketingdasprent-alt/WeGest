@@ -13,6 +13,12 @@
 begin;
 select plan(6);
 
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes de
+-- existir organização, para o handle_new_user_org não lhe atribuir org nem
+-- escrever user_organizacoes por cima do insert manual.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000100ff', 'bootstrap@limite-email.pt');
+
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-000000010000', 'Org Limite Email', 'limite-email-i');
 

@@ -24,8 +24,9 @@ import {
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
-import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
@@ -103,45 +104,6 @@ export function ContratoFaturarDialog({
   );
   const faturaZero = fatura.valorRegistado === 0;
   const podeFaturar = fatura.valorRegistado >= 0; // 0€ é permitido (cortesia / 100% desconto)
-
-  /** Documento HTML local — fallback quando a emissão fiscal falha ou em faturas a 0€.
-   *  `clienteId` é sempre um id de `clientes` (num motorista é o da ficha dele). */
-  async function abrirDocumentoLocal(numeroDoc: string, clienteId: string) {
-    // NIF/morada do cliente para o cabeçalho — best-effort, não bloqueia
-    let clienteNif: string | null = null;
-    let clienteMorada: string | null = null;
-    try {
-      const { data: cli } = await supabase
-        .from('clientes')
-        .select('nif, morada, codigo_postal, cidade')
-        .eq('id', clienteId)
-        .single();
-      if (cli) {
-        clienteNif = (cli as any).nif ?? null;
-        clienteMorada =
-          [(cli as any).morada, (cli as any).codigo_postal, (cli as any).cidade]
-            .filter(Boolean)
-            .join(', ') || null;
-      }
-    } catch {
-      /* cabeçalho do cliente é opcional */
-    }
-
-    const aberto = openFaturacaoDocumento({
-      tipo: tipo === 'fatura_recibo' ? 'fatura_recibo' : 'fatura',
-      numero: numeroDoc,
-      data: dataDoc,
-      emitente: emitente ?? null,
-      cliente: { nome: destinatario.nome, nif: clienteNif, morada: clienteMorada },
-      linhas: fatura.itens.map((it) => ({ descricao: it.descricao, valor: it.valor })),
-      subtotal: fatura.subtotal,
-      taxaIva: fatura.taxaIva,
-      iva: fatura.iva,
-      total: fatura.valorRegistado,
-      metodoLabel: tipo === 'fatura_recibo' ? metodoLabel(metodo) : null,
-    });
-    if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento local.');
-  }
 
   /** Dados do cliente (cabeçalho fiscal) para o documento.
    *  `clienteId` é sempre um id de `clientes` (num motorista é o da ficha dele). */
@@ -289,10 +251,14 @@ export function ContratoFaturarDialog({
       // antigas emitidas ao titular.
 
       // ── Fase 2 — emissão fiscal no provider configurado (NUNCA reverte a Fase 1) ────
-      if (faturaZero || !cobrancaId) {
-        // Fatura a 0€ não gera documento fiscal — só o documento interno.
-        await abrirDocumentoLocal(descricao, destinatarioIdFiscal);
-        toast.success('Fatura a 0€ registada (sem movimento de conta-corrente).');
+      // Uma fatura a 0€ TAMBÉM vai ao emissor fiscal. Até 07/09/2026 não ia:
+      // ficava só com o documento interno, sem número fiscal, e ninguém dava
+      // por isso — foi o que aconteceu ao contrato #0841 e a mais duas
+      // cobranças. Se o emissor recusar um total zero, o catch abaixo devolve
+      // exactamente o documento local de antes, por isso o pior caso é o
+      // comportamento antigo mais um aviso.
+      if (!cobrancaId) {
+        toast.success('Fatura registada na conta-corrente.');
       } else {
         try {
           // Itens fiscais = linhas brutas (sem a linha sintética de desconto);
@@ -341,10 +307,10 @@ export function ContratoFaturarDialog({
           if (res.warning) toast.warning(res.warning);
         } catch (kiErr: any) {
           console.error('Falha a emitir o documento fiscal:', kiErr);
-          toast.warning(
-            'Fatura registada, mas o documento fiscal ficou por emitir. Pode reemiti-lo na lista de faturas.'
-          );
-          await abrirDocumentoLocal(descricao, destinatarioIdFiscal);
+          // Sem documento nenhum: emitir uma factura é acto de software
+          // certificado. Se o provider não emitiu, não há factura — e o WeGest
+          // não desenha uma que se pareça com ela.
+          toast.warning(mensagemFalhaEmissao(kiErr), { duration: DURACAO_AVISO_FALHA_MS });
         }
       }
 
@@ -528,8 +494,9 @@ export function ContratoFaturarDialog({
             </p>
           ) : faturaZero ? (
             <p className="text-xs text-muted-foreground">
-              Fatura a 0€ (cortesia / 100% desconto) — o contrato fica facturado, mas não gera
-              movimento de conta-corrente.
+              Fatura a 0€ (cortesia / 100% desconto) — o contrato fica facturado e não gera
+              movimento de conta-corrente, mas o documento fiscal é emitido no {providerLabel} na
+              mesma.
             </p>
           ) : null}
         </div>

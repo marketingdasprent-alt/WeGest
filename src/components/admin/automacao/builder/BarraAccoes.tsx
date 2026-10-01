@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { useAutomacaoEstatisticasPorRegra } from '@/hooks/useAutomationQueue';
-import { contagemPorModulo } from '../agrupamento';
+import { colapsarPorGrupo, contagemPorModulo } from '../agrupamento';
 import { ChipsDeModulo } from '../ChipsDeModulo';
 import { useEditorAutomacao, type VistaDoEditor } from './editorAutomacao.contexto';
 
@@ -37,7 +37,8 @@ export function BarraAccoes() {
   const { data: regras = [] } = useAutomacaoEstatisticasPorRegra();
   // Já vem pela ordem das secções — chips e lista não podem discordar sobre
   // qual é o primeiro módulo.
-  const contagens = contagemPorModulo(regras);
+  // Conta automações (grupos), não acções — o mesmo número que a secção mostra.
+  const contagens = contagemPorModulo(colapsarPorGrupo(regras));
   const { canEdit } = usePermissions();
   const podeGerir = canEdit(RECURSOS.AUTOMACOES);
 

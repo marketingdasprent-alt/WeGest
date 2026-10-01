@@ -32,7 +32,7 @@ export function contratoTemplate(input: ContratoInput): { subject: string; html:
     ctaUrl,
   } = input;
 
-  const veiculo = [matricula, marcaModelo].filter(Boolean).join(' — ');
+  const veiculo = [matricula, marcaModelo].filter(Boolean).join(', ');
   const titulo = tipo === 'criado' ? 'Contrato de Aluguer Disponível' : 'Contrato Renovado';
   const introducao =
     tipo === 'criado'
@@ -61,7 +61,7 @@ export function contratoTemplate(input: ContratoInput): { subject: string; html:
   });
 
   const subject =
-    tipo === 'criado' ? `O seu contrato de aluguer — ${matricula}` : `Contrato renovado — ${matricula}`;
+    tipo === 'criado' ? `O seu contrato de aluguer: ${matricula}` : `Contrato renovado: ${matricula}`;
 
   return { subject, html };
 }

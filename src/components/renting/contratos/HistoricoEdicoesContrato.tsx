@@ -52,7 +52,7 @@ export function HistoricoEdicoesContrato({ contratoId }: Props) {
   const ultima = porTipo('ultima_alteracao');
 
   return (
-    <Card className="bg-card border-border sticky top-4 mt-4">
+    <Card className="bg-card border-border">
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <History className="h-4 w-4 text-muted-foreground" />

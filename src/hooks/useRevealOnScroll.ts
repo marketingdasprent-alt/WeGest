@@ -8,16 +8,9 @@ const REDUCED = '(prefers-reduced-motion: reduce)';
 const FULL = '(prefers-reduced-motion: no-preference)';
 
 /**
- * Revela `[data-reveal]` dentro do container quando a secção entra no
- * viewport.
- *
- * Os elementos partem de `opacity: 0` aplicado por JS (não por CSS), de modo
- * que sem JS — ou se o GSAP falhar a carregar — o conteúdo continua legível.
- * Com `prefers-reduced-motion: reduce` nada é escondido: os elementos ficam
- * simplesmente no estado final.
- *
- * `stagger` irregular é intencional em algumas secções (ver
- * ReconhecimentoSection): a desordem faz parte do argumento.
+ * Revela `[data-reveal]` do container ao entrar no viewport. `opacity: 0` é
+ * aplicado por JS (não CSS) para o conteúdo ficar legível sem JS/GSAP.
+ * `desordenado` é intencional nalgumas secções (ver ReconhecimentoSection).
  */
 export function useRevealOnScroll<T extends HTMLElement>(options?: {
   /** Segundos entre cada elemento. */

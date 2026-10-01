@@ -4,7 +4,8 @@
 -- Corre com:  supabase start  &&  supabase test db
 --
 -- Cobre o Automation Executor: para acao_tipo='notificacao', resolve
--- destinatários por cargo direto (admin OU cargo escolhido na regra),
+-- destinatários EXACTAMENTE pelos cargos escolhidos na regra (desde
+-- 20260909120000 já não há cópia automática para os admins da org),
 -- cria uma notifications por destinatário, enfileira email quando
 -- enviar_email=true, e rejeita acao_config mal configurado. Outros
 -- acao_tipo só concluem, sem ação.
@@ -31,7 +32,13 @@
 -- ============================================================
 
 begin;
-select plan(23);
+select plan(25);
+
+-- Consome a vaga de "primeiro utilizador da instalação" (handle_new_user_org
+-- dá-lhe org+admin automaticamente) para não colidir com os inserts manuais
+-- de user_organizacoes/user_org_ativa abaixo.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000a0ff', 'bootstrap@exec-runs.pt');
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'exec-runs-a');
@@ -66,11 +73,19 @@ select is(
   'run de acao_tipo=notificacao é concluído com sucesso'
 );
 
--- 2. O admin recebe uma notificação (mesmo sem pertencer ao cargo escolhido).
+-- 2. O admin NÃO recebe: quem recebe é exactamente quem a regra configurou.
+--
+-- Até 20260909120000 havia um ramo `uo.is_admin = true` no laço de
+-- destinatários que punha uma cópia de todas as notificações internas na caixa
+-- de todos os admins da org, por cima dos cargos escolhidos — um "Suporte de
+-- TI (Admin)" recebia avisos de ficha de motorista sem nunca estar na lista.
+-- Este teste era a prova desse comportamento; passa a ser a prova de que ele
+-- não voltou. O admin aqui tem `cargo_id = null`, por isso não entra por
+-- nenhuma via.
 select is(
   (select count(*)::int from public.notifications where destinatario_user_id = '00000000-0000-0000-0000-0000000a0001'),
-  1,
-  'o admin da org recebe a notificação'
+  0,
+  'o admin da org não recebe cópia de borla — só quem a regra escolheu'
 );
 
 -- 3. O utilizador do cargo escolhido na regra recebe uma notificação.
@@ -88,9 +103,12 @@ select is(
 );
 
 -- 5. As notificações ficam ligadas ao run que as gerou.
+--
+-- Um destinatário e não dois desde 20260909120000: o segundo era o admin, que
+-- vinha por fora da configuração da regra. Ver a nota do teste 2.
 select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0001'),
-  2,
+  1,
   'as notificações ficam com rastreabilidade até ao automation_run'
 );
 
@@ -158,8 +176,11 @@ select throws_ok(
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000a0004', 'gestor.testador@exec-runs.pt');
 
+-- handle_new_user_org já criou a linha (sem org, sem metadata); completa-se aqui.
 insert into public.profiles (id, org_id, nome, email, tipo_utilizador) values
-  ('00000000-0000-0000-0000-0000000a0004', '00000000-0000-0000-0000-0000000a0000', 'Gestor Testador', 'gestor.testador@exec-runs.pt', 'colaborador');
+  ('00000000-0000-0000-0000-0000000a0004', '00000000-0000-0000-0000-0000000a0000', 'Gestor Testador', 'gestor.testador@exec-runs.pt', 'colaborador')
+on conflict (id) do update set
+  org_id = excluded.org_id, nome = excluded.nome, email = excluded.email, tipo_utilizador = excluded.tipo_utilizador;
 
 insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) values
   ('00000000-0000-0000-0000-000000e00001', '00000000-0000-0000-0000-0000000a0000', 'Motorista Teste D', 'gestor testador');
@@ -233,7 +254,13 @@ select is(
   'para entidade viatura, o gestor responsável é resolvido via o motorista atualmente atribuído'
 );
 
--- Cenário F: sem gestor_responsavel definido — cai para o fallback (só admins).
+-- Cenário F: sem gestor_responsavel definido — a regra fica SEM destinatário.
+--
+-- Havia aqui um fallback para os admins da org. Saiu com 20260909120000, pela
+-- mesma razão do teste 2: uma regra que não resolve quem devia avisar não pode
+-- resolver-se sozinha avisando toda a gente. Nenhuma regra activa em produção
+-- usa a estratégia `gestor_responsavel`, por isso a mudança não tem alcance
+-- prático — mas o comportamento fica provado aqui.
 insert into public.motoristas_ativos (id, org_id, nome, gestor_responsavel) values
   ('00000000-0000-0000-0000-000000e00002', '00000000-0000-0000-0000-0000000a0000', 'Motorista Sem Gestor', null);
 
@@ -246,14 +273,17 @@ insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id
 
 select public.execute_automation_runs();
 
--- 13. Sem gestor_responsavel resolvido, cai para o fallback e avisa o admin.
+-- 13. Sem gestor_responsavel resolvido, não se avisa ninguém — nem o admin.
 select is(
-  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0001'),
-  1,
-  'sem gestor_responsavel resolvido, cai para o fallback e avisa o admin da org'
+  (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006'),
+  0,
+  'sem gestor_responsavel resolvido, a regra não avisa ninguém — já não cai nos admins'
 );
 
--- 14. ...e o fallback NÃO inclui quem só tem o recurso RBAC (só admins, não é a estratégia recurso).
+-- 14. ...e continua a não incluir quem só tem o recurso RBAC.
+--
+-- Passava antes e passa agora — fica porque é o que distingue "não avisou
+-- ninguém" de "avisou a pessoa errada".
 select is(
   (select count(*)::int from public.notifications where rule_run_id = '00000000-0000-0000-0000-0000004c0006' and destinatario_user_id = '00000000-0000-0000-0000-0000000a0002'),
   0,
@@ -381,6 +411,51 @@ select is(
       and destinatario_email_externo is not null),
   2,
   'um retry não duplica as notifications dos endereços livres'
+);
+
+-- ════════════════════════════════════════════════════════════
+-- Cenário J: destinatarios_emails_livres também vale com estrategia='motorista'
+-- ════════════════════════════════════════════════════════════
+-- O ramo motorista terminava com o seu próprio automation_runs_complete +
+-- continue, ANTES de chegar ao bloco partilhado dos endereços livres — que
+-- por isso nunca corria para esta estratégia (duas regras semeadas usam-na:
+-- motorista.reparacao_cobranca, motorista.ficha_incompleta).
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000a0010', 'motorista.avulso@exec-runs.pt');
+
+insert into public.motoristas_ativos (id, org_id, nome, user_id, email) values
+  ('00000000-0000-0000-0000-000000e00010', '00000000-0000-0000-0000-0000000a0000', 'Motorista Avulso',
+   '00000000-0000-0000-0000-0000000a0010', 'motorista.avulso@exec-runs.pt');
+
+insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
+  ('00000000-0000-0000-0000-000000460010', '00000000-0000-0000-0000-0000000a0000', 'teste.regra_motorista_avulso', 'Regra Motorista com Avulso', 'teste.evento10', 'email',
+   jsonb_build_object('titulo', 'Titulo de Teste', 'template_codigo', 'teste.notif',
+                       'destinatarios_estrategia', 'motorista',
+                       'destinatarios_emails_livres', jsonb_build_array('fornecedor@fora.pt')));
+
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
+  ('00000000-0000-0000-0000-0000004c0010', '00000000-0000-0000-0000-000000460010', '00000000-0000-0000-0000-0000000a0000', 'motoristas_ativos', '00000000-0000-0000-0000-000000e00010');
+
+select public.execute_automation_runs();
+
+-- 21. O motorista continua a receber (o comportamento antigo não regrediu)...
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-0000004c0010'
+      and q.destinatario = 'motorista.avulso@exec-runs.pt'),
+  1,
+  'estratégia motorista continua a enfileirar o email do motorista'
+);
+
+-- 22. ...e o endereço avulso enfileira também — é isto que estava a falhar.
+select is(
+  (select count(*)::int from public.notification_queue q
+     join public.notifications n on n.id = q.notification_id
+    where n.rule_run_id = '00000000-0000-0000-0000-0000004c0010'
+      and q.destinatario = 'fornecedor@fora.pt'),
+  1,
+  'estratégia motorista TAMBÉM enfileira os endereços livres'
 );
 
 select * from finish();

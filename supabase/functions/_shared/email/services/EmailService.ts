@@ -37,6 +37,7 @@ import {
   passwordRecoveryTemplate,
   magicLinkTemplate,
   motoristaOnboardingTemplate,
+  orgConfirmacaoTemplate,
 } from '../templates/authEmail.ts';
 import {
   jobFalhaTemplate,
@@ -364,6 +365,23 @@ export class EmailService {
           : magicLinkTemplate(args.actionLink);
     const message: EmailMessage = { to: [{ email: args.to }], subject, html };
 
+    return this.send(orgId, 'auth', message);
+  }
+
+  /**
+   * Confirmação do email do administrador que acabou de registar uma
+   * organização (register-org). A org é nova e ainda não tem integração de
+   * email própria — o resolver cai no fornecedor por omissão.
+   */
+  async sendOrgConfirmacao(
+    orgId: string,
+    args: { to: string; nomeEmpresa: string; actionLink: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+    const { subject, html } = orgConfirmacaoTemplate(args.actionLink, args.nomeEmpresa);
+    const message: EmailMessage = { to: [{ email: args.to }], subject, html };
     return this.send(orgId, 'auth', message);
   }
 

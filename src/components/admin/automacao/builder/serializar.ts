@@ -1,18 +1,7 @@
 import type { AutomationEdge as Edge, AutomationNode as Node } from './dominio/tipos';
 
-/**
- * Transforma o canvas no payload que irá para o backend.
- *
- * O React Flow pendura estado de interface nos nós — `selected`, `dragging`,
- * `measured`, `width`, `handles` — que muda a cada clique. Enviar isso fazia
- * o payload mudar sem que a lógica tivesse mudado, e um diff no servidor não
- * conseguiria distinguir "o utilizador editou" de "o utilizador clicou".
- *
- * A posição não é lógica, mas também não é descartável: sem ela o fluxo não
- * pode ser redesenhado como o utilizador o deixou. Por isso sai de dentro do
- * nó e vai para um bloco `layout` à parte — o backend pode ignorá-lo por
- * completo sem perder nada da lógica.
- */
+// O estado efémero do React Flow não integra o payload; o layout preserva apenas
+// posições para redesenhar o fluxo sem afectar a lógica do backend.
 
 export interface NoSerializado {
   id: string;
@@ -29,7 +18,6 @@ export interface PayloadFluxo {
   versao: 1;
   nos: NoSerializado[];
   ligacoes: LigacaoSerializada[];
-  /** Posições, por id de nó. Puramente visual. */
   layout: Record<string, { x: number; y: number }>;
 }
 
@@ -43,9 +31,8 @@ export function serializarFluxo(nodes: Node[], edges: Edge[]): PayloadFluxo {
       tipo: n.type ?? 'desconhecido',
       config: { ...(n.data as Record<string, unknown>) },
     })),
-    // Apagar um nó com Delete deixa arestas órfãs por um instante. Deixá-las
-    // passar fazia o backend rejeitar o fluxo inteiro por causa de uma ponta
-    // solta que o utilizador nem vê.
+    // O React Flow mantém arestas órfãs momentaneamente após apagar um nó;
+    // excluí-las evita rejeitar um fluxo válido por estado transitório da UI.
     ligacoes: edges
       .filter((e) => idsExistentes.has(e.source) && idsExistentes.has(e.target))
       .map((e) => ({ de: e.source, para: e.target })),

@@ -12,7 +12,13 @@
 -- ============================================================
 
 begin;
-select plan(7);
+select plan(9);
+
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes de
+-- existir organização, para o handle_new_user_org não lhe atribuir org nem
+-- escrever user_organizacoes por cima do insert manual.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000300ff', 'bootstrap@digest-h.pt');
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-000000030000', 'Org Digest', 'digest-h');
@@ -20,14 +26,41 @@ insert into public.organizacoes (id, nome, codigo) values
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-000000030a01', 'gestor@digest-h.pt');
 
-insert into public.user_organizacoes (user_id, org_id, is_admin) values
-  ('00000000-0000-0000-0000-000000030a01', '00000000-0000-0000-0000-000000030000', true);
+-- O destinatário tem de estar num CARGO, e a regra tem de o nomear.
+--
+-- Até 20260909120000 este utilizador era resolvido por `is_admin = true`: o
+-- laço de destinatários punha uma cópia de tudo na caixa de todos os admins da
+-- org, e a regra abaixo nem precisava de dizer quem devia avisar. Esse ramo
+-- saiu — quem recebe é exactamente quem a regra configurou — e sem cargo esta
+-- fixture deixava de resolver ninguém, com todas as contagens a dar 0.
+--
+-- A migração fez o equivalente em produção no passo 1: às regras que tinham a
+-- lista de cargos vazia atribuiu o cargo "Administrador" da própria org.
+--
+-- Aqui o cargo tem nome PRÓPRIO do teste, e não "Administrador": inserir uma
+-- organização dispara `ensure_base_cargos`, que já semeia "Administrador",
+-- "Gestor TVDE" e "Supervisor Gestor TVDE", e `idx_cargos_nome_org_id` é único
+-- por (nome, org_id) — reutilizar o nome rebenta a fixture inteira antes da
+-- primeira asserção. Mesma convenção de "Cargo Permitido"/"Cargo Idem".
+--
+-- `is_admin` fica `true` de propósito: se a cópia automática voltar, este
+-- utilizador passa a receber por duas vias e o teste 1 vê 6 onde espera 3.
+insert into public.cargos (id, nome, org_id) values
+  ('00000000-0000-0000-0000-000000030c01', 'Cargo Digest', '00000000-0000-0000-0000-000000030000');
+
+insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
+  ('00000000-0000-0000-0000-000000030a01', '00000000-0000-0000-0000-000000030000', true,
+   '00000000-0000-0000-0000-000000030c01');
 
 -- Regra em modo digest — enviar_email=true MAS enviar_email_digest=true
 -- também: execute_automation_runs não deve enfileirar email nenhum.
+--
+-- `destinatarios_recurso` ficou aqui do desenho antigo e já não é consultado
+-- pela resolução — o que decide é a estratégia (por omissão `cargo`) e a lista
+-- de cargos. Fica explícito para o ficheiro não depender de omissões.
 insert into public.automation_rules (id, org_id, codigo, nome, event_type, acao_tipo, acao_config) values
   ('00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'teste.digest', 'Regra Digest Teste', 'teste.digest_evento', 'notificacao',
-   '{"template_codigo":"teste.digest_evento","destinatarios_recurso":"renting_contratos","enviar_email":true,"enviar_email_digest":true,"titulo":"Contrato a renovar"}'::jsonb);
+   '{"template_codigo":"teste.digest_evento","destinatarios_estrategia":"cargo","destinatarios_cargo_ids":["00000000-0000-0000-0000-000000030c01"],"enviar_email":true,"enviar_email_digest":true,"titulo":"Contrato a renovar"}'::jsonb);
 
 insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id) values
   ('00000000-0000-0000-0000-0000004c3001', '00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'contratos_renting', '00000000-0000-0000-0000-000000ef3001'),
@@ -87,6 +120,46 @@ select is(
   (select count(*)::int from public.notification_templates where codigo = 'digest.resumo_diario' and canal = 'email' and org_id = '00000000-0000-0000-0000-000000030000'),
   1,
   'seed_automacao_defaults() cria o template de email do digest'
+);
+
+-- 8-9. Sem `mensagem` (o caso normal: `processar_automation_run` nunca a
+--      escreve), a linha usa o `payload` — as mesmas etiquetas que já lá
+--      estão. `link` e chaves `_id` ficam de fora (uuid interno e URL crua
+--      não dizem nada numa linha de texto); o resto aparece como
+--      "Campo: valor". Ver 20260905130000.
+insert into public.automation_runs (id, rule_id, org_id, entity_table, entity_id, payload) values
+  ('00000000-0000-0000-0000-0000004c3009', '00000000-0000-0000-0000-000000463001', '00000000-0000-0000-0000-000000030000', 'contratos_renting', '00000000-0000-0000-0000-000000ef3009',
+   jsonb_build_object('matricula', 'AT-36-XD', 'cliente_id', '11111111-1111-1111-1111-111111111111', 'link', 'https://wegest.pt/x'));
+
+insert into public.notifications (org_id, destinatario_user_id, template_codigo, titulo, mensagem, payload, rule_run_id) values (
+  '00000000-0000-0000-0000-000000030000', '00000000-0000-0000-0000-000000030a01', 'teste.digest_evento', 'Contrato a renovar', null,
+  jsonb_build_object('matricula', 'AT-36-XD', 'cliente_id', '11111111-1111-1111-1111-111111111111', 'link', 'https://wegest.pt/x'),
+  '00000000-0000-0000-0000-0000004c3009'
+);
+
+select public.enviar_digests_diarios();
+
+-- `created_at` é `now()` — constante ao longo de TODA a transacção do
+-- ficheiro (não `clock_timestamp()`), por isso este email do digest e o dos
+-- testes 3-6 empatam nele; "order by created_at desc limit 1" não distingue
+-- os dois. `total = '1'` distingue-os de forma inequívoca — só este grupo
+-- tem um único item.
+select ok(
+  (select payload_render->>'lista' from public.notification_queue
+     where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
+       and payload_render->>'total' = '1') like '%Matrícula: AT-36-XD%',
+  'sem mensagem, a linha do digest mostra o payload (ex.: a matrícula)'
+);
+
+select ok(
+  (select payload_render->>'lista' from public.notification_queue
+     where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
+       and payload_render->>'total' = '1') not like '%https://wegest.pt/x%'
+  and
+  (select payload_render->>'lista' from public.notification_queue
+     where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
+       and payload_render->>'total' = '1') not like '%11111111-1111-1111-1111-111111111111%',
+  'a linha do digest não expõe o link cru nem o uuid interno de cliente_id'
 );
 
 select * from finish();

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import AssinaturaDialog from './AssinaturaDialog';
+import { sanitizeRichHtml } from '@/lib/safeHtml';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,7 +105,9 @@ export const AssinaturasTab = () => {
               <CardContent>
                 <div
                   className="text-sm border rounded-md p-3 bg-muted/30 max-h-32 overflow-y-auto prose prose-sm"
-                  dangerouslySetInnerHTML={{ __html: a.conteudo_html || '<em>Sem conteúdo</em>' }}
+                  dangerouslySetInnerHTML={{
+                    __html: sanitizeRichHtml(a.conteudo_html || '<em>Sem conteúdo</em>'),
+                  }}
                 />
               </CardContent>
             </Card>

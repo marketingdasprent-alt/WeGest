@@ -4,7 +4,10 @@ import { ArrowRight, Car, Euro, Gauge, History, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
+import { useContratoRenovacoes } from '@/hooks/useContratoRenovacoes';
 import { useContratoVersoes } from '@/hooks/useContratosRenting';
+
+import { ContratoRenovacoesLista } from './ContratoRenovacoesLista';
 
 interface ContratoTabHistoricoProps {
   contratoId: string | null;
@@ -37,9 +40,21 @@ export const ContratoTabHistorico: React.FC<ContratoTabHistoricoProps> = ({
   onAbrirVersao,
 }) => {
   const { data: versoes = [], isLoading } = useContratoVersoes(contratoId);
+  // Renovações TVDE de 08-09 a 24-09 não criaram versão: só existem no histórico.
+  const isTvde = versoes.find((v) => v.id === contratoId)?.regime === 'tvde';
+  const renovacoes = useContratoRenovacoes(isTvde ? versoes.map((v) => v.id) : []);
+  const temRenovacoesSemVersao = (renovacoes.data?.length ?? 0) > 0 || !!renovacoes.error;
 
   return (
     <div>
+      {isTvde && temRenovacoesSemVersao && (
+        <ContratoRenovacoesLista
+          renovacoes={renovacoes.data ?? []}
+          isLoading={renovacoes.isLoading}
+          error={renovacoes.error}
+        />
+      )}
+
       <div className="flex items-center gap-2 pb-2 border-b mb-4">
         <History className="h-5 w-5 text-primary" />
         <h3 className="text-base font-semibold">Histórico de versões</h3>

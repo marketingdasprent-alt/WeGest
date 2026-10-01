@@ -2,15 +2,9 @@
  * Rotas servidas sem sessão — a landing, as páginas institucionais e os acessos
  * por token (galeria de danos, quadro de TV, formulários públicos).
  *
- * PORQUE ISTO EXISTE
- * O `NotificacoesPopup` está montado ao nível da App, fora das rotas, e o único
- * critério para aparecer era "o utilizador não é motorista". Resultado: avisos
- * operacionais internos — matrículas, contratos a expirar, cartas de condução
- * caducadas — apareciam sobre a landing pública e sobre o quadro de TV, que é
- * precisamente um ecrã pensado para estar à vista de quem passa.
- *
- * Manter a lista aqui, e não espalhada por componentes, é o que permite ao teste
- * compará-la com as rotas declaradas em WebAppRoutes.
+ * Existe porque o `NotificacoesPopup`, montado fora das rotas, só filtrava por
+ * "não é motorista" e mostrava avisos internos sobre o quadro de TV e a landing
+ * pública. Fica centralizada aqui para o teste a comparar com WebAppRoutes.
  */
 
 /** Caminhos públicos com correspondência exacta. */

@@ -93,7 +93,11 @@ jobs:
         with:
           deno-version: v2.x
 
-      - run: deno test --allow-read supabase/functions/_shared
+      # env: os testes dos handlers definem SUPABASE_URL/chaves falsas; net só em
+      # loopback, para o servidor local dos testes de rate limit. Este job não
+      # instala node_modules: sem --node-modules-dir=none o Deno vê o package.json
+      # e recusa os imports npm: (ex.: @supabase/supabase-js).
+      - run: deno test --allow-read --allow-env --allow-net=127.0.0.1 --node-modules-dir=none supabase/functions/_shared
 
   build:
     name: 🏗️ Build
@@ -272,6 +276,7 @@ jobs:
             accao_email \
             notifications_destinatario_externo \
             automation_rules_grupo_id \
+            email_gemea_herda_grupo_id \
             testar_regra_automacao \
             automation_queue \
             automation_rules \
@@ -280,7 +285,9 @@ jobs:
             seed_automacao_defaults \
             automacao_saude_ignorar_failed_job \
             automacao_timeline_views \
-            retry_failed_job
+            retry_failed_job \
+            cartao_frota_alterado \
+            contrato_alterado
 
       # ── Gate 2: notificações ──────────────────────────────────────────
       - name: pgTAP — notificações
@@ -290,9 +297,38 @@ jobs:
             notifications \
             notification_queue \
             limite_diario_emails \
-            enviar_digests_diarios
+            enviar_digests_diarios \
+            emails_sem_travessoes
 
-      # ── Gate 3: isolamento e exposição ────────────────────────────────
+      # ── Gate 2b: API externa de rent-a-car ────────────────────────────
+      # Chaves com hash, colunas do site no catálogo e funções api_* por
+      # organização. Nasceram a 2026-10-01 com a Fase A da API.
+      - name: pgTAP — API externa
+        if: steps.baseline.outputs.tem_baseline == 'true'
+        run: |
+          bash scripts/pgtap-suite.sh "API externa" \
+            api_chaves \
+            catalogo_site_colunas \
+            api_catalogo
+
+      # ── Gate 3: ingestão de plataformas ───────────────────────────────
+      # Os dois modos de falha que custaram dinheiro a sério em Setembro de
+      # 2026, ambos silenciosos: a conta da própria frota a entrar nos resumos
+      # da Uber como se fosse um motorista (-133 017 EUR a sujar totais), e
+      # semanas inteiras a não chegar sem ninguém dar por isso.
+      - name: pgTAP — ingestão de plataformas
+        if: steps.baseline.outputs.tem_baseline == 'true'
+        run: |
+          bash scripts/pgtap-suite.sh "Ingestão de plataformas" \
+            uber_conta_frota_fora_do_resumo \
+            semana_plataforma_em_falta \
+            bolt_liquido_a_pagar \
+            entrega_de_cartao_pela_hora \
+            uma_parcela_por_semana \
+            combustivel_chega_ao_motorista \
+            reimportar_substitui_a_semana
+
+      # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
       # que nasça sem isolamento de org ou executável pelo papel anónimo.
       - name: pgTAP — segurança e multi-tenancy
@@ -300,9 +336,16 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
-            rls_anon_exposure
+            rls_anon_exposure \
+            signup_nao_confia_na_metadata \
+            salvar_precos_modelo_tarifa \
+            aceitar_convite_pelo_titular \
+            buckets_viaturas_fase0 \
+            gerar_cobrancas_slot_tolerante \
+            atribuicao_segue_estado_do_contrato \
+            fotos_da_viatura
 
-      # ── Gate 4: concorrência a sério ──────────────────────────────────
+      # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de
       # `begin ... rollback`, e uma segunda ligação não vê fixtures por
       # confirmar. Dois workers a competir exigem dados commitados e dois

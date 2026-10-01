@@ -56,6 +56,11 @@ vi.mock('@/integrations/supabase/client', () => ({
     rpc: vi.fn(),
     auth: {
       getSession: vi.fn(),
+      // Resolve por omissão em vez de devolver undefined: quem só quer
+      // registar quem gravou (`gravado_por`) não devia ter de montar o mock
+      // da autenticação. Um teste que se importe com o utilizador substitui
+      // isto com mockResolvedValue.
+      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
     },
     functions: {
       invoke: vi.fn(),

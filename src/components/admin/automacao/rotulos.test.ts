@@ -3,6 +3,7 @@ import {
   MODULOS,
   chaveDoEvento,
   identidadeDoModulo,
+  identidadeDoEvento,
   moduloDoEvento,
   TODOS_OS_MODULOS,
 } from './rotulos';
@@ -122,5 +123,23 @@ describe('identidadeDoModulo', () => {
 
   it('o valor "todos" não é um módulo', () => {
     expect(MODULOS.some((m) => m.chave === TODOS_OS_MODULOS)).toBe(false);
+  });
+
+  it('o recibo verde do motorista e filtrado no Financeiro, nao nos Motoristas', () => {
+    // Quem valida o recibo e quem trata das contas. Sem o alias caia em "Outros"
+    // e o filtro do Financeiro escondia-o.
+    expect(chaveDoEvento('motorista_recibo.por_validar')).toBe('cobranca');
+    expect(identidadeDoEvento('motorista_recibo.por_validar').nome).toBe('Financeiro');
+  });
+
+  it('o cartao de frota e filtrado no Financeiro', () => {
+    // Mudar o titular do cartao muda quem paga o combustivel. Sem alias caia em "Outros".
+    expect(chaveDoEvento('cartao_frota.alterado')).toBe('cobranca');
+    expect(identidadeDoEvento('cartao_frota.alterado').nome).toBe('Financeiro');
+  });
+
+  it('o contrato de motorista e filtrado nos contratos', () => {
+    expect(chaveDoEvento('contrato.alterado')).toBe('contrato_renting');
+    expect(identidadeDoEvento('contrato.alterado').nome).toBe('Renting');
   });
 });

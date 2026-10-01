@@ -143,6 +143,11 @@ select is(
 -- ════════════════════════════════════════════════════════════
 -- Validação na escrita — a UI não é fronteira de segurança
 -- ════════════════════════════════════════════════════════════
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" para não
+-- colidir com os inserts manuais de user_organizacoes/user_org_ativa abaixo.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000f4ff', 'bootstrap@f4.pt');
+
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000f4000', 'Org Condicoes A', 'f4-a'),
   ('00000000-0000-0000-0000-0000000f4b00', 'Org Condicoes B', 'f4-b');

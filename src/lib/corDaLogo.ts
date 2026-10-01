@@ -1,17 +1,7 @@
-// A cor da marca tirada do próprio logótipo.
-//
-// Pedir a alguém que escreva um hexadecimal é pedir-lhe uma coisa que ninguém
-// tem à mão. O logótipo, esse, já está carregado — e é ele que define a cor da
-// empresa. Isto lê-o e propõe a cor, deixando sempre a última palavra a quem
-// está a configurar.
-//
-// O QUE CONTA COMO "A COR DA MARCA"
-// Não é a cor mais frequente: quase todos os logótipos são maioritariamente
-// transparentes, brancos ou pretos, e a cor mais repetida seria o fundo ou o
-// contorno do texto. É a cor CROMÁTICA dominante — descartam-se os pixéis
-// transparentes, os cinzentos e os extremos de claro/escuro, e entre o que
-// resta pesa-se cada cor pela área que ocupa E pela sua saturação, para um
-// azul vivo em pouca área ganhar a um bege lavado em muita.
+// A cor da marca tirada do próprio logótipo, para propor em vez de pedir um
+// hexadecimal a quem configura. Não é a cor mais frequente (seria o fundo
+// transparente/branco/preto) — é a cor cromática dominante, pesada por área E
+// saturação, para um azul vivo em pouca área ganhar a um bege lavado em muita.
 
 /** Um pixel só entra na contagem acima desta opacidade. */
 const ALFA_MINIMO = 128;
@@ -78,10 +68,8 @@ export function corDominanteDePixeis(dados: Uint8ClampedArray): string | null {
     balde.soma[1] += g;
     balde.soma[2] += b;
     balde.n += 1;
-    // A saturação entra como peso AO QUADRADO. Linear não chegava: um bege
-    // lavado a cobrir metade do logótipo batia um vermelho vivo do símbolo,
-    // e o bege não é a cor que ninguém associa àquela marca. Ao quadrado, a
-    // vivacidade pesa mais do que a área — que é como o olho decide.
+    // Peso ao quadrado: linear deixava um bege lavado em área bater um
+    // vermelho vivo do símbolo, que é como o olho realmente decide.
     balde.peso += s * s;
     baldes.set(chave, balde);
   }
@@ -101,11 +89,8 @@ export function corDominanteDePixeis(dados: Uint8ClampedArray): string | null {
 
 /**
  * Carrega a imagem e devolve a sua cor dominante. Só funciona no browser.
- *
- * Devolve `null` — nunca lança — quando a imagem não carrega, quando o
- * servidor não permite ler os pixéis (canvas contaminado por falta de CORS) ou
- * quando o logótipo não tem cor. Isto corre num ecrã de configuração: falhar
- * significa "não sugiro nada", nunca "rebentar o formulário".
+ * Nunca lança — corre num ecrã de configuração, falhar deve significar
+ * "não sugiro nada", nunca "rebentar o formulário".
  */
 export async function corDominanteDaImagem(url: string): Promise<string | null> {
   if (!url) return null;
@@ -120,8 +105,7 @@ export async function corDominanteDaImagem(url: string): Promise<string | null> 
       img.src = url;
     });
 
-    // Reduzir antes de ler: um logótipo grande são milhões de pixéis para uma
-    // resposta que não muda. 64×64 chega e é instantâneo.
+    // Reduzir antes de ler: 64×64 chega e evita milhões de pixéis à toa.
     const LADO = 64;
     const canvas = document.createElement('canvas');
     canvas.width = LADO;

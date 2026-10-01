@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
-import { openFaturacaoDocumento, type FaturacaoDocEmitente } from '@/utils/faturacaoDocumento';
+import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import { emitirDocumento, baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
@@ -196,38 +196,18 @@ export function NotaCreditoDialog({
           qc.invalidateQueries({ queryKey: ['invoices-by-contrato', cobranca.contrato_id] });
         } catch (kiErr: any) {
           console.error('Falha a emitir a nota de crédito no provider:', kiErr);
-          toast.warning(
-            `Nota de crédito registada, mas não foi possível emitir no ${providerLabel} — foi gerado o documento interno.`
-          );
+          toast.warning(`Não foi possível emitir a nota de crédito no ${providerLabel}.`);
         }
       }
 
-      // Documento HTML local (fallback) — original sem documento fiscal ou emissão falhada.
+      // Sem emissão no provider NÃO há nota de crédito: um documento que
+      // credita imposto é acto de software certificado. O WeGest regista o
+      // crédito na conta-corrente e diz que o documento falta — não desenha um.
       if (!emitiuFiscal) {
-        const clienteMorada =
-          [cli?.morada, cli?.codigo_postal, cli?.cidade].filter(Boolean).join(', ') || null;
-        const aberto = openFaturacaoDocumento({
-          tipo: 'nota_credito',
-          numero,
-          data: hojeISO(),
-          emitente: emitente ?? null,
-          cliente: {
-            nome: cobranca.destinatario_nome,
-            nif: cli?.nif ?? null,
-            morada: clienteMorada,
-          },
-          linhas: [{ descricao: `Crédito sobre ${docOriginal} — ${motivo.trim()}`, valor: base }],
-          subtotal: base,
-          taxaIva,
-          iva,
-          total: valorNum,
-          motivo: motivo.trim(),
-          documentoOriginal: docOriginal,
-          valorOriginal: totalCobranca,
-          saldoRestante,
-        });
-        toast.success(`Nota de crédito ${numero} emitida (${formatCurrency(valorNum)}).`);
-        if (!aberto) toast.warning('Pop-up bloqueado — não foi possível abrir o documento.');
+        toast.warning(
+          `Crédito de ${formatCurrency(valorNum)} registado na conta-corrente, mas a nota de crédito ` +
+            'NÃO foi emitida. Reemita-a na lista de documentos — até lá não existe documento para o cliente.'
+        );
       }
 
       onEmitida();

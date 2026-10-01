@@ -19,11 +19,6 @@ import {
   type AnexoDanosCtx,
 } from './render-anexo-danos';
 
-/**
- * Gera um documento PDF a partir de um template guardado na base de dados.
- * Substitui placeholders, renderiza HTML, tabelas, imagens, e anexos de danos.
- * Devolve o objecto jsPDF gerado.
- */
 export async function generateDocumentFromTemplate(params: GenerateDocumentParams): Promise<jsPDF> {
   const {
     templateId,
@@ -45,10 +40,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
   } = params;
 
   try {
-    // O template pode chegar já resolvido — é o caso da regeneração a partir de
-    // uma fotografia congelada. Aí não se vai à base de dados de propósito: uma
-    // edição posterior do template mudaria um documento que já foi enviado para
-    // assinar, e a pessoa assinaria coisa diferente da que recebeu.
     let templateData: DocumentTemplate;
 
     if (params.templateOverride) {
@@ -79,9 +70,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       ...(observacoesMomento != null ? { observacoes_momento: observacoesMomento } : {}),
     };
 
-    // O anexo de danos é resolvido ANTES de se desenhar seja o que for: traz o
-    // número do contrato (que vai para o canto superior direito e para o
-    // placeholder) e as partes (que pertencem ao cabeçalho, não ao anexo).
     let efectivoAnexoDanos = params.anexoDanos;
     if (templateData.tipo === 'anexo_danos' && params.viaturaId && !efectivoAnexoDanos) {
       const matriculaAnexo = (inputDocumentData?.viatura_matricula as string | undefined) ?? '';
@@ -99,22 +87,17 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       documentData.numero_contrato = String(efectivoAnexoDanos.numeroContrato);
     }
 
-    // Substituir placeholders no conteúdo HTML do template
     const conteudo = replaceDynamicFields(
       templateData.template_data.conteudo,
       motoristaData,
       documentData
     );
 
-    // Verificar existência de {{secao_danos}} — se presente, o anexo é renderizado INLINE
     const hasDanosPlaceholder = conteudo.includes('{{secao_danos}}');
     const [preDanos, htmlPart2] = hasDanosPlaceholder
       ? conteudo.split(/\{\{secao_danos\}\}/)
       : [conteudo, ''];
 
-    // {{secao_partes}} — identificação de quem alugou. Fica onde o template o
-    // puser (a seguir à empresa emissora, por desenho), e não dentro do anexo
-    // de danos: pela leitura da folha, identificar as partes é cabeçalho.
     const hasPartesPlaceholder = preDanos.includes('{{secao_partes}}');
     const [htmlPart1, htmlPartEntre] = hasPartesPlaceholder
       ? preDanos.split(/\{\{secao_partes\}\}/)
@@ -129,18 +112,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     const leftMargin = 20;
     const rightMargin = 20;
 
-    // Papel timbrado (background): a empresa manda sempre; só cai para o timbre
-    // gravado no próprio template se a empresa não tiver nenhum definido
-    // (compatibilidade com templates configurados antes de o timbre passar a
-    // viver na empresa).
-    //
-    // NÃO condicionar a `!existingPdf`: em documentos COMBINADOS (ex.: TVDE =
-    // Prestação + Aluguer, via generateDocumentosCombinados) todos os docs a
-    // seguir ao primeiro recebem `existingPdf` — com essa guarda o `bg` ficava
-    // null e ESSES documentos saíam sem timbrado em nenhuma página (só o 1.º
-    // vinha timbrado). Carregar sempre que houver URL faz o bloco abaixo
-    // carimbar a 1.ª página do doc de continuação e o renderHtmlBlock/render
-    // Table re-aplicá-lo nas páginas seguintes.
     const papelTimbradoUrl: string | null =
       (documentData?.empresaData as { papelTimbrado?: string | null } | undefined)?.papelTimbrado ||
       templateData.papel_timbrado_url ||
@@ -152,7 +123,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
 
     const hasLetterhead = !!bg;
 
-    // Margens ajustadas para papel timbrado
     const topMargin = templateData.template_data.topMargin ?? (hasLetterhead ? 42 : 32);
     const bottomMarginLetterhead =
       templateData.template_data.bottomMargin ?? (hasLetterhead ? 38 : 22);
@@ -160,19 +130,12 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
     const maxWidth = pageWidth - leftMargin - rightMargin;
     let yPos = topMargin;
 
-    // Com papel timbrado a área útil é menor; comprimir entrelinha.
     const lineFactor = hasLetterhead ? 1.24 : 1.5;
 
-    // Carimba o papel timbrado na 1ª página deste documento. Num documento de
-    // continuação (existingPdf) NÃO se adiciona página aqui — o
-    // generateDocumentosCombinados já criou a página separadora (pdf.addPage())
-    // antes de nos chamar; carimbamos o timbrado SOBRE essa página. Adicionar
-    // outra página aqui gerava uma folha em branco a mais por documento.
     if (bg) {
       pdf.addImage(bg, 'PNG', 0, 0, 210, 297);
     }
 
-    // Contexto para renderHtmlBlock
     const htmlCtx: RenderHtmlBlockCtx = {
       leftMargin,
       rightMargin,
@@ -197,15 +160,12 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       maxWidth,
     };
 
-    // Número do contrato no canto superior direito, como no contrato de aluguer.
     if (efectivoAnexoDanos?.numeroContrato != null) {
       renderNumeroContrato(pdf, efectivoAnexoDanos.numeroContrato, danosCtx);
     }
 
-    // Renderizar parte 1 (até {{secao_partes}}, ou até {{secao_danos}})
     yPos = await renderHtmlBlock(pdf, htmlPart1, yPos, htmlCtx);
 
-    // Identificação das partes + o que vier entre elas e o anexo de danos.
     if (hasPartesPlaceholder) {
       yPos = renderPartes(pdf, efectivoAnexoDanos?.partes ?? [], danosCtx, yPos + 2);
       if (htmlPartEntre.trim()) {
@@ -213,7 +173,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       }
     }
 
-    // Renderizar anexoFotos (check-in/check-out) em grelha 2×3
     if (params.anexoFotos?.length) {
       const cols = 2;
       const rows = 3;
@@ -228,9 +187,7 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
           if (!imagens.has(url)) {
             try {
               imagens.set(url, await loadImage(url));
-            } catch {
-              /* skip falhas de carregamento */
-            }
+            } catch {}
           }
         }
       }
@@ -265,7 +222,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       }
     }
 
-    // Mesclar fotos e danos locais (pré-visualização)
     if (efectivoAnexoDanos && params.fotosMomento?.length) {
       const fotosMomentoItems = params.fotosMomento.map((url) => ({
         url,
@@ -283,17 +239,14 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       };
     }
 
-    // Renderizar anexo de danos
     if (efectivoAnexoDanos) {
       yPos = await renderAnexoDanos(pdf, efectivoAnexoDanos, danosCtx, hasDanosPlaceholder, yPos);
     }
 
-    // Renderizar parte 2 (após {{secao_danos}})
     if (hasDanosPlaceholder && htmlPart2.trim()) {
       yPos = await renderHtmlBlock(pdf, htmlPart2, yPos, htmlCtx);
     }
 
-    // Numeração de páginas
     const endPage = pdf.getNumberOfPages();
     const docTotalPages = endPage - startPage + 1;
     const usarFooterEmpresa = !!params.footerText && !hasLetterhead;
@@ -320,7 +273,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
       }
     }
 
-    // Executar ação
     if (!params.skipOutput) {
       const fileName = `${templateData.nome}_${motoristaData.nome}_${format(new Date(), 'yyyyMMdd')}.pdf`;
       if (action === 'print') {
@@ -337,11 +289,6 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
   }
 }
 
-/**
- * Gera vários documentos (templates) num ÚNICO PDF, com uma folha branca a
- * separar cada documento. Cada documento mantém a sua própria numeração e
- * rodapé. Ordem do array = ordem no PDF.
- */
 export const generateDocumentosCombinados = async (
   docs: DocumentoCombinado[],
   opts: { action?: 'print' | 'download' | 'email'; fileName?: string } = {}
@@ -366,6 +313,5 @@ export const generateDocumentosCombinados = async (
   } else if (action === 'download') {
     pdf.save(resolvedFileName);
   }
-  // 'email': sem efeito secundário — quem chamou extrai o PDF para anexar ao envio.
   return pdf;
 };

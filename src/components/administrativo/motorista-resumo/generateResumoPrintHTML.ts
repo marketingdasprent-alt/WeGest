@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { escapeHtml } from '@/lib/safeHtml';
 import type { SlotPeriodo } from '../MotoristaResumoDialog';
 
 /* ───────── types ───────── */
@@ -24,6 +25,9 @@ interface Despesas {
   outros_custos: number;
   caucao: number;
   seguros: number;
+  /** Mensalidade de slot (categoria 'slot_mensal') — não confundir com
+   *  `totalSlot`/`slotPeriodos` abaixo, que é o aluguer pro-rata por dias. */
+  slot: number;
   reparacoes: number;
 }
 
@@ -92,8 +96,8 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     .map(
       (f) => `
       <div style="display:flex;flex-direction:column;gap:2px">
-        <span style="font-size:10px;color:#6b7280">${f.label}</span>
-        <span style="font-size:13px;font-weight:600;color:${(f as any).colored ? ((f as any).colored.includes('green') ? '#16a34a' : '#dc2626') : '#111827'}">${f.value ?? '—'}</span>
+        <span style="font-size:10px;color:#6b7280">${escapeHtml(f.label)}</span>
+        <span style="font-size:13px;font-weight:600;color:${(f as any).colored ? ((f as any).colored.includes('green') ? '#16a34a' : '#dc2626') : '#111827'}">${escapeHtml(f.value ?? '—')}</span>
       </div>`
     )
     .join('');
@@ -107,6 +111,7 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     ['Combustível', despesas.combustivel],
     ['Portagens', despesas.portagens],
     ['Outros Custos', despesas.outros_custos],
+    ['Slot', despesas.slot],
     ['Caução', despesas.caucao],
     ['Seguros', despesas.seguros],
     ['Reparações', despesas.reparacoes],
@@ -132,7 +137,7 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
                 .map(
                   (p) =>
                     `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
-                      <span>${p.matricula} (${p.dataInicioStr}–${p.dataFimStr}): ${p.dias} dias × ${fmtEur(p.taxaDiaria)}/dia</span>
+                      <span>${escapeHtml(p.matricula)} (${escapeHtml(p.dataInicioStr)}–${escapeHtml(p.dataFimStr)}): ${p.dias} dias × ${fmtEur(p.taxaDiaria)}/dia</span>
                       <span style="color:#b45309">${fmtEur(p.custo)}</span>
                     </div>`
                 )
@@ -152,7 +157,7 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
   const liquidoColor = liquido >= 0 ? '#2563eb' : '#f97316';
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-      <title>Resumo Financeiro — ${driverName}</title>
+      <title>Resumo Financeiro — ${escapeHtml(driverName)}</title>
       <style>
         *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
         body{font-family:'Segoe UI',Arial,sans-serif;color:#111827;background:#fff;padding:24px 32px}

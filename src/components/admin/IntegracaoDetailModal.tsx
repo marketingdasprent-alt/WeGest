@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SINCRONIZACAO_ATIVA } from '@/config/sync';
-import { useOrgId } from '@/contexts/TenantContext';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { TablesUpdate } from '@/integrations/supabase/types';
 import { cronExpressionToPreset, presetToCronExpression, CRON_PRESETS } from '@/lib/cronPresets';
+import { pedirSyncViaVerde } from '@/lib/viaVerdeSync';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +39,6 @@ import {
   Bot,
   Car,
   Clock,
-  Copy,
   Eye,
   EyeOff,
   ImagePlus,
@@ -61,6 +60,8 @@ import {
   type EstadoCredenciaisBolt,
   isIntegracaoBolt,
   payloadConversaoBolt,
+  payloadCredenciaisPortalBolt,
+  temCredenciaisPortal,
   periodoTexto,
   semanaAnterior,
   semanaDe,
@@ -89,7 +90,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   onUpdate,
 }) => {
   const { toast } = useToast();
-  const orgId = useOrgId();
   const [saving, setSaving] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -106,6 +106,13 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   // Remonta o bloco (e apaga o Client Secret que ele tem em memória) sempre que
   // o modal reabre ou muda de integração.
   const [boltFormKey, setBoltFormKey] = useState(0);
+  // Login do portal (fleets.bolt.eu) — o que o robô Apify usa para descarregar
+  // o CSV semanal. Vive em colunas próprias, à parte das credenciais da API:
+  // uma conta usa as duas fontes ao mesmo tempo, porque as campanhas só
+  // existem no CSV. A password nunca é reapresentada, como no resto do ecrã.
+  const [boltPortalEmail, setBoltPortalEmail] = useState('');
+  const [boltPortalPassword, setBoltPortalPassword] = useState('');
+  const [mostrarPortalPassword, setMostrarPortalPassword] = useState(false);
   const [sincronizandoSemana, setSincronizandoSemana] = useState(false);
 
   const initialCronRef = useRef<{ schedule: string; custom: string }>({
@@ -131,6 +138,9 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
   // senão os resumos semanais já importados ficavam órfãos.
   const isBolt = isIntegracaoBolt(integracao);
   const boltModo = boltAuthMode(integracao);
+  // Há login do portal guardado? É o que decide se o robô pode correr — já não
+  // é o modo, porque o robô e a API deixaram de competir pelas mesmas colunas.
+  const portalGravado = temCredenciaisPortal(integracao);
   const isViaVerde = integracao.plataforma === 'via_verde';
   // Cartrack: API REST directa (GPS/frota). Layout simplificado (username/password),
   // sincroniza pelo botão abaixo → cartrack-sync.
@@ -195,7 +205,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     intervalo_sync_horas: integracao.intervalo_sync_horas ?? 24,
     site_url: integracao.webhook_url ?? '',
     apify_actor_id: integracao.apify_actor_id ?? '',
-    apify_api_token: integracao.apify_api_token ?? '',
     auth_mode: (integracao.auth_mode ?? 'password') as 'password' | 'cookies',
     cookies_json: integracao.cookies_json ?? '',
     cron_schedule: 'disabled' as string,
@@ -256,7 +265,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       intervalo_sync_horas: integracao.intervalo_sync_horas ?? 24,
       site_url: integracao.plataforma === 'robot' ? (integracao.webhook_url ?? '') : '',
       apify_actor_id: integracao.apify_actor_id ?? '',
-      apify_api_token: integracao.apify_api_token ?? '',
       auth_mode: (integracao.auth_mode ?? 'password') as 'password' | 'cookies',
       cookies_json: integracao.cookies_json ?? '',
       cron_schedule: 'disabled',
@@ -269,6 +277,9 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
     setPeriodoInicio('');
     setPeriodoFim('');
     setBoltCred(CREDENCIAIS_BOLT_VAZIAS);
+    setBoltPortalEmail(integracao.robot_portal_email ?? '');
+    setBoltPortalPassword('');
+    setMostrarPortalPassword(false);
     setBoltFormKey((k) => k + 1);
     loadCronState();
   }, [open, integracao]);
@@ -387,30 +398,22 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
       // Via Verde: passa pela fila (via_verde_sync_queue) tal como o sync
       // automático — evita que um disparo manual ultrapasse o limite de
       // concorrência do plano Apify dedicado, ou entre em conflito com uma
-      // execução já agendada da mesma integração. via-verde-sync-drain é
-      // invocado de seguida para processar já, sem esperar pelo próximo
-      // tick de 5 min.
+      // execução já agendada da mesma integração. A RPC põe na fila e arranca
+      // o drain no servidor, sem esperar pelo próximo tick de 5 min.
       if (isViaVerde) {
-        const { error: insertError } = await supabase.from('via_verde_sync_queue').insert({
-          integracao_id: integracao.id,
-          org_id: orgId,
-          status: 'pending',
-          periodo_inicio: periodoTipo === 'personalizado' ? periodoInicio : null,
-          periodo_fim: periodoTipo === 'personalizado' ? periodoFim : null,
+        const personalizado = periodoTipo === 'personalizado';
+        const resultado = await pedirSyncViaVerde(integracao.id, {
+          inicio: personalizado ? periodoInicio : null,
+          fim: personalizado ? periodoFim : null,
         });
-
-        if (insertError && insertError.code !== '23505') {
-          throw new Error(insertError.message);
-        }
+        const jaNaFila = resultado === 'ja_na_fila';
 
         toast({
-          title: insertError ? 'Já estava na fila' : 'Adicionado à fila',
-          description: insertError
+          title: jaNaFila ? 'Já estava na fila' : 'Adicionado à fila',
+          description: jaNaFila
             ? 'Esta integração já tem uma execução pendente ou em curso.'
             : 'A processar em breve — respeitando o limite de execuções em simultâneo.',
         });
-
-        await supabase.functions.invoke('via-verde-sync-drain', { body: {} });
         return;
       }
 
@@ -506,9 +509,37 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
               clientSecret: boltCred.clientSecret,
               companyId: boltCred.companyId,
               companyName: boltCred.companyName,
+              // Esta conta ainda está em modo robô: client_id/client_secret
+              // guardam o login do portal e estão prestes a levar a chave da
+              // API por cima. Salvá-lo para as colunas próprias é o que impede
+              // o robô de ficar sem forma de entrar — sem isto repetia-se, ao
+              // pormenor, o que apagou as campanhas de 4 contas em Agosto.
+              portalAnterior:
+                boltModo === 'password' && !portalGravado
+                  ? { email: integracao.client_id, password: integracao.client_secret }
+                  : null,
             })
           );
           converteuParaApi = boltModo === 'password';
+        }
+
+        // Login do portal escrito neste ecrã — grava-se à parte das credenciais
+        // da API e DEPOIS da conversão, para o que o utilizador acabou de
+        // escrever ganhar ao que se salvou automaticamente.
+        const portalEmail = boltPortalEmail.trim();
+        const portalPassword = boltPortalPassword.trim();
+        if (portalPassword && !portalEmail) {
+          throw new Error('Preencha o email do portal Bolt.');
+        }
+        if (portalEmail && portalPassword) {
+          Object.assign(updatePayload, payloadCredenciaisPortalBolt(portalEmail, portalPassword));
+        } else if (portalEmail && integracao.robot_portal_password) {
+          // Só o email mudou; a password gravada mantém-se (não é reapresentada).
+          updatePayload.robot_portal_email = portalEmail;
+        } else if (portalEmail) {
+          throw new Error(
+            'Preencha também a password do portal Bolt — sem ela o robô não consegue entrar e o CSV das campanhas não chega.'
+          );
         }
         // Sem credenciais novas coladas não se toca no que está gravado — nem
         // em modo robô nem em oauth. O ecrã já não mostra o login do portal,
@@ -555,7 +586,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
           formData.auth_mode === 'password' ? formData.client_secret || null : null;
         updatePayload.webhook_url = formData.site_url || null;
         updatePayload.apify_actor_id = formData.apify_actor_id || null;
-        updatePayload.apify_api_token = formData.apify_api_token || null;
         updatePayload.auth_mode = formData.auth_mode;
         updatePayload.cookies_json =
           formData.auth_mode === 'cookies' ? formData.cookies_json || null : null;
@@ -621,36 +651,18 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
         }
       }
 
-      // Bolt em modo API: o agendamento do robô tem de desaparecer. As
-      // credenciais do portal foram substituídas pelas da API (são as mesmas
-      // colunas), portanto um robot-execute agendado só ia falhar o login
-      // semana após semana, em silêncio.
-      const boltEmModoApi = isBolt && (converteuParaApi || boltModo === 'oauth');
-      // Só se houver mesmo o que apagar: ou acabou de converter, ou o
-      // loadCronState encontrou um agendamento ainda de pé.
-      const temAgendamentoDoRobo =
-        integracao.plataforma === 'robot' &&
-        (converteuParaApi || initialCronRef.current.schedule !== 'disabled');
-      if (boltEmModoApi && temAgendamentoDoRobo) {
-        try {
-          await supabase.functions.invoke('robot-schedule', {
-            body: { integracao_id: integracao.id, action: 'delete' },
-          });
-          initialCronRef.current = { schedule: 'disabled', custom: '' };
-          setFormData((prev) => ({ ...prev, cron_schedule: 'disabled', cron_custom: '' }));
-        } catch (scheduleErr: any) {
-          console.warn('Erro ao remover agendamento do robô:', scheduleErr);
-          toast({
-            title: 'Aviso',
-            description:
-              'Credenciais guardadas, mas o agendamento do robô pode não ter sido removido. Confirme-o antes de Segunda-feira.',
-            variant: 'destructive',
-          });
-        }
-      }
+      // NOTA: converter para a API já NÃO apaga o agendamento do robô.
+      //
+      // Apagava, e com razão, enquanto o login do portal e a chave da API
+      // partilhavam client_id/client_secret: convertida a conta, o robô não
+      // tinha como entrar e o agendamento só produzia falhas silenciosas. Agora
+      // que o portal tem colunas próprias, os dois correm ao mesmo tempo de
+      // propósito — a API traz as viagens, o robô traz o CSV com as campanhas.
+      // Apagar o agendamento aqui seria voltar a desligar o que traz o dinheiro
+      // das campanhas.
 
       // Handle cron scheduling for robot integrations
-      if (integracao.plataforma === 'robot' && !boltEmModoApi) {
+      if (integracao.plataforma === 'robot') {
         const cronChanged =
           formData.cron_schedule !== initialCronRef.current.schedule ||
           (formData.cron_schedule === 'custom' &&
@@ -842,6 +854,72 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                     {boltCred.motivo}
                   </p>
                 )}
+
+                {/* Login do PORTAL — o robô Apify. Nos dois modos, porque as
+                    campanhas só existem no CSV do portal: a API devolve nove
+                    campos de preço por viagem e nenhum é campanha. Foi por
+                    estas credenciais terem partilhado colunas com as da API
+                    que 4 contas ficaram sem CSV entre Agosto e Setembro. */}
+                <div className="space-y-3 border-t border-border pt-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="flex items-center gap-2">
+                      <Bot className="h-4 w-4" />
+                      Login do portal (robô — CSV das campanhas)
+                    </Label>
+                    <Badge variant={portalGravado ? 'default' : 'secondary'}>
+                      {portalGravado ? 'Configurado' : 'Por configurar'}
+                    </Badge>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Credenciais com que se entra em <em>fleets.bolt.eu</em> — <strong>não</strong>{' '}
+                    são o Client ID/Secret da API. O robô usa-as para descarregar o relatório
+                    semanal, que é o único sítio onde existem as <strong>campanhas</strong> e os
+                    reembolsos de despesas. As duas ligações convivem: a API traz as viagens, o robô
+                    traz o que falta.
+                  </p>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bolt-portal-email">Email do portal</Label>
+                    <Input
+                      id="bolt-portal-email"
+                      autoComplete="off"
+                      placeholder="email@empresa.com"
+                      value={boltPortalEmail}
+                      onChange={(e) => setBoltPortalEmail(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bolt-portal-password">Password do portal</Label>
+                    <div className="relative">
+                      <Input
+                        id="bolt-portal-password"
+                        type={mostrarPortalPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        placeholder={
+                          portalGravado ? 'Gravada — escreva de novo para substituir' : '••••••••'
+                        }
+                        value={boltPortalPassword}
+                        onChange={(e) => setBoltPortalPassword(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
+                        onClick={() => setMostrarPortalPassword(!mostrarPortalPassword)}
+                        aria-label={mostrarPortalPassword ? 'Ocultar password' : 'Mostrar password'}
+                      >
+                        {mostrarPortalPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
 
                 <p className="text-xs text-muted-foreground">
                   A importação manual do CSV semanal continua disponível no cartão desta integração,
@@ -1234,29 +1312,6 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                 )}
 
                 <div className="space-y-2">
-                  <Label>API Token (Apify)</Label>
-                  <div className="relative">
-                    <Input
-                      type={showSecret ? 'text' : 'password'}
-                      value={formData.apify_api_token}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, apify_api_token: e.target.value }))
-                      }
-                      placeholder="apify_api_..."
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
-                      onClick={() => setShowSecret(!showSecret)}
-                    >
-                      {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
                   <Label>Actor ID (Apify)</Label>
                   <Input
                     value={formData.apify_actor_id}
@@ -1268,44 +1323,21 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                 </div>
 
                 <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Callback URL (para o actor)</Label>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        const callbackUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robot-webhook?integracao_id=${integracao.id}`;
-                        try {
-                          await navigator.clipboard.writeText(callbackUrl);
-                          toast({ title: 'URL copiada' });
-                        } catch {
-                          toast({
-                            title: 'Erro',
-                            description: 'Não foi possível copiar.',
-                            variant: 'destructive',
-                          });
-                        }
-                      }}
-                    >
-                      <Copy className="mr-2 h-4 w-4" /> Copiar URL
-                    </Button>
-                  </div>
-                  <Input
-                    value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/robot-webhook?integracao_id=${integracao.id}`}
-                    readOnly
-                  />
+                  <Label>Callback do actor</Label>
                   <p className="text-sm text-muted-foreground">
-                    Configure este URL no actor Apify para receber os resultados automaticamente.
+                    O callback assinado é configurado automaticamente quando o robot arranca.
                   </p>
                 </div>
               </>
             )}
 
-            {/* Sync semanal toggle — robôs. Uma Bolt já convertida não o tem:
-                o agendamento dispara robot-execute (Apify) e o login do portal
-                dessa conta já foi substituído pelas credenciais da API. */}
-            {integracao.plataforma === 'robot' && !(isBolt && boltModo === 'oauth') && (
+            {/* Sync semanal toggle — robôs, incluindo as Bolt já convertidas
+                para a API: o agendamento dispara o robot-execute, que vai ao
+                portal buscar o CSV das campanhas. Enquanto o login do portal
+                não estiver preenchido não se mostra, porque cada passagem
+                falharia — e falharia em silêncio, que é como isto se perdeu
+                durante cinco semanas. */}
+            {integracao.plataforma === 'robot' && (!isBolt || portalGravado) && (
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-4">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
@@ -1468,8 +1500,11 @@ export const IntegracaoDetailModal: React.FC<IntegracaoDetailModalProps> = ({
                 integracao.plataforma === 'via_verde' ||
                 integracao.robot_target_platform === 'bolt') &&
                 (integracao.plataforma === 'robot' || integracao.plataforma === 'via_verde') &&
-                // Convertida para a API: o robô já não consegue entrar no portal.
-                !(isBolt && boltModo === 'oauth') && (
+                // Uma Bolt convertida continua a poder correr o robô — é dele
+                // que vem o CSV com as campanhas. O que falta é o login do
+                // portal: sem ele o robot-execute recusa, e mais vale não
+                // oferecer o botão do que oferecer um erro.
+                (!isBolt || portalGravado) && (
                   <Button variant="outline" onClick={handleExecuteRobot} disabled={executingRobot}>
                     {executingRobot ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

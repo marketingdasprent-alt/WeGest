@@ -32,7 +32,7 @@ export function eliminacaoContaAdminTemplate(input: EliminacaoContaInput): {
     </body>
     </html>
   `;
-  return { subject: 'Pedido de Eliminação de Conta - WeGest', html };
+  return { subject: 'Pedido de Eliminação de Conta na WeGest', html };
 }
 
 export function eliminacaoContaConfirmacaoTemplate(input: EliminacaoContaInput): {
@@ -61,5 +61,5 @@ export function eliminacaoContaConfirmacaoTemplate(input: EliminacaoContaInput):
     </body>
     </html>
   `;
-  return { subject: 'Confirmação do Pedido de Eliminação de Conta - WeGest', html };
+  return { subject: 'Confirmação do Pedido de Eliminação de Conta na WeGest', html };
 }

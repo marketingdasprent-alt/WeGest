@@ -3,22 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-/**
- * Fronteira de erro de render.
- *
- * Antes de existir, um erro a renderizar qualquer componente levava a aplicação
- * inteira a ecrã branco — sem mensagem, sem registo e sem forma de recuperar a
- * não ser recarregar a página.
- *
- * Tem de ser um componente de classe: `componentDidCatch` e
- * `getDerivedStateFromError` não têm equivalente em hooks, e é a única forma
- * suportada em React de apanhar um erro de render.
- *
- * **O que NÃO apanha** — e é importante não prometer ao utilizador o que não
- * cobre: erros em handlers de eventos, em código assíncrono (incluindo o que
- * corre dentro do React Query) e em `setTimeout`. Esses continuam a ser tratados
- * onde acontecem, normalmente por toast.
- */
+// Error boundaries do React exigem componente de classe e só capturam renderização.
 
 interface FallbackProps {
   erro: Error;
@@ -27,15 +12,8 @@ interface FallbackProps {
 
 interface Props {
   children: ReactNode;
-  /**
-   * Quando muda de valor, a fronteira limpa o erro e tenta renderizar de novo.
-   * Nas rotas passa-se o pathname: navegar para outro lado recupera sozinho, em
-   * vez de deixar o utilizador preso no ecrã de erro.
-   */
   resetKey?: string | number;
-  /** Identifica a fronteira nos registos — sem isto não se sabe onde rebentou. */
   origem?: string;
-  /** Ecrã alternativo. Sem isto usa-se o ecrã por omissão, de página inteira. */
   fallback?: (props: FallbackProps) => ReactNode;
 }
 
@@ -51,8 +29,6 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(erro: Error, info: ErrorInfo): void {
-    // O React já escreve o erro na consola; o que falta é o contexto de onde
-    // aconteceu, que é o que permite reproduzi-lo.
     console.error(`[ErrorBoundary${this.props.origem ? ` · ${this.props.origem}` : ''}]`, erro, {
       componentStack: info.componentStack,
     });
@@ -78,13 +54,6 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-/**
- * Ecrã por omissão. Diz o que aconteceu em linguagem de utilizador e oferece as
- * duas saídas que fazem sentido — tentar outra vez, ou sair dali.
- *
- * Nunca mostra a stack trace: não ajuda quem está a usar o produto e passa a
- * ideia de software inacabado. O detalhe técnico vai para a consola.
- */
 function EcraDeErro({ erro, reset }: FallbackProps) {
   return (
     <div
@@ -121,14 +90,7 @@ function EcraDeErro({ erro, reset }: FallbackProps) {
   );
 }
 
-/**
- * Fronteira para usar à volta das rotas.
- *
- * Passa o pathname como `resetKey`, o que faz o erro limpar-se sozinho quando o
- * utilizador navega para outro lado. Sem isto, quem tropeça num erro fica preso
- * no ecrã de erro mesmo depois de clicar noutra entrada do menu — que é
- * exactamente o momento em que o produto parece partido.
- */
+// A mudança de rota repõe a fronteira para não prender a navegação no fallback.
 export function RouteErrorBoundary({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   return (

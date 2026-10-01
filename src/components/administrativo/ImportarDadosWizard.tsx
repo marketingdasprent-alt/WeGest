@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { format, startOfWeek, endOfWeek, subWeeks, addWeeks, isThisWeek } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import {
@@ -23,7 +22,8 @@ import { toast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { buildSupabaseFunctionUrl } from '@/utils/supabaseFunctionUrl';
+import { enviarImportacao, lerFicheiroComoTexto } from '@/lib/importacaoPlataformas';
+import { avisoImportacaoSemTitular } from '@/utils/combustivelSemDono';
 import {
   Dialog,
   DialogContent,
@@ -165,39 +165,6 @@ type Passo = 1 | 2 | 3 | 4;
 const PASSOS_LABELS = ['Plataforma', 'Conta', 'Semana', 'Ficheiro'];
 
 const fmtDate = (d: Date) => format(d, 'yyyy-MM-dd');
-
-// Lê o ficheiro como texto CSV. Se for Excel (.xlsx/.xls), converte a 1ª folha
-// para CSV (separador ';' — seguro com decimais/moradas que usam vírgula).
-async function fileToCsvText(file: File): Promise<string> {
-  const nome = file.name.toLowerCase();
-  if (nome.endsWith('.xlsx') || nome.endsWith('.xls')) {
-    const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-
-    // Alguns ficheiros trazem capa/resumo na 1ª folha e os movimentos noutra.
-    // Escolhemos a folha com mais linhas não vazias para reduzir imports parciais.
-    let bestCsv = '';
-    let bestScore = -1;
-
-    for (const sheetName of wb.SheetNames) {
-      const ws = wb.Sheets[sheetName];
-      if (!ws) continue;
-      const csv = XLSX.utils.sheet_to_csv(ws, { FS: ';', blankrows: false, rawNumbers: false });
-      const score = csv
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter((l) => l.length > 0).length;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestCsv = csv;
-      }
-    }
-
-    return bestCsv;
-  }
-  return file.text();
-}
 
 export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
   open,
@@ -441,76 +408,23 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
     if (!plataforma || !integracaoId || !file) return;
     setImportando(true);
     try {
-      const csvText = await fileToCsvText(file);
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData?.session?.access_token;
-      if (!token) throw new Error('Sessão inválida. Inicie sessão novamente.');
-
-      let url = '';
-      let body: Record<string, unknown> = {};
-
-      if (plataforma === 'bolt') {
-        url = buildSupabaseFunctionUrl('bolt-import-csv');
-        body = {
-          integracao_id: integracaoId,
-          dados_csv_bolt: csvText,
-          periodo: `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}`,
-          periodo_inicio: fmtDate(weekStart),
-          periodo_fim: fmtDate(weekEnd),
-          origem: 'Upload Manual (Contas)',
-        };
-      } else if (plataforma === 'uber') {
-        url = buildSupabaseFunctionUrl('uber-webhook', { integracao_id: integracaoId });
-        // Prefixa o nome com YYYYMMDD-YYYYMMDD para a edge function detectar a
-        // semana (occurred_at default) — caso o CSV não tenha coluna de data.
-        const wStart = fmtDate(weekStart).replace(/-/g, '');
-        const wEnd = fmtDate(weekEnd).replace(/-/g, '');
-        const nomeComPeriodo = /^\d{8}-\d{8}/.test(file.name)
-          ? file.name
-          : `${wStart}-${wEnd}-${file.name}`;
-        body = {
-          integracao_id: integracaoId,
-          dados_csv_brutos: csvText,
-          origem: 'Upload Manual (Contas)',
-          nome_original: nomeComPeriodo,
-          data_extracao: new Date().toISOString(),
-          periodo_inicio: fmtDate(weekStart),
-          periodo_fim: fmtDate(weekEnd),
-        };
-      } else {
-        // bp / repsol / edp / viaverde
-        url = buildSupabaseFunctionUrl(`${plataforma}-import-csv`);
-        body = { integracao_id: integracaoId, combustivel_csv: csvText };
-      }
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
+      const texto = await lerFicheiroComoTexto(file);
+      const resultado = await enviarImportacao({
+        plataforma,
+        integracaoId,
+        texto,
+        nomeFicheiro: file.name,
+        periodo: { inicio: fmtDate(weekStart), fim: fmtDate(weekEnd) },
+        origem: 'Upload Manual (Contas)',
       });
-      const data = await response.json();
-      if (!response.ok || data.success === false) {
-        throw new Error(data.error || `Erro ${response.status}`);
-      }
-
-      // Cobre todos os formatos de resposta (bolt: imported, uber: inserted+updated, bp/repsol/edp: variados)
-      const insertedOrUpdated =
-        (typeof data.inserted === 'number' ? data.inserted : 0) +
-        (typeof data.updated === 'number' ? data.updated : 0);
-      const imp =
-        data.imported ??
-        (insertedOrUpdated > 0 ? insertedOrUpdated : undefined) ??
-        data.processados ??
-        data.total_imported ??
-        data.matched ??
-        0;
-      const errs = data.errors ?? data.erros ?? 0;
-      const totalRows = data.total_rows ?? data.total ?? imp;
-      const skipped = data.skipped ?? 0;
-      const deduped = data.deduped_in_payload ?? 0;
+      const imp = resultado.gravados;
+      const errs = resultado.erros;
+      const totalRows = resultado.lidas;
+      const skipped = resultado.ignoradas;
+      const deduped = resultado.deduplicadas;
 
       if (imp === 0) {
-        const headers: string[] = data.debug_headers ?? [];
+        const headers = resultado.colunas;
         const desc =
           totalRows === 0
             ? 'Ficheiro não reconhecido — 0 linhas lidas. Verifica o formato.'
@@ -528,8 +442,10 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
           description:
             `${totalRows} linha(s) lida(s) · ${skipped} ignorada(s) · ${deduped} deduplicada(s)` +
             (errs > 0 ? ` · ${errs} erro(s)` : '') +
-            ` · Período: ${data.periodo || `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}`}`,
+            ` · Período: ${resultado.periodo || `${fmtDate(weekStart)} a ${fmtDate(weekEnd)}`}`,
         });
+        const semTitular = avisoImportacaoSemTitular(resultado.semTitular);
+        if (semTitular) toast.warning(semTitular, { duration: 15000 });
       }
       onImportComplete?.();
       onOpenChange(false);

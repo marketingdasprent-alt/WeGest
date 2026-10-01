@@ -147,7 +147,12 @@ describe('BoltApiCredenciais', () => {
     render(<BoltApiCredenciais contexto="editar" modoGravado="password" onEstado={vi.fn()} />);
 
     const aviso = screen.getByTestId('bolt-aviso-conversao');
-    expect(aviso).toHaveTextContent(/robô deixa de correr/i);
+    // O robô PASSOU A CONTINUAR a correr: desde 20260911100000 o login do
+    // portal tem campos próprios e deixou de ser substituído pelas
+    // credenciais da API. É dele que vem o CSV das campanhas, que a API não
+    // devolve — por isso converter para API já não o desliga. O teste ficou
+    // a afirmar o contrário ("deixa de correr") e deixou a main vermelha.
+    expect(aviso).toHaveTextContent(/robô continua a correr/i);
     expect(aviso).toHaveTextContent(/importação manual do CSV mantém-se/i);
     expect(aviso).toHaveTextContent(/histórico/i);
   });

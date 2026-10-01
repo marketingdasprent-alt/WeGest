@@ -292,12 +292,13 @@ export const BoltDataTab: React.FC = () => {
   const handleFetchFromApify = async () => {
     setLoading(true);
     try {
-      // 1. Get ALL active integrations with Apify tokens
+      // 1. Obter integrações activas. O token Apify é global e vive apenas
+      // no servidor; nunca é selecionado por clientes multi-tenant.
       const { data: configs, error: configError } = await supabase
         .from('plataformas_configuracao')
-        .select('id, nome, apify_api_token, apify_actor_id, plataforma, robot_target_platform')
+        .select('id, nome, apify_actor_id, plataforma, robot_target_platform')
         .eq('ativo', true)
-        .not('apify_api_token', 'is', null);
+        .not('apify_actor_id', 'is', null);
 
       if (configError) throw configError;
 

@@ -132,7 +132,9 @@ export interface MotoristaPayload {
   codigo_postal: string | null;
   data_contratacao: string | null;
   cidade: string | null;
-  status_ativo: boolean;
+  /** Só quem CRIA o motorista o preenche (com true). buildMotoristaPayload
+   *  nunca o devolve — ver o comentário lá em baixo. */
+  status_ativo?: boolean;
   is_slot: boolean;
   observacoes: string | null;
   iban: string | null;
@@ -174,7 +176,12 @@ export function buildMotoristaPayload(values: FormValues): MotoristaPayload {
     codigo_postal: values.codigo_postal || null,
     data_contratacao: values.data_contratacao || null,
     cidade: values.cidade || null,
-    status_ativo: values.status_ativo ?? true,
+    // status_ativo NÃO entra aqui de propósito. O campo não aparece no
+    // formulário, mas ia no payload com o valor que o form tinha em memória
+    // — bastava activar um motorista pelo botão e gravar a ficha a seguir
+    // para o valor velho (false) voltar e desfazer a activação, sem aviso.
+    // Quem escreve o estado é o botão Ativar/Inativar; na criação, quem
+    // insere acrescenta status_ativo: true.
     is_slot: values.is_slot ?? false,
     observacoes: values.observacoes || null,
     iban: ibanNormalizado || null,

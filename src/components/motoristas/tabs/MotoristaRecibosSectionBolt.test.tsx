@@ -65,7 +65,8 @@ describe('MotoristaRecibosSection — receita Bolt', () => {
       // A API tem 500 € para a mesma semana. Com a fonte em 'csv' este valor
       // não pode entrar no recibo — nem somado, nem a substituir o CSV.
       bolt_viagens: [{ driver_earnings: 500 }],
-      bolt_resumos_semanais: [{ ganhos_liquidos: 300 }],
+      // liquido_a_pagar: o campo que a ficha lê (coluna gerada, ver src/config/bolt.ts).
+      bolt_resumos_semanais: [{ liquido_a_pagar: 300 }],
     });
   });
 

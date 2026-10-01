@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -15,6 +16,11 @@ import { UpdateNotification } from '@/components/UpdateNotification';
 import { NotificacoesPopup } from '@/components/notificacoes/NotificacoesPopup';
 import { OnboardingColaboradorDialog } from '@/components/onboarding/OnboardingColaboradorDialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+
+// Só no `pnpm dev`: na build o ramo é `null` e o seletor nem chega ao bundle.
+const VerComoGrupo = import.meta.env.DEV
+  ? lazy(() => import('@/components/dev/VerComoGrupo').then((m) => ({ default: m.VerComoGrupo })))
+  : null;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +64,11 @@ const App = () => {
                           <WebAppRoutes />
                           <NotificacoesPopup />
                           <OnboardingColaboradorDialog />
+                          {VerComoGrupo && (
+                            <Suspense fallback={null}>
+                              <VerComoGrupo />
+                            </Suspense>
+                          )}
                         </>
                       )}
                     </NotificacoesProvider>

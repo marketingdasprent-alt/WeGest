@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database } from '@/integrations/supabase/types';
 import { ContratoEntregaStep } from './ContratoEntregaStep';
 import { RecolhaCheckinStep } from './RecolhaCheckinStep';
 import { TrocaCheckinStep } from './TrocaCheckinStep';
@@ -27,7 +28,7 @@ import { cn } from '@/lib/utils';
 import { useOrgId } from '@/contexts/TenantContext';
 export { SearchableDropdown, formatMatricula } from './calendarioUtils';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+type CalendarioEventoInsert = Database['public']['Tables']['calendario_eventos']['Insert'];
 
 export interface Viatura {
   id: string;
@@ -71,7 +72,6 @@ export interface PendingTrocaData {
   fazerDepois?: boolean;
 }
 
-// Data passed to step components so THEY create the event (atomic with contract/media)
 export interface PendingEventoData {
   tipo: 'entrega' | 'recolha' | 'devolucao';
   motoristaId: string;
@@ -94,31 +94,12 @@ interface Props {
   onClose: () => void;
 }
 
-// ── Event types ────────────────────────────────────────────────────────────────
-//
-// entrega   → motorista recebe viatura. Cria associação motorista_viaturas.
-//             viatura → em_uso
-//
-// recolha   → motorista entrega a viatura (ex: posto de entrega, não parque ainda).
-//             Fecha associação motorista_viaturas na data do evento.
-//             viatura → em_recolha (pendente de confirmação de chegada ao parque)
-//             A confirmação de chegada é feita por um gestor na lista de pendentes.
-//
-// devolucao → viatura já está no parque. Fecha associação + viatura → disponivel
-//
-// troca     → motorista troca de viatura. Sistema deteta a viatura atual pelo motorista.
-//             Fecha associação antiga + cria nova. Histórico mantido em ambos.
-//             viatura antiga → disponivel, nova → em_uso
-//
-// upgrade   → igual à troca, mas o tipo fica gravado para o dashboard calcular
-//             variação de renda (valor_aluguer).
-
 type TipoEvento = {
   value: string;
   label: string;
   color: string;
   desc: string;
-  /** Em transição: vai ser substituído pelo fluxo Reserva → Contrato. */
+
   legacy?: boolean;
 };
 
@@ -165,8 +146,6 @@ const TIPOS: TipoEvento[] = [
     desc: 'Reservar viatura — fica registada como reservada no calendário',
   },
 ];
-
-// ── Accent-insensitive search ─────────────────────────────────────────────────
 
 function norm(s: string): string {
   return s
@@ -425,7 +404,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
           ? new Date(`${data}T00:00:00`).toISOString()
           : new Date(`${data}T${hora}:00`).toISOString();
         const mm = marcaModeloByKey.get(reservaMarcaModelo.trim());
-        const payload: Record<string, any> = {
+        const payload: CalendarioEventoInsert = {
           titulo: reservaMarcaModelo.trim(),
           tipo: 'lista_espera',
           data_inicio: dataISO,
@@ -472,7 +451,7 @@ export const NovoEventoPage: React.FC<Props> = ({ userId, defaultDate, onClose }
         : new Date(`${data}T${hora}:00`).toISOString();
 
       // The event titulo = main vehicle plate
-      const eventoPayload: Record<string, any> = {
+      const eventoPayload: CalendarioEventoInsert = {
         titulo: mainViatura.matricula.replace(/[-\s]/g, '').toUpperCase(),
         tipo,
         data_inicio: dataISO,

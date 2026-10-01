@@ -3,9 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   useCartoesFrotaLista,
   useMotoristasParaCartoes,
+  useClientesParaCartoes,
   useGuardarCartaoFrota,
   useEliminarCartaoFrota,
   useImportarCartoesFrota,
+  useAssociarCartaoAoMotorista,
+  useAssociarCartaoAoCliente,
+  useDevolverCartaoDoMotorista,
 } from '@/hooks/useCartoesFrota';
 import { errorMessage } from '@/utils/errorMessage';
 import { useToast } from '@/hooks/use-toast';
@@ -17,12 +21,20 @@ import {
   norm,
   type CartaoFrota,
   type MotoristaOption,
+  type ClienteOption,
   type HistoricoItem,
   type StatusCartao,
   type FormState,
   type Movimento,
 } from './cartoesFlotaTab.types';
 import { parseSheet, readWorkbook } from './cartoesFlotaImport';
+import { normalizarNumeroCartao } from './cartoesFlotaNumero';
+import {
+  limitesRpc,
+  periodoPorOmissao,
+  rotuloPeriodo,
+  type PeriodoCartoes,
+} from './cartoesFlotaPeriodo';
 import type { ImportRow, TipoCartao } from './cartoesFlotaImport';
 import { exportarCartoesExcel, exportarCartoesPrint } from './cartoesFlotaExport';
 import { CartoesFlotaKpis } from './CartoesFlotaKpis';
@@ -41,77 +53,84 @@ export function CartoesFlotaTab() {
   const podeGerir = canEdit(RECURSOS.ADMINISTRATIVO_CARTOES);
   const { data: cartoes = [], isLoading: loading } = useCartoesFrotaLista<CartaoFrota>();
   const { data: motoristas = [] } = useMotoristasParaCartoes() as { data?: MotoristaOption[] };
+  const { data: clientes = [] } = useClientesParaCartoes() as { data?: ClienteOption[] };
   const guardarCartao = useGuardarCartaoFrota();
+  const associarMotorista = useAssociarCartaoAoMotorista();
+  const associarCliente = useAssociarCartaoAoCliente();
+  const devolverCartao = useDevolverCartaoDoMotorista();
   const eliminarCartao = useEliminarCartaoFrota();
   const importarCartoes = useImportarCartoesFrota();
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<'todos' | 'bp' | 'repsol' | 'edp'>('todos');
   const [sortField, setSortField] = useState<string>('numero');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  // 'ativos' (esconde cancelados) · 'todos' · ou um estado específico
   const [statusSel, setStatusSel] = useState<string>('ativos');
+  const [periodo, setPeriodo] = useState<PeriodoCartoes>(periodoPorOmissao);
   const [consumoMap, setConsumoMap] = useState<Record<string, { total: number; litros: number }>>(
     {}
   );
 
-  // CRUD Dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CartaoFrota | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [showPin, setShowPin] = useState(false);
 
-  // Delete
   const [deleteTarget, setDeleteTarget] = useState<CartaoFrota | null>(null);
 
-  // History Sheet
   const [historyCartao, setHistoryCartao] = useState<CartaoFrota | null>(null);
   const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Import
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [importing, setImporting] = useState(false);
 
+  // Datas em texto nas dependências: novas instâncias de Date reentrariam sempre.
+  const { desde, ate } = limitesRpc(periodo);
+
   useEffect(() => {
-    carregarConsumo();
-  }, []);
-
-  // A lista de cartões e o dropdown de motoristas vivem em
-  // @/hooks/useCartoesFrota. `CartaoFrota` é escrito à mão e diverge da forma
-  // que a BD devolve com as relações embebidas — daí o parâmetro de tipo em
-  // useCartoesFrotaLista<CartaoFrota>(), que mantém a asserção num sítio só.
-
-  const carregarConsumo = async () => {
-    try {
-      const now = new Date();
-      const desde = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const ate = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
-      const { data, error } = await supabase.rpc('get_cartoes_consumo', {
-        p_desde: desde,
-        p_ate: ate,
-      });
-      if (error) throw error;
-      const map: Record<string, { total: number; litros: number }> = {};
-      (data || []).forEach((r: any) => {
-        if (r.numero == null) return;
-        map[`${r.tipo}|${r.numero}`] = {
-          total: Number(r.total) || 0,
-          litros: Number(r.litros) || 0,
-        };
-      });
-      setConsumoMap(map);
-    } catch {
-      /* consumo é opcional — a barra fica sem dados */
-    }
-  };
+    let cancelado = false;
+    const carregar = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_cartoes_consumo', {
+          p_desde: desde,
+          p_ate: ate,
+        });
+        if (error) throw error;
+        if (cancelado) return;
+        const map: Record<string, { total: number; litros: number }> = {};
+        (data || []).forEach((r: any) => {
+          if (r.numero == null) return;
+          map[`${r.tipo}|${r.numero}`] = {
+            total: Number(r.total) || 0,
+            litros: Number(r.litros) || 0,
+          };
+        });
+        setConsumoMap(map);
+      } catch {}
+    };
+    carregar();
+    return () => {
+      cancelado = true;
+    };
+  }, [desde, ate]);
 
   const motoristaNome = (id: string | null) =>
     id ? (motoristas.find((m) => m.id === id)?.nome ?? '') : '';
 
-  const consumoOf = (c: CartaoFrota) => consumoMap[`${c.tipo}|${c.numero}`]?.total ?? 0;
+  const titularNome = (motoristaId: string | null, clienteId: string | null) =>
+    motoristaId
+      ? (motoristas.find((m) => m.id === motoristaId)?.nome ?? '')
+      : clienteId
+        ? (clientes.find((c) => c.id === clienteId)?.nome ?? '')
+        : '';
+
+  // `get_cartoes_consumo` devolve o número já normalizado (últimos 4 dígitos);
+  // `cartoes_frota.numero` tem 2 a 5, por isso normaliza-se pela mesma regra.
+  const consumoOf = (c: CartaoFrota) =>
+    consumoMap[`${c.tipo}|${normalizarNumeroCartao(c.numero)}`]?.total ?? 0;
 
   const filtered = useMemo(() => {
     const list = cartoes.filter((c) => {
@@ -167,7 +186,6 @@ export function CartoesFlotaTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartoes, search, tipoFilter, statusSel, sortField, sortDir, consumoMap]);
 
-  // KPIs sobre a VISTA FILTRADA (respondem a tipo/estado/pesquisa).
   const kpis = useMemo(() => {
     const emUso = filtered.filter((c) => c.status === 'em_uso').length;
     const disp = filtered.filter((c) => c.status === 'disponivel').length;
@@ -175,11 +193,10 @@ export function CartoesFlotaTab() {
     const plafondAtivo = filtered
       .filter((c) => c.status === 'em_uso')
       .reduce((s, c) => s + (c.limite || 0), 0);
-    const consumoMes = filtered.reduce(
-      (s, c) => s + (consumoMap[`${c.tipo}|${c.numero}`]?.total ?? 0),
-      0
-    );
-    return { total: filtered.length, emUso, disp, canc, plafondAtivo, consumoMes };
+    // Pela mesma chave normalizada da coluna; com o número cru dava sempre 0.
+    const consumoPeriodo = filtered.reduce((s, c) => s + consumoOf(c), 0);
+    return { total: filtered.length, emUso, disp, canc, plafondAtivo, consumoPeriodo };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, consumoMap]);
 
   const statusCounts = useMemo(() => {
@@ -191,7 +208,6 @@ export function CartoesFlotaTab() {
   const { setPage, totalPages, total, pageItems, start, end, page, pageSizeStr, setPageSizeStr } =
     usePagination(filtered, 25, `${search}|${tipoFilter}|${sortField}|${sortDir}`);
 
-  // ── CRUD ──────────────────────────────────────────────────────────────
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm());
@@ -213,7 +229,9 @@ export function CartoesFlotaTab() {
       devolucao: c.devolucao || '',
       status: c.status || 'disponivel',
       motorista_id: c.motorista_id || '',
+      cliente_id: c.cliente_id || '',
       ultimo_motorista_id: c.ultimo_motorista_id || '',
+      ultimo_cliente_id: c.ultimo_cliente_id || '',
       data_entrega: movimento === 'entrega' && !c.data_entrega ? todayISO() : c.data_entrega || '',
       data_devolucao:
         movimento === 'devolucao' && !c.data_devolucao ? todayISO() : c.data_devolucao || '',
@@ -223,43 +241,35 @@ export function CartoesFlotaTab() {
     setDialogOpen(true);
   };
 
+  // Movimentos passam pelas RPCs atómicas; trocar titular devolve antes de atribuir
+  // para preservar períodos e imputação de consumo.
   const handleSave = async () => {
     if (!form.numero.trim()) {
       toast({ title: 'Número obrigatório', variant: 'destructive' });
       return;
     }
 
-    // ── Lógica de movimento (Entrega / Devolução) ──
-    let motoristaId: string | null = form.motorista_id || null;
-    let ultimoId: string | null = form.ultimo_motorista_id || null;
-    let status: StatusCartao = form.status;
-    let dataEntrega: string | null = form.data_entrega || null;
-    let dataDevolucao: string | null = form.data_devolucao || null;
-    const devolucaoNota: string | null = form.devolucao || null;
-    const oldMot = editing?.motorista_id || null;
+    const titularAntes = editing?.motorista_id || editing?.cliente_id || null;
+    const titularDepois = form.motorista_id || form.cliente_id || null;
 
-    if (form.movimento === 'entrega') {
-      if (!motoristaId) {
-        toast({ title: 'Selecione o motorista para a entrega', variant: 'destructive' });
-        return;
-      }
-      if (oldMot && oldMot !== motoristaId) ultimoId = oldMot;
-      status = 'em_uso';
-      dataEntrega = form.data_entrega || todayISO();
-    } else if (form.movimento === 'devolucao') {
-      const holder = motoristaId || oldMot;
-      if (holder) ultimoId = holder;
-      motoristaId = null;
-      status = 'disponivel';
-      dataDevolucao = form.data_devolucao || todayISO();
-    } else if (oldMot && oldMot !== motoristaId) {
-      // Sem movimento explícito, mas o motorista foi trocado à mão → último automático.
-      ultimoId = oldMot;
+    if (form.movimento === 'entrega' && !titularDepois) {
+      toast({ title: 'Selecione o motorista ou o cliente da entrega', variant: 'destructive' });
+      return;
     }
+
+    const movimento: Movimento =
+      form.movimento !== 'nenhum'
+        ? form.movimento
+        : titularDepois && titularDepois !== titularAntes
+          ? 'entrega'
+          : !titularDepois && titularAntes
+            ? 'devolucao'
+            : 'nenhum';
 
     setSaving(true);
     try {
-      const payload = {
+      const status: StatusCartao = form.status;
+      const payload: Record<string, unknown> = {
         numero: form.numero.trim(),
         tipo: form.tipo,
         data_validade: form.data_validade || null,
@@ -268,16 +278,41 @@ export function CartoesFlotaTab() {
         ambito: form.ambito || null,
         detentor: form.detentor || null,
         notas: form.notas || null,
-        devolucao: devolucaoNota,
-        status,
-        motorista_id: motoristaId,
-        ultimo_motorista_id: ultimoId,
-        data_entrega: dataEntrega,
-        data_devolucao: dataDevolucao,
-        // `ativo` mantido em sincronia com o ciclo de vida (usado no export/impressão).
-        ativo: status === 'disponivel' || status === 'em_uso',
+        devolucao: form.devolucao || null,
+        // A RPC é a única fonte de estado e datas quando há movimento.
+        ...(movimento === 'nenhum'
+          ? {
+              status,
+              data_entrega: form.data_entrega || null,
+              data_devolucao: form.data_devolucao || null,
+              ativo: status === 'disponivel' || status === 'em_uso',
+            }
+          : {}),
       };
-      await guardarCartao.mutateAsync({ cartaoId: editing?.id, payload });
+
+      const cartaoId = await guardarCartao.mutateAsync({ cartaoId: editing?.id, payload });
+
+      if (movimento === 'devolucao' || (movimento === 'entrega' && titularAntes)) {
+        await devolverCartao.mutateAsync({
+          cartaoId,
+          motoristaId: editing?.motorista_id ?? '',
+          data: (movimento === 'devolucao' ? form.data_devolucao : form.data_entrega) || undefined,
+        });
+      }
+
+      if (movimento === 'entrega') {
+        const data = form.data_entrega || undefined;
+        if (form.motorista_id) {
+          await associarMotorista.mutateAsync({
+            cartaoId,
+            motoristaId: form.motorista_id,
+            data,
+          });
+        } else {
+          await associarCliente.mutateAsync({ cartaoId, clienteId: form.cliente_id, data });
+        }
+      }
+
       toast({ title: editing ? 'Cartão atualizado' : 'Cartão criado' });
       setDialogOpen(false);
     } catch (err: unknown) {
@@ -298,7 +333,6 @@ export function CartoesFlotaTab() {
     setDeleteTarget(null);
   };
 
-  // ── HISTORY ───────────────────────────────────────────────────────────
   const openHistory = async (c: CartaoFrota) => {
     setHistoryCartao(c);
     setHistorico([]);
@@ -326,7 +360,6 @@ export function CartoesFlotaTab() {
     [historico]
   );
 
-  // ── IMPORT ────────────────────────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -392,7 +425,9 @@ export function CartoesFlotaTab() {
     return null;
   };
 
-  const handleExport = () => exportarCartoesExcel({ filtered, consumoOf });
+  const periodoLabel = rotuloPeriodo(periodo);
+
+  const handleExport = () => exportarCartoesExcel({ filtered, consumoOf, periodoLabel });
 
   const handlePrint = () =>
     exportarCartoesPrint({
@@ -403,14 +438,16 @@ export function CartoesFlotaTab() {
       search,
       consumoOf,
       titularLabel,
+      periodoLabel,
     });
 
-  // ── RENDER ────────────────────────────────────────────────────────────
   return (
     <div className="space-y-4 mt-4">
-      <CartoesFlotaKpis kpis={kpis} />
+      <CartoesFlotaKpis kpis={kpis} periodoLabel={periodoLabel} />
 
       <CartoesFlotaFiltros
+        periodo={periodo}
+        onPeriodoChange={setPeriodo}
         search={search}
         onSearchChange={setSearch}
         tipoFilter={tipoFilter}
@@ -442,6 +479,7 @@ export function CartoesFlotaTab() {
           }
         }}
         consumoOf={consumoOf}
+        periodoLabel={periodoLabel}
         titularLabel={titularLabel}
         onEdit={(c) => openEdit(c)}
         onEntrega={(c) => openEdit(c, 'entrega')}
@@ -460,7 +498,8 @@ export function CartoesFlotaTab() {
         showPin={showPin}
         setShowPin={setShowPin}
         motoristas={motoristas}
-        motoristaNome={motoristaNome}
+        clientes={clientes}
+        titularNome={titularNome}
         saving={saving}
         onSave={handleSave}
       />

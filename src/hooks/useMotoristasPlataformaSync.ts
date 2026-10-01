@@ -15,6 +15,41 @@ function normalizeStr(str: string): string {
 
 const PARTICLES = ['de', 'da', 'do', 'das', 'dos', 'e'];
 
+/**
+ * Quais destes ids de plataforma já têm motorista noutro registo.
+ *
+ * Pergunta só pelos candidatos (dezenas), em lotes e com paginação. Antes
+ * traziam-se TODAS as linhas já ligadas para um Set — mas são 2664 na Uber e
+ * 6004 na Bolt, e o PostgREST devolve no máximo 1000 por pedido. O conjunto
+ * vinha ~83% incompleto na Bolt, por isso motoristas já associados contavam
+ * como não-associados: reapareciam na lista e no contador por mais vezes que
+ * alguém os associasse.
+ */
+export async function idsJaLigados(
+  tabela: 'uber_transactions' | 'bolt_resumos_semanais',
+  coluna: 'uber_driver_id' | 'identificador_motorista',
+  candidatos: string[]
+): Promise<Set<string>> {
+  const ligados = new Set<string>();
+  const PAGINA = 1000;
+  for (let i = 0; i < candidatos.length; i += 50) {
+    const lote = candidatos.slice(i, i + 50);
+    for (let from = 0; ; from += PAGINA) {
+      const { data, error } = await (supabase as any)
+        .from(tabela)
+        .select(coluna)
+        .in(coluna, lote)
+        .not('motorista_id', 'is', null)
+        .range(from, from + PAGINA - 1);
+      if (error) throw error;
+      const linhas = (data ?? []) as Record<string, string>[];
+      linhas.forEach((r) => ligados.add(r[coluna]));
+      if (linhas.length < PAGINA) break;
+    }
+  }
+  return ligados;
+}
+
 /** Pessoas distintas na Uber/Bolt (últimas 8 semanas) sem ficha de motorista. */
 export function useMotoristasPlataformaNaoAssociadosCount() {
   return useQuery({
@@ -32,27 +67,39 @@ export function useMotoristasPlataformaNaoAssociadosCount() {
         (crm || []).map((m: any) => m.bolt_id).filter((x: any) => !!x)
       );
 
-      const [uberDrv, boltRows, uberLigDb, boltLigDb] = await Promise.all([
-        supabase.from('uber_drivers').select('uber_driver_id, full_name').is('motorista_id', null),
+      const [uberDrv, boltRows] = await Promise.all([
+        // `is_conta_frota` fora: é a conta da própria empresa na Uber (a que
+        // recebe as transferências semanais), não um motorista. Ver migração
+        // 20260911140000.
+        supabase
+          .from('uber_drivers')
+          .select('uber_driver_id, full_name')
+          .is('motorista_id', null)
+          .eq('is_conta_frota', false),
         supabase
           .from('bolt_resumos_semanais')
           .select('identificador_motorista, motorista_nome')
           .is('motorista_id', null)
           .gte('periodo_inicio', desdeDate)
           .not('identificador_motorista', 'is', null),
-        supabase
-          .from('uber_transactions')
-          .select('uber_driver_id')
-          .not('motorista_id', 'is', null)
-          .not('uber_driver_id', 'is', null),
-        supabase
-          .from('bolt_resumos_semanais')
-          .select('identificador_motorista')
-          .not('motorista_id', 'is', null)
-          .not('identificador_motorista', 'is', null),
       ]);
-      (uberLigDb.data || []).forEach((r: any) => uberLigados.add(r.uber_driver_id));
-      (boltLigDb.data || []).forEach((r: any) => boltLigados.add(r.identificador_motorista));
+
+      // Já com os candidatos em mão, confirmar quais estão ligados noutro
+      // registo — perguntando só por estes ids, sem a truncagem dos 1000.
+      const candidatosUber = [
+        ...new Set((uberDrv.data || []).map((d: any) => d.uber_driver_id).filter(Boolean)),
+      ] as string[];
+      const candidatosBolt = [
+        ...new Set(
+          (boltRows.data || []).map((r: any) => r.identificador_motorista).filter(Boolean)
+        ),
+      ] as string[];
+      const [uberLigDb, boltLigDb] = await Promise.all([
+        idsJaLigados('uber_transactions', 'uber_driver_id', candidatosUber),
+        idsJaLigados('bolt_resumos_semanais', 'identificador_motorista', candidatosBolt),
+      ]);
+      uberLigDb.forEach((id) => uberLigados.add(id));
+      boltLigDb.forEach((id) => boltLigados.add(id));
 
       // Contar PESSOAS (nome normalizado distinto), não registos.
       const nomes = new Set<string>();
@@ -216,16 +263,10 @@ export function useSincronizarMotoristasPlataformaIds() {
     mutationFn: async () => {
       // 1. Buscar todos os motoristas
       //
-      // O `org_id` vem em todas as queries daqui para baixo porque o cruzamento
-      // é por nome/telefone/email — dados que a mesma pessoa tem iguais em duas
-      // empresas. Quem tem acesso a mais do que uma org vê motoristas das duas,
-      // e sem este campo o casamento saía cruzado: em 08/2026 quatro motoristas
-      // da Premium Ride (Hugo Palma, Kuldeep Singh, Rakesh Kumar, Paulo Silva)
-      // ficaram pendurados nas fichas da Década Ousada, com 7 transações Uber
-      // na conta-corrente da empresa errada.
-      //
-      // A mesma pessoa DEVE ter uma ficha por empresa — são contas-correntes
-      // independentes. O que não pode é a ficha de uma org apanhar o ID da outra.
+      // `org_id` entra em todas as queries porque o cruzamento é por
+      // nome/telefone/email, iguais para a mesma pessoa em duas empresas —
+      // sem isto, em 08/2026, 4 motoristas da Premium Ride ficaram
+      // pendurados na Década Ousada com transações Uber na conta errada.
       const { data: currentMotoristas, error: motError } = await supabase
         .from('motoristas_ativos')
         .select('id, nome, email, telefone, bolt_id, uber_uuid, org_id');
@@ -242,7 +283,10 @@ export function useSincronizarMotoristasPlataformaIds() {
       const { data: uberDrivers, error: uberError } = await supabase
         .from('uber_drivers')
         .select('full_name, uber_driver_id, motorista_id, org_id')
-        .not('uber_driver_id', 'is', null);
+        .not('uber_driver_id', 'is', null)
+        // Nunca casar uma ficha com a conta da própria empresa: o cruzamento é
+        // por nome, e o nome da frota parece-se com o de quem a gere.
+        .eq('is_conta_frota', false);
       if (uberError) throw uberError;
 
       let totalMapped = 0;

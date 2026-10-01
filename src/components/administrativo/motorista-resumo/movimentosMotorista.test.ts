@@ -53,10 +53,38 @@ describe('classificarMovimento', () => {
     expect(classificarMovimento({ tipo: null, categoria: null, valor: 12 }).destino).toBe('outros');
   });
 
+  // O trigger sincronizar_movimento_resumo escreve o líquido da semana de
+  // volta em motorista_financeiro, com categoria 'resumos' e data igual ao
+  // último dia da semana — ou seja, DENTRO da semana que resume. Contá-lo
+  // aqui somava a cada motorista o próprio líquido uma segunda vez: crédito
+  // inchava a receita, débito inchava "Outros".
+  it('o movimento escrito pelo próprio resumo fica de fora, nos dois sentidos', () => {
+    const credito = classificarMovimento(mov('credito', 'resumos', 1712.45));
+    expect(credito.destino).toBe('ignorado');
+    expect(credito.motivo).toContain('resumo');
+
+    const debito = classificarMovimento(mov('debito', 'resumos', 1400));
+    expect(debito.destino).toBe('ignorado');
+    expect(debito.motivo).toContain('resumo');
+  });
+
   it('não se importa com maiúsculas nem espaços', () => {
     expect(classificarMovimento(mov(' Credito ', ' Renda_Viatura ', 10)).destino).toBe(
       'receita_outras'
     );
+    expect(classificarMovimento(mov('credito', ' Resumos ', 10)).destino).toBe('ignorado');
+  });
+
+  // O resumo escreve o seu próprio líquido como movimento de categoria
+  // `resumos`. Se esse movimento voltasse a entrar no cálculo, cada abertura
+  // do resumo lia o resultado anterior como despesa (ou receita) nova e o
+  // número fugia sozinho: −500, −1000, −1500.
+  it('o líquido escrito pelo próprio resumo nunca reentra no cálculo', () => {
+    for (const tipo of ['debito', 'credito']) {
+      const c = classificarMovimento(mov(tipo, 'resumos', 500));
+      expect(c.destino).toBe('ignorado');
+      expect(c.motivo).toContain('o próprio resumo escreveu');
+    }
   });
 });
 
@@ -99,5 +127,55 @@ describe('agregarMovimentos', () => {
     const somados = r.receitaOutras + r.caucao + r.seguros + r.outros;
     const ignorados = r.ignorados.reduce((s, i) => s + i.valor, 0);
     expect(somados + ignorados).toBe(100);
+  });
+});
+
+// Um `destino` novo é invisível para quem consome esta função com uma cadeia
+// de `else if`: o valor não vai para lado nenhum e desaparece da conta em
+// silêncio. Aconteceu quando 'slot' nasceu — o MotoristaRecibosSection não o
+// tratava e 6.030 € em 50 movimentos de 10 motoristas evaporaram-se do ecrã,
+// inflando o líquido na mesma medida.
+//
+// Este teste fixa o conjunto. Se falhar, é porque se acrescentou um destino:
+// antes de o actualizar, ver TODOS os sítios que chamam classificarMovimento
+// e garantir que cada um o trata (hoje: useContasResumoSemana.ts e
+// MotoristaRecibosSection.tsx).
+describe('o conjunto de destinos é fechado', () => {
+  const DESTINOS_CONHECIDOS = [
+    'receita_outras',
+    'caucao',
+    'seguros',
+    'slot',
+    'outros',
+    'ignorado',
+  ] as const;
+
+  it('nenhuma combinação de tipo e categoria produz um destino fora da lista', () => {
+    const categorias = [
+      'renda_viatura',
+      'aluguer',
+      'reparacao',
+      'bolt',
+      'uber',
+      'caucao',
+      'seguros',
+      'slot_mensal',
+      'resumos',
+      'multa',
+      'categoria_inventada',
+      '',
+    ];
+
+    for (const categoria of categorias) {
+      for (const tipo of ['credito', 'debito']) {
+        const { destino } = classificarMovimento(mov(tipo, categoria, 10));
+        expect(DESTINOS_CONHECIDOS).toContain(destino);
+      }
+    }
+  });
+
+  it('a mensalidade de slot tem destino próprio e não se confunde com outros', () => {
+    expect(classificarMovimento(mov('debito', 'slot_mensal', 603)).destino).toBe('slot');
+    expect(classificarMovimento(mov('debito', 'despesa_qualquer', 603)).destino).toBe('outros');
   });
 });

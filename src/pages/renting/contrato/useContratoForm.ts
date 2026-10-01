@@ -68,19 +68,10 @@ import {
 // Mapeia o 1º campo do schema com erro para o separador onde ele vive —
 // os restantes campos ficam todos no separador "Geral" (ContratoFormSecoes).
 //
-// `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` caem neste
-// grupo. Desde que o SectionGeral foi apagado (tinha os únicos <FormMessage />
-// destes três campos), um erro de validação neles deixa de ter superfície
-// ACIONÁVEL: o `onInvalid` (mais abaixo) continua a abrir o separador "Geral" e
-// a mostrar o toast, mas lá não há nenhum destes campos para corrigir — e o
-// cartão lateral (ResumoContrato) não lê form.formState.errors.
-// Decisão deliberada, não um esquecimento: os três só entram no formulário
-// por hidratação de um contrato/reserva já gravado, e só se grava um
-// contrato passando por este mesmo schema (ou pela função SQL
-// renovar_contrato_renting, que copia uma linha já validada) — não há forma
-// de os tornar inválidos pela aplicação. `valor_total_manual` tem ainda o
-// CHECK chk_contratos_valor_total_manual_valido (>= 0) na BD como garantia
-// extra.
+// `valor_total_manual`, `desconto_percentagem` e `voucher_codigo` não têm
+// campo próprio de erro desde que o SectionGeral foi apagado; ficam de fora
+// deliberadamente porque só entram no form já validados (hidratação de um
+// contrato/reserva gravado, ou renovar_contrato_renting).
 const FIELD_TAB_MAP: Partial<Record<keyof ContratoFormValues, string>> = {
   coberturas: 'coberturas',
   extras: 'extras',
@@ -970,10 +961,13 @@ export function useContratoForm(): UseContratoFormReturn {
       estacao_entrega_id: values.estacao_entrega_id || null,
       data_inicio: localInputToIso(values.data_inicio),
       estacao_recolha_id: values.estacao_recolha_id || null,
+      // TVDE nasce sempre sem data de fim (o servidor força-o desde
+      // 20260908115644), longa duração ou não — e o campo vazio TEM de passar
+      // por aqui como null: `localInputToIso('')` faz `new Date('')` e atira
+      // RangeError, matando o submit dentro do handler do clique, sem toast
+      // nem pedido. Ver useContratoForm.tvdeSemDataFim.test.ts.
       data_fim:
-        values.regime === 'tvde' && !values.is_longa_duracao
-          ? null
-          : localInputToIso(values.data_fim ?? ''),
+        values.regime === 'tvde' || !values.data_fim ? null : localInputToIso(values.data_fim),
       estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
       estado_operacional: values.estado_operacional,
       estado_financeiro: values.estado_financeiro,
@@ -1128,10 +1122,11 @@ export function useContratoForm(): UseContratoFormReturn {
               // Reenviá-los aqui era sobrepor os três com os valores hidratados
               // do contrato ANTIGO e desfazer a troca acabada de fazer.
               estacao_recolha_id: values.estacao_recolha_id || null,
+              // Mesma regra do payload de criação — ver o comentário lá.
               data_fim:
-                values.regime === 'tvde' && !values.is_longa_duracao
+                values.regime === 'tvde' || !values.data_fim
                   ? null
-                  : localInputToIso(values.data_fim ?? ''),
+                  : localInputToIso(values.data_fim),
               estacao_origem_viatura_id: values.estacao_origem_viatura_id || null,
               origem: values.origem,
               regime: values.regime,

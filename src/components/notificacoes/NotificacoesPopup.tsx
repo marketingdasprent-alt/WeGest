@@ -25,24 +25,11 @@ const AUTO_DISPENSA_MS = 10_000;
 /**
  * Avisos do que ACABOU de acontecer — não do que está por resolver.
  *
- * ANTES: este componente mostrava `notificacoes`, a lista inteira de
- * não-resolvidas. Isso fazia dele um espelho permanente do backlog:
- *
- *  - entrar no sistema ou dar F5 enchia o canto outra vez;
- *  - o "Ocultar" vivia em sessionStorage, logo era por ABA e por sessão de
- *    browser — abrir um segundo separador trazia tudo de volta;
- *  - o agrupamento cria uma linha nova por (tipo, dia), por isso o mesmo
- *    seguro por tratar gerava um cartão novo todos os dias, com id novo, que
- *    o "ocultar" de ontem não apanhava.
- *
- * O resultado prático era o utilizador a fechar os mesmos avisos várias vezes
- * por dia — e a aprender a fechá-los sem ler, que é o oposto do objectivo de
- * um alerta.
- *
- * AGORA: o canto mostra `chegadas` (o que entrou depois de a app arrancar),
- * cada aviso aparece uma vez, e o backlog vive onde se pode trabalhar sobre
- * ele — o sino e /notificacoes. Sem persistência nenhuma: não é precisa,
- * porque a lista nunca se repõe a partir do backlog.
+ * Antes mostrava a lista inteira de não-resolvidas: F5 enchia o canto outra
+ * vez, "Ocultar" era por sessionStorage/aba, e o mesmo aviso reaparecia com
+ * id novo todos os dias — o utilizador aprendia a fechar sem ler. Agora só
+ * `chegadas` (desde o arranque da app) aparece, uma vez, sem persistência;
+ * o backlog vive no sino e em /notificacoes.
  */
 export const NotificacoesPopup = () => {
   const navigate = useNavigate();

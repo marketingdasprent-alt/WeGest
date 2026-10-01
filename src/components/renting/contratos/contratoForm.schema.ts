@@ -212,9 +212,12 @@ export const contratoFormSchema = z
       });
     }
 
-    // TVDE: data de fim OPCIONAL — sem ela o contrato fica em aberto e a 1.ª
-    // renovação (RPC renovar_contrato_renting) fecha o período até hoje e
-    // arranca o ciclo mensal. Quando fornecida, valida-se só a ordem.
+    // TVDE não tem data de fim: o contrato fica aberto enquanto o motorista lá
+    // estiver e cobra-se à semana. A renovação é um acto manual que avança
+    // `proxima_renovacao_em` — já não fecha o contrato nem cria versão (ver
+    // 20260908093000). O formulário deixou de a preencher e o servidor força
+    // NULL na criação (20260908092000); a validação de ordem fica como defesa
+    // em profundidade, para o caso de vir uma data por outro caminho.
     if (d.regime === 'tvde') {
       if (
         d.data_fim &&

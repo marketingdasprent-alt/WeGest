@@ -1,63 +1,43 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Car,
-  Plus,
-  Search,
-  Eye,
-  Trash2,
-  AlertTriangle,
-  Layers,
-  Printer,
-  FileSpreadsheet,
-  Loader2,
-} from 'lucide-react';
+import { Car, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { AcoesLinha } from '@/components/ui/acoes-linha';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
-import { pt } from 'date-fns/locale';
 import { ViaturaStatsCards } from '@/components/viaturas/ViaturaStatsCards';
 import { DeleteViaturaDialog } from '@/components/viaturas/DeleteViaturaDialog';
-import { ImportViaturasDialog } from '@/components/viaturas/ImportViaturasDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
-import {
-  getCategoriaBadgeClass,
-  getStatusBadgeClass,
-  getStatusLabel,
-  deriveViaturaEstado,
-  ESTADOS_EM_USO,
-} from '@/lib/viaturas';
-import { cn } from '@/lib/utils';
+import { getStatusLabel, deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { exportViaturasPdf, exportViaturasExcel } from '@/utils/viaturasExport';
 import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
-import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { toggleSort } from '@/components/ui/sortable-table-head';
 import { EmptyState } from '@/components/ui/empty-state';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { useCapasViaturas } from '@/hooks/useCapasViaturas';
+import { AmbitoFrotaAviso } from '@/components/viaturas/AmbitoFrotaAviso';
+import { useAmbitoViaturas } from '@/hooks/useAmbitoViaturas';
+import { viaturaNoAmbito } from '@/utils/ambitoViaturas';
+import { cabemNaLinhaDosEstados, cartoesTiposViatura } from '@/utils/cartoesTiposViatura';
+import { CartaoTipoViaturaCard } from '@/components/viaturas/CartaoTipoViaturaCard';
+import { ViaturasFiltrosBarra } from '@/components/viaturas/ViaturasFiltrosBarra';
+import { ViaturasAcoesMenu } from '@/components/viaturas/ViaturasAcoesMenu';
+import { FrotaAtencaoAviso } from '@/components/viaturas/FrotaAtencaoAviso';
+import { ViaturasTabela } from '@/components/viaturas/lista/ViaturasTabela';
+import { ViaturasCartoesMobile } from '@/components/viaturas/lista/ViaturasCartoesMobile';
+import { acoesDaViatura } from '@/components/viaturas/lista/acoesViatura';
+import { useSituacaoViaturas } from '@/hooks/useSituacaoViaturas';
+import { proximaValidade, resumoAtencao } from '@/utils/documentosViatura';
+import {
+  filtrarViaturas,
+  opcoesFiltrosViaturas,
+  type FacetaViaturas,
+  type FiltrosViaturas,
+} from '@/utils/filtrosViaturas';
 
 interface ViaturasTipo {
   id: string;
@@ -89,12 +69,6 @@ interface Viatura {
   viatura_tipos?: ViaturasTipo | null;
 }
 
-/** Lower-case + strip diacritics + strip dashes/spaces — pesquisa de matrícula/marca/modelo. */
-function normalizeSearch(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[-\s]/g, '');
-}
-
-/** Define se uma viatura entra no âmbito do filtro de status quanto a vendidas. */
 function matchesVendaScope(v: { is_vendida?: boolean | null }, statusFilter: string): boolean {
   if (statusFilter === 'vendido') return !!v.is_vendida;
   if (statusFilter === 'todos_vendidos') return true;
@@ -104,23 +78,12 @@ function matchesVendaScope(v: { is_vendida?: boolean | null }, statusFilter: str
 export default function Viaturas() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [viaturas, setViaturas] = useState<Viatura[]>([]);
+  const [todasViaturas, setViaturas] = useState<Viatura[]>([]);
   const [loading, setLoading] = useState(true);
   const [tipos, setTipos] = useState<ViaturasTipo[]>([]);
 
-  // Os filtros vivem no endereço, como já acontece em Motoristas.
-  //
-  // Antes eram estado local: filtrar a lista, abrir uma viatura e voltar atrás
-  // devolvia a lista inteira, sem ordenação, e era preciso filtrar tudo de
-  // novo. O browser guarda o endereço em cada passo do histórico — é a única
-  // coisa que o "voltar" consegue repor.
-  //
-  // `replace` em vez de push: senão cada tecla escrita na pesquisa criava uma
-  // entrada no histórico e o "voltar" andava filtro a filtro.
-  //
-  // A forma funcional de setSearchParams é obrigatória aqui: o toggleSort faz
-  // duas chamadas seguidas (campo e direcção), e com o objecto capturado a
-  // segunda escrevia por cima da primeira.
+  // A URL preserva filtros no histórico; atualizações funcionais não se sobrepõem.
+  // `replace` evita uma entrada de histórico por cada tecla na pesquisa.
   const filtroNoUrl = useCallback(
     (chave: string, omissao: string) =>
       [
@@ -129,8 +92,7 @@ export default function Viaturas() {
           setSearchParams(
             (anterior) => {
               const proximo = new URLSearchParams(anterior);
-              // Valores por omissão não vão para o endereço — senão ficava
-              // cheio de ruído logo ao abrir a página.
+              // Não poluir o endereço com valores por omissão.
               if (!valor || valor === omissao) proximo.delete(chave);
               else proximo.set(chave, valor);
               return proximo;
@@ -151,8 +113,7 @@ export default function Viaturas() {
   const sortDir = sortDirRaw as 'asc' | 'desc';
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
-  // Distinguir "não há nada" de "os filtros não deixam ver nada" — cada caso
-  // pede uma acção diferente de quem está a olhar para a lista vazia.
+  // Lista vazia e filtros sem resultados exigem ações diferentes.
   const temFiltrosAtivos =
     searchTerm !== '' ||
     statusFilter !== 'all' ||
@@ -160,9 +121,7 @@ export default function Viaturas() {
     combustivelFilter !== 'all' ||
     tipoFilter !== 'all';
 
-  // Uma só escrita ao endereço em vez de cinco chamadas encadeadas: assim o
-  // "voltar" do browser desfaz a limpeza de uma vez, e não filtro a filtro.
-  // A ordenação não é filtro e fica onde está.
+  // Uma só alteração faz o histórico desfazer toda a limpeza de filtros de uma vez.
   const limparFiltros = () =>
     setSearchParams(
       (anterior) => {
@@ -175,7 +134,6 @@ export default function Viaturas() {
       { replace: true }
     );
 
-  // Dialog states
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedViatura, setSelectedViatura] = useState<Viatura | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -185,15 +143,50 @@ export default function Viaturas() {
   const { hasAccessToResource } = usePermissions();
   const podeEliminar = hasAccessToResource(RECURSOS.VIATURAS_ELIMINAR);
 
-  // Ocupação atual (reservas/contratos/movimentos/reparações ativos) para
-  // derivar o estado de cada viatura. Uma reserva/contrato marcado para o
-  // futuro já conta como ocupação.
+  // Reservas e contratos futuros já contam como ocupação da viatura.
   const { data: fontesMap } = useViaturasOcupacao();
+
+  // Âmbito do cargo (ex.: Gestor TVDE → TVDE + SLOT): contagens, cartões e
+  // lista contam só estas. "Ver toda a frota" desliga (fica no URL).
+  const ambito = useAmbitoViaturas();
+  const viaturas = useMemo(
+    () =>
+      ambito.activo
+        ? todasViaturas.filter((v) =>
+            viaturaNoAmbito({ isSlot: v.is_slot, tipoNome: v.viatura_tipos?.nome }, ambito.ambito)
+          )
+        : todasViaturas,
+    [todasViaturas, ambito.activo, ambito.ambito]
+  );
+  const tiposVisiveis = useMemo(
+    () =>
+      ambito.activo
+        ? tipos.filter((t) => viaturaNoAmbito({ tipoNome: t.nome }, ambito.ambito))
+        : tipos,
+    [tipos, ambito.activo, ambito.ambito]
+  );
+  const cartoesOcultos = useMemo(
+    () => (ambito.activo ? (ambito.ambito?.cartoesOcultos ?? []) : []),
+    [ambito.activo, ambito.ambito]
+  );
 
   const estadoDe = useCallback(
     (v: Viatura) => deriveViaturaEstado(v, fontesMap?.get(v.id)),
     [fontesMap]
   );
+
+  // Com quem está cada viatura e há quanto tempo está livre.
+  const { data: situacoes } = useSituacaoViaturas();
+  // O nome de quem tem a viatura também se pesquisa ("joão" → o carro dele).
+  const viaturasPesquisaveis = useMemo(
+    () =>
+      viaturas.map((v) => ({
+        ...v,
+        ocupante_nome: situacoes?.get(v.id)?.ocupante?.nome ?? null,
+      })),
+    [viaturas, situacoes]
+  );
+  const atencao = useMemo(() => resumoAtencao(viaturas, estadoDe), [viaturas, estadoDe]);
 
   useEffect(() => {
     loadViaturas();
@@ -242,83 +235,77 @@ export default function Viaturas() {
       manutencao: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'manutencao').length,
       inativas: viaturas.filter((v) => !v.is_vendida && estadoDe(v) === 'inativo').length,
       vendidas: viaturas.filter((v) => v.is_vendida).length,
-      slot: viaturas.filter((v) => v.is_slot && !v.is_vendida).length,
-      slotDisponiveis: viaturas.filter(
-        (v) => v.is_slot && !v.is_vendida && estadoDe(v) === 'disponivel'
-      ).length,
     };
   }, [viaturas, estadoDe]);
 
-  const tiposCounts = useMemo(() => {
-    const total: Record<string, number> = {};
-    const disponiveis: Record<string, number> = {};
-    viaturas
-      .filter((v) => !v.is_slot && matchesVendaScope(v, statusFilter))
-      .forEach((v) => {
-        if (v.tipo_id) {
-          total[v.tipo_id] = (total[v.tipo_id] || 0) + 1;
-          if (estadoDe(v) === 'disponivel')
-            disponiveis[v.tipo_id] = (disponiveis[v.tipo_id] || 0) + 1;
+  const cartoesTipo = useMemo(
+    () =>
+      cartoesTiposViatura(
+        viaturas,
+        tiposVisiveis,
+        estadoDe,
+        (v) => matchesVendaScope(v, statusFilter),
+        cartoesOcultos
+      ),
+    [viaturas, tiposVisiveis, estadoDe, statusFilter, cartoesOcultos]
+  );
+  const semInativas = cartoesOcultos.includes('inativas');
+  const tiposNaLinhaDeCima =
+    tiposVisiveis.length > 0 && cabemNaLinhaDosEstados(semInativas ? 5 : 6, cartoesTipo.length);
+  const listaCartoesTipo = cartoesTipo.map((c) => {
+    const isActive = tipoFilter === c.id;
+    return (
+      <CartaoTipoViaturaCard
+        key={c.id}
+        cartao={c}
+        isActive={isActive}
+        onClick={() => setTipoFilter(isActive && c.id !== 'all' ? 'all' : c.id)}
+      />
+    );
+  });
+
+  const filtros = useMemo<FiltrosViaturas>(
+    () => ({
+      search: searchTerm,
+      status: statusFilter,
+      categoria: categoriaFilter,
+      combustivel: combustivelFilter,
+      tipo: tipoFilter,
+    }),
+    [searchTerm, statusFilter, categoriaFilter, combustivelFilter, tipoFilter]
+  );
+  const opcoesFiltros = useMemo(
+    () => opcoesFiltrosViaturas(viaturasPesquisaveis, filtros, estadoDe),
+    [viaturasPesquisaveis, filtros, estadoDe]
+  );
+  // Clicar em "Disponíveis" ordena pelas paradas há mais tempo — é onde se age primeiro.
+  const filtrarPorEstado = (estado: string) =>
+    setSearchParams(
+      (anterior) => {
+        const proximo = new URLSearchParams(anterior);
+        if (estado === 'all') proximo.delete('status');
+        else proximo.set('status', estado);
+        if (estado === 'disponivel') {
+          proximo.set('sort', 'com_quem');
+          proximo.delete('dir');
         }
-      });
-    return { total, disponiveis };
-  }, [viaturas, statusFilter, estadoDe]);
+        return proximo;
+      },
+      { replace: true }
+    );
+  const setFiltro = (faceta: FacetaViaturas, valor: string) =>
+    ({ status: setStatusFilter, categoria: setCategoriaFilter, combustivel: setCombustivelFilter })[
+      faceta
+    ](valor);
 
   const filteredViaturas = useMemo(() => {
-    let result = [...viaturas];
+    const result = filtrarViaturas(viaturasPesquisaveis, filtros, estadoDe);
+    // Livres primeiro (as paradas há mais tempo à frente), depois por nome de quem as tem.
+    const chaveComQuem = (v: Viatura) => {
+      const s = situacoes?.get(v.id);
+      return s?.ocupante ? `1${s.ocupante.nome}` : `0${s?.livreDesde ?? '0000'}`;
+    };
 
-    // Âmbito de vendidas + estado derivado (controlado pelo filtro de status)
-    if (statusFilter === 'vendido') {
-      result = result.filter((v) => v.is_vendida);
-    } else if (statusFilter === 'todos_vendidos') {
-      // mostra tudo, incluindo vendidas
-    } else {
-      result = result.filter((v) => !v.is_vendida);
-      if (statusFilter === 'em_uso') {
-        result = result.filter((v) => (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v)));
-      } else if (statusFilter === 'alugadas') {
-        // Ocupadas mas NÃO reservadas — espelha o KPI "Alugadas" da homepage,
-        // que separa alugadas de reservadas (o `em_uso` acima junta as duas).
-        result = result.filter(
-          (v) =>
-            estadoDe(v) !== 'em_reserva' &&
-            (ESTADOS_EM_USO as readonly string[]).includes(estadoDe(v))
-        );
-      } else if (statusFilter !== 'all') {
-        result = result.filter((v) => estadoDe(v) === statusFilter);
-      }
-    }
-
-    // Filtro de pesquisa (ignora maiúsculas, acentos e traços)
-    if (searchTerm) {
-      const term = normalizeSearch(searchTerm);
-      result = result.filter(
-        (v) =>
-          normalizeSearch(v.matricula).includes(term) ||
-          normalizeSearch(v.marca).includes(term) ||
-          normalizeSearch(v.modelo).includes(term)
-      );
-    }
-
-    // Filtro de categoria
-    if (categoriaFilter !== 'all') {
-      result = result.filter((v) => v.categoria === categoriaFilter);
-    }
-
-    // Filtro de combustível
-    if (combustivelFilter !== 'all') {
-      result = result.filter((v) => v.combustivel === combustivelFilter);
-    }
-
-    // Filtro de tipo / SLOT — "Todos" mostra tudo (incluindo slot); o separador
-    // SLOT mostra só slot; um tipo específico mostra só os desse tipo (não-slot).
-    if (tipoFilter === 'slot') {
-      result = result.filter((v) => v.is_slot);
-    } else if (tipoFilter !== 'all') {
-      result = result.filter((v) => !v.is_slot && v.tipo_id === tipoFilter);
-    }
-
-    // Ordenação
     result.sort((a, b) => {
       let aVal: any = '';
       let bVal: any = '';
@@ -331,9 +318,9 @@ export default function Viaturas() {
       } else if (sortField === 'ano') {
         aVal = a.ano;
         bVal = b.ano;
-      } else if (sortField === 'categoria') {
-        aVal = a.categoria;
-        bVal = b.categoria;
+      } else if (sortField === 'com_quem') {
+        aVal = chaveComQuem(a);
+        bVal = chaveComQuem(b);
       } else if (sortField === 'combustivel') {
         aVal = a.combustivel;
         bVal = b.combustivel;
@@ -343,9 +330,10 @@ export default function Viaturas() {
       } else if (sortField === 'km_atual') {
         aVal = a.km_atual;
         bVal = b.km_atual;
-      } else if (sortField === 'inspecao_validade') {
-        aVal = a.inspecao_validade;
-        bVal = b.inspecao_validade;
+      } else if (sortField === 'documentos') {
+        // A validade mais próxima primeiro; sem datas vão para o fim.
+        aVal = proximaValidade(a) ?? '9999';
+        bVal = proximaValidade(b) ?? '9999';
       }
 
       if (aVal === null || aVal === undefined) aVal = '';
@@ -360,20 +348,8 @@ export default function Viaturas() {
     });
 
     return result;
-  }, [
-    viaturas,
-    searchTerm,
-    statusFilter,
-    categoriaFilter,
-    combustivelFilter,
-    tipoFilter,
-    sortField,
-    sortDir,
-    estadoDe,
-  ]);
+  }, [viaturasPesquisaveis, filtros, sortField, sortDir, estadoDe, situacoes]);
 
-  // Paginação partilhada (com seletor de tamanho). O resetKey volta à 1ª página
-  // sempre que os filtros/pesquisa mudam.
   const {
     page: safePage,
     setPage: setCurrentPage,
@@ -391,26 +367,35 @@ export default function Viaturas() {
     'page'
   );
 
-  const getCategoriaColor = (categoria: string | null | undefined) =>
-    getCategoriaBadgeClass(categoria);
+  // Miniatura da capa — só das viaturas da página; sem fotos mostra o ícone.
+  const idsDaPagina = useMemo(() => paginatedViaturas.map((v) => v.id), [paginatedViaturas]);
+  const capas = useCapasViaturas(idsDaPagina);
 
-  const getStatusColor = (status: string | null | undefined) => getStatusBadgeClass(status);
-
-  const getStatusText = (status: string | null | undefined) => getStatusLabel(status);
-
-  const isExpiringSoon = (date: string | null | undefined) => {
-    if (!date) return false;
-    const expiryDate = new Date(date);
-    const today = new Date();
-    const daysUntilExpiry = Math.floor(
-      (expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    return daysUntilExpiry <= 30 && daysUntilExpiry >= 0;
-  };
-
-  const isExpired = (date: string | null | undefined) => {
-    if (!date) return false;
-    return new Date(date) < new Date();
+  const podeReservar = hasAccessToResource(RECURSOS.RENTING_RESERVAS);
+  const podeVerMotorista = hasAccessToResource(RECURSOS.MOTORISTAS_GESTAO);
+  const podeVerContrato = hasAccessToResource(RECURSOS.RENTING_CONTRATOS);
+  const acoesDe = (v: Viatura) => {
+    const ocupante = situacoes?.get(v.id)?.ocupante;
+    return acoesDaViatura({
+      matricula: v.matricula,
+      estado: estadoDe(v),
+      ocupante,
+      pode: {
+        eliminar: podeEliminar,
+        reservar: podeReservar,
+        verMotorista: podeVerMotorista,
+        verContrato: podeVerContrato,
+      },
+      on: {
+        abrir: () => handleViewPage(v),
+        eliminar: () => handleDeleteClick(v),
+        reservar: () => navigate(`/renting/reservas/nova?viatura_id=${v.id}`),
+        verOcupante: () => {
+          if (ocupante?.tipo === 'motorista') navigate(`/motoristas/${ocupante.id}`);
+          else if (ocupante?.contratoId) navigate(`/renting/contratos/${ocupante.contratoId}`);
+        },
+      },
+    });
   };
 
   const handleDeleteClick = (viatura: Viatura) => {
@@ -476,29 +461,13 @@ export default function Viaturas() {
         icon={Car}
       >
         <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-          <Button
-            variant="outline"
-            onClick={handlePrint}
-            disabled={printing || filteredViaturas.length === 0}
-            className="w-full sm:w-auto"
-          >
-            {printing ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Printer className="mr-2 h-4 w-4" />
-            )}
-            Imprimir
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleExportExcel}
-            disabled={filteredViaturas.length === 0}
-            className="w-full sm:w-auto"
-          >
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Exportar Excel
-          </Button>
-          <ImportViaturasDialog onImportComplete={loadViaturas} />
+          <ViaturasAcoesMenu
+            onImprimir={handlePrint}
+            onExportarExcel={handleExportExcel}
+            aImprimir={printing}
+            semResultados={filteredViaturas.length === 0}
+            onImportado={loadViaturas}
+          />
           <Button onClick={handleNewViatura} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Nova Viatura
@@ -506,154 +475,43 @@ export default function Viaturas() {
         </div>
       </StickyPageHeader>
 
-      {/* Stats Cards */}
+      <AmbitoFrotaAviso ambito={ambito} oQue="viaturas" />
+
+      <FrotaAtencaoAviso
+        vencidas={atencao.vencidas}
+        aVencer={atencao.aVencer}
+        activo={statusFilter === 'atencao'}
+        onVer={() => filtrarPorEstado('atencao')}
+        onVerTodas={() => filtrarPorEstado('all')}
+      />
+
       <ViaturaStatsCards
         stats={stats}
         activeFilter={statusFilter}
-        onFilter={(filter) => setStatusFilter(filter)}
-      />
+        onFilter={filtrarPorEstado}
+        semInativas={semInativas}
+      >
+        {/* Âmbito TVDE: sobra só o SLOT, que ocupa o lugar livre da primeira linha. */}
+        {tiposNaLinhaDeCima && listaCartoesTipo}
+      </ViaturaStatsCards>
 
-      {/* Tipo + SLOT filter cards */}
-      {tipos.length > 0 && (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-          {(() => {
-            const todosTotal = viaturas.filter(
-              (v) => !v.is_slot && matchesVendaScope(v, statusFilter)
-            ).length;
-            const todosDisponiveis = viaturas.filter(
-              (v) => !v.is_slot && matchesVendaScope(v, statusFilter) && v.status === 'disponivel'
-            ).length;
-            const items = [
-              {
-                id: 'all',
-                nome: 'Todos os Tipos',
-                total: todosTotal,
-                disponiveis: todosDisponiveis,
-                icon: Car,
-                color: 'text-primary',
-                bgColor: 'bg-primary/10',
-              },
-              ...tipos.map((t) => ({
-                id: t.id,
-                nome: t.nome,
-                total: tiposCounts.total[t.id] || 0,
-                disponiveis: tiposCounts.disponiveis[t.id] || 0,
-                icon: Car,
-                color: 'text-primary',
-                bgColor: 'bg-primary/10',
-              })),
-              {
-                id: 'slot',
-                nome: 'SLOT',
-                total: stats.slot,
-                disponiveis: stats.slotDisponiveis,
-                icon: Layers,
-                color: 'text-purple-600',
-                bgColor: 'bg-purple-500/10',
-              },
-            ];
-            return items.map((item) => {
-              const isActive = tipoFilter === item.id;
-              const Icon = item.icon;
-              return (
-                <Card
-                  key={item.id}
-                  onClick={() => setTipoFilter(isActive && item.id !== 'all' ? 'all' : item.id)}
-                  className={cn(
-                    'border-border/50 cursor-pointer transition-all hover:border-primary/50 hover:shadow-sm',
-                    isActive && 'border-primary ring-1 ring-primary shadow-sm'
-                  )}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={cn(
-                          'rounded-lg p-2',
-                          item.bgColor,
-                          isActive && 'ring-1 ring-current'
-                        )}
-                      >
-                        <Icon className={`h-5 w-5 ${item.color}`} />
-                      </div>
-                      <div>
-                        <div className="flex items-baseline gap-2">
-                          <p className="text-2xl font-bold text-green-600">{item.disponiveis}</p>
-                          <p className="text-sm font-medium text-muted-foreground">
-                            / {item.total}
-                          </p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{item.nome}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            });
-          })()}
+      {tiposVisiveis.length > 0 && !tiposNaLinhaDeCima && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-6">
+          {listaCartoesTipo}
         </div>
       )}
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Pesquisar por matrícula, marca ou modelo..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <div className="flex flex-col gap-1 w-full sm:w-[240px]">
-          <span className="text-xs font-medium text-muted-foreground">Estado</span>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="em_reserva">Em reserva</SelectItem>
-              <SelectItem value="em_contrato">Em contrato</SelectItem>
-              <SelectItem value="em_movimentacao">Em movimentação</SelectItem>
-              <SelectItem value="todos_vendidos">Todos (incluindo vendidos)</SelectItem>
-              <SelectItem value="vendido">Vendidos</SelectItem>
-              <SelectItem value="inativo">Inativos</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1 w-full sm:w-[180px]">
-          <span className="text-xs font-medium text-muted-foreground">Categoria</span>
-          <Select value={categoriaFilter} onValueChange={setCategoriaFilter}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas as categorias</SelectItem>
-              <SelectItem value="green">Green</SelectItem>
-              <SelectItem value="comfort">Comfort</SelectItem>
-              <SelectItem value="black">Black</SelectItem>
-              <SelectItem value="x-saver">X-Saver</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col gap-1 w-full sm:w-[180px]">
-          <span className="text-xs font-medium text-muted-foreground">Combustível</span>
-          <Select value={combustivelFilter} onValueChange={setCombustivelFilter}>
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Combustível" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="eletrico">Elétrico</SelectItem>
-              <SelectItem value="hibrido">Híbrido</SelectItem>
-              <SelectItem value="gasolina">Gasolina</SelectItem>
-              <SelectItem value="diesel">Diesel</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <ViaturasFiltrosBarra
+        filtros={filtros}
+        opcoes={opcoesFiltros}
+        onSearch={setSearchTerm}
+        onFiltro={setFiltro}
+        aMostrar={filteredViaturas.length}
+        total={viaturas.length}
+        temFiltros={temFiltrosAtivos}
+        onLimpar={limparFiltros}
+      />
 
-      {/* Table / Cards */}
       {loading ? (
         <TableSkeleton colunas={6} />
       ) : filteredViaturas.length === 0 ? (
@@ -676,236 +534,27 @@ export default function Viaturas() {
           />
         )
       ) : isMobile ? (
-        // Mobile: Cards
-        <div className="space-y-3">
-          {paginatedViaturas.map((viatura) => (
-            <Card key={viatura.id} className="border-border/50">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="font-mono font-bold text-lg">{viatura.matricula}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {viatura.marca} {viatura.modelo} {viatura.ano && `(${viatura.ano})`}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <Badge className={getCategoriaColor(viatura.categoria)}>
-                      {viatura.categoria || 'N/D'}
-                    </Badge>
-                    <Badge variant="outline" className={getStatusColor(estadoDe(viatura))}>
-                      {getStatusText(estadoDe(viatura))}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-4 text-muted-foreground">
-                    <span>{viatura.km_atual?.toLocaleString('pt-PT') || '0'} km</span>
-                    <span className="capitalize">{viatura.combustivel || 'N/D'}</span>
-                  </div>
-                  {/* Havia aqui um segundo botão, com um lápis, a chamar
-                      exactamente o mesmo handleViewPage que o olho. Não eram
-                      duas acções que por acaso coincidiam: /viaturas/:id abre o
-                      separador "dados", que É o formulário de edição
-                      (ViaturaTabDados tem onSave). Ver e editar são o mesmo
-                      ecrã, logo era um botão a mais. */}
-                  <AcoesLinha
-                    acoes={[
-                      {
-                        icone: Eye,
-                        rotulo: `Abrir viatura ${viatura.matricula}`,
-                        onClick: () => handleViewPage(viatura),
-                      },
-                      {
-                        icone: Trash2,
-                        rotulo: `Eliminar viatura ${viatura.matricula}`,
-                        onClick: () => handleDeleteClick(viatura),
-                        destrutiva: true,
-                        oculta: !podeEliminar,
-                      },
-                    ]}
-                  />
-                </div>
-                {(isExpired(viatura.inspecao_validade) || isExpired(viatura.seguro_validade)) && (
-                  <div className="mt-2 flex items-center gap-1 text-destructive text-xs">
-                    <AlertTriangle className="h-3 w-3" />
-                    <span>Documentação expirada</span>
-                  </div>
-                )}
-                {(isExpiringSoon(viatura.inspecao_validade) ||
-                  isExpiringSoon(viatura.seguro_validade)) &&
-                  !isExpired(viatura.inspecao_validade) &&
-                  !isExpired(viatura.seguro_validade) && (
-                    <div className="mt-2 flex items-center gap-1 text-yellow-500 text-xs">
-                      <AlertTriangle className="h-3 w-3" />
-                      <span>Documentação a expirar</span>
-                    </div>
-                  )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <ViaturasCartoesMobile
+          viaturas={paginatedViaturas}
+          estadoDe={estadoDe}
+          situacoes={situacoes}
+          acoesDe={acoesDe}
+          onAbrir={handleViewPage}
+        />
       ) : (
-        // Desktop: Table
-        <div className="rounded-lg border border-border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="h-10">
-                <SortableTableHead
-                  field="matricula"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Matrícula
-                </SortableTableHead>
-                <SortableTableHead
-                  field="marca"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Marca/Modelo
-                </SortableTableHead>
-                <SortableTableHead
-                  field="ano"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Ano
-                </SortableTableHead>
-                <SortableTableHead
-                  field="categoria"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Categoria
-                </SortableTableHead>
-                <SortableTableHead
-                  field="combustivel"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Combustível
-                </SortableTableHead>
-                <SortableTableHead
-                  field="status"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Status
-                </SortableTableHead>
-                <SortableTableHead
-                  field="km_atual"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Km
-                </SortableTableHead>
-                <SortableTableHead
-                  field="inspecao_validade"
-                  sortField={sortField}
-                  sortDir={sortDir}
-                  onSort={handleSort}
-                  className="h-10"
-                >
-                  Inspeção
-                </SortableTableHead>
-                <TableHead className="h-10 text-xs text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedViaturas.map((viatura) => (
-                <TableRow
-                  key={viatura.id}
-                  className="cursor-pointer hover:bg-muted/50 h-10"
-                  onClick={() => handleViewPage(viatura)}
-                >
-                  <TableCell className="py-2 text-sm font-mono font-bold">
-                    {viatura.matricula}
-                  </TableCell>
-                  <TableCell className="py-2 text-sm">
-                    {viatura.marca} {viatura.modelo}
-                  </TableCell>
-                  <TableCell className="py-2 text-sm">{viatura.ano || 'N/D'}</TableCell>
-                  <TableCell className="py-2">
-                    <Badge className={`text-xs ${getCategoriaColor(viatura.categoria)}`}>
-                      {viatura.categoria || 'N/D'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-2 text-sm capitalize">
-                    {viatura.combustivel || 'N/D'}
-                  </TableCell>
-                  <TableCell className="py-2">
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${getStatusColor(estadoDe(viatura))}`}
-                    >
-                      {getStatusText(estadoDe(viatura))}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-2 text-sm">
-                    {viatura.km_atual?.toLocaleString('pt-PT') || '0'}
-                  </TableCell>
-                  <TableCell className="py-2 text-sm">
-                    <div className="flex items-center gap-1">
-                      {isExpired(viatura.inspecao_validade) && (
-                        <AlertTriangle className="h-3 w-3 text-destructive" />
-                      )}
-                      {isExpiringSoon(viatura.inspecao_validade) &&
-                        !isExpired(viatura.inspecao_validade) && (
-                          <AlertTriangle className="h-3 w-3 text-yellow-500" />
-                        )}
-                      {viatura.inspecao_validade
-                        ? format(new Date(viatura.inspecao_validade), 'dd/MM/yyyy', { locale: pt })
-                        : 'N/D'}
-                    </div>
-                  </TableCell>
-                  <TableCell className="py-2 text-right">
-                    {/* Mesmo lápis duplicado da vista em cartões, retirado pela
-                        mesma razão. O botão do olho NÃO é redundante com o
-                        clique na linha: <TableRow onClick> não é acessível por
-                        teclado (um <tr> não recebe foco), pelo que este botão é
-                        a única forma de abrir a viatura sem rato. */}
-                    <AcoesLinha
-                      compacto
-                      alinhamento="fim"
-                      pararPropagacao
-                      acoes={[
-                        {
-                          icone: Eye,
-                          rotulo: `Abrir viatura ${viatura.matricula}`,
-                          onClick: () => handleViewPage(viatura),
-                        },
-                        {
-                          icone: Trash2,
-                          rotulo: `Eliminar viatura ${viatura.matricula}`,
-                          onClick: () => handleDeleteClick(viatura),
-                          destrutiva: true,
-                          oculta: !podeEliminar,
-                        },
-                      ]}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <ViaturasTabela
+          viaturas={paginatedViaturas}
+          estadoDe={estadoDe}
+          situacoes={situacoes}
+          acoesDe={acoesDe}
+          onAbrir={handleViewPage}
+          sortField={sortField}
+          sortDir={sortDir}
+          onSort={handleSort}
+          capas={capas}
+        />
       )}
 
-      {/* Paginação */}
       {!loading && totalItems > 0 && (
         <div className="rounded-lg border border-border">
           <TablePagination
@@ -921,8 +570,6 @@ export default function Viaturas() {
           />
         </div>
       )}
-
-      {/* Dialogs */}
 
       <DeleteViaturaDialog
         viatura={selectedViatura}

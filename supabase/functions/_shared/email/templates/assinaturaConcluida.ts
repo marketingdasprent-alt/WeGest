@@ -39,5 +39,5 @@ export function assinaturaConcluidaTemplate(input: AssinaturaConcluidaInput): {
     emissorLogoUrl,
   });
 
-  return { subject: `Documento assinado — ${documentoNome}`, html };
+  return { subject: `Documento assinado: ${documentoNome}`, html };
 }

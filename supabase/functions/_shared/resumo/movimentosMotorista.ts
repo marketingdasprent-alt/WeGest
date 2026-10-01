@@ -1,29 +1,11 @@
 // Para onde vai cada movimento financeiro do motorista.
 //
-// Vivia escrito à mão em três sítios — o resumo do motorista, o fecho de
-// contas e a lista de Contas/Resumo — e os três discordavam. Um crédito de
-// categoria `renda_viatura` (o acerto de uma viatura parada na oficina) era
-// contado como receita pelo fecho, contado como extra pela lista, e
-// DESCARTADO EM SILÊNCIO pelo resumo. O motorista via o valor desaparecer
-// sem explicação, e os dois ecrãs que têm de mostrar o mesmo mostravam
-// números diferentes.
-//
-// A regra deixa de ser uma lista de categorias a ignorar e passa a ser o
-// motivo por trás dela:
-//
-//   1. Ignora-se um DÉBITO quando o resumo já calcula essa mesma coisa a
-//      partir de outra fonte — o aluguer sai dos dias × tarifa, a reparação
-//      sai da viatura. Contar o movimento outra vez duplicava.
-//
-//   2. Um CRÉDITO nunca é ignorado por esse motivo. Os blocos calculados só
-//      produzem cobranças; um crédito na mesma categoria é um acerto, e um
-//      acerto nunca duplica — corrige.
-//
-//   3. O que não se reconhece vai para "outros". Uma categoria nova não pode
-//      fazer dinheiro desaparecer só porque ninguém se lembrou dela aqui.
-//
-//   4. O que é mesmo ignorado sai na lista `ignorados`, com motivo. Nada
-//      desaparece em silêncio — é o que permitiu a este erro viver meses.
+// Antes vivia escrito à mão em três sítios que discordavam entre si (um
+// crédito de `renda_viatura` era descartado em silêncio pelo resumo mas
+// contado noutros ecrãs). Regras: só se ignora um DÉBITO já calculado por
+// outra via (evita duplicar); um CRÉDITO nunca é ignorado por esse motivo
+// (é sempre um acerto, não duplica); categoria desconhecida vai para "outros",
+// nunca desaparece; e tudo o que é ignorado fica registado em `ignorados` com motivo.
 
 export interface MovimentoMotorista {
   tipo: string | null;
@@ -31,7 +13,13 @@ export interface MovimentoMotorista {
   valor: number | string | null;
 }
 
-export type DestinoMovimento = 'receita_outras' | 'caucao' | 'seguros' | 'outros' | 'ignorado';
+export type DestinoMovimento =
+  | 'receita_outras'
+  | 'caucao'
+  | 'seguros'
+  | 'slot'
+  | 'outros'
+  | 'ignorado';
 
 export interface Classificacao {
   destino: DestinoMovimento;
@@ -51,11 +39,26 @@ const JA_CALCULADAS_COMO_DEBITO = [...DEBITOS_QUE_O_CONTRATO_COBRE, 'reparacao']
 /** Categorias cujo CRÉDITO já vem na receita das plataformas. */
 const JA_CONTADAS_COMO_RECEITA = ['bolt', 'uber'];
 
+/** Categorias que o PRÓPRIO resumo escreve de volta em motorista_financeiro.
+ *
+ *  O trigger `sincronizar_movimento_resumo` grava o líquido da semana como
+ *  movimento dentro da própria semana; voltar a lê-lo aqui somava o líquido a
+ *  si mesmo, dobrando a cada recarregamento. Ignora-se nos dois sentidos,
+ *  porque não é uma cobrança duplicada — é a conta a entrar na própria conta. */
+const ESCRITAS_PELO_PROPRIO_RESUMO = ['resumos'];
+
 const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
 
 export function classificarMovimento(m: MovimentoMotorista): Classificacao {
   const categoria = norm(m.categoria);
   const ehCredito = norm(m.tipo) === 'credito';
+
+  if (ESCRITAS_PELO_PROPRIO_RESUMO.includes(categoria)) {
+    return {
+      destino: 'ignorado',
+      motivo: 'é o líquido que o próprio resumo escreveu, não uma linha da conta',
+    };
+  }
 
   if (ehCredito) {
     if (JA_CONTADAS_COMO_RECEITA.includes(categoria)) {
@@ -81,6 +84,9 @@ export function classificarMovimento(m: MovimentoMotorista): Classificacao {
 
   if (categoria === 'caucao') return { destino: 'caucao' };
   if (categoria === 'seguros') return { destino: 'seguros' };
+  // Slot mensal (ver NovoMovimentoFinanceiroOverlay / gerar_cobrancas_slot_mensais):
+  // linha própria para não se misturar com "outros custos" avulsos.
+  if (categoria === 'slot_mensal') return { destino: 'slot' };
   return { destino: 'outros' };
 }
 
@@ -88,6 +94,7 @@ export interface MovimentosAgregados {
   receitaOutras: number;
   caucao: number;
   seguros: number;
+  slot: number;
   outros: number;
   /** O que ficou de fora, e porquê. Para mostrar, auditar ou avisar. */
   ignorados: Array<{ categoria: string; tipo: string; valor: number; motivo: string }>;
@@ -100,6 +107,7 @@ export function agregarMovimentos(
     receitaOutras: 0,
     caucao: 0,
     seguros: 0,
+    slot: 0,
     outros: 0,
     ignorados: [],
   };
@@ -125,6 +133,9 @@ export function agregarMovimentos(
         break;
       case 'seguros':
         acc.seguros += valor;
+        break;
+      case 'slot':
+        acc.slot += valor;
         break;
       case 'outros':
         acc.outros += valor;

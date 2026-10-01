@@ -1,12 +1,21 @@
 project_id = "hkqzzxgeedsmjnhyquke"
 
+# Emails de autenticação (recovery/magic link/onboarding). Só é chamada por
+# outras funções com a service role key — que é um JWT assinado pelo projecto
+# e passa aqui — e a própria função confirma esse bearer com
+# requireInternalRequest. Aberta, gerava links de recuperação para qualquer
+# email (auditoria 2026-09-16).
 [functions.send-brevo-email]
-verify_jwt = false
+verify_jwt = true
 
 # Formulário "Fale connosco" da landing pública. Sem sessão → aceita anon.
 [functions.contact-inquiry]
 verify_jwt = false
 
+# Cópia da Folha de Danos por email. Chamada tanto pela UI autenticada como
+# pela página de check-in/out por token (sem sessão) → verify_jwt = false. A
+# autorização é feita DENTRO da função: token de realização válido, ou a
+# sessão do chamador ser membro da organização. O assunto é composto lá.
 [functions.send-folha-danos-email]
 verify_jwt = false
 
@@ -23,18 +32,36 @@ verify_jwt = false
 [functions.send-documento-fiscal-email]
 verify_jwt = true
 
-# Aviso de recibo anulado. Chamada pelo trigger SQL via pg_net com service key.
+# Aviso de recibo anulado. Chamada pelo trigger SQL via pg_net com service key
+# (um JWT válido) — e a função exige exactamente essa key com
+# requireInternalRequest. A false era um relay anónimo de email.
 [functions.send-recibo-anulado-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.delete-user]
 verify_jwt = false
 
+# Dispara webhooks de integração. Chamada pela UI autenticada e por
+# send-assistance-notification (service role). A função distingue os dois e
+# exige membro da organização ao utilizador; filtra sempre por org_id.
 [functions.send-webhook]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-user]
 verify_jwt = false
+
+# Workers internos: o gateway valida o JWT e o handler exige a service role exata.
+[functions.via-verde-import]
+verify_jwt = true
+
+[functions.via-verde-sync-drain]
+verify_jwt = true
+
+[functions.send-bulk-settlements]
+verify_jwt = true
+
+[functions.send-weekly-settlements]
+verify_jwt = true
 
 # Onboarding de motorista (fluxo email-first). Aberta pré-login (anon) →
 # verify_jwt=false. Segurança: só age sobre um perfil motoristas_ativos
@@ -43,7 +70,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.bolt-auth]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-sync]
 verify_jwt = false
@@ -56,10 +83,16 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.bolt-api]
-verify_jwt = false
+verify_jwt = true
+
+[functions.bolt-rescue-apify]
+verify_jwt = true
+
+[functions.uber-rescue-apify]
+verify_jwt = true
 
 [functions.bolt-auto-map-drivers]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-full-sync]
 verify_jwt = false
@@ -79,23 +112,40 @@ verify_jwt = false
 [functions.send-notification-queue-email]
 verify_jwt = false
 
+# Aviso aos gestores de evento novo no calendário. Chamada pela UI
+# autenticada; a função exige membro da organização indicada em org_id.
 [functions.send-calendar-notification]
-verify_jwt = false
+verify_jwt = true
 
 [functions.send-marketing-email]
-verify_jwt = false
+verify_jwt = true
 
+# Estatísticas de uma campanha (PII). Sessão obrigatória; a função resolve a
+# org pela campanha e exige membro dessa org.
 [functions.brevo-email-stats]
-verify_jwt = false
+verify_jwt = true
 
+# Callback da Brevo. Autentica com o Bearer token configurado no webhook da
+# Brevo (BREVO_WEBHOOK_SECRET) — não é um JWT, por isso verify_jwt = false e
+# a validação é feita dentro da função, antes de ler o corpo.
 [functions.brevo-webhook]
 verify_jwt = false
 
+# Sincronização do estado de entrega de uma campanha. Botão da UI (sessão →
+# membro da org da campanha) ou agendador (service role).
 [functions.sync-campaign-sends]
-verify_jwt = false
+verify_jwt = true
 
+# Reparação de mapeamentos motorista ↔ Bolt. Ferramenta operacional sem
+# chamador na aplicação: exclusivamente interna (service role) e sempre
+# limitada a uma organização (org_id obrigatório).
+[functions.sync-driver-ids]
+verify_jwt = true
+
+# Teste de credenciais antes de gravar a integração. Sessão obrigatória e
+# admin de alguma organização, validados dentro da função (auditoria 2026-09-22).
 [functions.brevo-test-connection]
-verify_jwt = false
+verify_jwt = true
 
 [functions.via-verde-test-connection]
 verify_jwt = false
@@ -103,6 +153,8 @@ verify_jwt = false
 [functions.uber-test-connection]
 verify_jwt = false
 
+# Botão da UI (sessão → admin da org da integração) ou chamada interna
+# (service role). A autorização vive dentro da função.
 [functions.uber-sync]
 verify_jwt = false
 
@@ -118,8 +170,10 @@ verify_jwt = false
 [functions.uber-import-reports]
 verify_jwt = false
 
+# Teste de credenciais antes de gravar a integração. Sessão obrigatória e
+# admin de alguma organização, validados dentro da função (auditoria 2026-09-22).
 [functions.bp-test-connection]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bp-sync-cards]
 verify_jwt = false
@@ -131,6 +185,8 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.robot-webhook]
+# Callback externo com HMAC por integração; pedidos manuais continuam a
+# validar o JWT e o papel admin dentro da função.
 verify_jwt = false
 
 [functions.robot-manual-import]
@@ -140,10 +196,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.robot-schedule]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-schedule]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bolt-import-csv]
 verify_jwt = false
@@ -191,19 +247,14 @@ verify_jwt = true
 [functions.quadro-live]
 verify_jwt = false
 
-# Worker do outbox de emissão fiscal. Chamado só pelo pg_cron via net.http_post
-# com a anon key — que já é um JWT validamente assinado, por isso
-# verify_jwt=true não impede o cron (não precisa da chave service_role para
-# isso). true fecha o disparo público não-autenticado: repetir esta chamada
-# de fora queima a escada de backoff da outbox mais depressa do que
-# desenhado.
+# Worker do outbox de emissão fiscal. O pg_cron chama cron_invocar_edge, que
+# usa exclusivamente cron_service_role_jwt do Vault. A função também confirma
+# internamente que o bearer coincide exatamente com SUPABASE_SERVICE_ROLE_KEY.
 [functions.faturacao-outbox-drain]
 verify_jwt = true
 
-# Worker diário do ciclo de vida das parcelas de acordos de pagamento. Mesma
-# razão do faturacao-outbox-drain acima — a anon key do cron já satisfaz
-# verify_jwt=true; deixar false expunha um gatilho público que podia queimar
-# o orçamento de 3 tentativas de aviso por parcela.
+# Worker diário do ciclo de vida das parcelas de acordos de pagamento. Usa a
+# mesma autenticação interna por service role do worker de faturação acima.
 [functions.acordos-parcelas-diario]
 verify_jwt = true
 
@@ -265,3 +316,15 @@ verify_jwt = false
 # WeGest, não da org) — só a utilizadores autenticados.
 [functions.apify-credenciais-partilhadas]
 verify_jwt = true
+
+# Cria integrações robot com a credencial Apify partilhada exclusivamente no
+# servidor. A função valida utilizador real e admin da organização ativa.
+[functions.integracao-robot-criar]
+verify_jwt = true
+
+# Resolve um link curto (wegest.pt/r/<codigo>) e reencaminha para o ficheiro.
+# Quem o abre é o motorista, no WhatsApp, sem sessão → verify_jwt = false. A
+# autorização é o próprio código: 12 caracteres aleatórios, com validade
+# gravada na linha, e o destino sai sempre da tabela — nunca do pedido.
+[functions.link-curto]
+verify_jwt = false

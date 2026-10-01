@@ -53,11 +53,10 @@ export interface AcordoDetalhe {
 }
 
 /**
- * Acordo + parcelas + outbox associada, combinados num objeto só. Lê
- * acordos_pagamento/acordo_parcelas DIRETAMENTE (RLS de staff:
- * has_renting_faturacao_access()) — NUNCA através da RPC acordo_vista_devedor(),
- * que é a vista REDUZIDA do devedor (esconde titular_nif, erros de API, e mostra
- * liquidacao_pendente sempre como "paga"). Esta é a vista interna de quem gere.
+ * Acordo + parcelas + outbox associada, combinados num objeto só. Lê as
+ * tabelas DIRETAMENTE (RLS has_renting_faturacao_access()) — nunca via
+ * acordo_vista_devedor(), que é a vista reduzida do devedor (esconde
+ * titular_nif e mostra liquidacao_pendente sempre como "paga").
  */
 export function useAcordoDetalhe(acordoId: string | null | undefined) {
   return useQuery({
@@ -100,12 +99,9 @@ export function useAcordoDetalhe(acordoId: string | null | undefined) {
         (outbox ?? []).filter((o: any) => o.estado === 'suspenso').map((o: any) => o.parcela_id)
       );
 
-      // Recibos activos contra a MESMA cobrança, mas emitidos por fora do parcelamento
-      // (ex.: Fatura → Emitir Recibo): contam para faltaPagar (cobranca_saldo_por_liquidar
-      // já os inclui) mas nenhuma parcela sabe deles — daí a confusão de ver uma parcela
-      // com o valor nominal inteiro por pagar quando já só falta menos do que isso
-      // (achado ao testar manualmente). Filtra pelos recibo_id já ligados às parcelas
-      // deste acordo para não listar os próprios recibos do parcelamento como "externos".
+      // Recibos emitidos por fora do parcelamento contam para faltaPagar mas
+      // nenhuma parcela sabe deles; filtra os recibo_id já ligados às
+      // parcelas para não listar os próprios recibos do acordo como "externos".
       const parcelaReciboIds = (parcelas ?? [])
         .map((p: any) => p.recibo_id)
         .filter((id: string | null): id is string => !!id);

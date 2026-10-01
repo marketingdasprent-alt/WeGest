@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { buildSupabaseFunctionUrl } from '@/utils/supabaseFunctionUrl';
+import { avisoImportacaoSemTitular } from '@/utils/combustivelSemDono';
 import { toast } from 'sonner';
 import { useOrgId } from '@/contexts/TenantContext';
 import {
@@ -182,11 +183,15 @@ export const ImportRobotCsvDialog: React.FC<ImportRobotCsvDialogProps> = ({
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || `Erro ${response.status}`);
 
+      const semTitular = avisoImportacaoSemTitular(data.sem_titular);
       setResult({
         success: true,
-        message: `Importação ${platform.toUpperCase()} concluída: ${data.imported ?? 0} transações, ${data.matched ?? 0} com motorista.`,
+        message:
+          `Importação ${platform.toUpperCase()} concluída: ${data.imported ?? 0} transações, ${data.matched ?? 0} com titular.` +
+          (semTitular ? ` ${semTitular}` : ''),
       });
       toast.success(`CSV ${platform.toUpperCase()} importado com sucesso`);
+      if (semTitular) toast.warning(semTitular, { duration: 15000 });
       onImportComplete();
     } catch (error: any) {
       setResult({ success: false, message: error.message });

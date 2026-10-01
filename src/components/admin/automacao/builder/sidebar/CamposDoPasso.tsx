@@ -300,24 +300,23 @@ export function CamposDoPasso(props: CamposDoPassoProps) {
 
       {tipo === 'accao' && (acaoTipo === 'notificacao' || acaoTipo === 'email') && (
         <>
-          {/* Notificação e email escolhem destinatários da mesma forma — só
-              o canal (badge dentro de Destinatarios) muda. Sem o `tipo ===
-              'accao'` aqui, um nó de gatilho — que não tem `acaoTipo` e por
-              isso cai no valor por omissão 'notificacao' — mostrava esta
-              secção também. */}
+          {}
           <Destinatarios
             noId={noId}
             dados={dados}
             onAlterar={onAlterar}
             canal={acaoTipo === 'email' ? 'email' : 'notificacao'}
           />
-          <Mensagem
-            payload={props.payload}
-            corpo={props.corpo}
-            onCorpo={props.onCorpo}
-            regrasQueUsam={props.regrasQueUsam}
-            assunto={props.assuntoDoTemplate}
-          />
+          {}
+          {acaoTipo === 'email' && (
+            <Mensagem
+              payload={props.payload}
+              corpo={props.corpo}
+              onCorpo={props.onCorpo}
+              regrasQueUsam={props.regrasQueUsam}
+              assunto={props.assuntoDoTemplate}
+            />
+          )}
         </>
       )}
 

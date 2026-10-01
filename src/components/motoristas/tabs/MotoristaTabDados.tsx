@@ -305,7 +305,10 @@ export function MotoristaTabDados({
         is_slot: data.is_slot,
         slot_valor_semanal: data.is_slot ? data.slot_valor_semanal : null,
         seguro_valor_semanal: data.seguro_valor_semanal ?? null,
-        status_ativo: data.status_ativo,
+        // status_ativo fica de fora: gravar a ficha não é decidir se o
+        // motorista está activo. O form guarda o valor de quando abriu (ou
+        // pior, o do rascunho, que o reset acima prefere), e reescrevê-lo
+        // desfazia activações feitas entretanto pelo botão da ficha.
         observacoes: data.observacoes || null,
         iban: data.iban ? data.iban.replace(/\s/g, '').toUpperCase() : null,
         gestor_responsavel:
@@ -324,7 +327,8 @@ export function MotoristaTabDados({
       if (isCreating) {
         const { data: novo, error } = await supabase
           .from('motoristas_ativos')
-          .insert(updateData)
+          // Um motorista novo nasce activo — só aqui, na criação.
+          .insert({ ...updateData, status_ativo: true })
           .select()
           .single();
         if (error) throw error;

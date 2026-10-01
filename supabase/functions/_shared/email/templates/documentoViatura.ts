@@ -61,7 +61,7 @@ export function documentoViaturaTemplate(input: DocumentoViaturaInput): { subjec
   const estadoCor = isExpirado ? '#dc2626' : isUrgente ? '#d97706' : '#17BF7E';
 
   const titulo = isExpirado ? `${label} Expirado` : `${label} a Expirar`;
-  const veiculo = [matricula, marcaModelo].filter(Boolean).join(' — ');
+  const veiculo = [matricula, marcaModelo].filter(Boolean).join(', ');
 
   const corpo = `
       <p style="margin:0 0 8px"><strong>Viatura:</strong> ${veiculo}</p>
@@ -87,7 +87,7 @@ export function documentoViaturaTemplate(input: DocumentoViaturaInput): { subjec
   });
 
   const emoji = isExpirado ? '🔴' : isUrgente ? '⚠️' : '📋';
-  const subject = `${emoji} ${label} ${isExpirado ? 'expirado' : 'a expirar'} — ${matricula}`;
+  const subject = `${emoji} ${label} ${isExpirado ? 'expirado' : 'a expirar'}: ${matricula}`;
 
   return { subject, html };
 }

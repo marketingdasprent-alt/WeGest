@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import * as XLSX from 'npm:xlsx@0.18.5';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+// @deno-types="../_shared/vendor-sheetjs/cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
+import * as XLSX from '../_shared/vendor-sheetjs/cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,10 +10,13 @@ const corsHeaders = {
 
 const OWN_FLEET_OWNER = 'Década Ousada';
 
+// Já não aceita uma URL de ficheiro: a função fazia fetch() de uma URL
+// arbitrária e carregava a resposta inteira em memória — SSRF a partir do
+// nosso IP e consumo sem limite (auditoria 2026-09-16). A UI nunca usou esse
+// campo; o ficheiro é lido no browser e chegam aqui só as linhas já parseadas.
 interface ImportRequest {
   rows?: Record<string, unknown>[];
   rawMarkdown?: string;
-  fileUrl?: string;
   dryRun?: boolean;
 }
 
@@ -35,7 +39,10 @@ const normalizeText = (value: unknown) =>
     .trim();
 
 const normalizeHeader = (value: string) => normalizeText(value).replace(/\s+/g, ' ');
-const normalizePlate = (value: unknown) => String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const normalizePlate = (value: unknown) =>
+  String(value ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
 const normalizeOwnerName = (value: unknown) => normalizeText(value).replace(/\s+/g, ' ');
 
 const formatPlate = (value: unknown) => {
@@ -43,7 +50,9 @@ const formatPlate = (value: unknown) => {
   if (normalized.length === 6) {
     return `${normalized.slice(0, 2)}-${normalized.slice(2, 4)}-${normalized.slice(4, 6)}`;
   }
-  return String(value ?? '').trim().toUpperCase();
+  return String(value ?? '')
+    .trim()
+    .toUpperCase();
 };
 
 const parseInteger = (value: unknown) => {
@@ -58,7 +67,9 @@ const parseDate = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     const parsed = XLSX.SSF.parse_date_code(value);
     if (!parsed) return null;
-    return `${parsed.y.toString().padStart(4, '0')}-${parsed.m.toString().padStart(2, '0')}-${parsed.d.toString().padStart(2, '0')}`;
+    return `${parsed.y.toString().padStart(4, '0')}-${parsed.m
+      .toString()
+      .padStart(2, '0')}-${parsed.d.toString().padStart(2, '0')}`;
   }
 
   const text = String(value).trim();
@@ -84,7 +95,9 @@ const mapFuel = (value: unknown) => {
   if (normalized.includes('diesel')) return 'diesel';
   if (normalized.includes('hibr')) return 'hibrido';
   if (normalized.includes('eletric')) return 'eletrico';
-  if (normalized.includes('petrol') || normalized.includes('gasolina')) return 'gasolina';
+  if (normalized.includes('petrol') || normalized.includes('gasolina')) {
+    return 'gasolina';
+  }
   return null;
 };
 
@@ -101,7 +114,8 @@ const mapStatus = (value: unknown) => {
     return 'manutencao';
   }
   if (normalized === 'vendida') return 'vendida';
-  if (normalized === 'inativo' || normalized === 'inactiva' || normalized === 'inativa') return 'inativo';
+  if (normalized === 'inativo' || normalized === 'inactiva' || normalized === 'inativa')
+    return 'inativo';
   return null;
 };
 
@@ -157,21 +171,6 @@ const parseMarkdownTable = (rawMarkdown: string) => {
   return rows;
 };
 
-const parseRowsFromFile = async (fileUrl: string) => {
-  const response = await fetch(fileUrl);
-  if (!response.ok) {
-    throw new Error(`Não foi possível obter o ficheiro em ${fileUrl}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
-  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
-    defval: '',
-    raw: false,
-  });
-};
-
 const resolveOwnerName = (row: Record<string, unknown>) => {
   const explicitOwner = String(getCell(row, 'Ent. Proprietária')).trim();
   if (explicitOwner) return explicitOwner;
@@ -206,7 +205,7 @@ serve(async (req) => {
     });
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(
-      authHeader.replace('Bearer ', ''),
+      authHeader.replace('Bearer ', '')
     );
 
     if (authError || !authData.user) {
@@ -236,8 +235,14 @@ serve(async (req) => {
         .eq('user_id', currentUser.id)
         .eq('org_id', orgId)
         .maybeSingle(),
-      supabaseAdmin.rpc('has_permission', { _user_id: currentUser.id, _recurso: 'viaturas_criar' }),
-      supabaseAdmin.rpc('has_permission', { _user_id: currentUser.id, _recurso: 'viaturas_editar' }),
+      supabaseAdmin.rpc('has_permission', {
+        _user_id: currentUser.id,
+        _recurso: 'viaturas_criar',
+      }),
+      supabaseAdmin.rpc('has_permission', {
+        _user_id: currentUser.id,
+        _recurso: 'viaturas_editar',
+      }),
     ]);
 
     if (!membership?.is_admin && !(canCreate && canEdit)) {
@@ -251,15 +256,17 @@ serve(async (req) => {
     if (!rawRows.length && body.rawMarkdown) {
       rawRows = parseMarkdownTable(body.rawMarkdown);
     }
-    if (!rawRows.length && body.fileUrl) {
-      rawRows = await parseRowsFromFile(body.fileUrl);
-    }
 
     if (!rawRows.length) {
-      return new Response(JSON.stringify({ error: 'Nenhuma linha válida foi enviada para importar.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: 'Nenhuma linha válida foi enviada para importar.',
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     const { data: existingVehicles, error: vehiclesError } = await supabaseAdmin
@@ -317,7 +324,9 @@ serve(async (req) => {
       const status = mapStatus(getCell(sourceRow, 'Estado'));
       if (!status) {
         summary.skipped += 1;
-        summary.warnings.push(`Linha ${index + 2}: estado inválido para ${formatPlate(plateValue)}.`);
+        summary.warnings.push(
+          `Linha ${index + 2}: estado inválido para ${formatPlate(plateValue)}.`
+        );
         continue;
       }
 
@@ -340,7 +349,6 @@ serve(async (req) => {
           : null,
         cor: String(getCell(sourceRow, 'Cor')).trim() || null,
         combustivel: mapFuel(getCell(sourceRow, 'Combustível')),
-        status,
         km_atual: parseInteger(getCell(sourceRow, 'Kilómetros')),
         seguro_numero: String(getCell(sourceRow, 'Número do Seguro')).trim() || null,
         seguro_validade: parseDate(getCell(sourceRow, 'Validade Seguro')),
@@ -361,7 +369,10 @@ serve(async (req) => {
           summary.updated += 1;
         } else {
           summary.created += 1;
-          vehicleByPlate.set(normalizedPlate, { id: `preview-${normalizedPlate}`, matricula: payload.matricula as string });
+          vehicleByPlate.set(normalizedPlate, {
+            id: `preview-${normalizedPlate}`,
+            matricula: payload.matricula as string,
+          });
         }
         continue;
       }
@@ -410,7 +421,9 @@ serve(async (req) => {
       } catch (error) {
         summary.errors += 1;
         const message = error instanceof Error ? error.message : 'Erro desconhecido';
-        summary.warnings.push(`Linha ${index + 2}: erro ao importar ${formatPlate(plateValue)} — ${message}`);
+        summary.warnings.push(
+          `Linha ${index + 2}: erro ao importar ${formatPlate(plateValue)} — ${message}`
+        );
       }
     }
 
@@ -420,8 +433,13 @@ serve(async (req) => {
   } catch (error) {
     console.error('Erro na importação de viaturas:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro interno na importação.' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      JSON.stringify({
+        error: error instanceof Error ? error.message : 'Erro interno na importação.',
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   }
 });

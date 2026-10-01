@@ -16,7 +16,7 @@ export default defineConfig({
     // eram `TypeError: Cannot read properties of null (reading 'useId')` — as
     // internas do React anuladas sob pressão de workers — e timeouts.
     //
-    // Não era código lento: é contenção. São 118 ficheiros, cada um a montar o
+    // Não era código lento: é contenção. São 255 ficheiros, cada um a montar o
     // seu próprio ambiente jsdom (~355 s de tempo de ambiente contra ~93 s de
     // tempo real), e o pool por omissão ('forks') abre quase um worker por CPU.
     //
@@ -24,10 +24,10 @@ export default defineConfig({
     // a equipa a ignorar o CI e a repetir até passar, e no dia em que houver
     // uma regressão a sério ela vai parecer mais uma flutuação.
     //
-    // Percentagem em vez de número fixo de propósito: 50% dá 8 workers numa
+    // Percentagem em vez de número fixo de propósito: 25% dá 4 workers numa
     // máquina de 16 CPUs e 1–2 num runner de CI pequeno. Um valor fixo
     // sobrecarregaria o runner exactamente onde o problema aparece.
-    maxWorkers: '50%',
+    maxWorkers: '25%',
     // 5000 ms (o default) é apertado quando vários ambientes jsdom competem —
     // era a causa da segunda ronda de falhas. 15 s dá folga sem esconder um
     // teste genuinamente pendurado.

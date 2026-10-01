@@ -16,6 +16,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { classificarMovimento } from '@shared/movimentosMotorista';
 import {
   Select,
   SelectContent,
@@ -279,19 +280,20 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         0
       );
 
-      // 3. Bolt: um sítio só — bolt_resumos_semanais.ganhos_liquidos, escrito
-      // tanto pela API oficial como pelo CSV (ver src/config/bolt.ts). Já não
-      // se consulta bolt_viagens: tem uma linha por TENTATIVA de despacho e
-      // somá-la conta a mesma corrida várias vezes.
+      // 3. Bolt: um sítio só — bolt_resumos_semanais.liquido_a_pagar, coluna
+      // gerada pela base que soma ganhos_liquidos + campanhas + reembolsos
+      // (ver src/config/bolt.ts). Ler ganhos_liquidos perdia as campanhas nas
+      // integrações em oauth. Já não se consulta bolt_viagens: tem uma linha
+      // por TENTATIVA de despacho e somá-la conta a mesma corrida várias vezes.
       const { data: boltResumos } = await supabase
         .from('bolt_resumos_semanais')
-        .select('ganhos_liquidos')
+        .select('liquido_a_pagar')
         .eq('motorista_id', motoristaId)
         .lte('periodo_inicio', weekEndStr)
         .gte('periodo_fim', weekStartStr);
 
       const boltResumosTotal = (boltResumos || []).reduce(
-        (acc, curr) => acc + (Number(curr.ganhos_liquidos) || 0),
+        (acc, curr) => acc + (Number(curr.liquido_a_pagar) || 0),
         0
       );
 
@@ -343,7 +345,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         supabase
           .from('contratos_renting')
           .select(
-            'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
+            'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
           )
           .eq('contrato_condutores.motorista_id', motoristaId)
           .is('deleted_at', null)
@@ -394,30 +396,43 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       let finSeguros = 0;
       let finOutros = 0;
 
+      // A classificação é a partilhada (movimentosMotorista.ts), a mesma do
+      // fecho, da lista de Contas e do resumo do motorista. Este ecrã era o
+      // último com cópia própria da regra, e faltava-lhe a proteção que mais
+      // importa: um crédito de categoria `resumos` é o líquido que ESTE ecrã
+      // gravou, e entrava outra vez como receita. Cada semana já gravada
+      // aparecia com o seu próprio líquido somado em "Outras" e o número
+      // subia a cada recarregamento — 1.599,63 € de receita fantasma na
+      // semana de 24/08, vindos do resumo dessa mesma semana.
+      //
+      // A reparação continua a sair antes: é calculada à parte, e a
+      // classificação partilhada ignora-a precisamente por isso.
       (finData || []).forEach((mov: any) => {
         const val = Number(mov.valor) || 0;
-        if (mov.tipo === 'credito') {
-          if (mov.categoria === 'caucao') return;
-          extraCredits += val;
-        } else {
-          if (mov.categoria === 'reparacao') finReparacoes += val;
-          else if (mov.categoria === 'caucao') finCaucao += val;
-          else if (mov.categoria === 'seguros') finSeguros += val;
-          // Um débito de renda_viatura já está representado no aluguer do
-          // contrato (fixedRent, acima) — somá-lo aqui duplicava sempre que
-          // havia contrato, e inventava dívida a partir do nada quando não
-          // havia (caso real: Paulo André Antunes Badalo, sem viatura
-          // atribuída, com 225 € "de aluguer" vindos só deste débito
-          // avulso). Mesma regra de movimentosMotorista.ts.
-          else if (mov.categoria === 'renda_viatura') return;
-          else finOutros += val;
+        const categoria = (mov.categoria ?? '').trim().toLowerCase();
+
+        if (mov.tipo !== 'credito' && categoria === 'reparacao') {
+          finReparacoes += val;
+          return;
         }
+
+        const { destino } = classificarMovimento(mov);
+        if (destino === 'receita_outras') extraCredits += val;
+        else if (destino === 'caucao') finCaucao += val;
+        else if (destino === 'seguros') finSeguros += val;
+        // A mensalidade de slot ganhou balde próprio na classificação
+        // partilhada, mas este ecrã não tem linha para ela — vai para Outros,
+        // exactamente onde caía antes desta migração. Sem este ramo o valor
+        // não ia para lado nenhum: 6.030 € em 50 movimentos de 10 motoristas
+        // desapareciam da conta, e o líquido mostrado aqui subia na mesma
+        // medida.
+        else if (destino === 'outros' || destino === 'slot') finOutros += val;
       });
 
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
       const passesReciboVerde = motorista.recibo_verde ?? true;
 
-      // Fonte única: bolt_resumos_semanais.ganhos_liquidos — o mesmo campo que
+      // Fonte única: bolt_resumos_semanais.liquido_a_pagar — o mesmo campo que
       // o ecrã de resumos e o painel do motorista mostram.
       const boltTotal = boltResumosTotal;
       const faturadoPlataformas = uberTotal + boltTotal;

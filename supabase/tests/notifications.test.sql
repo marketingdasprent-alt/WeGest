@@ -12,6 +12,12 @@
 begin;
 select plan(8);
 
+-- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes de
+-- existir organização, para o handle_new_user_org não lhe atribuir org nem
+-- escrever user_organizacoes/user_org_ativa por cima dos inserts manuais.
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-00000000a0ff', 'bootstrap@notif.pt');
+
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org A', 'notif-a'),
   ('00000000-0000-0000-0000-0000000b0000', 'Org B', 'notif-b');

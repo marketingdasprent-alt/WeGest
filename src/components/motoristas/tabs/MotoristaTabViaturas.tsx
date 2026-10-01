@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { associacaoViaturaAtiva } from '@/utils/associacaoViatura';
 import {
   Table,
   TableBody,
@@ -182,7 +183,12 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
             'id, matricula, marca, modelo, ano, cor, categoria, status, extintor_numero, extintor_validade, is_slot'
           )
           .order('matricula'),
-        supabase.from('motorista_viaturas').select('viatura_id').eq('status', 'ativo'),
+        // `data_fim` entra aqui de propósito: uma atribuição que já expirou
+        // deixa a viatura livre, e sem isto ficava bloqueada para sempre.
+        supabase
+          .from('motorista_viaturas')
+          .select('viatura_id, status, data_fim')
+          .eq('status', 'ativo'),
         supabase
           .from('contratos')
           .select('id, data_inicio, duracao_meses, versao, numero_contrato')
@@ -197,7 +203,11 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
 
       if (viaturasRes.error) throw viaturasRes.error;
 
-      const activeViaturaIds = new Set((activeMvRes.data || []).map((mv) => mv.viatura_id));
+      const activeViaturaIds = new Set(
+        (activeMvRes.data || [])
+          .filter((mv) => associacaoViaturaAtiva(mv))
+          .map((mv) => mv.viatura_id)
+      );
 
       const disponiveis = (viaturasRes.data || []).filter((v) => {
         const s = (v.status || '')
@@ -225,12 +235,12 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
     }
   };
 
-  const associacoesAtivas = associacoes.filter((a) => a.status === 'ativo');
+  const associacoesAtivas = associacoes.filter((a) => associacaoViaturaAtiva(a));
   // Mais recente primeiro (associacoes já vem ordenado por data_inicio desc).
   const viaturaAtual = associacoesAtivas[0];
   const outrasAtivas = associacoesAtivas.slice(1);
   const historico = associacoes
-    .filter((a) => a.status !== 'ativo')
+    .filter((a) => !associacaoViaturaAtiva(a))
     .sort((a, b) => {
       let va: string | number = '';
       let vb: string | number = '';
@@ -513,7 +523,17 @@ export function MotoristaTabViaturas({ motorista }: MotoristaTabViaturasProps) {
                     <Calendar className="h-4 w-4" />
                     Desde: {format(new Date(viaturaAtual.data_inicio), 'dd/MM/yyyy')}
                   </span>
-                  <span>Duração: {calcularDuracao(viaturaAtual.data_inicio, null)}</span>
+                  {viaturaAtual.data_fim && (
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      Até: {format(new Date(viaturaAtual.data_fim), 'dd/MM/yyyy')}
+                    </span>
+                  )}
+                  {/* O `null` estava aqui hardcoded e escondia a data de fim que
+                      os triggers carimbam — a duração dizia sempre "até hoje". */}
+                  <span>
+                    Duração: {calcularDuracao(viaturaAtual.data_inicio, viaturaAtual.data_fim)}
+                  </span>
                 </div>
 
                 {/* Extintor e Contrato */}

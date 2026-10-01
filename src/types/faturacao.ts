@@ -79,3 +79,18 @@ export interface InvoiceMetadata {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * Identificação da empresa emissora, usada no cabeçalho dos ecrãs de faturação.
+ *
+ * Vivia em `utils/faturacaoDocumento.ts`, que gerava um A4 intitulado "Fatura"
+ * com NIF do emitente, NIF do cliente, linha de IVA e total, e se imprimia
+ * sozinho, sempre que a emissão no software certificado falhava. Emitir uma
+ * factura é acto de software certificado pela AT — esse ficheiro foi removido
+ * a 2026-09-17 e o tipo ficou, porque identificar a empresa no ecrã é legítimo.
+ */
+export interface FaturacaoDocEmitente {
+  nomeCompleto: string;
+  nif?: string | null;
+  sede?: string | null;
+}

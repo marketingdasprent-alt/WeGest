@@ -12,31 +12,17 @@ export interface AssinaturaPedido {
   created_at: string;
   expires_at: string;
   assinado_em: string | null;
-  /**
-   * Já houve uma assinatura MAIS RECENTE do mesmo documento, por outro pedido.
-   *
-   * Cada link é de uma utilização; para assinar outra vez envia-se um pedido
-   * novo. Quando isso acontece, a assinatura antiga deixa de ser a que vale —
-   * mas continua a existir e a poder ser vista.
-   */
+  /** Já houve uma assinatura MAIS RECENTE do mesmo documento, por outro pedido —
+   * cada link serve para uma utilização, e a antiga continua visível mas deixa de valer. */
   substituida: boolean;
   /** PDF ORIGINAL, tal como foi enviado para assinar. Existe sempre. */
   documento_path: string;
   /** PDF com a assinatura dentro. Só existe depois de assinado. */
   documento_assinado_path: string | null;
   /**
-   * O pedido foi feito sobre uma linha de contrato anterior a esta.
-   *
-   * Reverter um contrato para reserva e voltar a criá-lo faz nascer uma LINHA
-   * nova, com o mesmo número. Os pedidos ficam agarrados à linha onde foram
-   * criados, e sem isto um documento já assinado desaparecia do ecrã — foi o
-   * que aconteceu ao contrato 841 da matrícula 00-62-VF, que tem quatro linhas
-   * e as assinaturas espalhadas por três delas.
-   *
-   * Não são promovidos a documentos do contrato actual de propósito: foram
-   * assinados sobre o que o contrato dizia nessa altura, e se as datas ou o
-   * preço mudaram entretanto, apresentá-los como actuais seria mentir sobre o
-   * que a pessoa assinou.
+   * O pedido foi feito sobre uma linha de contrato anterior a esta (reverter para
+   * reserva e recriar gera nova linha, mesmo número — cf. contrato 841/00-62-VF).
+   * Não se promovem ao contrato actual de propósito: foram assinados sobre os dados de então.
    */
   de_versao_anterior: boolean;
 }
@@ -92,12 +78,9 @@ export function useAssinaturaPedidos(contratoId: string | null | undefined) {
 }
 
 /**
- * Marca as assinaturas que já foram substituídas por uma mais recente.
- *
- * Substituição é por DOCUMENTO: assinar de novo o "Contrato de Aluguer" não
- * torna antiga a assinatura da "Folha de Danos". Compara-se pela data em que
- * foi assinado, não pela ordem da lista nem pela data de envio — o que conta é
- * quando a pessoa assinou.
+ * Marca as assinaturas substituídas por uma mais recente do MESMO documento
+ * (assinar de novo o "Contrato" não afecta a "Folha de Danos"), comparando pela
+ * data de assinatura, não pela ordem da lista.
  */
 export function marcarSubstituidas(pedidos: AssinaturaPedido[]): AssinaturaPedido[] {
   const maisRecentePorDocumento = new Map<string, string>();

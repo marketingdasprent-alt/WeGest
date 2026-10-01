@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2, Send, Users, FileSignature } from 'lucide-react';
+import { sanitizeRichHtml } from '@/lib/safeHtml';
 
 interface Props {
   open: boolean;
@@ -129,7 +130,9 @@ export const EnviarCampanhaDialog = ({
               </div>
               <div
                 className="border rounded-md p-3 text-sm bg-muted/30 max-h-32 overflow-y-auto [&_img]:max-w-full [&_img]:h-auto"
-                dangerouslySetInnerHTML={{ __html: assinaturaSelecionada.conteudo_html }}
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeRichHtml(assinaturaSelecionada.conteudo_html),
+                }}
               />
             </div>
           )}

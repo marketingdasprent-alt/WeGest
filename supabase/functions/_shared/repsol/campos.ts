@@ -10,11 +10,7 @@
 // normalizado em minúsculas `cartao_dispositivo/montante`). É por isso que a
 // leitura é por lista de candidatos e não por nome fixo.
 
-export const stripAcc = (s: string) =>
-  (s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
+export const stripAcc = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 export function parseNumber(val: string): number | null {
   if (!val) return null;
@@ -22,35 +18,57 @@ export function parseNumber(val: string): number | null {
   if (!s) return null;
   if (s.includes(',') && s.includes('.')) {
     if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
-      s = s.replace(/\./g, '').replace(',', '.'); // 1.234,56 → 1234.56
+      s = s.replace(/\./g, '').replace(',', '.');
     } else {
-      s = s.replace(/,/g, ''); // 1,234.56 → 1234.56
+      s = s.replace(/,/g, '');
     }
   } else if (s.includes(',')) {
     const afterComma = s.substring(s.lastIndexOf(',') + 1);
     if (afterComma.length <= 2) {
-      s = s.replace(',', '.'); // 15,96 → 15.96
+      s = s.replace(',', '.');
     } else {
-      s = s.replace(/,/g, ''); // 1,596 → 1596
+      s = s.replace(/,/g, '');
     }
   } else if (s.includes('.')) {
     const parts = s.split('.');
     const afterLastDot = parts[parts.length - 1];
     if (parts.length > 2 || afterLastDot.length === 3) {
-      s = s.replace(/\./g, ''); // 1.596 → 1596
+      s = s.replace(/\./g, '');
     }
-    // else: 15.96 → keep as is (dot is decimal separator)
   }
   const n = parseFloat(s);
   return isNaN(n) ? null : n;
 }
 
-/** Primeiro candidato presente e não vazio. Para texto (datas, nomes, postos). */
 export function findField(row: Record<string, string>, candidates: string[]): string {
   for (const c of candidates) {
     const cNorm = stripAcc(c);
     const key = Object.keys(row).find((k) => stripAcc(k).includes(cNorm));
     if (key && row[key]) return row[key];
+  }
+  return '';
+}
+
+/**
+ * Como findField, mas olha para TODAS as colunas que combinam com cada
+ * candidato, não só para a primeira.
+ *
+ * Porquê: o export português traz `MATRÍCULA` (sempre vazia) e
+ * `MATRÍCULA/CONDUTOR TICKET` (o que o condutor escreveu na bomba). As duas
+ * combinam com "matricula"; o findField encontrava a vazia, dava-a por não
+ * preenchida e passava ao candidato seguinte — sem nunca ver a segunda coluna.
+ * Resultado: `viatura_id` NULL em 100% das linhas de Setembro/2026.
+ *
+ * Não substitui o findField: para a data, o desempate certo é a ordem dos
+ * candidatos (`data operacao` antes do genérico `data`, que apanharia
+ * `DATA FATURA`), e varrer todas as colunas ali só aumentaria o risco.
+ */
+export function findFieldAny(row: Record<string, string>, candidates: string[]): string {
+  for (const c of candidates) {
+    const cNorm = stripAcc(c);
+    for (const k of Object.keys(row)) {
+      if (stripAcc(k).includes(cNorm) && row[k]) return row[k];
+    }
   }
   return '';
 }

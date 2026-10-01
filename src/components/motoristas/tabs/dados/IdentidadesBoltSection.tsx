@@ -19,19 +19,8 @@ import {
 } from '@/hooks/useMotoristasPlataformaSync';
 import { cn } from '@/lib/utils';
 
-/**
- * Identidades Bolt ligadas a este motorista.
- *
- * A Bolt emite um `driver_uuid` novo sempre que o motorista sai da frota e
- * volta, e outro por cada conta da frota — por isso um motorista tem N. A
- * coluna `motoristas_ativos.bolt_id` só guardava um, e o sync preenchia o
- * resto adivinhando pelo nome, o que mandou ganhos para a ficha errada
- * (auditoria 2026-08-12).
- *
- * Agora a ligação é sempre manual e explícita: um UUID desconhecido fica por
- * ligar até alguém o atribuir aqui. A ligação vale para sempre e reatribui o
- * histórico desse UUID.
- */
+// Um motorista pode ter vários UUIDs Bolt; a associação é manual para não
+// atribuir ganhos ao motorista errado quando a identidade muda ou se repete.
 interface Props {
   motoristaId: string | null;
 }

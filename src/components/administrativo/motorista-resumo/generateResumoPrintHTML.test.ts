@@ -22,6 +22,7 @@ const baseParams = {
     outros_custos: 20,
     caucao: 0,
     seguros: 50,
+    slot: 0,
     reparacoes: 10,
   },
   totalDespesas: 410,
@@ -76,6 +77,15 @@ describe('generateResumoPrintHTML', () => {
   it('includes the liquido value', () => {
     const html = generateResumoPrintHTML(baseParams);
     expect(html).toContain('VALOR LÍQUIDO A RECEBER');
+  });
+
+  it('shows a dedicated Slot row with its own value, not folded into Outros Custos', () => {
+    const html = generateResumoPrintHTML({
+      ...baseParams,
+      despesas: { ...baseParams.despesas, outros_custos: 20, slot: 75 },
+    });
+    expect(html).toContain('Slot');
+    expect(html).toContain('75,00');
   });
 
   it('includes the WeGest footer', () => {
@@ -211,5 +221,24 @@ describe('generateResumoPrintHTML', () => {
       infoFields: [{ key: 'test', label: 'Test', value: null, always: true }],
     });
     expect(html).toContain('—');
+  });
+
+  it('escapa campos de negócio antes de os inserir no documento imprimível', () => {
+    const html = generateResumoPrintHTML({
+      ...baseParams,
+      driverName: '</title><script>alert(1)</script>',
+      infoFields: [
+        { key: 'nome', label: '<img src=x onerror=alert(1)>', value: '<svg onload=alert(1)>' },
+      ],
+      slotPeriodos: [
+        {
+          ...baseParams.slotPeriodos[0],
+          matricula: '<script>alert(1)</script>',
+        },
+      ],
+    });
+
+    expect(html).not.toMatch(/<script>alert\(1\)<\/script>|<img src=x|<svg onload/i);
+    expect(html).toContain('&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
   });
 });
