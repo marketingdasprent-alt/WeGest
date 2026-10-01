@@ -161,6 +161,12 @@ const ContratoForm = () => {
   const viaturaTrocada =
     camposTravados && !!viaturaEscolhida && viaturaEscolhida !== contrato?.viatura_id;
 
+  const notasInternas = form.watch('observacoes_internas');
+  const notasInternasAlteradas =
+    camposTravados &&
+    notasInternas != null &&
+    notasInternas !== (contrato?.observacoes_internas ?? '');
+
   const abriuEntregaAoCriarRef = useRef(false);
 
   useEffect(() => {
@@ -307,7 +313,7 @@ const ContratoForm = () => {
             isPending ||
             contrato?.substituido_em != null ||
             condutoresRascunho.length > 0 ||
-            (camposTravados && !viaturaTrocada)
+            (camposTravados && !viaturaTrocada && !notasInternasAlteradas)
           }
           className="gap-2"
         >
