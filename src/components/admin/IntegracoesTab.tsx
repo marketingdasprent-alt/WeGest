@@ -44,6 +44,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Loader2, Plus, Pencil, Trash2, Webhook, Play, Settings } from 'lucide-react';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { ApiChavesCard } from './api-chaves/ApiChavesCard';
 import { IntegracaoCard, type IntegracaoCardData } from './IntegracaoCard';
 import { IntegracaoDialog } from './IntegracaoDialog';
 import { IntegracaoDetailModal } from './IntegracaoDetailModal';
@@ -1003,6 +1004,8 @@ export const IntegracoesTab: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      <ApiChavesCard />
 
       {/* Dialogs */}
       <IntegracaoDialog

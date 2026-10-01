@@ -32,6 +32,7 @@ const FormularioPublico = lazy(() => import('@/pages/FormularioPublico'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const AssinarDocumento = lazy(() => import('@/pages/AssinarDocumento'));
 const QuadroLive = lazy(() => import('@/pages/QuadroLive'));
+const ApiDocsPage = lazy(() => import('@/pages/ApiDocsPage'));
 const LinkCurto = lazy(() => import('@/pages/LinkCurto'));
 const TicketsTI = lazy(() => import('@/pages/TicketsTI'));
 const TicketTIAutor = lazy(() => import('@/pages/TicketTIAutor'));
@@ -155,6 +156,8 @@ const WebAppRoutes = () => {
             <Route path="/r/:codigo" element={<LinkCurto />} />
             {/* Quadro TV público — sem login, acesso por token */}
             <Route path="/quadro/:token" element={<QuadroLive />} />
+            {/* Documentação pública da API de rent-a-car — sem login */}
+            <Route path="/api/docs" element={<ApiDocsPage />} />
             {/* A rota do autor vem ANTES: /ti/:token capturaria /ti/ticket/xxx com
                 token="ticket", e quem clicasse no link do email cairia no
                 formulário de submissão em vez do próprio pedido. */}

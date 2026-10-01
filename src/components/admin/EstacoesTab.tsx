@@ -27,17 +27,20 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Plus, Pencil, Trash2, MapPin, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  estacaoFormDeLinha,
+  estacaoFormVazio,
+  estacaoPayload,
+  type EstacaoForm,
+  type LinhaEstacao,
+} from './estacoes/estacaoForm';
 
-interface Estacao {
+interface Estacao extends LinhaEstacao {
   id: string;
-  nome: string;
-  morada: string | null;
-  cidade: string | null;
-  ativa: boolean;
   created_at: string;
 }
 
-const emptyForm = { nome: '', morada: '', cidade: '', ativa: true };
+const emptyForm: EstacaoForm = estacaoFormVazio;
 
 export const EstacoesTab = () => {
   const queryClient = useQueryClient();
@@ -75,12 +78,8 @@ export const EstacoesTab = () => {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!form.nome.trim()) throw new Error('O nome é obrigatório');
-      const payload = {
-        nome: form.nome.trim(),
-        morada: form.morada.trim() || null,
-        cidade: form.cidade.trim() || null,
-        ativa: form.ativa,
-      };
+      // Lança com a mensagem PT quando a coordenada é impossível (vai para o onError).
+      const payload = estacaoPayload(form);
       if (editing) {
         const { error } = await supabase.from('estacoes').update(payload).eq('id', editing.id);
         if (error) throw error;
@@ -119,7 +118,7 @@ export const EstacoesTab = () => {
 
   const openEdit = (e: Estacao) => {
     setEditing(e);
-    setForm({ nome: e.nome, morada: e.morada || '', cidade: e.cidade || '', ativa: e.ativa });
+    setForm(estacaoFormDeLinha(e));
     setDialogOpen(true);
   };
 
@@ -245,6 +244,40 @@ export const EstacoesTab = () => {
                 onChange={(e) => setForm((f) => ({ ...f, cidade: e.target.value }))}
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="horario">Horário</Label>
+              <Input
+                id="horario"
+                placeholder="Ex: Seg-Sex 9h-19h, Sáb 9h-13h"
+                value={form.horario}
+                onChange={(e) => setForm((f) => ({ ...f, horario: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="latitude">Latitude</Label>
+                <Input
+                  id="latitude"
+                  inputMode="decimal"
+                  placeholder="Ex: 39,7436"
+                  value={form.latitude}
+                  onChange={(e) => setForm((f) => ({ ...f, latitude: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="longitude">Longitude</Label>
+                <Input
+                  id="longitude"
+                  inputMode="decimal"
+                  placeholder="Ex: -8,8071"
+                  value={form.longitude}
+                  onChange={(e) => setForm((f) => ({ ...f, longitude: e.target.value }))}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Horário e coordenadas aparecem no site de rent-a-car.
+            </p>
             <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
               <Label htmlFor="ativa" className="cursor-pointer">
                 Estação ativa

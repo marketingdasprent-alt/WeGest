@@ -31,13 +31,22 @@ import { useTenant } from '@/contexts/TenantContext';
 import { matchesSearch } from '@/lib/utils';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { errorMessage } from '@/utils/errorMessage';
+import { ModeloSiteFields } from '@/components/viaturas/modelos/ModeloSiteFields';
+import {
+  modeloSiteDeLinha,
+  modeloSiteSchema,
+  modeloSiteVazio,
+  type LinhaModeloSite,
+  type ModeloSiteInput,
+} from '@/components/viaturas/modelos/modeloSite.schema';
 
 interface Marca {
   id: string;
   nome: string;
   ativa: boolean;
 }
-interface Modelo {
+interface Modelo extends LinhaModeloSite {
   id: string;
   marca_id: string;
   nome: string;
@@ -74,6 +83,7 @@ const ViaturaMarcasModelos = () => {
   const [modeloDialogOpen, setModeloDialogOpen] = useState(false);
   const [editingModelo, setEditingModelo] = useState<Modelo | null>(null);
   const [modeloForm, setModeloForm] = useState({ nome: '', ativo: true });
+  const [modeloSite, setModeloSite] = useState<ModeloSiteInput>(modeloSiteVazio);
   const [savingModelo, setSavingModelo] = useState(false);
   const [deleteModeloTarget, setDeleteModeloTarget] = useState<Modelo | null>(null);
 
@@ -218,11 +228,13 @@ const ViaturaMarcasModelos = () => {
   const openNewModelo = () => {
     setEditingModelo(null);
     setModeloForm({ nome: '', ativo: true });
+    setModeloSite(modeloSiteVazio);
     setModeloDialogOpen(true);
   };
   const openEditModelo = (m: Modelo) => {
     setEditingModelo(m);
     setModeloForm({ nome: m.nome, ativo: m.ativo });
+    setModeloSite(modeloSiteDeLinha(m));
     setModeloDialogOpen(true);
   };
   const handleSaveModelo = async () => {
@@ -232,7 +244,10 @@ const ViaturaMarcasModelos = () => {
     }
     try {
       setSavingModelo(true);
-      const payload = { nome: modeloForm.nome.trim(), ativo: modeloForm.ativo };
+      // parse lança com a mensagem PT do campo (ex.: "Lugares entre 1 e 9").
+      const site = modeloSiteSchema.safeParse(modeloSite);
+      if (!site.success) throw new Error(site.error.issues[0].message);
+      const payload = { nome: modeloForm.nome.trim(), ativo: modeloForm.ativo, ...site.data };
       if (editingModelo) {
         const { error } = await supabase
           .from('viatura_modelos')
@@ -249,8 +264,8 @@ const ViaturaMarcasModelos = () => {
       }
       qc.invalidateQueries({ queryKey: ['viatura_modelos'] });
       setModeloDialogOpen(false);
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    } catch (e: unknown) {
+      toast({ title: 'Erro', description: errorMessage(e), variant: 'destructive' });
     } finally {
       setSavingModelo(false);
     }
@@ -635,7 +650,7 @@ const ViaturaMarcasModelos = () => {
           if (!o) setModeloDialogOpen(false);
         }}
       >
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingModelo ? 'Editar Modelo' : `Novo Modelo — ${selectedMarca?.nome}`}
@@ -652,6 +667,12 @@ const ViaturaMarcasModelos = () => {
                 placeholder="Ex: Model 3, Série 3, Clio"
               />
             </div>
+            <ModeloSiteFields
+              value={modeloSite}
+              onChange={setModeloSite}
+              modeloId={editingModelo?.id ?? null}
+              orgId={orgId ?? null}
+            />
             <div className="flex items-center justify-between rounded-lg border p-3">
               <Label>Activo</Label>
               <Switch

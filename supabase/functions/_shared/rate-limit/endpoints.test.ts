@@ -31,7 +31,7 @@ async function databaseFetch(input: RequestInfo | URL, init?: RequestInit): Prom
     if (allowed) quotas.set(key, used + 1);
     return reply({ allowed, retry_after: allowed ? 0 : 60 });
   }
-  if (url.pathname.endsWith('/primavera_api_keys') && request.method === 'GET') {
+  if (url.pathname.endsWith('/api_chaves') && request.method === 'GET') {
     return reply({
       id: 'key-a',
       org_id: 'org-a',

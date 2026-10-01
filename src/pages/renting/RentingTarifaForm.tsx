@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaFormValidation';
+import {
+  MENSAGEM_TARIFA_SITE_DUPLICADA,
+  ehConflitoTarifaSite,
+  tarifaSiteNoPayload,
+} from './tarifaSite';
 import type { Json } from '@/integrations/supabase/types';
 import { buildPrecosModeloLinhas } from './precosModeloBuilder';
 import { pedeConfirmacaoRemocaoPrecos } from './confirmacaoRemocaoPrecos';
@@ -68,6 +73,7 @@ const EMPTY_FORM = {
   reserva_max_minutos: 'none',
   para_tvde: false,
   ativa: true,
+  tarifa_site: false,
 };
 
 const EMPTY_PRECO_MODELO: PrecoModeloForm = {
@@ -176,6 +182,7 @@ const RentingTarifaForm = () => {
       reserva_max_minutos: (tarifa as any).reserva_max_minutos?.toString() ?? 'none',
       para_tvde: tarifa.tipo === 'tvde',
       ativa: tarifa.ativa ?? true,
+      tarifa_site: tarifa.tarifa_site ?? false,
     });
   }, [tarifa]);
 
@@ -218,6 +225,7 @@ const RentingTarifaForm = () => {
     reserva_max_minutos: minSel(form.reserva_max_minutos),
     tipo: form.para_tvde ? 'tvde' : 'renting',
     ativa: form.ativa,
+    tarifa_site: tarifaSiteNoPayload(form.para_tvde, form.tarifa_site),
   });
 
   /**
@@ -290,7 +298,8 @@ const RentingTarifaForm = () => {
         setRemocaoPendente({ mensagem: e.message, andClose });
         return;
       }
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+      const description = ehConflitoTarifaSite(e) ? MENSAGEM_TARIFA_SITE_DUPLICADA : e.message;
+      toast({ title: 'Erro', description, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -826,6 +835,21 @@ const RentingTarifaForm = () => {
                   onCheckedChange={(v) => setForm((p) => ({ ...p, ativa: v }))}
                 />
               </div>
+              {!form.para_tvde && (
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <Label htmlFor="tarifa-site">Tarifa do site de rent-a-car</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Só uma por organização. A API pública lê os preços por modelo desta tarifa.
+                    </p>
+                  </div>
+                  <Switch
+                    id="tarifa-site"
+                    checked={form.tarifa_site}
+                    onCheckedChange={(v) => setForm((p) => ({ ...p, tarifa_site: v }))}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Resumo */}
