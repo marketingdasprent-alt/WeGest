@@ -127,3 +127,17 @@ Deno.test('exigirPermissao → null quando tem, 403 quando não tem', () => {
   assertEquals(exigirPermissao(ctx, 'catalogo:read'), null);
   assertEquals((exigirPermissao(ctx, 'reservas:write') as Response).status, 403);
 });
+
+Deno.test(
+  'erro da RPC api_chave_por_hash → 503 ERRO_INTERNO, nunca 401 "desconhecida"',
+  async () => {
+    const r = recusa(
+      await autenticar(pedido(), {
+        rpc: () => Promise.resolve({ data: null, error: { message: 'relation missing' } }),
+      })
+    );
+    assertEquals(r.recusa.status, 503);
+    assertEquals((await r.recusa.json()).erro.codigo, 'ERRO_INTERNO');
+    assertEquals(r.chave, undefined);
+  }
+);

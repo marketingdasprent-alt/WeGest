@@ -1,17 +1,52 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { CORS_HEADERS, erro, ok, respostaLimite } from './respostas.ts';
+import { CORS_HEADERS, comCors, erro, ok, origemPermitida, respostaLimite } from './respostas.ts';
 
-Deno.test('ok devolve JSON com CORS só para wegest.pt', async () => {
+const comOrigem = (origin?: string) =>
+  new Request('https://x/v1/modelos', { headers: origin ? { origin } : {} });
+
+Deno.test('ok devolve JSON; o ACAO não vem de ok(), vem de comCors', async () => {
   const r = ok({ a: 1 });
   assertEquals(r.status, 200);
-  assertEquals(r.headers.get('access-control-allow-origin'), 'https://wegest.pt');
+  assertEquals(r.headers.get('content-type'), 'application/json');
+  assertEquals(r.headers.get('access-control-allow-origin'), null);
+  assertEquals(r.headers.get('vary'), 'Origin');
   assertEquals(await r.json(), { a: 1 });
 });
 
-Deno.test('ok com cacheSeconds põe Cache-Control público', () => {
+Deno.test('ok com cacheSeconds é PRIVADO e varia por chave (resposta por organização)', () => {
   const r = ok([], { cacheSeconds: 300 });
-  assertEquals(r.headers.get('cache-control'), 'public, max-age=300');
+  assertEquals(r.headers.get('cache-control'), 'private, max-age=300');
+  assertEquals(r.headers.get('vary'), 'Origin, X-API-Key, Authorization');
 });
+
+Deno.test('ok publico (só openapi.json) pode ir para caches partilhadas', () => {
+  const r = ok({}, { cacheSeconds: 3600, publico: true });
+  assertEquals(r.headers.get('cache-control'), 'public, max-age=3600');
+  assertEquals(r.headers.get('vary'), 'Origin');
+});
+
+Deno.test('ok sem cacheSeconds não põe Cache-Control', () => {
+  assertEquals(ok({}).headers.get('cache-control'), null);
+});
+
+Deno.test(
+  'CORS: wegest.pt e www.wegest.pt recebem o seu ACAO; origem estranha não recebe nenhum',
+  () => {
+    assertEquals(origemPermitida(comOrigem('https://wegest.pt')), 'https://wegest.pt');
+    assertEquals(origemPermitida(comOrigem('https://www.wegest.pt')), 'https://www.wegest.pt');
+    assertEquals(origemPermitida(comOrigem('https://evil.example')), null);
+    assertEquals(origemPermitida(comOrigem()), null);
+
+    const a = comCors(comOrigem('https://wegest.pt'), ok({}));
+    assertEquals(a.headers.get('access-control-allow-origin'), 'https://wegest.pt');
+    const b = comCors(comOrigem('https://www.wegest.pt'), erro('NAO_AUTENTICADO', 'x', 401));
+    assertEquals(b.headers.get('access-control-allow-origin'), 'https://www.wegest.pt');
+    const c = comCors(comOrigem('https://evil.example'), ok({}));
+    assertEquals(c.headers.get('access-control-allow-origin'), null);
+    assertEquals(CORS_HEADERS['Access-Control-Allow-Headers'].includes('x-api-key'), true);
+    assertEquals('Access-Control-Allow-Origin' in CORS_HEADERS, false);
+  }
+);
 
 Deno.test('erro tem sempre o envelope { erro: { codigo, mensagem } }', async () => {
   const r = erro('NAO_AUTENTICADO', 'Chave em falta', 401);
@@ -19,7 +54,7 @@ Deno.test('erro tem sempre o envelope { erro: { codigo, mensagem } }', async () 
   assertEquals(await r.json(), {
     erro: { codigo: 'NAO_AUTENTICADO', mensagem: 'Chave em falta' },
   });
-  assertEquals(CORS_HEADERS['Access-Control-Allow-Headers'].includes('x-api-key'), true);
+  assertEquals(r.headers.get('cache-control'), null);
 });
 
 Deno.test('erro com detalhes inclui-os dentro do envelope', async () => {

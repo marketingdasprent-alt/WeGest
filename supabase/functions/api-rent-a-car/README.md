@@ -10,7 +10,18 @@ negócio vive em funções SQL `api_*` (SECURITY DEFINER, `org_id` explícito, s
 Cabeçalho `X-API-Key: wg_ra_…` (ou `Authorization: Bearer wg_ra_…`). As chaves criam-se
 em Integrações → Chaves de API (RPC `api_chaves_criar`); a base guarda só o sha256
 (`api_chaves.api_key_hash`) e a chave em claro aparece uma única vez. Chave de outro escopo
-(ex. `contabilidade`), desactivada, expirada ou fora da `ip_whitelist` → `403`.
+(ex. `contabilidade`), desactivada, expirada ou fora da `ip_whitelist` → `403`. Erro da base
+ao resolver a chave → `503` (nunca `401`).
+
+**`ip_whitelist` só é fiável em chamadas directas** a
+`https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1/*`. Via
+`wegest.pt/api/rent-a-car` o pedido passa pelo rewrite da Vercel e o IP que a função vê é o
+da Vercel, não o do servidor do site. Quem precisar de whitelist usa o URL directo.
+
+## Limites
+
+- 60 pedidos/min por IP antes de olhar para a chave (`api-rent-a-car-anon`).
+- `rate_limit_per_minute` da chave (120 por omissão, preso a 1..10000) depois de autenticar.
 
 ## Base URL e rotas
 
@@ -18,12 +29,17 @@ em Integrações → Chaves de API (RPC `api_chaves_criar`); a base guarda só o
 - Directo: `https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1/*`.
 - `GET /openapi.json` é público; `GET /health` e o catálogo exigem chave com `catalogo:read`.
 - Erros sempre `{ "erro": { "codigo", "mensagem", "detalhes"? } }`; `429` traz `Retry-After`.
-- Cada pedido autenticado fica em `api_pedidos` (30 dias, sem corpo).
+- Catálogo com `Cache-Control: private, max-age=300` e `Vary: Origin, X-API-Key,
+Authorization` (a resposta é por organização); só `openapi.json` é `public`.
+- CORS só para `https://wegest.pt` e `https://www.wegest.pt` (página `/api/docs`).
+- Cada pedido a `/v1` fica em `api_pedidos` (30 dias, sem corpo nem query string, caminho
+  até 200 caracteres), recusas incluídas: `401` e `429` por IP com org/chave a null, `403` e
+  `429` da chave com a org e a chave em causa.
 
 ## Testes
 
 `deno test --allow-read --allow-env --allow-net=127.0.0.1 --node-modules-dir=none supabase/functions/_shared/api-rent-a-car`
-(auth, router, respostas, catálogo, OpenAPI). As funções SQL têm pgTAP em `supabase/tests/api_*.test.sql`.
+(auth, router, respostas, catálogo, OpenAPI, handler). As funções SQL têm pgTAP em `supabase/tests/api_*.test.sql`.
 
 ## Publicar
 

@@ -6,20 +6,13 @@ export interface Rota {
   id: string | null;
 }
 
-// O recurso admite ponto por causa de openapi.json.
-const PADRAO = /^(?:\/api-rent-a-car)?\/v1\/([a-z][a-z.-]*)(?:\/([^/]+))?\/?$/;
+// O recurso admite ponto por causa de openapi.json. O id só leva [A-Za-z0-9_-]
+// (UUIDs e afins): nada de %-codificação, pontos ou barras chega às RPCs.
+const PADRAO = /^(?:\/api-rent-a-car)?\/v1\/([a-z][a-z.-]*)(?:\/([A-Za-z0-9_-]+))?\/?$/;
 
 export function resolverRota(url: URL, metodo: string): Rota | null {
   const m = PADRAO.exec(url.pathname);
   if (!m) return null;
   if (metodo !== 'GET' && metodo !== 'POST' && metodo !== 'DELETE') return null;
-  let id: string | null = null;
-  if (m[2]) {
-    try {
-      id = decodeURIComponent(m[2]);
-    } catch {
-      return null;
-    }
-  }
-  return { metodo, recurso: m[1], id };
+  return { metodo, recurso: m[1], id: m[2] ?? null };
 }

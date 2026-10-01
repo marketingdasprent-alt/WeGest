@@ -37,3 +37,12 @@ Deno.test('método fora de GET/POST/DELETE é null', () => {
 Deno.test('id mal codificado não rebenta: é null', () => {
   assertEquals(resolverRota(new URL('https://x/v1/modelos/%E0%A4%A'), 'GET'), null);
 });
+
+Deno.test('id só aceita [A-Za-z0-9_-]: espaços codificados e barras não entram', () => {
+  assertEquals(resolverRota(new URL('https://x/v1/modelos/abc%20def'), 'GET'), null);
+  assertEquals(resolverRota(new URL('https://x/v1/modelos/a.b'), 'GET'), null);
+  assertEquals(
+    resolverRota(new URL('https://x/v1/modelos/2b7c0b7e-1111-4222-8333-444455556666'), 'GET')?.id,
+    '2b7c0b7e-1111-4222-8333-444455556666'
+  );
+});

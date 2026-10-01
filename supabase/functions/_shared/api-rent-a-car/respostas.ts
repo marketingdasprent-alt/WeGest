@@ -1,13 +1,22 @@
-// Respostas da API externa de rent-a-car: um envelope de erro, CORS só para a
-// página de documentação, cache opcional para o catálogo.
+// Respostas da API externa de rent-a-car: um envelope de erro, CORS só para as
+// origens da página de documentação, cache opcional para o catálogo.
 import type { RateLimitDecision } from '../rate-limit/rateLimit.ts';
 
+/** Origens que podem ler a API no browser (página /api/docs). */
+const ORIGENS_PERMITIDAS: ReadonlySet<string> = new Set([
+  'https://wegest.pt',
+  'https://www.wegest.pt',
+]);
+
+/** Cabeçalhos CORS fixos. O Allow-Origin é posto por comCors, conforme o Origin do pedido. */
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
-  'Access-Control-Allow-Origin': 'https://wegest.pt',
   'Access-Control-Allow-Headers': 'x-api-key, authorization, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  Vary: 'Origin',
 };
+
+// As respostas autenticadas dependem da chave (organização): uma cache partilhada
+// tem de as separar por X-API-Key/Authorization, e só o cliente as pode guardar.
+const VARY_PRIVADO = 'Origin, X-API-Key, Authorization';
 
 export type CodigoErro =
   | 'NAO_AUTENTICADO'
@@ -25,9 +34,37 @@ export type CodigoErro =
   | 'ESTADO_INVALIDO'
   | 'ERRO_INTERNO';
 
-export function ok(body: unknown, init: { status?: number; cacheSeconds?: number } = {}): Response {
-  const headers: Record<string, string> = { ...CORS_HEADERS, 'Content-Type': 'application/json' };
-  if (init.cacheSeconds) headers['Cache-Control'] = `public, max-age=${init.cacheSeconds}`;
+/** A origem do pedido, se estiver na allowlist; senão null (nenhum Allow-Origin). */
+export function origemPermitida(req: Request): string | null {
+  const origem = req.headers.get('origin');
+  return origem && ORIGENS_PERMITIDAS.has(origem) ? origem : null;
+}
+
+/** Acrescenta o Access-Control-Allow-Origin da origem permitida, se houver. */
+export function comCors(req: Request, resposta: Response): Response {
+  const origem = origemPermitida(req);
+  if (origem) resposta.headers.set('Access-Control-Allow-Origin', origem);
+  return resposta;
+}
+
+/**
+ * Resposta JSON. Com cacheSeconds é `private` e varia por chave (o catálogo é por
+ * organização); só `publico: true` (openapi.json) pode ir para caches partilhadas.
+ */
+export function ok(
+  body: unknown,
+  init: { status?: number; cacheSeconds?: number; publico?: boolean } = {}
+): Response {
+  const headers: Record<string, string> = {
+    ...CORS_HEADERS,
+    Vary: 'Origin',
+    'Content-Type': 'application/json',
+  };
+  if (init.cacheSeconds) {
+    const tipo = init.publico ? 'public' : 'private';
+    headers['Cache-Control'] = `${tipo}, max-age=${init.cacheSeconds}`;
+    if (!init.publico) headers.Vary = VARY_PRIVADO;
+  }
   return new Response(JSON.stringify(body), { status: init.status ?? 200, headers });
 }
 
@@ -43,7 +80,12 @@ export function erro(
   };
   return new Response(JSON.stringify(corpo), {
     status,
-    headers: { ...CORS_HEADERS, ...cabecalhos, 'Content-Type': 'application/json' },
+    headers: {
+      ...CORS_HEADERS,
+      Vary: 'Origin',
+      ...cabecalhos,
+      'Content-Type': 'application/json',
+    },
   });
 }
 

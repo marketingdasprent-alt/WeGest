@@ -148,7 +148,10 @@ export const OPENAPI: Record<string, unknown> = {
       'Catálogo, disponibilidade, cotação e reservas de rent-a-car da organização. ' +
       'Chave no cabeçalho X-API-Key, só a partir do backend do site. Datas ISO 8601 com fuso. ' +
       'Dinheiro em euros com 2 casas, sempre sem e com IVA. ' +
-      'Erros sempre no envelope { "erro": { "codigo", "mensagem" } }.',
+      'Erros sempre no envelope { "erro": { "codigo", "mensagem" } }. ' +
+      'A ip_whitelist de uma chave só é fiável em chamadas directas a ' +
+      'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1; via wegest.pt ' +
+      'o IP visto é o da Vercel. No "experimentar" desta página use só uma chave de teste.',
   },
   servers: [{ url: 'https://wegest.pt/api/rent-a-car/v1' }],
   security: [{ ApiKey: [] }],

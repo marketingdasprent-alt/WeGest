@@ -2,6 +2,7 @@ import { assertEquals, assertMatch } from 'https://deno.land/std@0.224.0/assert/
 import { type LinhaAuditoria, tratarPedido } from './handler.ts';
 
 const CHAVE = 'wg_ra_' + 'b'.repeat(48);
+const UUID = '2b7c0b7e-1111-4222-8333-444455556666';
 const linhaOk = {
   id: 'k1',
   org_id: 'org1',
@@ -14,9 +15,11 @@ const linhaOk = {
   expires_at: null,
 };
 
+type Decisao = { allowed: boolean; retry_after: number };
 interface Opcoes {
   chave?: Record<string, unknown> | null;
-  limite?: { allowed: boolean; retry_after: number };
+  limite?: Decisao;
+  limiteAnon?: Decisao;
   tarifa?: string | null;
   rebentar?: boolean;
 }
@@ -34,16 +37,15 @@ function dbFalso(o: Opcoes = {}) {
         return Promise.resolve({ data: linha ? [linha] : [], error: null });
       }
       if (name === 'consume_edge_rate_limit') {
-        return Promise.resolve({
-          data: o.limite ?? { allowed: true, retry_after: 0 },
-          error: null,
-        });
+        const anon = args.p_operation === 'api-rent-a-car-anon';
+        const decisao = (anon ? o.limiteAnon : o.limite) ?? { allowed: true, retry_after: 0 };
+        return Promise.resolve({ data: decisao, error: null });
       }
       if (name === 'api_tarifa_site')
         return Promise.resolve({ data: o.tarifa ?? null, error: null });
       if (name === 'api_modelos') {
         if (o.rebentar) throw new Error('base em baixo');
-        return Promise.resolve({ data: [{ id: 'm1' }], error: null });
+        return Promise.resolve({ data: [{ id: UUID }], error: null });
       }
       return Promise.resolve({ data: null, error: { message: `rpc desconhecida: ${name}` } });
     },
@@ -70,6 +72,9 @@ async function correr(req: Request, db: ReturnType<typeof dbFalso>) {
   await auditoria;
   return resposta;
 }
+
+const opsLimite = (db: ReturnType<typeof dbFalso>) =>
+  db.rpcs.filter((c) => c.name === 'consume_edge_rate_limit').map((c) => c.args.p_operation);
 
 Deno.test('401 sem chave fica em api_pedidos com org e chave a null', async () => {
   const db = dbFalso();
@@ -103,41 +108,67 @@ Deno.test('403 por chave desactivada fica em api_pedidos com org e chave da linh
   assertEquals(db.pedidos[0].org_id, 'org1');
   assertEquals(db.pedidos[0].api_chave_id, 'k1');
   assertEquals(db.pedidos[0].estado_http, 403);
-  // A recusa acontece antes do limite: a quota não é gasta.
-  assertEquals(
-    db.rpcs.some((c) => c.name === 'consume_edge_rate_limit'),
-    false
-  );
-});
-
-Deno.test('429 do limite fica em api_pedidos com org e chave, e traz Retry-After', async () => {
-  const db = dbFalso({ limite: { allowed: false, retry_after: 42 } });
-  const r = await correr(pedido('/v1/modelos'), db);
-  assertEquals(r.status, 429);
-  assertEquals(r.headers.get('retry-after'), '42');
-  assertEquals((await r.json()).erro.codigo, 'LIMITE_EXCEDIDO');
-  assertEquals(db.pedidos.length, 1);
-  assertEquals(db.pedidos[0].org_id, 'org1');
-  assertEquals(db.pedidos[0].api_chave_id, 'k1');
-  assertEquals(db.pedidos[0].estado_http, 429);
-  assertEquals(
-    db.rpcs.some((c) => c.name === 'api_modelos'),
-    false
-  );
+  // A recusa acontece antes do limite da chave: essa quota não é gasta.
+  assertEquals(opsLimite(db), ['api-rent-a-car-anon']);
 });
 
 Deno.test(
-  'pedido bom: catálogo servido, limite por chave e linha de auditoria com 200',
+  '429 do limite da chave fica em api_pedidos com org e chave, e traz Retry-After',
+  async () => {
+    const db = dbFalso({ limite: { allowed: false, retry_after: 42 } });
+    const r = await correr(pedido('/v1/modelos'), db);
+    assertEquals(r.status, 429);
+    assertEquals(r.headers.get('retry-after'), '42');
+    assertEquals((await r.json()).erro.codigo, 'LIMITE_EXCEDIDO');
+    assertEquals(db.pedidos.length, 1);
+    assertEquals(db.pedidos[0].org_id, 'org1');
+    assertEquals(db.pedidos[0].api_chave_id, 'k1');
+    assertEquals(db.pedidos[0].estado_http, 429);
+    assertEquals(
+      db.rpcs.some((c) => c.name === 'api_modelos'),
+      false
+    );
+  }
+);
+
+Deno.test(
+  'limite anónimo por IP corre ANTES de autenticar: 60/min, e o 429 fica auditado com nulos',
+  async () => {
+    const db = dbFalso({ limiteAnon: { allowed: false, retry_after: 7 } });
+    const r = await correr(pedido('/v1/modelos'), db);
+    assertEquals(r.status, 429);
+    assertEquals(r.headers.get('retry-after'), '7');
+    assertEquals(
+      db.rpcs.map((c) => c.name),
+      ['consume_edge_rate_limit']
+    );
+    const anon = db.rpcs[0].args;
+    assertEquals(anon.p_operation, 'api-rent-a-car-anon');
+    assertEquals(anon.p_limit, 60);
+    assertEquals(anon.p_window_seconds, 60);
+    assertMatch(String(anon.p_subject_hash), /^[a-f0-9]{64}$/);
+    assertEquals(db.pedidos.length, 1);
+    assertEquals(db.pedidos[0].org_id, null);
+    assertEquals(db.pedidos[0].api_chave_id, null);
+    assertEquals(db.pedidos[0].estado_http, 429);
+  }
+);
+
+Deno.test(
+  'pedido bom: anon → chave → limite da chave → catálogo, e auditoria com 200',
   async () => {
     const db = dbFalso();
-    const r = await correr(pedido('/api-rent-a-car/v1/modelos?categoria=g1'), db);
+    const r = await correr(pedido(`/api-rent-a-car/v1/modelos?categoria=${UUID}`), db);
     assertEquals(r.status, 200);
-    assertEquals(await r.json(), [{ id: 'm1' }]);
-    const limite = db.rpcs.find((c) => c.name === 'consume_edge_rate_limit');
-    assertEquals(limite?.args.p_operation, 'api-rent-a-car');
+    assertEquals(await r.json(), [{ id: UUID }]);
+    assertEquals(
+      db.rpcs.map((c) => c.name),
+      ['consume_edge_rate_limit', 'api_chave_por_hash', 'consume_edge_rate_limit', 'api_modelos']
+    );
+    assertEquals(opsLimite(db), ['api-rent-a-car-anon', 'api-rent-a-car']);
+    const limite = db.rpcs.find((c) => c.args.p_operation === 'api-rent-a-car');
     assertEquals(limite?.args.p_limit, 120);
     assertEquals(limite?.args.p_window_seconds, 60);
-    assertMatch(String(limite?.args.p_subject_hash), /^[a-f0-9]{64}$/);
     assertEquals(db.pedidos[0].estado_http, 200);
     assertEquals(db.pedidos[0].caminho, '/api-rent-a-car/v1/modelos');
   }
@@ -150,7 +181,10 @@ Deno.test('limite da chave fica preso a 1..10000', async () => {
   ] as const) {
     const db = dbFalso({ chave: { ...linhaOk, rate_limit_per_minute: configurado } });
     await correr(pedido('/v1/health'), db);
-    assertEquals(db.rpcs.find((c) => c.name === 'consume_edge_rate_limit')?.args.p_limit, aplicado);
+    assertEquals(
+      db.rpcs.find((c) => c.args.p_operation === 'api-rent-a-car')?.args.p_limit,
+      aplicado
+    );
   }
 });
 
@@ -167,7 +201,7 @@ Deno.test('/health diz se há tarifa do site', async () => {
 });
 
 Deno.test(
-  'openapi.json, OPTIONS e rota inexistente não autenticam nem ficam na auditoria',
+  'openapi.json (cache pública), OPTIONS e rota fora de /v1 não autenticam nem auditam',
   async () => {
     const db = dbFalso();
     const spec = await correr(new Request('https://x/v1/openapi.json'), db);
@@ -175,7 +209,8 @@ Deno.test(
     assertEquals((await spec.json()).openapi, '3.1.0');
     assertEquals(spec.headers.get('cache-control'), 'public, max-age=3600');
     const opts = await correr(new Request('https://x/v1/modelos', { method: 'OPTIONS' }), db);
-    assertEquals(opts.headers.get('access-control-allow-origin'), 'https://wegest.pt');
+    assertEquals(opts.status, 200);
+    assertEquals(opts.headers.get('access-control-allow-methods')?.includes('GET'), true);
     const fora = await correr(new Request('https://x/v2/modelos'), db);
     assertEquals(fora.status, 404);
     assertEquals(db.pedidos, []);
@@ -183,11 +218,48 @@ Deno.test(
   }
 );
 
-Deno.test('recurso desconhecido em /v1 → 404 auditado', async () => {
+Deno.test(
+  'CORS: devolve o ACAO da origem permitida; origem estranha não recebe nenhum',
+  async () => {
+    const db = dbFalso();
+    for (const origem of ['https://wegest.pt', 'https://www.wegest.pt']) {
+      const r = await correr(pedido('/v1/modelos', { origin: origem }), db);
+      assertEquals(r.headers.get('access-control-allow-origin'), origem);
+      const opts = await correr(
+        new Request('https://x/v1/modelos', { method: 'OPTIONS', headers: { origin: origem } }),
+        db
+      );
+      assertEquals(opts.headers.get('access-control-allow-origin'), origem);
+    }
+    const estranha = await correr(pedido('/v1/modelos', { origin: 'https://evil.example' }), db);
+    assertEquals(estranha.headers.get('access-control-allow-origin'), null);
+    const recusa = await correr(
+      new Request('https://x/v1/modelos', { headers: { origin: 'https://wegest.pt' } }),
+      db
+    );
+    assertEquals(recusa.status, 401);
+    assertEquals(recusa.headers.get('access-control-allow-origin'), 'https://wegest.pt');
+  }
+);
+
+Deno.test('recurso desconhecido em /v1 → 404 auditado, sem ecoar o nome pedido', async () => {
   const db = dbFalso();
   const r = await correr(pedido('/v1/reservas'), db);
   assertEquals(r.status, 404);
+  assertEquals(await r.json(), {
+    erro: { codigo: 'NAO_ENCONTRADO', mensagem: 'Recurso inexistente.' },
+  });
   assertEquals(db.pedidos[0].estado_http, 404);
+});
+
+Deno.test('o caminho auditado é cortado a 200 caracteres e nunca leva a query string', async () => {
+  const db = dbFalso();
+  const longo = '/v1/modelos/' + 'a'.repeat(400);
+  await correr(pedido(`${longo}?segredo=1`), db);
+  const caminho = db.pedidos[0].caminho as string;
+  assertEquals(caminho.length, 200);
+  assertEquals(caminho.startsWith('/v1/modelos/aaaa'), true);
+  assertEquals(caminho.includes('segredo'), false);
 });
 
 Deno.test('excepção inesperada → 500 ERRO_INTERNO auditado', async () => {

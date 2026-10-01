@@ -2,6 +2,7 @@ import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { servirCatalogo } from './catalogo.ts';
 
 const ctx = { chaveId: 'k1', orgId: 'org1', permissoes: ['catalogo:read'], limitePorMinuto: 120 };
+const UUID = '2b7c0b7e-1111-4222-8333-444455556666';
 
 function db(esperado: string, args: Record<string, unknown>, data: unknown) {
   return {
@@ -19,15 +20,16 @@ const semBase = {
   },
 };
 
-Deno.test('GET /modelos chama api_modelos com filtros e cache de 5 minutos', async () => {
+Deno.test('GET /modelos chama api_modelos com filtros e cache PRIVADA de 5 minutos', async () => {
   const r = await servirCatalogo(
     { metodo: 'GET', recurso: 'modelos', id: null },
-    new URL('https://x/v1/modelos?categoria=g1&tipo=comercial'),
+    new URL(`https://x/v1/modelos?categoria=${UUID}&tipo=comercial`),
     ctx,
-    db('api_modelos', { p_org_id: 'org1', p_categoria: 'g1', p_tipo: 'comercial' }, [{ id: 'm1' }])
+    db('api_modelos', { p_org_id: 'org1', p_categoria: UUID, p_tipo: 'comercial' }, [{ id: 'm1' }])
   );
   assertEquals(r?.status, 200);
-  assertEquals(r?.headers.get('cache-control'), 'public, max-age=300');
+  assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
+  assertEquals(r?.headers.get('vary'), 'Origin, X-API-Key, Authorization');
   assertEquals(await r?.json(), [{ id: 'm1' }]);
 });
 
@@ -41,26 +43,40 @@ Deno.test('GET /modelos sem filtros passa null nos dois parâmetros', async () =
   assertEquals(await r?.json(), []);
 });
 
-Deno.test('GET /modelos/{id} chama api_modelo e devolve o detalhe', async () => {
+Deno.test('GET /modelos/{id} chama api_modelo e devolve o detalhe, cache privada', async () => {
   const r = await servirCatalogo(
-    { metodo: 'GET', recurso: 'modelos', id: 'm1' },
-    new URL('https://x/v1/modelos/m1'),
+    { metodo: 'GET', recurso: 'modelos', id: UUID },
+    new URL(`https://x/v1/modelos/${UUID}`),
     ctx,
-    db('api_modelo', { p_org_id: 'org1', p_modelo_id: 'm1' }, { id: 'm1', tarifa: {} })
+    db('api_modelo', { p_org_id: 'org1', p_modelo_id: UUID }, { id: UUID, tarifa: {} })
   );
   assertEquals(r?.status, 200);
-  assertEquals(await r?.json(), { id: 'm1', tarifa: {} });
+  assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
+  assertEquals(await r?.json(), { id: UUID, tarifa: {} });
 });
 
-Deno.test('GET /modelos/{id} inexistente → 404', async () => {
+Deno.test('GET /modelos/{id} com UUID inexistente → 404', async () => {
   const r = await servirCatalogo(
-    { metodo: 'GET', recurso: 'modelos', id: 'zzz' },
-    new URL('https://x/v1/modelos/zzz'),
+    { metodo: 'GET', recurso: 'modelos', id: UUID },
+    new URL(`https://x/v1/modelos/${UUID}`),
     ctx,
-    db('api_modelo', { p_org_id: 'org1', p_modelo_id: 'zzz' }, null)
+    db('api_modelo', { p_org_id: 'org1', p_modelo_id: UUID }, null)
   );
   assertEquals(r?.status, 404);
   assertEquals((await r?.json()).erro.codigo, 'NAO_ENCONTRADO');
+});
+
+Deno.test('GET /modelos/{id} com id que não é UUID → 404 sem tocar na base', async () => {
+  for (const id of ['zzz', '123', UUID.slice(0, -1), UUID + '0']) {
+    const r = await servirCatalogo(
+      { metodo: 'GET', recurso: 'modelos', id },
+      new URL(`https://x/v1/modelos/${id}`),
+      ctx,
+      semBase
+    );
+    assertEquals(r?.status, 404);
+    assertEquals((await r?.json()).erro.codigo, 'NAO_ENCONTRADO');
+  }
 });
 
 Deno.test('tipo inválido → 400 PARAMETRO_INVALIDO sem tocar na base', async () => {
@@ -86,8 +102,8 @@ Deno.test('sem permissão catalogo:read → 403', async () => {
 
 Deno.test('recurso de lista com id → 404, sem tocar na base', async () => {
   const r = await servirCatalogo(
-    { metodo: 'GET', recurso: 'extras', id: 'e1' },
-    new URL('https://x/v1/extras/e1'),
+    { metodo: 'GET', recurso: 'extras', id: UUID },
+    new URL(`https://x/v1/extras/${UUID}`),
     ctx,
     semBase
   );
@@ -125,4 +141,15 @@ Deno.test('recurso que não é de catálogo devolve null', async () => {
     db('', {}, null)
   );
   assertEquals(r, null);
+});
+
+Deno.test('categoria que não é UUID → 400 PARAMETRO_INVALIDO sem tocar na base', async () => {
+  const r = await servirCatalogo(
+    { metodo: 'GET', recurso: 'modelos', id: null },
+    new URL('https://x/v1/modelos?categoria=g1'),
+    ctx,
+    semBase
+  );
+  assertEquals(r?.status, 400);
+  assertEquals((await r?.json()).erro.codigo, 'PARAMETRO_INVALIDO');
 });

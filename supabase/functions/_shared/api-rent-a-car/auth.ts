@@ -67,8 +67,15 @@ export async function autenticar(req: Request, db: DbRpc): Promise<ContextoApi |
   }
   const { data, error } = await db.rpc('api_chave_por_hash', { p_hash: await sha256Hex(chave) });
   const linha = (Array.isArray(data) ? data[0] : data) as LinhaChave | undefined;
-  if (error || !linha)
-    return { recusa: erro('NAO_AUTENTICADO', 'Chave de API desconhecida.', 401) };
+  if (error) {
+    // Base em baixo ou migração por aplicar: não é a chave que está mal.
+    console.error(
+      '[api-rent-a-car] api_chave_por_hash falhou:',
+      (error as { message?: string }).message
+    );
+    return { recusa: erro('ERRO_INTERNO', 'Serviço temporariamente indisponível.', 503) };
+  }
+  if (!linha) return { recusa: erro('NAO_AUTENTICADO', 'Chave de API desconhecida.', 401) };
 
   const recusada = (mensagem: string): Recusa => ({
     recusa: erro('SEM_PERMISSAO', mensagem, 403),
