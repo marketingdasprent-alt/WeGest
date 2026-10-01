@@ -26,6 +26,7 @@ import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
@@ -309,10 +310,7 @@ export function ContratoFaturarDialog({
           // Sem documento nenhum: emitir uma factura é acto de software
           // certificado. Se o provider não emitiu, não há factura — e o WeGest
           // não desenha uma que se pareça com ela.
-          toast.warning(
-            'Fatura registada na conta-corrente, mas o documento fiscal NÃO foi emitido. ' +
-              'Reemita-o na lista de faturas — até lá não existe documento para entregar ao cliente.'
-          );
+          toast.warning(mensagemFalhaEmissao(kiErr), { duration: DURACAO_AVISO_FALHA_MS });
         }
       }
 

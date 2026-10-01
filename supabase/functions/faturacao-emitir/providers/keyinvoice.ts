@@ -42,6 +42,10 @@ function resolve(cfg: ProviderConfig) {
       NC: String(dt.NC ?? env('KI_DOCTYPE_NC') ?? '7'), // Nota de Crédito
       // RC não entra aqui — não tem doctype próprio (ver topo do ficheiro).
     } as Record<string, string>,
+    // Série por tipo (settings.docseries, ex.: { FT: 'FT26' }). Sem ela o KeyInvoice
+    // escolhe a série "por omissão" da conta — numa conta sem esse padrão responde
+    // "Série de documento inválida" (Dasp Rent Sul, 29-09-2026).
+    docseries: (s.docseries ?? {}) as Record<string, unknown>,
     defaultProduct: String(s.default_product || env('KI_DEFAULT_PRODUCT') || ''),
     defaultIdTax: String(s.default_idtax || env('KI_DEFAULT_IDTAX') || ''),
   };
@@ -81,6 +85,20 @@ async function authenticate(apiKey: string, endpoint: string): Promise<string> {
     throw new Error(`KeyInvoice authenticate falhou: ${d?.ErrorMessage || 'sem Sid'}`);
   }
   return d.Sid;
+}
+
+/** O artigo genérico das linhas é por conta: existir na DEMO não chega. Sem ele o
+ *  insertDocument recusa — foi o que travou 25 emissões da Dasp Rent Sul em 09/2026. */
+async function assertArtigoExiste(endpoint: string, sid: string, idProduct: string) {
+  if (!idProduct) return;
+  const d = await call(endpoint, 'productExists', { IdProduct: idProduct }, { sid });
+  if (!ok(d)) {
+    throw new Error(
+      `O artigo "${idProduct}" não existe nesta conta KeyInvoice ` +
+        `(${d?.ErrorMessage || 'productExists recusado'}). ` +
+        'Crie-o no painel do KeyInvoice, em Artigos, antes de emitir.'
+    );
+  }
 }
 
 /** getTaxes -> mapa { taxa(%) : IdTax }. Tolerante a nomes de campos. */
@@ -136,7 +154,9 @@ async function resolveIdClient(
 export const keyInvoiceProvider: FaturacaoProvider = {
   async health(cfg) {
     const r = resolve(cfg);
-    await authenticate(r.apiKey, r.endpoint);
+    const sid = await authenticate(r.apiKey, r.endpoint);
+    // "Testar ligação" apanha a conta mal preparada antes da primeira emissão.
+    await assertArtigoExiste(r.endpoint, sid, r.defaultProduct);
   },
 
   hasDoctype(tipo: EmitInput['tipo'], cfg) {
@@ -176,7 +196,15 @@ export const keyInvoiceProvider: FaturacaoProvider = {
         0
       );
       method = 'insertReceipt';
+      // Série do PRÓPRIO recibo (settings.docseries.RC), o mesmo nome de campo que
+      // setReceiptVoid usa para identificar um recibo. Sem ela o KeyInvoice escolhe
+      // a série "por omissão" da conta, que numa conta como a da Dasp Rent Sul não
+      // existe ("Série de documento inválida"). Nunca foi emitido um RC até 30-09-2026,
+      // por isso o nome do parâmetro está por confirmar contra a API: se recusar,
+      // a falha fica em failed_jobs com a mensagem exacta.
+      const rcSeries = r.docseries.RC;
       doc = {
+        ...(rcSeries ? { DocSeries: String(rcSeries) } : {}),
         DocLines: [
           {
             DocType: String(input.documentoOriginal.doctype),
@@ -202,10 +230,15 @@ export const keyInvoiceProvider: FaturacaoProvider = {
           ...(it.desconto ? { Discount: String(Number(it.desconto)) } : {}),
         };
       });
+      for (const idProduct of new Set(docLines.map((l) => l.IdProduct).filter(Boolean))) {
+        await assertArtigoExiste(r.endpoint, sid, idProduct);
+      }
       const comments = [input.observacoes, input.referencia_externa].filter(Boolean).join(' | ');
       method = 'insertDocument';
+      const docSeries = r.docseries[input.tipo];
       doc = {
         DocType: r.doctypes[input.tipo],
+        ...(docSeries ? { DocSeries: String(docSeries) } : {}),
         DocLines: docLines,
         ...clienteFields,
         ...(comments ? { Comments: comments } : {}),
