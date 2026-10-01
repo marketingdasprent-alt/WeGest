@@ -5,7 +5,7 @@
 -- pelo menos uma viatura não-slot não vendida. Tipo vem de viatura_tipos.
 -- ============================================================
 begin;
-select plan(17);
+select plan(18);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c01ff', 'bootstrap@catalogo.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -78,6 +78,11 @@ select is(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-00
 
 -- org sem tarifa_site: lista vazia, nunca erro
 select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000c0b00')), 0, 'org sem tarifa_site dá lista vazia');
+
+-- só o service_role (a edge function) executa as funções api_*
+select ok(
+  not has_function_privilege('authenticated', 'public.api_modelos(uuid,uuid,text)', 'EXECUTE'),
+  'authenticated não executa api_modelos');
 
 select * from finish();
 rollback;

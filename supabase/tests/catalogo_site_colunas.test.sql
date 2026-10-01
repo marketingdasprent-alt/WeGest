@@ -1,6 +1,6 @@
 -- Colunas do site no modelo, estações e tarifa; uma tarifa_site activa por org.
 begin;
-select plan(9);
+select plan(11);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000b01ff', 'bootstrap@catalogo.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -11,6 +11,17 @@ select has_column('public', 'viatura_modelos', 'lugares', 'modelo tem lugares');
 select has_column('public', 'viatura_modelos', 'imagem_url', 'modelo tem imagem_url');
 select has_column('public', 'estacoes', 'horario', 'estação tem horário');
 select has_column('public', 'renting_tarifas', 'tarifa_site', 'tarifa tem tarifa_site');
+
+-- bucket modelos-viaturas: 4 políticas; a leitura só para quem tem sessão
+-- (as imagens servem-se por /object/public/, o anónimo não lista o bucket).
+select is(
+  (select count(*)::int from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname like 'modelos_viaturas_%'),
+  4, 'as 4 políticas do bucket modelos-viaturas existem');
+select is(
+  (select roles from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname = 'modelos_viaturas_leitura'),
+  '{authenticated}'::name[], 'leitura do bucket só para authenticated');
 
 insert into public.viatura_marcas (id, org_id, nome) values
   ('00000000-0000-0000-0000-0000000b0aa1', '00000000-0000-0000-0000-0000000b0a00', 'Renault');
