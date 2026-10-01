@@ -393,6 +393,9 @@
     "src/components/admin/estacoes/estacaoForm.ts",
     "src/components/admin/estacoes/estacaoForm.test.ts",
     "src/pages/renting/tarifaSite.ts",
-    "src/pages/renting/tarifaSite.test.ts"
+    "src/pages/renting/tarifaSite.test.ts",
+    "src/pages/ApiDocsPage.tsx",
+    "src/pages/ApiDocsPage.test.tsx",
+    "src/lib/apiDocs.ts"
   ]
 }

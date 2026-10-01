@@ -79,8 +79,12 @@ export default defineConfig(({ mode }) => ({
         skipWaiting: false,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,ico,svg,woff2}'],
-        globIgnores: ['**/images/**'],
-        navigateFallbackDenylist: [/^\/~oauth/],
+        // O leitor da documentação da API (Scalar, ~1 MB gzip) só serve a rota
+        // pública /api/docs: não vai para o precache de todos os utilizadores.
+        globIgnores: ['**/images/**', '**/assets/ApiDocsPage-*'],
+        // /api/rent-a-car/* é a API externa (rewrite da Vercel), não uma rota da
+        // SPA: o SW não pode responder-lhe com o index.html.
+        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\/rent-a-car\//],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Nota: o vite-plugin-pwa precacheia SEMPRE o manifest.webmanifest (não
         // tem interruptor, e `manifestTransforms` não chega às entradas que ele

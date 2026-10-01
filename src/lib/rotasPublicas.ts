@@ -24,6 +24,8 @@ const EXATAS = new Set([
   '/privacidade',
   '/cookies',
   '/eliminar-conta',
+  // Documentação pública da API de rent-a-car (lida por programadores externos).
+  '/api/docs',
 ]);
 
 /**
