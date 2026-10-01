@@ -389,6 +389,10 @@
     "src/vite-env.d.ts",
     "src/components/viaturas/modelos/modeloSite.schema.ts",
     "src/components/viaturas/modelos/modeloSite.schema.test.ts",
-    "src/components/viaturas/modelos/ModeloSiteFields.tsx"
+    "src/components/viaturas/modelos/ModeloSiteFields.tsx",
+    "src/components/admin/estacoes/estacaoForm.ts",
+    "src/components/admin/estacoes/estacaoForm.test.ts",
+    "src/pages/renting/tarifaSite.ts",
+    "src/pages/renting/tarifaSite.test.ts"
   ]
 }
