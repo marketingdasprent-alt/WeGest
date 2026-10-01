@@ -386,6 +386,9 @@
     "src/utils/quadroLeaderboard.ts",
     "src/utils/quadroLive.types.ts",
     "src/utils/viaVerdePeriod.ts",
-    "src/vite-env.d.ts"
+    "src/vite-env.d.ts",
+    "src/components/viaturas/modelos/modeloSite.schema.ts",
+    "src/components/viaturas/modelos/modeloSite.schema.test.ts",
+    "src/components/viaturas/modelos/ModeloSiteFields.tsx"
   ]
 }
