@@ -80,6 +80,19 @@ export default {
           DEFAULT: 'hsl(var(--brand-navy))',
           foreground: 'hsl(var(--brand-navy-foreground))',
         },
+        // Blocos de código da documentação (escuros nos dois temas).
+        code: {
+          bg: 'hsl(var(--code-bg))',
+          fg: 'hsl(var(--code-fg))',
+          muted: 'hsl(var(--code-muted))',
+          linha: 'hsl(var(--code-linha))',
+        },
+        syntax: {
+          string: 'hsl(var(--syntax-string))',
+          number: 'hsl(var(--syntax-number))',
+          key: 'hsl(var(--syntax-key))',
+          keyword: 'hsl(var(--syntax-keyword))',
+        },
         popover: {
           DEFAULT: 'hsl(var(--popover))',
           foreground: 'hsl(var(--popover-foreground))',
