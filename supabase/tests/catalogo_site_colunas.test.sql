@@ -1,6 +1,6 @@
 -- Colunas do site no modelo, estações e tarifa; uma tarifa_site activa por org.
 begin;
-select plan(11);
+select plan(12);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000b01ff', 'bootstrap@catalogo.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -18,6 +18,11 @@ select is(
   (select count(*)::int from pg_policies
     where schemaname = 'storage' and tablename = 'objects' and policyname like 'modelos_viaturas_%'),
   4, 'as 4 políticas do bucket modelos-viaturas existem');
+select ok(
+  (select qual from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname = 'modelos_viaturas_leitura')
+    like '%foldername%',
+  'listagem do bucket só na pasta da própria organização');
 select is(
   (select roles from pg_policies
     where schemaname = 'storage' and tablename = 'objects' and policyname = 'modelos_viaturas_leitura'),

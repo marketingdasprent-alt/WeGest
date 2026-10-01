@@ -5,7 +5,7 @@
 -- pelo menos uma viatura não-slot não vendida. Tipo vem de viatura_tipos.
 -- ============================================================
 begin;
-select plan(18);
+select plan(19);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c01ff', 'bootstrap@catalogo.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -83,6 +83,13 @@ select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000
 select ok(
   not has_function_privilege('authenticated', 'public.api_modelos(uuid,uuid,text)', 'EXECUTE'),
   'authenticated não executa api_modelos');
+
+-- advisor function_search_path_mutable: search_path vazio e fixo
+-- (proconfig guarda-o como search_path="", formato confirmado em produção).
+select ok(
+  (select proconfig from pg_proc where oid = 'public.api_preco_json(numeric,numeric)'::regprocedure)
+    @> array['search_path=""'],
+  'api_preco_json tem search_path fixo e vazio');
 
 select * from finish();
 rollback;
