@@ -30,27 +30,36 @@ comment on column public.renting_tarifas.tarifa_site is
 
 -- Bucket público só para fotos de marketing dos modelos (nunca fotos de matrículas).
 -- Os ficheiros ficam em modelos-viaturas/<org_id>/<modelo_id>.<ext>.
-insert into storage.buckets (id, name, public)
-values ('modelos-viaturas', 'modelos-viaturas', true)
-on conflict (id) do nothing;
+-- Só imagens, até 2 MB: o limite vive no bucket, não no ecrã.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('modelos-viaturas', 'modelos-viaturas', true, 2097152, '{image/jpeg,image/png,image/webp}')
+on conflict (id) do update
+  set file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
 
+-- Leitura: o bucket é público, as imagens servem-se por /object/public/ sem
+-- passar por política SELECT. Esta só permite listar a quem tem sessão;
+-- o anónimo não enumera o bucket.
 drop policy if exists modelos_viaturas_leitura on storage.objects;
-create policy modelos_viaturas_leitura on storage.objects for select
+create policy modelos_viaturas_leitura on storage.objects for select to authenticated
   using (bucket_id = 'modelos-viaturas');
+
+-- Escrita: quem edita marcas e modelos (mesmo recurso das políticas
+-- mt_viatura_modelos_* no baseline), sempre na pasta da própria organização.
 drop policy if exists modelos_viaturas_escrita on storage.objects;
 create policy modelos_viaturas_escrita on storage.objects for insert to authenticated
   with check (bucket_id = 'modelos-viaturas'
               and (storage.foldername(name))[1] = public.get_current_org_id()::text
-              and public.is_current_user_admin());
+              and public.has_permission(auth.uid(), 'viaturas_marcas_modelos'));
 drop policy if exists modelos_viaturas_alterar on storage.objects;
 create policy modelos_viaturas_alterar on storage.objects for update to authenticated
   using (bucket_id = 'modelos-viaturas'
          and (storage.foldername(name))[1] = public.get_current_org_id()::text
-         and public.is_current_user_admin());
+         and public.has_permission(auth.uid(), 'viaturas_marcas_modelos'));
 drop policy if exists modelos_viaturas_apagar on storage.objects;
 create policy modelos_viaturas_apagar on storage.objects for delete to authenticated
   using (bucket_id = 'modelos-viaturas'
          and (storage.foldername(name))[1] = public.get_current_org_id()::text
-         and public.is_current_user_admin());
+         and public.has_permission(auth.uid(), 'viaturas_marcas_modelos'));
 
 notify pgrst, 'reload schema';
