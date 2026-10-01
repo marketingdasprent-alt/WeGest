@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
     .then(({ error }) => {
       if (error) console.error('[api-rent-a-car] auditoria falhou:', error.message);
     });
-  if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(auditoria);
+  if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(Promise.resolve(auditoria));
 
   return resposta;
 });
