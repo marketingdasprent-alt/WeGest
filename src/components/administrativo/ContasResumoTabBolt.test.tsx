@@ -7,6 +7,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
+// O aviso de abastecimentos suspeitos tem testes próprios; aqui só atrapalhava.
+vi.mock('@/hooks/useAbastecimentosSuspeitos', () => ({
+  useAbastecimentosSuspeitos: () => ({ data: undefined }),
+}));
+vi.mock('@/hooks/useCombustivelSemDono', () => ({
+  useCombustivelSemDono: () => ({ data: undefined }),
+}));
+
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasAccessToResource: () => true, isAdmin: true }),
 }));
@@ -36,6 +44,9 @@ vi.mock('./ContasResumoStats', () => ({ ContasResumoStats: () => null }));
 vi.mock('./ContasResumoBulkBar', () => ({ ContasResumoBulkBar: () => null }));
 vi.mock('./MotoristaResumoDialog', () => ({ MotoristaResumoDialog: () => null }));
 vi.mock('./ImportarDadosWizard', () => ({ ImportarDadosWizard: () => null }));
+vi.mock('./importacao-automatica/ImportacaoAutomaticaDialog', () => ({
+  ImportacaoAutomaticaDialog: () => null,
+}));
 vi.mock('./RelatorioPagamentoDialog', () => ({ RelatorioPagamentoDialog: () => null }));
 
 import { ContasResumoTab } from './ContasResumoTab';

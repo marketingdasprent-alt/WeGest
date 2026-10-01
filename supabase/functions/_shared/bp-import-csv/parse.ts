@@ -1,3 +1,11 @@
+/**
+ * Número do cartão BP ("Nº cartão" no export do portal), só dígitos.
+ * O Excel às vezes grava-o como decimal ("105,0"): conta a parte inteira.
+ */
+export function numeroCartaoBp(valor: string): string {
+  return (valor || '').trim().split(/[.,]/)[0].replace(/\D/g, '');
+}
+
 export function parseCsvLine(line: string, sep: string): string[] {
   const fields: string[] = [];
   let i = 0;

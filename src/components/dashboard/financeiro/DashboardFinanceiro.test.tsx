@@ -15,6 +15,15 @@ vi.mock('@/components/dashboard/DashboardInicioHeader', () => ({
   DashboardInicioHeader: ({ perfil }: { perfil?: string }) => <div>perfil:{perfil}</div>,
 }));
 
+// Quem está a olhar: o grupo Faturação troca "Precisa de atenção" pelos negativos.
+const perfil = vi.hoisted(() => ({ cargo: 'Financeiro' as string | null }));
+vi.mock('@/hooks/usePermissions', () => ({
+  usePermissions: () => ({ cargo: perfil.cargo, isAdmin: false }),
+}));
+vi.mock('@/components/dashboard/motoristas/MotoristasSemanaCard', () => ({
+  MotoristasSemanaCard: () => <div>cartão dos negativos</div>,
+}));
+
 vi.mock('@/hooks/useResumoPlataformas', () => ({
   useResumoPlataformas: () => ({
     loading: false,
@@ -94,7 +103,20 @@ vi.mock('@/hooks/useContasResumoSemana', () => ({
         reparacoes: 0,
         liquido: 405,
       },
+      {
+        _uid: 'm2',
+        motorista_id: 'inativo-1',
+        driver_uuid: 'd2',
+        driver_name: 'Motorista Que Saiu',
+        total_faturado: 300,
+        aluguer: 175,
+        combustivel: 0,
+        portagens: 0,
+        reparacoes: 0,
+        liquido: -120,
+      },
     ],
+    statusAtivoMap: { 'inativo-1': false },
   }),
 }));
 vi.mock('@/hooks/useFaturacaoMovimentos', () => ({
@@ -140,7 +162,10 @@ beforeAll(() => {
   };
 });
 
-beforeEach(() => navegou.mockClear());
+beforeEach(() => {
+  navegou.mockClear();
+  perfil.cargo = 'Financeiro';
+});
 
 function renderDashboard() {
   return render(
@@ -187,6 +212,8 @@ describe('DashboardFinanceiro', () => {
   it('mostra as contas de motoristas da ultima semana fechada', async () => {
     renderDashboard();
     await waitFor(() => expect(screen.getByText('Ruben Alexandre')).toBeInTheDocument());
+    // Inativos não entram: o saldo final de quem saiu fecha-se no separador Resumos.
+    expect(screen.queryByText('Motorista Que Saiu')).not.toBeInTheDocument();
     // O cartão não rola: a lista está cortada e o rodapé leva ao separador
     // onde ela está inteira.
     expect(screen.getByRole('button', { name: /Ver em Administrativo/ })).toBeInTheDocument();
@@ -229,5 +256,15 @@ describe('DashboardFinanceiro', () => {
     expect(screen.getByText(/Maria Silva/)).toBeInTheDocument();
     expect(screen.getByText(/2 por emitir/)).toBeInTheDocument();
     expect(screen.getByText(/Contrato #552/)).toBeInTheDocument();
+    expect(screen.queryByText('cartão dos negativos')).not.toBeInTheDocument();
+  });
+
+  it('grupo Faturação: os negativos da semana no lugar de "Precisa de atenção"', async () => {
+    perfil.cargo = 'Faturação';
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText('cartão dos negativos')).toBeInTheDocument());
+    expect(screen.queryByText('Precisa de atenção')).not.toBeInTheDocument();
+    // O resto da dashboard financeira continua igual.
+    expect(screen.getByText('Cartões Frota e OBE')).toBeInTheDocument();
   });
 });

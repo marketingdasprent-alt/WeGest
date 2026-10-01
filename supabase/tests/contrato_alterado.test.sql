@@ -12,7 +12,7 @@
 -- ============================================================
 
 begin;
-select plan(14);
+select plan(15);
 
 -- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes de
 -- existir organização (ver semana_plataforma_em_falta.test.sql).
@@ -107,8 +107,8 @@ select ok(
   (select corpo_template from public.notification_templates
     where org_id = '00000000-0000-0000-0000-000000190000'
       and codigo = 'contrato.alterado' and canal = 'email' and ativo)
-  like '%{{alteracoes_texto}}%',
-  'o template de email referencia {{alteracoes_texto}}, que o trigger fornece'
+  like '%{{antes_texto}}%{{depois_texto}}%',
+  'o template de email mostra {{antes_texto}} e {{depois_texto}}, que o trigger fornece'
 );
 
 -- ── O que NÃO é alteração ────────────────────────────────────────────────
@@ -155,8 +155,16 @@ select is(
   (select payload->>'mensagem' from public.domain_events
     where event_type = 'contrato.alterado'
       and entity_id = '00000000-0000-0000-0000-000000190001'),
-  'Contrato nº 77 de Motorista Contrato — viatura: sem viatura → CA-01-CO; km check-out: — → 12345',
-  'a mensagem nomeia o contrato, o motorista e as alterações'
+  'Contrato nº 77 de Motorista Contrato alterado. Viatura: sem viatura → CA-01-CO; Km check-out: sem dados → 12345.',
+  'a mensagem nomeia o contrato, o motorista e as alterações, sem travessões'
+);
+
+select is(
+  (select payload->>'depois_texto' from public.domain_events
+    where event_type = 'contrato.alterado'
+      and entity_id = '00000000-0000-0000-0000-000000190001'),
+  E'Viatura: CA-01-CO\nKm check-out: 12345',
+  'depois_texto: um campo por linha, para o email'
 );
 
 -- ── A cadeia até ao sino e à fila de email ───────────────────────────────
@@ -176,7 +184,7 @@ select ok(
   (select mensagem from public.notificacoes
     where tipo = 'contrato_alterado'
       and destinatario_id = '00000000-0000-0000-0000-000000190a01')
-  like 'Contrato nº 77 de Motorista Contrato — %',
+  like 'Contrato nº 77 de Motorista Contrato alterado. %',
   'a notificação traz a mensagem do payload'
 );
 
@@ -216,9 +224,9 @@ select is(
       and tipo = 'contrato_alterado'
       and destinatario_id = '00000000-0000-0000-0000-000000190a01')
     @> jsonb_build_array(
-         jsonb_build_object('mensagem', 'Contrato nº 77 de Motorista Contrato — viatura: sem viatura → CA-01-CO; km check-out: — → 12345'),
+         jsonb_build_object('mensagem', 'Contrato nº 77 de Motorista Contrato alterado. Viatura: sem viatura → CA-01-CO; Km check-out: sem dados → 12345.'),
          -- data_fim nasce preenchida por contratos_preencher_data_fim (início + 12 meses).
-         jsonb_build_object('mensagem', 'Contrato nº 77 de Motorista Contrato — estado: ativo → encerrado; fim: 01/09/2027 → 23/09/2026')
+         jsonb_build_object('mensagem', 'Contrato nº 77 de Motorista Contrato alterado. Estado: Ativo → Encerrado; Fim: 01/09/2027 → 23/09/2026.')
        ),
   true,
   'encerrar o contrato com o primeiro aviso por resolver junta o segundo facto ao mesmo aviso (não é suprimido)'

@@ -34,6 +34,10 @@ import { useContasResumoSemana } from '@/hooks/useContasResumoSemana';
 import { useFaturacaoMovimentos } from '@/hooks/useFaturacaoMovimentos';
 import { useCartoesObeResumo } from '@/hooks/useCartoesObeResumo';
 import { useRecibosVerdesResumo } from '@/hooks/useRecibosVerdesResumo';
+import { usePermissions } from '@/hooks/usePermissions';
+import { ehGrupoFaturacao } from '@/hooks/useDashboardTipo';
+import { ehInativo } from '@/utils/motoristasInativosResumo';
+import { MotoristasSemanaCard } from '@/components/dashboard/motoristas/MotoristasSemanaCard';
 
 const FaturacaoChart = lazy(() => import('./FaturacaoChart'));
 const RecibosDonutChart = lazy(() => import('./RecibosDonutChart'));
@@ -61,6 +65,8 @@ const PLATAFORMA_SUB: Record<string, string> = {
 
 export function DashboardFinanceiro() {
   const navigate = useNavigate();
+  // Pedido do Thiago (01/10): a Faturação vê os negativos da semana em vez de "Precisa de atenção".
+  const verNegativos = ehGrupoFaturacao(usePermissions().cargo);
   // Calculado uma vez: `new Date()` a cada render dava instantes sempre novos,
   // e um hook que dependesse deles voltava a pedir os dados em ciclo.
   const { semana, mes } = useMemo(() => {
@@ -99,10 +105,15 @@ export function DashboardFinanceiro() {
   const { pendentes, loading: loadingPendentes } = useFaturacaoPendentes();
   const { data: contasAReceber } = useContasAReceber();
   const { contratos: contratosARenovar } = useContratosARenovar();
-  const { resumos: contasMotoristas } = useContasResumoSemana(
+  const { resumos: todasContas, statusAtivoMap = {} } = useContasResumoSemana(
     semanaFechada?.inicio ?? mes.inicio,
     semanaFechada?.fim ?? mes.fim,
     semanaFechada ? true : null
+  );
+  // Só activos: o saldo final de quem saiu fecha-se no separador Resumos.
+  const contasMotoristas = useMemo(
+    () => todasContas.filter((r) => !ehInativo(r.motorista_id, statusAtivoMap)),
+    [todasContas, statusAtivoMap]
   );
   // Só as primeiras: o cartão não rola, quem quiser a lista toda tem o botão
   // no rodapé que leva ao separador onde ela vive.
@@ -402,23 +413,32 @@ export function DashboardFinanceiro() {
 
           {/* ── Coluna direita: atenção + cartões/OBE + contas ─────────────── */}
           <div className="space-y-4 xl:flex xl:min-h-0 xl:flex-col">
-            <Card className="flex shrink-0 flex-col p-4">
-              <h2 className="text-sm font-semibold">Precisa de atenção</h2>
-              {categoriasAlerta.length === 0 ? (
-                <p className="mt-3 text-[13px] text-muted-foreground">Nada a destacar por agora.</p>
-              ) : (
-                <div className="mt-1 flex flex-1 flex-col">
-                  {categoriasAlerta.map((categoria, i) => (
-                    <AlertaCategoriaRow
-                      key={categoria.id}
-                      categoria={categoria}
-                      index={i}
-                      onClick={() => navigate(categoria.href)}
-                    />
-                  ))}
-                </div>
-              )}
-            </Card>
+            {verNegativos ? (
+              // Altura fixa: o cartão enche a que lhe dão e rola por dentro.
+              <div className="shrink-0 lg:h-[21.5rem]">
+                <MotoristasSemanaCard />
+              </div>
+            ) : (
+              <Card className="flex shrink-0 flex-col p-4">
+                <h2 className="text-sm font-semibold">Precisa de atenção</h2>
+                {categoriasAlerta.length === 0 ? (
+                  <p className="mt-3 text-[13px] text-muted-foreground">
+                    Nada a destacar por agora.
+                  </p>
+                ) : (
+                  <div className="mt-1 flex flex-1 flex-col">
+                    {categoriasAlerta.map((categoria, i) => (
+                      <AlertaCategoriaRow
+                        key={categoria.id}
+                        categoria={categoria}
+                        index={i}
+                        onClick={() => navigate(categoria.href)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </Card>
+            )}
 
             <Card className="shrink-0 p-4">
               <h2 className="flex items-center gap-2 text-sm font-semibold">

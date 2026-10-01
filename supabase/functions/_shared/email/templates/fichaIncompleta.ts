@@ -37,5 +37,5 @@ export function fichaIncompletaTemplate(input: FichaIncompletaInput): { subject:
     emissorLogoUrl,
   });
 
-  return { subject: 'Lembrete — complete a sua ficha', html };
+  return { subject: 'Lembrete: complete a sua ficha', html };
 }

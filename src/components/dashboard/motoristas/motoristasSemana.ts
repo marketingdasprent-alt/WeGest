@@ -102,6 +102,14 @@ export function agruparPorGestor(
   });
 }
 
+/** Só os motoristas activos — quem saiu fecha o saldo no separador Resumos. */
+export function apenasAtivos(
+  linhas: readonly LinhaLiquido[],
+  idsAtivos: ReadonlySet<string>
+): LinhaLiquido[] {
+  return linhas.filter((l) => idsAtivos.has(l.motorista_id));
+}
+
 /** Só os líquidos negativos da semana, do mais negativo para o menos. */
 export function ordenarNegativos(linhas: LinhaLiquido[]): MotoristaNegativo[] {
   return linhas
