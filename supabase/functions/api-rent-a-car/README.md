@@ -15,31 +15,42 @@ ao resolver a chave → `503` (nunca `401`).
 
 **`ip_whitelist` só é fiável em chamadas directas** a
 `https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1/*`. Via
-`wegest.pt/api/rent-a-car` o pedido passa pelo rewrite da Vercel e o IP que a função vê é o
-da Vercel, não o do servidor do site. Quem precisar de whitelist usa o URL directo.
+`api.wegest.pt` o pedido passa por um Cloudflare Worker e o IP que a função vê é do
+Cloudflare, não o do servidor do site. Quem precisar de whitelist usa o URL directo.
 
 ## Limites
 
-- 60 pedidos/min por IP antes de olhar para a chave (`api-rent-a-car-anon`).
 - `rate_limit_per_minute` da chave (120 por omissão, preso a 1..10000) depois de autenticar.
+- 60 pedidos/min por IP (`api-rent-a-car-anon`) só para pedidos que falham a autenticação sem
+  chave conhecida (401). Quem tem chave válida nunca gasta este balde: atrás de um proxy o IP
+  é o mesmo para todos os sites.
 
 ## Base URL e rotas
 
-- Produção: `https://wegest.pt/api/rent-a-car/v1/*` (rewrite no `vercel.json`).
+- Produção: `https://api.wegest.pt/v1/*`, por um Cloudflare Worker (ver
+  `cloudflare/api-wegest/README.md`). O Worker não guarda nada em cache e passa método, query,
+  corpo e cabeçalhos tal como vêm.
 - Directo: `https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1/*`.
-- `GET /openapi.json` é público; `GET /health` e o catálogo exigem chave com `catalogo:read`.
+- `wegest.pt/api/rent-a-car/v1/*` (rewrite da Vercel) ainda existe, mas a firewall da Vercel
+  desafia rajadas de pedidos (403 "Vercel Security Checkpoint"): não usar para integrações.
+- `GET /v1` apresenta a API (`{ nome, versao, documentacao }`) e `GET /v1/openapi.json` é a
+  especificação; ambos públicos. `GET /v1/health` e o catálogo exigem chave com
+  `catalogo:read`.
 - Erros sempre `{ "erro": { "codigo", "mensagem", "detalhes"? } }`; `429` traz `Retry-After`.
-- Catálogo com `Cache-Control: private, max-age=300` e `Vary: Origin, X-API-Key,
-Authorization` (a resposta é por organização); só `openapi.json` é `public`.
-- CORS só para `https://wegest.pt` e `https://www.wegest.pt` (página `/api/docs`).
-- Cada pedido a `/v1` fica em `api_pedidos` (30 dias, sem corpo nem query string, caminho
-  até 200 caracteres), recusas incluídas: `401` e `429` por IP com org/chave a null, `403` e
-  `429` da chave com a org e a chave em causa.
+- Catálogo com `Cache-Control: private, max-age=300` e `Vary: Origin, X-API-Key, Authorization`
+  (a resposta é por organização); só a apresentação e o `openapi.json` são `public`.
+- CORS só para `https://wegest.pt`, `https://www.wegest.pt` e `https://docs.wegest.pt` (o
+  "experimentar" da documentação).
+- Cada pedido a `/v1/<recurso>` fica em `api_pedidos` (30 dias, sem corpo nem query string,
+  caminho até 200 caracteres), recusas incluídas: `401` e `429` anónimo com org/chave a null,
+  `403` e `429` da chave com a org e a chave em causa.
 
 ## Testes
 
 `deno test --allow-read --allow-env --allow-net=127.0.0.1 --node-modules-dir=none supabase/functions/_shared/api-rent-a-car`
-(auth, router, respostas, catálogo, OpenAPI, handler). As funções SQL têm pgTAP em `supabase/tests/api_*.test.sql`.
+(auth, router, respostas, catálogo, OpenAPI, handler). As funções SQL têm pgTAP em
+`supabase/tests/api_*.test.sql`. O Worker tem testes em `cloudflare/api-wegest/worker.test.js`
+(correm no `pnpm test`).
 
 ## Publicar
 

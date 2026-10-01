@@ -150,12 +150,38 @@ export const OPENAPI: Record<string, unknown> = {
       'Dinheiro em euros com 2 casas, sempre sem e com IVA. ' +
       'Erros sempre no envelope { "erro": { "codigo", "mensagem" } }. ' +
       'A ip_whitelist de uma chave só é fiável em chamadas directas a ' +
-      'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1; via wegest.pt ' +
-      'o IP visto é o da Vercel. No "experimentar" desta página use só uma chave de teste.',
+      'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1 (servidor "directo"); ' +
+      'via api.wegest.pt o pedido passa pelo Cloudflare e o IP visto não é o do seu servidor. ' +
+      'No "experimentar" da documentação use só uma chave de teste.',
   },
-  servers: [{ url: 'https://wegest.pt/api/rent-a-car/v1' }],
+  servers: [
+    { url: 'https://api.wegest.pt/v1' },
+    {
+      url: 'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1',
+      description: 'directo',
+    },
+  ],
   security: [{ ApiKey: [] }],
   paths: {
+    '/': {
+      get: {
+        summary: 'Apresentação da API',
+        security: [],
+        responses: {
+          '200': {
+            description: 'Nome, versão e onde está a documentação',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { nome: texto(), versao: texto(), documentacao: texto() },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/health': {
       get: {
         summary: 'Estado da API e da chave',

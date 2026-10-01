@@ -2,10 +2,11 @@
 // origens da página de documentação, cache opcional para o catálogo.
 import type { RateLimitDecision } from '../rate-limit/rateLimit.ts';
 
-/** Origens que podem ler a API no browser (página /api/docs). */
+/** Origens que podem ler a API no browser (documentação: /api/docs e docs.wegest.pt). */
 const ORIGENS_PERMITIDAS: ReadonlySet<string> = new Set([
   'https://wegest.pt',
   'https://www.wegest.pt',
+  'https://docs.wegest.pt',
 ]);
 
 /** Cabeçalhos CORS fixos. O Allow-Origin é posto por comCors, conforme o Origin do pedido. */

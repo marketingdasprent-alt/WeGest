@@ -10,7 +10,7 @@ Deno.test('toda a rota de catálogo está documentada, e só essas mais health/o
   }
   assert(doc.has('GET /health'));
   assert(doc.has('GET /openapi.json'));
-  const esperados = new Set<string>(['GET /health', 'GET /openapi.json']);
+  const esperados = new Set<string>(['GET /', 'GET /health', 'GET /openapi.json']);
   for (const r of ROTAS_CATALOGO) {
     esperados.add(`GET /${r.recurso}`);
     if (r.comId) esperados.add(`GET /${r.recurso}/{id}`);
@@ -53,5 +53,17 @@ Deno.test('openapi.json é público: sem segurança; o resto herda ApiKey', () =
   // deno-lint-ignore no-explicit-any
   const paths = OPENAPI.paths as Record<string, any>;
   assertEquals(paths['/openapi.json'].get.security, []);
+  assertEquals(paths['/'].get.security, []);
   assertEquals(paths['/modelos'].get.security, undefined);
+});
+
+Deno.test('servidor principal é api.wegest.pt/v1; o URL directo do Supabase vem em segundo', () => {
+  const servers = OPENAPI.servers as { url: string; description?: string }[];
+  assertEquals(servers[0].url, 'https://api.wegest.pt/v1');
+  assertEquals(
+    servers[1].url,
+    'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1'
+  );
+  assertEquals(servers[1].description, 'directo');
+  assertEquals(servers.length, 2);
 });
