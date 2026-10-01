@@ -41,7 +41,6 @@ vi.mock('./SectionViatura', () => ({ SectionViatura: marcador('sec-viatura') }))
 vi.mock('@/components/renting/shared/CondutoresFields', () => ({
   CondutoresFields: marcador('sec-condutores'),
 }));
-vi.mock('./SectionInfoAdicional', () => ({ SectionInfoAdicional: marcador('sec-info') }));
 vi.mock('./TrocaViaturaInfo', () => ({ TrocaViaturaInfo: marcador('sec-troca') }));
 vi.mock('@/components/renting/shared/ALDFields', () => ({ ALDFields: marcador('sec-ald') }));
 
@@ -78,6 +77,12 @@ describe('ContratoFormSecoes — contrato aberto', () => {
     expect(fieldsetTravadoDe('sec-viatura')).toBeNull();
   });
 
+  it('permite editar notas internas mantendo observações públicas bloqueadas', () => {
+    renderSecoes(true);
+    expect(screen.getByLabelText(/Observações Internas/)).toBeEnabled();
+    expect(screen.getByLabelText(/Observações Públicas/)).toBeDisabled();
+  });
+
   it('tudo o resto fica dentro do bloqueio, antes e depois da Viatura', () => {
     renderSecoes(true);
     for (const sec of [
@@ -88,7 +93,6 @@ describe('ContratoFormSecoes — contrato aberto', () => {
       'sec-troca',
       'sec-ald',
       'sec-condutores',
-      'sec-info',
     ]) {
       expect(fieldsetTravadoDe(sec)).not.toBeNull();
     }
@@ -104,7 +108,7 @@ describe('ContratoFormSecoes — contrato aberto', () => {
 
   it('sem contrato aberto não há bloqueio nenhum', () => {
     renderSecoes(false);
-    for (const sec of ['sec-regime', 'sec-cliente', 'sec-viatura', 'sec-info']) {
+    for (const sec of ['sec-regime', 'sec-cliente', 'sec-viatura']) {
       expect(fieldsetTravadoDe(sec)).toBeNull();
     }
   });

@@ -344,6 +344,7 @@ jobs:
             buckets_viaturas_fase0 \
             gerar_cobrancas_slot_tolerante \
             atribuicao_segue_estado_do_contrato \
+            tvde_parado_volta_a_cobrar \
             fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────

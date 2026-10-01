@@ -82,7 +82,7 @@ interface ContratoFormSecoesProps {
   contratoId?: string | null;
   /**
    * Contrato já aberto: tudo fica em cinzento e sem clique — MENOS a secção
-   * da Viatura, que é a única alteração permitida depois de o contrato
+   * da Viatura e as notas internas, que podem mudar depois de o contrato
    * existir (trocar o cliente de carro sem refazer o contrato).
    *
    * O bloqueio vive aqui, e não num `<fieldset disabled>` à volta do
@@ -476,8 +476,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
           onCriarNovoCliente={onCriarNovoCliente}
           onCriarNovoMotorista={onCriarNovoMotorista}
         />
-        <SectionInfoAdicional form={form} />
       </fieldset>
+      <SectionInfoAdicional form={form} travado={travado} />
 
       {contratoId && dialogAberto && (
         <PedirAlteracaoContratoDialog

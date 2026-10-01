@@ -10,9 +10,10 @@ import { SectionTitle } from './SectionTitle';
 
 interface SectionInfoAdicionalProps {
   form: UseFormReturn<ContratoFormValues>;
+  travado?: boolean;
 }
 
-export const SectionInfoAdicional: React.FC<SectionInfoAdicionalProps> = ({ form }) => (
+export const SectionInfoAdicional: React.FC<SectionInfoAdicionalProps> = ({ form, travado }) => (
   <div>
     <SectionTitle>Informação Adicional</SectionTitle>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -32,6 +33,7 @@ export const SectionInfoAdicional: React.FC<SectionInfoAdicionalProps> = ({ form
               <Textarea
                 className="bg-background min-h-[80px]"
                 placeholder="Visível ao cliente no contrato e relatórios..."
+                disabled={travado}
                 {...field}
                 value={field.value ?? ''}
               />
