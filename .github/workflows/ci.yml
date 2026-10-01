@@ -326,7 +326,8 @@ jobs:
             entrega_de_cartao_pela_hora \
             uma_parcela_por_semana \
             combustivel_chega_ao_motorista \
-            reimportar_substitui_a_semana
+            reimportar_substitui_a_semana \
+            id_de_plataforma_fica_na_ultima_ficha
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
