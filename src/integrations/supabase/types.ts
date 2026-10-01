@@ -376,6 +376,125 @@ export type Database = {
           },
         ]
       }
+      api_chaves: {
+        Row: {
+          api_key: string | null
+          api_key_hash: string | null
+          api_secret: string | null
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          escopo: string
+          expires_at: string | null
+          id: string
+          ip_whitelist: string[] | null
+          last_used_at: string | null
+          nome: string
+          org_id: string
+          permissoes: string[]
+          prefixo: string | null
+          rate_limit_per_minute: number
+          total_requests: number
+        }
+        Insert: {
+          api_key?: string | null
+          api_key_hash?: string | null
+          api_secret?: string | null
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          escopo: string
+          expires_at?: string | null
+          id?: string
+          ip_whitelist?: string[] | null
+          last_used_at?: string | null
+          nome: string
+          org_id: string
+          permissoes?: string[]
+          prefixo?: string | null
+          rate_limit_per_minute?: number
+          total_requests?: number
+        }
+        Update: {
+          api_key?: string | null
+          api_key_hash?: string | null
+          api_secret?: string | null
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          escopo?: string
+          expires_at?: string | null
+          id?: string
+          ip_whitelist?: string[] | null
+          last_used_at?: string | null
+          nome?: string
+          org_id?: string
+          permissoes?: string[]
+          prefixo?: string | null
+          rate_limit_per_minute?: number
+          total_requests?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "primavera_api_keys_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_pedidos: {
+        Row: {
+          api_chave_id: string | null
+          caminho: string
+          created_at: string
+          duracao_ms: number | null
+          estado_http: number
+          id: number
+          ip: string | null
+          metodo: string
+          org_id: string | null
+        }
+        Insert: {
+          api_chave_id?: string | null
+          caminho: string
+          created_at?: string
+          duracao_ms?: number | null
+          estado_http: number
+          id?: never
+          ip?: string | null
+          metodo: string
+          org_id?: string | null
+        }
+        Update: {
+          api_chave_id?: string | null
+          caminho?: string
+          created_at?: string
+          duracao_ms?: number | null
+          estado_http?: number
+          id?: never
+          ip?: string | null
+          metodo?: string
+          org_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_pedidos_api_chave_id_fkey"
+            columns: ["api_chave_id"]
+            isOneToOne: false
+            referencedRelation: "api_chaves"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_pedidos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       apify_credenciais_partilhadas: {
         Row: {
           apify_actor_id: string
@@ -2430,6 +2549,7 @@ export type Database = {
           created_at: string
           criado_por: string | null
           de: string
+          entregue_em: string | null
           id: string
           motorista_id: string | null
           org_id: string
@@ -2442,6 +2562,7 @@ export type Database = {
           created_at?: string
           criado_por?: string | null
           de: string
+          entregue_em?: string | null
           id?: string
           motorista_id?: string | null
           org_id: string
@@ -2454,6 +2575,7 @@ export type Database = {
           created_at?: string
           criado_por?: string | null
           de?: string
+          entregue_em?: string | null
           id?: string
           motorista_id?: string | null
           org_id?: string
@@ -6044,7 +6166,10 @@ export type Database = {
           ativa: boolean
           cidade: string | null
           created_at: string | null
+          horario: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
           morada: string | null
           nome: string
           org_id: string | null
@@ -6054,7 +6179,10 @@ export type Database = {
           ativa?: boolean
           cidade?: string | null
           created_at?: string | null
+          horario?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           morada?: string | null
           nome: string
           org_id?: string | null
@@ -6064,7 +6192,10 @@ export type Database = {
           ativa?: boolean
           cidade?: string | null
           created_at?: string | null
+          horario?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           morada?: string | null
           nome?: string
           org_id?: string | null
@@ -9475,65 +9606,6 @@ export type Database = {
           },
         ]
       }
-      primavera_api_keys: {
-        Row: {
-          api_key: string
-          api_secret: string | null
-          ativo: boolean
-          created_at: string
-          created_by: string | null
-          expires_at: string | null
-          id: string
-          ip_whitelist: string[] | null
-          last_used_at: string | null
-          nome: string
-          org_id: string
-          permissoes: string[]
-          rate_limit_per_minute: number
-          total_requests: number
-        }
-        Insert: {
-          api_key: string
-          api_secret?: string | null
-          ativo?: boolean
-          created_at?: string
-          created_by?: string | null
-          expires_at?: string | null
-          id?: string
-          ip_whitelist?: string[] | null
-          last_used_at?: string | null
-          nome: string
-          org_id: string
-          permissoes?: string[]
-          rate_limit_per_minute?: number
-          total_requests?: number
-        }
-        Update: {
-          api_key?: string
-          api_secret?: string | null
-          ativo?: boolean
-          created_at?: string
-          created_by?: string | null
-          expires_at?: string | null
-          id?: string
-          ip_whitelist?: string[] | null
-          last_used_at?: string | null
-          nome?: string
-          org_id?: string
-          permissoes?: string[]
-          rate_limit_per_minute?: number
-          total_requests?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "primavera_api_keys_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizacoes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       primavera_api_logs: {
         Row: {
           api_key_id: string | null
@@ -9582,7 +9654,7 @@ export type Database = {
             foreignKeyName: "primavera_api_logs_api_key_id_fkey"
             columns: ["api_key_id"]
             isOneToOne: false
-            referencedRelation: "primavera_api_keys"
+            referencedRelation: "api_chaves"
             referencedColumns: ["id"]
           },
           {
@@ -10498,6 +10570,7 @@ export type Database = {
           preco_semana: number | null
           reserva_max_minutos: number | null
           reserva_min_minutos: number | null
+          tarifa_site: boolean
           tipo: string
           updated_at: string
           valido_ate: string | null
@@ -10519,6 +10592,7 @@ export type Database = {
           preco_semana?: number | null
           reserva_max_minutos?: number | null
           reserva_min_minutos?: number | null
+          tarifa_site?: boolean
           tipo?: string
           updated_at?: string
           valido_ate?: string | null
@@ -10540,6 +10614,7 @@ export type Database = {
           preco_semana?: number | null
           reserva_max_minutos?: number | null
           reserva_min_minutos?: number | null
+          tarifa_site?: boolean
           tipo?: string
           updated_at?: string
           valido_ate?: string | null
@@ -13667,8 +13742,10 @@ export type Database = {
           data_validade: string | null
           ficheiro_url: string
           id: string
+          miniatura_url: string | null
           nome_ficheiro: string | null
           observacoes: string | null
+          ordem: number | null
           org_id: string | null
           tipo_documento: string
           updated_at: string | null
@@ -13680,8 +13757,10 @@ export type Database = {
           data_validade?: string | null
           ficheiro_url: string
           id?: string
+          miniatura_url?: string | null
           nome_ficheiro?: string | null
           observacoes?: string | null
+          ordem?: number | null
           org_id?: string | null
           tipo_documento: string
           updated_at?: string | null
@@ -13693,8 +13772,10 @@ export type Database = {
           data_validade?: string | null
           ficheiro_url?: string
           id?: string
+          miniatura_url?: string | null
           nome_ficheiro?: string | null
           observacoes?: string | null
+          ordem?: number | null
           org_id?: string | null
           tipo_documento?: string
           updated_at?: string | null
@@ -13826,30 +13907,48 @@ export type Database = {
       }
       viatura_modelos: {
         Row: {
+          ar_condicionado: boolean
           ativo: boolean
+          bagageira: number | null
+          caixa: string | null
           created_at: string
           id: string
+          imagem_url: string | null
+          lugares: number | null
           marca_id: string
           nome: string
           org_id: string
+          portas: number | null
           updated_at: string
         }
         Insert: {
+          ar_condicionado?: boolean
           ativo?: boolean
+          bagageira?: number | null
+          caixa?: string | null
           created_at?: string
           id?: string
+          imagem_url?: string | null
+          lugares?: number | null
           marca_id: string
           nome: string
           org_id: string
+          portas?: number | null
           updated_at?: string
         }
         Update: {
+          ar_condicionado?: boolean
           ativo?: boolean
+          bagageira?: number | null
+          caixa?: string | null
           created_at?: string
           id?: string
+          imagem_url?: string | null
+          lugares?: number | null
           marca_id?: string
           nome?: string
           org_id?: string
+          portas?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -14715,6 +14814,23 @@ export type Database = {
         }
         Relationships: []
       }
+      viatura_capas: {
+        Row: {
+          ficheiro_url: string | null
+          foto_id: string | null
+          miniatura_url: string | null
+          viatura_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viatura_documentos_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       acordo_cancelar: { Args: { p_acordo_id: string }; Returns: undefined }
@@ -14760,6 +14876,86 @@ export type Database = {
       }
       acordo_vista_devedor: { Args: { p_acordo_id: string }; Returns: Json }
       acordos_manutencao_diaria: { Args: { p_hoje: string }; Returns: Json }
+      alteracao_valor: {
+        Args: { p_campo: string; p_valor: string }
+        Returns: string
+      }
+      alteracoes_em_linhas: {
+        Args: { p_alteracoes: Json; p_lado: string }
+        Returns: string
+      }
+      alteracoes_numa_linha: { Args: { p_alteracoes: Json }; Returns: string }
+      api_categorias: { Args: { p_org_id: string }; Returns: Json }
+      api_chave_por_hash: {
+        Args: { p_hash: string }
+        Returns: {
+          ativo: boolean
+          escopo: string
+          expires_at: string
+          id: string
+          ip_whitelist: string[]
+          nome: string
+          org_id: string
+          permissoes: string[]
+          rate_limit_per_minute: number
+        }[]
+      }
+      api_chaves_criar: {
+        Args: {
+          p_escopo: string
+          p_expira_em: string
+          p_ip_whitelist: string[]
+          p_nome: string
+          p_permissoes: string[]
+        }
+        Returns: {
+          chave: string
+          id: string
+          prefixo: string
+        }[]
+      }
+      api_chaves_desativar: { Args: { p_id: string }; Returns: undefined }
+      api_coberturas: { Args: { p_org_id: string }; Returns: Json }
+      api_extras: { Args: { p_org_id: string }; Returns: Json }
+      api_iva_rent_a_car: { Args: { p_org_id: string }; Returns: number }
+      api_localizacoes: { Args: { p_org_id: string }; Returns: Json }
+      api_modelo: {
+        Args: { p_modelo_id: string; p_org_id: string }
+        Returns: Json
+      }
+      api_modelos: {
+        Args: { p_categoria?: string; p_org_id: string; p_tipo?: string }
+        Returns: Json
+      }
+      api_modelos_publicaveis: {
+        Args: { p_org_id: string }
+        Returns: {
+          ar_condicionado: boolean
+          bagageira: number
+          caixa: string
+          combustivel: string
+          frota: number
+          grupo_id: string
+          grupo_nome: string
+          imagem_url: string
+          lugares: number
+          marca: string
+          modelo: string
+          modelo_id: string
+          portas: number
+          preco_dia: number
+          tipo: string
+        }[]
+      }
+      api_preco_json: {
+        Args: { p_iva: number; p_valor: number }
+        Returns: Json
+      }
+      api_tarifa_site: { Args: { p_org_id: string }; Returns: string }
+      aplicar_textos_padrao_email: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       aprovar_candidatura_motorista: {
         Args: { p_candidatura_id: string }
         Returns: Json
@@ -14963,6 +15159,10 @@ export type Database = {
         Returns: number
       }
       bolt_resumo_recalcular_total: { Args: { p_id: string }; Returns: number }
+      bolt_substituir_semana_csv: {
+        Args: { p_chaves: string[]; p_integracao_id: string; p_periodo: string }
+        Returns: number
+      }
       bolt_sync_queue_claim: {
         Args: { p_max: number }
         Returns: {
@@ -15900,6 +16100,10 @@ export type Database = {
         Args: { p_contrato_id: string; p_km_fim?: number; p_km_inicio?: number }
         Returns: string
       }
+      reordenar_fotos_viatura: {
+        Args: { p_ids: string[]; p_viatura_id: string }
+        Returns: undefined
+      }
       reserva_tem_conflito: {
         Args: {
           p_data_fim: string
@@ -15952,6 +16156,15 @@ export type Database = {
         }
         Returns: Record<string, unknown>
       }
+      resolver_titular_por_cartao_em: {
+        Args: {
+          p_momento: string
+          p_numero: string
+          p_org_id: string
+          p_tipo: string
+        }
+        Returns: Record<string, unknown>
+      }
       responder_pedido_troca_kms: {
         Args: {
           p_aceite: boolean
@@ -15961,6 +16174,7 @@ export type Database = {
         Returns: undefined
       }
       retry_failed_job: { Args: { p_id: string }; Returns: undefined }
+      rotulo_campo_aviso: { Args: { p_chave: string }; Returns: string }
       salvar_precos_modelo_tarifa: {
         Args: {
           p_confirmar_remocao?: boolean
@@ -16030,6 +16244,14 @@ export type Database = {
           p_viagens?: number
         }
         Returns: string
+      }
+      uber_substituir_semana_csv: {
+        Args: {
+          p_integracao_id: string
+          p_periodo: string
+          p_uber_driver_ids: string[]
+        }
+        Returns: Json
       }
       unaccent: { Args: { "": string }; Returns: string }
       validar_convite_token: {
