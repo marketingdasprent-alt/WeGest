@@ -300,6 +300,17 @@ jobs:
             enviar_digests_diarios \
             emails_sem_travessoes
 
+      # ── Gate 2b: API externa de rent-a-car ────────────────────────────
+      # Chaves com hash, colunas do site no catálogo e funções api_* por
+      # organização. Nasceram a 2026-10-01 com a Fase A da API.
+      - name: pgTAP — API externa
+        if: steps.baseline.outputs.tem_baseline == 'true'
+        run: |
+          bash scripts/pgtap-suite.sh "API externa" \
+            api_chaves \
+            catalogo_site_colunas \
+            api_catalogo
+
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
       # 2026, ambos silenciosos: a conta da própria frota a entrar nos resumos
