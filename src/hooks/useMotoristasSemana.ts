@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import {
   agruparPorGestor,
+  apenasAtivos,
   escolherSemanaFechada,
   ordenarNegativos,
   type GestorContagem,
@@ -51,14 +52,15 @@ export function useMotoristasSemana(enabled = true) {
           : Promise.resolve({ data: [], error: null }),
         supabase
           .from('motoristas_ativos')
-          .select('gestor_responsavel')
+          .select('id, gestor_responsavel')
           .eq('status_ativo', true)
           .is('desativado_em', null),
       ]);
       if (liquidos.error) throw liquidos.error;
       if (motoristas.error) throw motoristas.error;
 
-      const linhas = liquidos.data ?? [];
+      const idsAtivos = new Set((motoristas.data ?? []).map((m) => m.id));
+      const linhas = apenasAtivos(liquidos.data ?? [], idsAtivos);
       const porGestor = agruparPorGestor(motoristas.data ?? []);
 
       return {

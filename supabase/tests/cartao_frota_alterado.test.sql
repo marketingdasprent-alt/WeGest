@@ -11,7 +11,7 @@
 -- ============================================================
 
 begin;
-select plan(14);
+select plan(16);
 
 -- Bootstrap: consome a vaga de "primeiro utilizador da instalação" antes de
 -- existir organização (ver semana_plataforma_em_falta.test.sql).
@@ -67,8 +67,8 @@ select ok(
   (select corpo_template from public.notification_templates
     where org_id = '00000000-0000-0000-0000-000000180000'
       and codigo = 'cartao_frota.alterado' and canal = 'email' and ativo)
-  like '%{{alteracoes_texto}}%',
-  'o template de email referencia {{alteracoes_texto}}, que o trigger fornece'
+  like '%{{antes_texto}}%{{depois_texto}}%',
+  'o template de email mostra {{antes_texto}} e {{depois_texto}}, que o trigger fornece'
 );
 
 -- ── O que NÃO é alteração ────────────────────────────────────────────────
@@ -129,12 +129,29 @@ select is(
 );
 
 -- 7. A mensagem nomeia o cartão e diz o que mudou — é o que aparece no sino.
-select ok(
+select is(
   (select payload->>'mensagem' from public.domain_events
     where event_type = 'cartao_frota.alterado'
-      and entity_id = '00000000-0000-0000-0000-000000180c01')
-  like 'Cartão Repsol nº 1006 — titular: sem titular → Motorista Cartao; estado: disponivel → em_uso%',
-  'a mensagem nomeia o cartão e as alterações'
+      and entity_id = '00000000-0000-0000-0000-000000180c01'),
+  'Cartão Repsol nº 1006 alterado. Titular: sem titular → Motorista Cartao; Estado: Disponível → Em uso; Data de entrega: sem data → 22/09/2026.',
+  'a mensagem nomeia o cartão e as alterações, sem travessões'
+);
+
+-- O email mostra o antes e o agora, um campo por linha.
+select is(
+  (select payload->>'antes_texto' from public.domain_events
+    where event_type = 'cartao_frota.alterado'
+      and entity_id = '00000000-0000-0000-0000-000000180c01'),
+  E'Titular: sem titular\nEstado: Disponível\nData de entrega: sem data',
+  'antes_texto: um campo por linha'
+);
+
+select is(
+  (select payload->>'depois_texto' from public.domain_events
+    where event_type = 'cartao_frota.alterado'
+      and entity_id = '00000000-0000-0000-0000-000000180c01'),
+  E'Titular: Motorista Cartao\nEstado: Em uso\nData de entrega: 22/09/2026',
+  'depois_texto: um campo por linha'
 );
 
 -- ── A cadeia até ao sino e à fila de email ───────────────────────────────
@@ -156,7 +173,7 @@ select ok(
   (select mensagem from public.notificacoes
     where tipo = 'cartao_frota_alterado'
       and destinatario_id = '00000000-0000-0000-0000-000000180a01')
-  like 'Cartão Repsol nº 1006 — %',
+  like 'Cartão Repsol nº 1006 alterado. %',
   'a notificação traz a mensagem do payload'
 );
 
@@ -196,8 +213,8 @@ select is(
       and tipo = 'cartao_frota_alterado'
       and destinatario_id = '00000000-0000-0000-0000-000000180a01')
     @> jsonb_build_array(
-         jsonb_build_object('mensagem', 'Cartão Repsol nº 1006 — titular: sem titular → Motorista Cartao; estado: disponivel → em_uso; data de entrega: — → 22/09/2026'),
-         jsonb_build_object('mensagem', 'Cartão Repsol nº 1006 — titular: Motorista Cartao → sem titular; estado: em_uso → disponivel; data de devolução: — → 22/09/2026')
+         jsonb_build_object('mensagem', 'Cartão Repsol nº 1006 alterado. Titular: sem titular → Motorista Cartao; Estado: Disponível → Em uso; Data de entrega: sem data → 22/09/2026.'),
+         jsonb_build_object('mensagem', 'Cartão Repsol nº 1006 alterado. Titular: Motorista Cartao → sem titular; Estado: Em uso → Disponível; Data de devolução: sem data → 22/09/2026.')
        ),
   true,
   'devolver o cartão com o primeiro aviso por resolver junta o segundo facto ao mesmo aviso no sino (não é suprimido)'

@@ -8,6 +8,7 @@ import {
   FileDown,
   ChevronDown,
   Upload,
+  Sparkles,
   HandCoins,
 } from 'lucide-react';
 import { pt } from 'date-fns/locale';
@@ -65,6 +66,7 @@ interface ContasResumoFiltrosProps {
   onExportExcel: () => void;
   canImportar: boolean;
   onOpenImportarWizard: () => void;
+  onOpenImportacaoAutomatica: () => void;
   onOpenRelatorioPagamento: () => void;
   filterRecibo: 'todos' | 'verde' | 'nao_verde';
   onFilterReciboChange: (value: 'todos' | 'verde' | 'nao_verde') => void;
@@ -73,6 +75,10 @@ interface ContasResumoFiltrosProps {
   filterGestor: string;
   onFilterGestorChange: (value: string) => void;
   gestorMap: Record<string, string>;
+  /** Inativos escondidos por omissão; ligado, voltam para fechar o saldo final. */
+  mostrarInativos?: boolean;
+  onMostrarInativosChange?: (value: boolean) => void;
+  inativosEscondidos?: number;
 }
 
 export function ContasResumoFiltros({
@@ -97,6 +103,7 @@ export function ContasResumoFiltros({
   onExportExcel,
   canImportar,
   onOpenImportarWizard,
+  onOpenImportacaoAutomatica,
   onOpenRelatorioPagamento,
   filterRecibo,
   onFilterReciboChange,
@@ -105,6 +112,9 @@ export function ContasResumoFiltros({
   filterGestor,
   onFilterGestorChange,
   gestorMap,
+  mostrarInativos = false,
+  onMostrarInativosChange,
+  inativosEscondidos = 0,
 }: ContasResumoFiltrosProps) {
   return (
     <div className="flex flex-col gap-3">
@@ -253,9 +263,15 @@ export function ContasResumoFiltros({
                 Exportar Excel
               </DropdownMenuItem>
               {canImportar && (
+                <DropdownMenuItem onClick={onOpenImportacaoAutomatica}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Importação automática
+                </DropdownMenuItem>
+              )}
+              {canImportar && (
                 <DropdownMenuItem onClick={onOpenImportarWizard}>
                   <Upload className="h-4 w-4 mr-2" />
-                  Importar Dados
+                  Importação manual (um ficheiro)
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -309,6 +325,22 @@ export function ContasResumoFiltros({
           <span className="w-1.5 h-1.5 rounded-full bg-current" />
           Líquido Negativo
         </button>
+        {onMostrarInativosChange && (mostrarInativos || inativosEscondidos > 0) && (
+          <button
+            onClick={() => onMostrarInativosChange(!mostrarInativos)}
+            aria-pressed={mostrarInativos}
+            title="Motoristas inativos com saldo por fechar nesta semana"
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+              mostrarInativos
+                ? 'bg-slate-600 border-slate-600 text-white'
+                : 'border-border text-muted-foreground hover:border-slate-500 hover:text-foreground'
+            )}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            Inativos ({inativosEscondidos})
+          </button>
+        )}
         {Object.keys(gestorMap).length > 0 && (
           <Select value={filterGestor} onValueChange={onFilterGestorChange}>
             <SelectTrigger className="h-7 text-xs w-auto min-w-[140px] border-border">
@@ -325,12 +357,16 @@ export function ContasResumoFiltros({
           </Select>
         )}
 
-        {(filterRecibo !== 'todos' || filterSaldo !== 'todos' || filterGestor !== 'todos') && (
+        {(filterRecibo !== 'todos' ||
+          filterSaldo !== 'todos' ||
+          filterGestor !== 'todos' ||
+          mostrarInativos) && (
           <button
             onClick={() => {
               onFilterReciboChange('todos');
               onFilterSaldoChange('todos');
               onFilterGestorChange('todos');
+              onMostrarInativosChange?.(false);
             }}
             className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 ml-1"
           >

@@ -147,7 +147,7 @@ select public.enviar_digests_diarios();
 select ok(
   (select payload_render->>'lista' from public.notification_queue
      where template_codigo = 'digest.resumo_diario' and destinatario = 'gestor@digest-h.pt'
-       and payload_render->>'total' = '1') like '%Matricula: AT-36-XD%',
+       and payload_render->>'total' = '1') like '%Matrícula: AT-36-XD%',
   'sem mensagem, a linha do digest mostra o payload (ex.: a matrícula)'
 );
 

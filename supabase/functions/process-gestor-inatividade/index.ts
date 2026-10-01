@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
     <p style="margin:0">${mensagem}</p>
   </div>
   <div style="text-align:center;color:#888;font-size:12px;padding:16px">
-    <p>Email automático — ${orgNome}. Não responda a esta mensagem.</p>
+    <p>Email automático de ${orgNome}. Não responda a esta mensagem.</p>
   </div>
 </body>
 </html>`;

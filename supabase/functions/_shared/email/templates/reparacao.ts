@@ -26,7 +26,7 @@ export function reparacaoConcluidaTemplate(input: ReparacaoConcluidaInput): { su
     emissorLogoUrl,
     ctaUrl,
   } = input;
-  const veiculo = [matricula, marcaModelo].filter(Boolean).join(' — ');
+  const veiculo = [matricula, marcaModelo].filter(Boolean).join(', ');
 
   const corpo = `
       <p style="margin:0 0 8px"><strong>Viatura:</strong> ${veiculo}</p>
@@ -48,7 +48,7 @@ export function reparacaoConcluidaTemplate(input: ReparacaoConcluidaInput): { su
     emissorLogoUrl,
   });
 
-  return { subject: `Reparação concluída — ${matricula} (valor a cobrar)`, html };
+  return { subject: `Reparação concluída: ${matricula} (valor a cobrar)`, html };
 }
 
 // Reparação aberta há demasiado tempo — alerta interno ao gestor, sem
@@ -68,7 +68,7 @@ export function reparacaoAbertaDemoradaTemplate(input: ReparacaoAbertaDemoradaIn
   html: string;
 } {
   const { matricula, marcaModelo, descricaoReparacao, diasAberta, destinatarioNome, empresaNome, ctaUrl } = input;
-  const veiculo = [matricula, marcaModelo].filter(Boolean).join(' — ');
+  const veiculo = [matricula, marcaModelo].filter(Boolean).join(', ');
 
   const corpo = `
       <p style="margin:0 0 8px"><strong>Viatura:</strong> ${veiculo}</p>
@@ -88,5 +88,5 @@ export function reparacaoAbertaDemoradaTemplate(input: ReparacaoAbertaDemoradaIn
     ctaUrl,
   });
 
-  return { subject: `⚠️ Reparação parada há ${diasAberta} dias — ${matricula}`, html };
+  return { subject: `⚠️ Reparação parada há ${diasAberta} dias: ${matricula}`, html };
 }

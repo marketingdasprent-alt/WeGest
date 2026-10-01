@@ -22,6 +22,10 @@ describe('ambitoDoUtilizador', () => {
     }
   });
 
+  it('o Gestor TVDE dispensa os cartões Inativas, Todos os Tipos e os por tipo', () => {
+    expect(TVDE.cartoesOcultos).toEqual(['inativas', 'todos_os_tipos', 'tipos']);
+  });
+
   it('o admin nunca tem âmbito — vê a frota toda, mesmo com cargo de Gestor TVDE', () => {
     expect(ambitoDoUtilizador({ isAdmin: true, cargo: 'Gestor TVDE' })).toBeNull();
   });

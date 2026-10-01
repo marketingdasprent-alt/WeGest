@@ -88,10 +88,12 @@ export function MovimentoRepeticaoFields({
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>Nº de Semanas / Parcelas</Label>
+            <Label htmlFor="num-semanas-acordo">Nº de Semanas / Parcelas</Label>
             <Input
+              id="num-semanas-acordo"
               type="number"
               min="1"
+              placeholder="ex.: 4"
               value={numSemanas}
               onChange={(e) => onNumSemanasChange(e.target.value)}
               autoFocus
@@ -108,6 +110,13 @@ export function MovimentoRepeticaoFields({
         </div>
 
         <NotaDataMovimento />
+
+        {numSemanas.trim() === '1' && valorNum > 0 && semanaInicio && (
+          <p role="note" className="text-xs font-medium text-warning">
+            Com 1 semana, os €{valorNum.toFixed(2)} são descontados todos de uma vez na semana de{' '}
+            {format(parseISO(semanaInicio), 'dd/MM/yyyy', { locale: pt })}.
+          </p>
+        )}
 
         {isRecurring && valorNum > 0 && (
           <ResumoParcelas numSemanas={numSemanas} semanaInicio={semanaInicio} valorNum={valorNum} />
@@ -132,7 +141,7 @@ export function MovimentoRepeticaoFields({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="nenhuma">Não — lançamento único</SelectItem>
-            <SelectItem value="parcelas">Parcelas fixas (gera já N semanas)</SelectItem>
+            <SelectItem value="parcelas">Parcelas semanais (uma por semana, gera já)</SelectItem>
             <SelectItem value="semanal">Recorrência semanal (automática)</SelectItem>
             <SelectItem value="mensal">Recorrência mensal (semana fixa do mês)</SelectItem>
           </SelectContent>
@@ -142,10 +151,12 @@ export function MovimentoRepeticaoFields({
       <div className="grid grid-cols-2 gap-4">
         {repeticao === 'parcelas' && (
           <div className="space-y-1.5">
-            <Label>Nº de Semanas / Parcelas</Label>
+            <Label htmlFor="num-semanas-parcelas">Nº de Semanas / Parcelas</Label>
             <Input
+              id="num-semanas-parcelas"
               type="number"
-              min="1"
+              min="2"
+              placeholder="ex.: 4"
               value={numSemanas}
               onChange={(e) => onNumSemanasChange(e.target.value)}
             />

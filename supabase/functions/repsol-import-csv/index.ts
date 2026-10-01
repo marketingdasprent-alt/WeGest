@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { contarComTitular } from '../_shared/combustivel/titular.ts';
 import {
   stripAcc,
   parseNumber,
@@ -412,8 +413,6 @@ Deno.serve(async (req) => {
       const matriculaNorm = parseMatricula(matriculaRaw);
       const viaturaId = matriculaNorm ? matriculaMap.get(matriculaNorm) : null;
 
-      if (motoristaId) matched++;
-
       // Usar Map para pre-deduplicar as transações gémeas do pacote.
       if (upsertMap.has(txId)) dedupedInPayload++;
       upsertMap.set(txId, {
@@ -434,11 +433,15 @@ Deno.serve(async (req) => {
 
     const upsertBatch = Array.from(upsertMap.values());
     if (upsertBatch.length > 0) {
-      const { error } = await supabase
+      const { data: gravadas, error } = await supabase
         .from('repsol_transacoes')
-        .upsert(upsertBatch, { onConflict: 'integracao_id,transaction_id' });
-      if (!error) imported = upsertBatch.length;
-      else console.error('Bulk upsert error:', error);
+        .upsert(upsertBatch, { onConflict: 'integracao_id,transaction_id' })
+        .select('motorista_id, cliente_id');
+      if (!error) {
+        imported = upsertBatch.length;
+        // Conta o que ficou gravado: é o gatilho que decide o titular.
+        matched = contarComTitular(gravadas);
+      } else console.error('Bulk upsert error:', error);
     }
 
     const firstRow = rows[0] ?? null;
@@ -448,6 +451,7 @@ Deno.serve(async (req) => {
         imported,
         matched,
         skipped,
+        sem_titular: imported - matched,
         deduped_in_payload: dedupedInPayload,
         total: rows.length,
         // debug_headers: nomes das colunas recebidas — alimenta o diagnóstico do

@@ -2,10 +2,11 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
+import { carregarGrupoPrevisto, type GrupoPrevisto } from '@/lib/verComoGrupo';
 
 export type AppRole = 'admin' | 'gestor_tvde' | 'gestor_comercial' | 'colaborador';
 
-const CARGO_MOTORISTA_ID = 'a0000000-0000-0000-0000-000000000001';
+export const CARGO_MOTORISTA_ID = 'a0000000-0000-0000-0000-000000000001';
 
 interface PermissionsState {
   isAdmin: boolean;
@@ -22,6 +23,8 @@ interface PermissionsContextType extends PermissionsState {
   hasAccessToResource: (recurso: string) => boolean;
   canEdit: (recurso: string) => boolean;
   refreshPermissions: () => Promise<void>;
+  /** Só em `pnpm dev`: grupo que o admin está a pré-visualizar ("Ver como grupo"). */
+  verComo: GrupoPrevisto | null;
 }
 
 const DEFAULT_STATE: PermissionsState = {
@@ -48,6 +51,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const lastFetchedUserIdRef = useRef<string | null | undefined>(undefined);
 
   const [state, setState] = useState<PermissionsState>(DEFAULT_STATE);
+  const [verComo, setVerComo] = useState<GrupoPrevisto | null>(null);
 
   const fetchPermissions = useCallback(async () => {
     const currentFetchId = ++fetchIdRef.current;
@@ -56,6 +60,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     if (!user || !orgId) {
       lastFetchedUserIdRef.current = null;
+      setVerComo(null);
       setState({ ...DEFAULT_STATE, loading: false, initialized: true });
       return;
     }
@@ -75,6 +80,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (membershipError && currentFetchId === fetchIdRef.current) {
           console.error('[PermissionsContext] Sem membership na org ativa:', membershipError);
           lastFetchedUserIdRef.current = user.id;
+          setVerComo(null);
           setState({ ...DEFAULT_STATE, loading: false, initialized: true });
         }
         return;
@@ -97,10 +103,20 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       if (currentFetchId !== fetchIdRef.current) return;
 
+      // "Ver como grupo" (só dev): o admin passa a ter as permissões do grupo escolhido.
+      const previsto =
+        import.meta.env.DEV && membership.is_admin ? await carregarGrupoPrevisto(orgId) : null;
+      if (currentFetchId !== fetchIdRef.current) return;
+      setVerComo(previsto);
+      if (previsto) tipoUtilizador = 'colaborador';
+
       const profile = {
-        is_admin: membership.is_admin as boolean,
-        cargo_id: (membership.cargo_id as string | null) ?? null,
-        cargo: (membership as { cargos?: { nome?: string } | null }).cargos?.nome ?? null,
+        is_admin: previsto ? false : (membership.is_admin as boolean),
+        cargo_id: previsto?.id ?? (membership.cargo_id as string | null) ?? null,
+        cargo:
+          previsto?.nome ??
+          (membership as { cargos?: { nome?: string } | null }).cargos?.nome ??
+          null,
         tipo_utilizador: tipoUtilizador,
       };
 
@@ -251,6 +267,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         hasAccessToResource,
         canEdit,
         refreshPermissions: fetchPermissions,
+        verComo,
       }}
     >
       {children}

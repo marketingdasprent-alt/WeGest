@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
-import { parseCsv } from '../_shared/bp-import-csv/parse.ts';
+import { numeroCartaoBp, parseCsv } from '../_shared/bp-import-csv/parse.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,13 +61,6 @@ function parseNumber(val: string): number | null {
   return isNaN(n) ? null : n;
 }
 
-/** Normalize name for comparison: lowercase, trim, remove accents */
-function normalizeName(name: string): string {
-  return (name || '').toLowerCase().trim()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ');
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -127,48 +120,31 @@ Deno.serve(async (req) => {
       console.log(`bp-import-csv: Sample row: ${JSON.stringify(rows[0])}`);
     }
 
-    // Load drivers with fuel cards or name
-    const { data: motoristas } = await supabase
-      .from('motoristas_ativos')
-      .select('id, nome, cartao_frota, cartao_bp, cartao_repsol, cartao_edp')
-      .eq('org_id', orgId);
-
-    // Build card→motorista lookups
-    const cardMapFull = new Map<string, { id: string; nome: string }>();
-    const cardMapSuffix3 = new Map<string, { id: string; nome: string }>();
-    const cardMapSuffix4 = new Map<string, { id: string; nome: string }>();
-    const nameMap = new Map<string, { id: string; nome: string }>();
-
-    for (const m of motoristas || []) {
-      // Name-based lookup
-      const normalName = normalizeName(m.nome);
-      if (normalName) nameMap.set(normalName, { id: m.id, nome: m.nome });
-
-      // Check all possible fuel card fields
-      const allCards = [m.cartao_frota, m.cartao_bp, m.cartao_repsol, m.cartao_edp]
-        .filter(c => !!c)
-        .join('/');
-
-      if (!allCards) continue;
-      
-      const parts = allCards.split('/');
-      for (const part of parts) {
-        const sanitized = sanitizeCard(part);
-        if (sanitized.length > 0) {
-          cardMapFull.set(sanitized, { id: m.id, nome: m.nome });
-          if (sanitized.length >= 4) {
-            cardMapSuffix4.set(sanitized.slice(-4), { id: m.id, nome: m.nome });
-          }
-          if (sanitized.length >= 3) {
-            cardMapSuffix3.set(sanitized.slice(-3), { id: m.id, nome: m.nome });
-          }
-        }
-      }
-    }
-    console.log(`bp-import-csv: Full card map: ${cardMapFull.size}, suffix4: ${cardMapSuffix4.size}, suffix3: ${cardMapSuffix3.size}, names: ${nameMap.size}`);
-
     let imported = 0, skipped = 0, matched = 0, unmatched = 0;
     const errors: string[] = [];
+
+    // O titular é resolvido pelo gatilho resolver_motorista (histórico de
+    // Cartões Frota), que lê o número através de bp_cartoes. Sem esta ligação
+    // os CSV de Setembro de 2026 entraram todos sem motorista.
+    const cartoesBp = new Map<string, string>();
+    const cartaoBpId = async (numero: string): Promise<string | null> => {
+      const emCache = cartoesBp.get(numero);
+      if (emCache) return emCache;
+      const { data, error } = await supabase
+        .from('bp_cartoes')
+        .upsert(
+          { integracao_id, org_id: orgId, card_id: `csv:${numero}`, card_number: numero },
+          { onConflict: 'integracao_id,card_id' },
+        )
+        .select('id')
+        .single();
+      if (error || !data) {
+        errors.push(`Cartão ${numero}: ${error?.message ?? 'sem id'}`);
+        return null;
+      }
+      cartoesBp.set(numero, data.id);
+      return data.id;
+    };
 
     for (const row of rows) {
       try {
@@ -180,7 +156,6 @@ Deno.serve(async (req) => {
         const fuelType = findField(row, ['Produto', 'Product', 'Fuel', 'Combustível', 'Type']);
         const station = findField(row, ['Posto', 'Station', 'Site', 'Local']);
         const location = findField(row, ['Localização', 'Location', 'City', 'Cidade', 'Address']);
-        const profileName = findField(row, ['Nome Perfil', 'Nome', 'Driver', 'Motorista']);
 
         if (!dateStr) { skipped++; continue; }
         const transactionDate = parseBpDate(dateStr);
@@ -190,16 +165,10 @@ Deno.serve(async (req) => {
         const quantity = parseNumber(quantityStr);
         const txId = `bp-${sanitizeCard(cardNumber)}-${dateStr.replace(/\D/g, '')}`;
 
-        // Match driver: full card → suffix4 → suffix3 → name
-        const sanitizedCard = sanitizeCard(cardNumber);
-        let driverMatch = sanitizedCard ? cardMapFull.get(sanitizedCard) : undefined;
-        if (!driverMatch && sanitizedCard.length >= 4) driverMatch = cardMapSuffix4.get(sanitizedCard.slice(-4));
-        if (!driverMatch && sanitizedCard.length >= 3) driverMatch = cardMapSuffix3.get(sanitizedCard.slice(-3));
-        if (!driverMatch && profileName) driverMatch = nameMap.get(normalizeName(profileName));
+        const numeroCartao = numeroCartaoBp(cardNumber);
+        const cardId = numeroCartao ? await cartaoBpId(numeroCartao) : null;
 
-        if (driverMatch) { matched++; } else if (sanitizedCard || profileName) { unmatched++; }
-
-        const { error: upsertError } = await supabase
+        const { data: gravada, error: upsertError } = await supabase
           .from('bp_transacoes')
           .upsert({
             integracao_id,
@@ -211,9 +180,13 @@ Deno.serve(async (req) => {
             fuel_type: fuelType || null,
             station_name: station || null,
             station_location: location || null,
-            motorista_id: driverMatch?.id || null,
+            card_id: cardId,
             raw_data: row,
-          }, { onConflict: 'integracao_id,transaction_id' });
+          }, { onConflict: 'integracao_id,transaction_id' })
+          .select('motorista_id, cliente_id')
+          .single();
+
+        if (gravada?.motorista_id || gravada?.cliente_id) { matched++; } else if (numeroCartao) { unmatched++; }
 
         if (upsertError) {
           if (upsertError.message?.includes('unique') || upsertError.message?.includes('duplicate')) {
@@ -235,7 +208,7 @@ Deno.serve(async (req) => {
       .eq('id', integracao_id)
       .eq('org_id', orgId);
 
-    const result = { success: true, total_rows: rows.length, imported, skipped, matched, unmatched, errors: errors.slice(0, 10) };
+    const result = { success: true, total_rows: rows.length, imported, skipped, matched, unmatched, sem_titular: imported - matched, errors: errors.slice(0, 10) };
     console.log('bp-import-csv: Result:', JSON.stringify(result));
 
     return new Response(JSON.stringify(result),

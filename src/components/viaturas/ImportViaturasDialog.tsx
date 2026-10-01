@@ -21,6 +21,9 @@ import { useOrgId } from '@/contexts/TenantContext';
 
 interface ImportViaturasDialogProps {
   onImportComplete: () => void;
+  /** Aberto de fora (ex.: menu "⋯" da Frota) — nesse caso não desenha o botão próprio. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface ImportSummary {
@@ -34,9 +37,19 @@ interface ImportSummary {
   warnings: string[];
 }
 
-export function ImportViaturasDialog({ onImportComplete }: ImportViaturasDialogProps) {
+export function ImportViaturasDialog({
+  onImportComplete,
+  open: openExterno,
+  onOpenChange,
+}: ImportViaturasDialogProps) {
   const orgId = useOrgId();
-  const [open, setOpen] = useState(false);
+  const [openInterno, setOpenInterno] = useState(false);
+  const controlado = openExterno !== undefined;
+  const open = controlado ? openExterno : openInterno;
+  const setOpen = (valor: boolean) => {
+    if (!controlado) setOpenInterno(valor);
+    onOpenChange?.(valor);
+  };
   const [file, setFile] = useState<File | null>(null);
   const [rows, setRows] = useState<Record<string, unknown>[] | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -160,12 +173,14 @@ export function ImportViaturasDialog({ onImportComplete }: ImportViaturasDialogP
         if (!nextOpen) resetState();
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="outline" className="w-full sm:w-auto">
-          <FileSpreadsheet className="h-4 w-4 mr-2" />
-          Importar Excel
-        </Button>
-      </DialogTrigger>
+      {!controlado && (
+        <DialogTrigger asChild>
+          <Button variant="outline" className="w-full sm:w-auto">
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Importar Excel
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar viaturas</DialogTitle>

@@ -39,9 +39,9 @@ export function calendarNotificationTemplate(input: CalendarNotificationInput): 
   const matriculaFormatada = formatMatricula(input.matricula);
   const cidadeFormatada = input.cidade ? input.cidade.toUpperCase() : '';
   const tipoLabel = TIPO_LABELS[input.tipo] || input.tipo;
-  const titulo = `${matriculaFormatada}${cidadeFormatada ? ' - ' + cidadeFormatada : ''}`;
+  const titulo = `${matriculaFormatada}${cidadeFormatada ? ', ' + cidadeFormatada : ''}`;
 
-  const subject = `Novo evento: ${tipoLabel} - ${matriculaFormatada}${cidadeFormatada ? ' ' + cidadeFormatada : ''}`;
+  const subject = `Novo evento: ${tipoLabel}, ${matriculaFormatada}${cidadeFormatada ? ' ' + cidadeFormatada : ''}`;
 
   const html = emailLayout({
     titulo: 'Novo Evento no Calendário',

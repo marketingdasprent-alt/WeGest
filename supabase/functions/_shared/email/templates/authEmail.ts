@@ -1,3 +1,7 @@
+import { botaoEmail } from './botao.ts';
+
+const BOTAO = { cor: '#000000', tamanhoLetra: 16 };
+
 export function passwordRecoveryTemplate(actionLink: string): { subject: string; html: string } {
   const html = `
         <!DOCTYPE html>
@@ -19,9 +23,7 @@ export function passwordRecoveryTemplate(actionLink: string): { subject: string;
             <p>Recebemos um pedido para redefinir a palavra-passe da sua conta no WeGest.</p>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${actionLink}" style="background: #000000; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Redefinir palavra-passe
-              </a>
+              ${botaoEmail(actionLink, 'Redefinir palavra-passe', BOTAO)}
             </div>
 
             <p>Se o botão não funcionar, copie e cole o link abaixo no seu navegador:</p>
@@ -38,7 +40,7 @@ export function passwordRecoveryTemplate(actionLink: string): { subject: string;
         </body>
         </html>
       `;
-  return { subject: 'Redefinir a sua palavra-passe - WeGest', html };
+  return { subject: 'Redefinir a sua palavra-passe no WeGest', html };
 }
 
 export function motoristaOnboardingTemplate(actionLink: string): { subject: string; html: string } {
@@ -59,12 +61,10 @@ export function motoristaOnboardingTemplate(actionLink: string): { subject: stri
           <div style="background: #f9f9f9; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
             <h2 style="color: #333; margin-top: 0;">Defina a sua palavra-passe</h2>
             <p>Olá,</p>
-            <p>A sua empresa já criou o seu perfil de motorista no WeGest. Para aceder à sua conta — com os seus documentos e dados já preenchidos — só falta definir uma palavra-passe.</p>
+            <p>A sua empresa já criou o seu perfil de motorista no WeGest. Os seus documentos e dados já estão preenchidos. Para aceder à sua conta, só falta definir uma palavra-passe.</p>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${actionLink}" style="background: #000000; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Definir palavra-passe
-              </a>
+              ${botaoEmail(actionLink, 'Definir palavra-passe', BOTAO)}
             </div>
 
             <p>Se o botão não funcionar, copie e cole o link abaixo no seu navegador:</p>
@@ -83,7 +83,7 @@ export function motoristaOnboardingTemplate(actionLink: string): { subject: stri
         </body>
         </html>
       `;
-  return { subject: 'Ative a sua conta de motorista - WeGest', html };
+  return { subject: 'Ative a sua conta de motorista no WeGest', html };
 }
 
 export function magicLinkTemplate(actionLink: string): { subject: string; html: string } {
@@ -107,9 +107,7 @@ export function magicLinkTemplate(actionLink: string): { subject: string; html: 
             <p>Clique no botão abaixo para aceder à sua conta no WeGest de forma rápida e segura:</p>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${actionLink}" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Aceder à conta
-              </a>
+              ${botaoEmail(actionLink, 'Aceder à conta', { cor: '#667eea', tamanhoLetra: 16 })}
             </div>
 
             <p>Se o botão não funcionar, copie e cole o link abaixo no seu navegador:</p>
@@ -126,7 +124,7 @@ export function magicLinkTemplate(actionLink: string): { subject: string; html: 
         </body>
         </html>
       `;
-  return { subject: 'O seu link de acesso - WeGest', html };
+  return { subject: 'O seu link de acesso ao WeGest', html };
 }
 
 /**
@@ -160,16 +158,14 @@ export function orgConfirmacaoTemplate(
             <p>A organização <strong>${empresa}</strong> foi registada no WeGest com este email como administrador. Para ativar a conta e entrar, confirme que este email é seu:</p>
 
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${actionLink}" style="background: #000000; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">
-                Confirmar email e entrar
-              </a>
+              ${botaoEmail(actionLink, 'Confirmar email e entrar', BOTAO)}
             </div>
 
             <p>Se o botão não funcionar, copie e cole o link abaixo no seu navegador:</p>
             <p style="background: #e9ecef; padding: 15px; border-radius: 5px; word-break: break-all; font-size: 14px;">${actionLink}</p>
 
             <div style="background: #fff4e5; border-left: 4px solid #ff9800; padding: 12px 15px; border-radius: 5px; margin-top: 20px;">
-              <p style="margin: 0;"><strong>Não foi você?</strong> Se não registou esta organização, ignore este email — sem confirmação a conta não fica ativa.</p>
+              <p style="margin: 0;"><strong>Não foi você?</strong> Se não registou esta organização, ignore este email. Sem confirmação, a conta não fica ativa.</p>
             </div>
           </div>
 
@@ -180,5 +176,5 @@ export function orgConfirmacaoTemplate(
         </body>
         </html>
       `;
-  return { subject: `Confirme o seu email - ${empresa} no WeGest`, html };
+  return { subject: `Confirme o seu email: ${empresa} no WeGest`, html };
 }
