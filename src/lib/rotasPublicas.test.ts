@@ -13,6 +13,7 @@ describe('isRotaPublica', () => {
       '/privacidade',
       '/cookies',
       '/eliminar-conta',
+      '/api/docs',
     ]) {
       expect(isRotaPublica(rota), rota).toBe(true);
     }
@@ -76,6 +77,7 @@ describe('isRotaPublica', () => {
       '/formulario/:id',
       '/danos/:token',
       '/quadro/:token',
+      '/api/docs',
     ];
 
     for (const path of publicasEsperadas) {

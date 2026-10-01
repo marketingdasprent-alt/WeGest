@@ -91,7 +91,7 @@ async function authenticate(
 
   // Lookup key
   const { data: key, error: dbErr } = await supabase
-    .from('primavera_api_keys')
+    .from('api_chaves')
     .select('id, org_id, nome, permissoes, ativo, ip_whitelist, rate_limit_per_minute, expires_at')
     .eq('api_key', apiKey)
     .single();
@@ -142,7 +142,7 @@ async function authenticate(
 
   // Update usage stats (fire & forget)
   supabase
-    .from('primavera_api_keys')
+    .from('api_chaves')
     .update({
       last_used_at: new Date().toISOString(),
       total_requests: (key as any).total_requests + 1,
