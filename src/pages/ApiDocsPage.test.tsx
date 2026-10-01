@@ -34,7 +34,7 @@ describe('ApiDocsPage', () => {
     const c = recebido.configuracao as Record<string, unknown>;
     expect(c.telemetry).toBe(false);
     expect(c.withDefaultFonts).toBe(false);
-    expect(c.proxyUrl).toBeUndefined();
+    expect(c.proxyUrl).toBe('');
     expect(c.persistAuth).toBe(false);
     expect(c.agent).toEqual({ disabled: true });
     expect(c.mcp).toEqual({ disabled: true });
