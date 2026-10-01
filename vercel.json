@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/rent-a-car/(.*)",
+      "destination": "https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

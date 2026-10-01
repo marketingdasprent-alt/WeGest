@@ -396,6 +396,7 @@
     "src/pages/renting/tarifaSite.test.ts",
     "src/pages/ApiDocsPage.tsx",
     "src/pages/ApiDocsPage.test.tsx",
-    "src/lib/apiDocs.ts"
+    "src/lib/apiDocs.ts",
+    "src/config/vercelRewrites.test.ts"
   ]
 }
