@@ -501,10 +501,12 @@ Deno.serve(async (req) => {
         `(${agregado.ordens_ignoradas} sem motorista, ${agregado.ordens_sem_preco} sem preço)`
     );
 
+    // Só fichas activas: uma ficha desactivada não recebe ganhos novos.
     const { data: motoristas, error: erroMotoristas } = await supabase
       .from('motoristas_ativos')
       .select('id, nome, telefone, email, bolt_id')
-      .eq('org_id', orgId);
+      .eq('org_id', orgId)
+      .or('status_ativo.is.null,status_ativo.eq.true');
 
     if (erroMotoristas) {
       console.warn(`[bolt-sync-semana] falha a ler motoristas_ativos: ${erroMotoristas.message}`);

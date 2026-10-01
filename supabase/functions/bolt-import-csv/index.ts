@@ -353,11 +353,17 @@ Deno.serve(async (req) => {
     }
 
     // Fetch motoristas for name matching (só da org da integração — evita
-    // fazer match cruzado com motoristas de outras orgs)
+    // fazer match cruzado com motoristas de outras orgs). Só as fichas activas:
+    // o ganho de uma semana nova nunca é de uma ficha desactivada (o André
+    // Nascimento voltou com ficha nova e o Bolt continuava a ir para a antiga).
     const { data: motoristas } = await supabase
       .from('motoristas_ativos')
-      .select('id, nome, telefone, email')
-      .eq('org_id', orgId);
+      .select('id, nome, telefone, email, bolt_id')
+      .eq('org_id', orgId)
+      .or('status_ativo.is.null,status_ativo.eq.true');
+    const boltIdDaFicha = new Map(
+      (motoristas ?? []).map((m: { id: string; bolt_id: string | null }) => [m.id, m.bolt_id]),
+    );
 
     // Cascata nome exacto → telefone → email → nome parcial. A mesma que o
     // bolt-sync-semana usa para a API — uma cópia só, em parse.ts.
@@ -475,13 +481,23 @@ Deno.serve(async (req) => {
         if (record.motorista_id) {
           console.log(`bolt-import-csv: Match found for ${record.motorista_nome} -> ID: ${record.motorista_id}`);
 
-          // Auto-save bolt_id to motoristas_ativos if not present
-          if (record.identificador_motorista) {
+          // O ID que chegou fica na ficha, mesmo que ela tivesse outro: a base
+          // (trg_ficha_*_id_plataforma) tira-o de uma ficha inactiva e passa o
+          // histórico. Se já está noutra ficha ACTIVA, manda essa ligação: um
+          // match por nome ou email não tira o ID a outro motorista.
+          const jaNoutraActiva = [...boltIdDaFicha].some(
+            ([id, bolt]) => bolt === record.identificador_motorista && id !== record.motorista_id,
+          );
+          if (
+            record.identificador_motorista &&
+            !jaNoutraActiva &&
+            boltIdDaFicha.get(record.motorista_id) !== record.identificador_motorista
+          ) {
             const { error: updateError } = await supabase
               .from('motoristas_ativos')
               .update({ bolt_id: record.identificador_motorista })
-              .eq('id', record.motorista_id)
-              .is('bolt_id', null); // Only update if empty
+              .eq('id', record.motorista_id);
+            boltIdDaFicha.set(record.motorista_id, record.identificador_motorista);
 
             if (updateError) {
               console.warn(`bolt-import-csv: Failed to auto-save bolt_id for ${record.motorista_nome}:`, updateError.message);
