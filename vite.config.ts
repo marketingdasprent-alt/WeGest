@@ -3,6 +3,49 @@ import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
 import { VitePWA } from 'vite-plugin-pwa';
+import type { Plugin } from 'vite';
+
+// ─── Leitor da documentação da API (Scalar) fora do precache ────────────────
+// O Scalar parte-se em ~90 chunks (Vue, ícones, codemirror…) e só serve a rota
+// pública /api/docs. Um módulo é "só da documentação" quando se alcança a
+// partir do ApiDocsPage mas não a partir de nenhuma entrada da app sem passar
+// por ele. Os chunks feitos só desses módulos vão para assets/scalar/, que o
+// workbox ignora. Critério pelo grafo, não pelo nome do pacote: um sub-chunk
+// do Scalar pode ter Vue ou outras dependências dele lá dentro.
+const PAGINA_DOCS = path.resolve(__dirname, 'src/pages/ApiDocsPage.tsx').replace(/\\/g, '/');
+const modulosSoDaDocumentacao = new Set<string>();
+const normalizarId = (id: string) => id.replace(/\\/g, '/').split('?')[0];
+
+function separarDocumentacaoDaApi(): Plugin {
+  return {
+    name: 'wegest-separar-documentacao-da-api',
+    apply: 'build',
+    buildEnd() {
+      modulosSoDaDocumentacao.clear();
+      const ids = [...this.getModuleIds()];
+      const pagina = ids.find((id) => normalizarId(id) === PAGINA_DOCS);
+      if (!pagina) return;
+      const filhos = (id: string) => {
+        const info = this.getModuleInfo(id);
+        return info ? [...info.importedIds, ...info.dynamicallyImportedIds] : [];
+      };
+      const alcancaveis = (inicio: string[], bloqueado?: string) => {
+        const vistos = new Set<string>();
+        const fila = inicio.filter((id) => id !== bloqueado);
+        while (fila.length) {
+          const id = fila.pop() as string;
+          if (vistos.has(id)) continue;
+          vistos.add(id);
+          for (const f of filhos(id)) if (f !== bloqueado && !vistos.has(f)) fila.push(f);
+        }
+        return vistos;
+      };
+      const entradas = ids.filter((id) => this.getModuleInfo(id)?.isEntry);
+      const daApp = alcancaveis(entradas, pagina);
+      for (const id of alcancaveis([pagina])) if (!daApp.has(id)) modulosSoDaDocumentacao.add(id);
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -12,6 +55,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    separarDocumentacaoDaApi(),
 
     VitePWA({
       registerType: 'prompt',
@@ -81,10 +125,10 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ['**/*.{js,css,ico,svg,woff2}'],
         // O leitor da documentação da API (Scalar, ~1 MB gzip) só serve a rota
         // pública /api/docs: não vai para o precache de todos os utilizadores.
-        globIgnores: ['**/images/**', '**/assets/ApiDocsPage-*'],
-        // /api/rent-a-car/* é a API externa (rewrite da Vercel), não uma rota da
+        globIgnores: ['**/images/**', '**/assets/scalar/**', '**/assets/ApiDocsPage-*'],
+        // /api/rent-a-car[/*] é a API externa (rewrite da Vercel), não uma rota da
         // SPA: o SW não pode responder-lhe com o index.html.
-        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\/rent-a-car\//],
+        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\/rent-a-car(\/|$)/],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Nota: o vite-plugin-pwa precacheia SEMPRE o manifest.webmanifest (não
         // tem interruptor, e `manifestTransforms` não chega às entradas que ele
@@ -118,6 +162,13 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
+        // Chunks feitos só de módulos da documentação da API → assets/scalar/
+        // (fora do precache, ver separarDocumentacaoDaApi). O resto fica igual.
+        chunkFileNames: (chunk) =>
+          chunk.moduleIds.length > 0 &&
+          chunk.moduleIds.every((id) => modulosSoDaDocumentacao.has(id))
+            ? 'assets/scalar/[name]-[hash].js'
+            : 'assets/[name]-[hash].js',
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-supabase': ['@supabase/supabase-js'],

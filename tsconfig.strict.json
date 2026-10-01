@@ -397,6 +397,8 @@
     "src/pages/ApiDocsPage.tsx",
     "src/pages/ApiDocsPage.test.tsx",
     "src/lib/apiDocs.ts",
-    "src/config/vercelRewrites.test.ts"
+    "src/config/vercelRewrites.test.ts",
+    "src/components/admin/api-chaves/ApiChaveNovaDialog.test.tsx",
+    "src/components/viaturas/modelos/ModeloSiteFields.test.tsx"
   ]
 }

@@ -20,6 +20,10 @@ interface Opcoes {
   chave?: Record<string, unknown> | null;
   limite?: Decisao;
   limiteAnon?: Decisao;
+  /** Simula o armazém de quotas a contar de verdade: p_limit por (operação, sujeito). */
+  quotaReal?: boolean;
+  /** O armazém falha só para o balde anónimo (o helper responde 503). */
+  anonIndisponivel?: boolean;
   tarifa?: string | null;
   rebentar?: boolean;
 }
@@ -27,6 +31,7 @@ interface Opcoes {
 function dbFalso(o: Opcoes = {}) {
   const pedidos: Record<string, unknown>[] = [];
   const rpcs: { name: string; args: Record<string, unknown> }[] = [];
+  const usados = new Map<string, number>();
   return {
     pedidos,
     rpcs,
@@ -38,6 +43,16 @@ function dbFalso(o: Opcoes = {}) {
       }
       if (name === 'consume_edge_rate_limit') {
         const anon = args.p_operation === 'api-rent-a-car-anon';
+        if (anon && o.anonIndisponivel) {
+          return Promise.resolve({ data: null, error: { message: 'quotas offline' } });
+        }
+        if (o.quotaReal) {
+          const k = `${args.p_operation}:${args.p_subject_hash}`;
+          const n = usados.get(k) ?? 0;
+          const allowed = n < Number(args.p_limit);
+          if (allowed) usados.set(k, n + 1);
+          return Promise.resolve({ data: { allowed, retry_after: allowed ? 0 : 60 }, error: null });
+        }
         const decisao = (anon ? o.limiteAnon : o.limite) ?? { allowed: true, retry_after: 0 };
         return Promise.resolve({ data: decisao, error: null });
       }
@@ -108,8 +123,8 @@ Deno.test('403 por chave desactivada fica em api_pedidos com org e chave da linh
   assertEquals(db.pedidos[0].org_id, 'org1');
   assertEquals(db.pedidos[0].api_chave_id, 'k1');
   assertEquals(db.pedidos[0].estado_http, 403);
-  // A recusa acontece antes do limite da chave: essa quota não é gasta.
-  assertEquals(opsLimite(db), ['api-rent-a-car-anon']);
+  // Chave conhecida mas recusada: não gasta quota nenhuma (nem a anónima).
+  assertEquals(opsLimite(db), []);
 });
 
 Deno.test(
@@ -132,17 +147,17 @@ Deno.test(
 );
 
 Deno.test(
-  'limite anónimo por IP corre ANTES de autenticar: 60/min, e o 429 fica auditado com nulos',
+  'chave inventada gasta o balde anónimo por IP (60/min); o 429 fica auditado com nulos',
   async () => {
-    const db = dbFalso({ limiteAnon: { allowed: false, retry_after: 7 } });
+    const db = dbFalso({ chave: null, limiteAnon: { allowed: false, retry_after: 7 } });
     const r = await correr(pedido('/v1/modelos'), db);
     assertEquals(r.status, 429);
     assertEquals(r.headers.get('retry-after'), '7');
     assertEquals(
       db.rpcs.map((c) => c.name),
-      ['consume_edge_rate_limit']
+      ['api_chave_por_hash', 'consume_edge_rate_limit']
     );
-    const anon = db.rpcs[0].args;
+    const anon = db.rpcs[1].args;
     assertEquals(anon.p_operation, 'api-rent-a-car-anon');
     assertEquals(anon.p_limit, 60);
     assertEquals(anon.p_window_seconds, 60);
@@ -155,24 +170,56 @@ Deno.test(
 );
 
 Deno.test(
-  'pedido bom: anon → chave → limite da chave → catálogo, e auditoria com 200',
+  '61 pedidos do mesmo IP com chave válida → todos 200 (atrás da Vercel o IP é partilhado)',
   async () => {
-    const db = dbFalso();
-    const r = await correr(pedido(`/api-rent-a-car/v1/modelos?categoria=${UUID}`), db);
-    assertEquals(r.status, 200);
-    assertEquals(await r.json(), [{ id: UUID }]);
-    assertEquals(
-      db.rpcs.map((c) => c.name),
-      ['consume_edge_rate_limit', 'api_chave_por_hash', 'consume_edge_rate_limit', 'api_modelos']
-    );
-    assertEquals(opsLimite(db), ['api-rent-a-car-anon', 'api-rent-a-car']);
-    const limite = db.rpcs.find((c) => c.args.p_operation === 'api-rent-a-car');
-    assertEquals(limite?.args.p_limit, 120);
-    assertEquals(limite?.args.p_window_seconds, 60);
-    assertEquals(db.pedidos[0].estado_http, 200);
-    assertEquals(db.pedidos[0].caminho, '/api-rent-a-car/v1/modelos');
+    const db = dbFalso({ quotaReal: true });
+    for (let i = 0; i < 61; i++) {
+      const r = await correr(pedido('/v1/health'), db);
+      assertEquals(r.status, 200, `pedido ${i + 1}`);
+      await r.body?.cancel();
+    }
+    assertEquals(opsLimite(db).includes('api-rent-a-car-anon'), false);
   }
 );
+
+Deno.test('61 pedidos do mesmo IP com chave inventada → 401 até ao 60.º, 429 no 61.º', async () => {
+  const db = dbFalso({ chave: null, quotaReal: true });
+  for (let i = 1; i <= 61; i++) {
+    const r = await correr(pedido('/v1/modelos'), db);
+    assertEquals(r.status, i <= 60 ? 401 : 429, `pedido ${i}`);
+    await r.body?.cancel();
+  }
+});
+
+Deno.test(
+  'armazém do balde anónimo em baixo (503) não toca na chave válida nem no 401',
+  async () => {
+    const valida = await correr(pedido('/v1/health'), dbFalso({ anonIndisponivel: true }));
+    assertEquals(valida.status, 200);
+    const inventada = await correr(
+      pedido('/v1/modelos'),
+      dbFalso({ chave: null, anonIndisponivel: true })
+    );
+    assertEquals(inventada.status, 401);
+  }
+);
+
+Deno.test('pedido bom: chave → limite da chave → catálogo, e auditoria com 200', async () => {
+  const db = dbFalso();
+  const r = await correr(pedido(`/api-rent-a-car/v1/modelos?categoria=${UUID}`), db);
+  assertEquals(r.status, 200);
+  assertEquals(await r.json(), [{ id: UUID }]);
+  assertEquals(
+    db.rpcs.map((c) => c.name),
+    ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_modelos']
+  );
+  assertEquals(opsLimite(db), ['api-rent-a-car']);
+  const limite = db.rpcs.find((c) => c.args.p_operation === 'api-rent-a-car');
+  assertEquals(limite?.args.p_limit, 120);
+  assertEquals(limite?.args.p_window_seconds, 60);
+  assertEquals(db.pedidos[0].estado_http, 200);
+  assertEquals(db.pedidos[0].caminho, '/api-rent-a-car/v1/modelos');
+});
 
 Deno.test('limite da chave fica preso a 1..10000', async () => {
   for (const [configurado, aplicado] of [
@@ -211,6 +258,7 @@ Deno.test(
     const opts = await correr(new Request('https://x/v1/modelos', { method: 'OPTIONS' }), db);
     assertEquals(opts.status, 200);
     assertEquals(opts.headers.get('access-control-allow-methods')?.includes('GET'), true);
+    assertEquals(opts.headers.get('vary'), 'Origin');
     const fora = await correr(new Request('https://x/v2/modelos'), db);
     assertEquals(fora.status, 404);
     assertEquals(db.pedidos, []);

@@ -11,7 +11,10 @@ import { resolverRota } from './router.ts';
 const CACHE_OPENAPI_SEGUNDOS = 3600;
 const LIMITE_MINIMO = 1;
 const LIMITE_MAXIMO = 10000;
-// Antes de olhar para a chave: trava quem martela com chaves inventadas.
+// Só conta pedidos que falham a autenticação sem chave conhecida (401): trava
+// quem martela com chaves inventadas sem tocar em quem tem chave válida. Atrás
+// do rewrite da Vercel o IP é o mesmo para todos os sites, por isso este balde
+// nunca pode correr antes da chave.
 const LIMITE_ANONIMO_POR_MINUTO = 60;
 const CAMINHO_MAXIMO = 200;
 
@@ -82,17 +85,21 @@ async function tratar(req: Request, db: DbApi): Promise<Resultado> {
     }),
   });
 
-  const anonimo = await consumeRateLimit(db, {
-    operation: 'api-rent-a-car-anon',
-    identity: ip,
-    limit: LIMITE_ANONIMO_POR_MINUTO,
-    windowSeconds: 60,
-  });
-  const recusaAnonima = respostaLimite(anonimo);
-  if (recusaAnonima) return registar(recusaAnonima, null);
-
   const auth = await autenticar(req, db);
-  if ('recusa' in auth) return registar(auth.recusa, auth.chave ?? null);
+  if ('recusa' in auth) {
+    if (!auth.chave && auth.recusa.status === 401) {
+      const anonimo = await consumeRateLimit(db, {
+        operation: 'api-rent-a-car-anon',
+        identity: ip,
+        limit: LIMITE_ANONIMO_POR_MINUTO,
+        windowSeconds: 60,
+      });
+      // Só o 429 conta: um 503 do armazém de quotas não muda a resposta (401).
+      const recusaAnonima = !anonimo.allowed && anonimo.status === 429;
+      if (recusaAnonima) return registar(respostaLimite(anonimo) as Response, null);
+    }
+    return registar(auth.recusa, auth.chave ?? null);
+  }
   const ctx = auth;
   const chave: ChaveRecusada = { id: ctx.chaveId, orgId: ctx.orgId };
 

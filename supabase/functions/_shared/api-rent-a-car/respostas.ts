@@ -12,6 +12,8 @@ const ORIGENS_PERMITIDAS: ReadonlySet<string> = new Set([
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
   'Access-Control-Allow-Headers': 'x-api-key, authorization, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  // O Allow-Origin varia com o Origin do pedido, também no preflight (OPTIONS).
+  Vary: 'Origin',
 };
 
 // As respostas autenticadas dependem da chave (organização): uma cache partilhada

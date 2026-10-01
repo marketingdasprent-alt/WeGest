@@ -29,12 +29,16 @@ describe('ApiDocsPage', () => {
     expect(screen.getByTestId('scalar').textContent).toContain('/api-rent-a-car/v1/openapi.json');
   });
 
-  it('nada sai para a Scalar: sem telemetria, sem fontes deles, sem o proxy deles', () => {
+  it('nada sai para a Scalar: sem telemetria, fontes, proxy, agente, MCP nem chave persistida', () => {
     render(<ApiDocsPage />);
     const c = recebido.configuracao as Record<string, unknown>;
     expect(c.telemetry).toBe(false);
     expect(c.withDefaultFonts).toBe(false);
-    expect(c.proxyUrl).toBeUndefined();
+    expect(c.proxyUrl).toBe('');
+    expect(c.persistAuth).toBe(false);
+    expect(c.agent).toEqual({ disabled: true });
+    expect(c.mcp).toEqual({ disabled: true });
+    expect(c.showDeveloperTools).toBe('never');
     expect(CONFIGURACAO_BASE.telemetry).toBe(false);
   });
 
