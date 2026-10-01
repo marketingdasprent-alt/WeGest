@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { periodoUberDaImportacao, unicos } from '../_shared/importacao/substituir.ts';
 
 type UntypedSupabaseClient = ReturnType<typeof createClient<any>>;
 
@@ -1980,6 +1981,20 @@ const processCsvImport = async ({
     parseErrors = rows.length;
   }
 
+  // Voltar a importar a mesma semana substitui: sai o que veio de ficheiro para
+  // esta conta e semana e já não vem no ficheiro novo (nunca se soma).
+  let substituidas = 0;
+  const periodoImportado = periodoUberDaImportacao(periodoInicio, periodoFim, nomeOriginal);
+  if (parseErrors === 0 && periodoImportado && rows.length > 0) {
+    const { data: sub, error: subErr } = await supabase.rpc('uber_substituir_semana_csv', {
+      p_integracao_id: integracaoId,
+      p_periodo: periodoImportado,
+      p_uber_driver_ids: unicos(rows.map((r) => r.uber_driver_id as string | null)),
+    });
+    if (subErr) console.error('[uber-webhook] substituir semana falhou:', subErr.message);
+    else substituidas = Number((sub as { transacoes?: number } | null)?.transacoes ?? 0);
+  }
+
   let newDrivers = 0;
   if (driverRowsMap.size > 0) {
     try {
@@ -2004,7 +2019,7 @@ const processCsvImport = async ({
     executado_por: null,
     tipo: 'csv_import',
     status: parseErrors > 0 ? 'error' : 'success',
-    mensagem: `Importação CSV: ${totalInserted} novos, ${totalUpdated} actualizados de ${rows.length} linhas${skippedRows > 0 ? `, ${skippedRows} ignoradas` : ''} (${nomeOriginal})`,
+    mensagem: `Importação CSV: ${totalInserted} novos, ${totalUpdated} actualizados de ${rows.length} linhas${skippedRows > 0 ? `, ${skippedRows} ignoradas` : ''}${substituidas > 0 ? `, ${substituidas} da importação anterior substituídas` : ''} (${nomeOriginal})`,
     erros: parseErrors,
     viagens_novas: totalInserted,
     viagens_atualizadas: totalUpdated,
@@ -2037,6 +2052,7 @@ const processCsvImport = async ({
     updated: totalUpdated,
     errors: parseErrors,
     skipped: skippedRows,
+    substituidas,
     columns_mapped: Array.from(columnMap.values()),
   };
 };

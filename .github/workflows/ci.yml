@@ -297,7 +297,19 @@ jobs:
             notifications \
             notification_queue \
             limite_diario_emails \
-            enviar_digests_diarios
+            enviar_digests_diarios \
+            emails_sem_travessoes
+
+      # ── Gate 2b: API externa de rent-a-car ────────────────────────────
+      # Chaves com hash, colunas do site no catálogo e funções api_* por
+      # organização. Nasceram a 2026-10-01 com a Fase A da API.
+      - name: pgTAP — API externa
+        if: steps.baseline.outputs.tem_baseline == 'true'
+        run: |
+          bash scripts/pgtap-suite.sh "API externa" \
+            api_chaves \
+            catalogo_site_colunas \
+            api_catalogo
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
@@ -310,7 +322,11 @@ jobs:
           bash scripts/pgtap-suite.sh "Ingestão de plataformas" \
             uber_conta_frota_fora_do_resumo \
             semana_plataforma_em_falta \
-            bolt_liquido_a_pagar
+            bolt_liquido_a_pagar \
+            entrega_de_cartao_pela_hora \
+            uma_parcela_por_semana \
+            combustivel_chega_ao_motorista \
+            reimportar_substitui_a_semana
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova

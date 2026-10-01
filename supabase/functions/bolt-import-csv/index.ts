@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { unicos } from '../_shared/importacao/substituir.ts';
 import {
   construirChaveMotorista,
   criarMatcherMotoristas,
@@ -415,6 +416,7 @@ Deno.serve(async (req) => {
     let semChave = 0;
     let semConteudo = 0;
     let brutoImportado = 0;
+    const chavesGravadas: string[] = [];
 
     for (const row of rows) {
       try {
@@ -499,12 +501,27 @@ Deno.serve(async (req) => {
           errors++;
         } else {
           imported++;
+          chavesGravadas.push(record.chave_motorista);
           brutoImportado += Number(record.ganhos_brutos_total ?? 0) || 0;
         }
       } catch (rowError) {
         console.error('bolt-import-csv row error:', rowError);
         errors++;
       }
+    }
+
+    // Voltar a importar a mesma semana substitui: sai o que veio de ficheiro para
+    // esta conta e semana e já não vem no ficheiro novo (nunca se soma). Só com
+    // o ficheiro todo gravado; a API (api_sincronizado_em) nunca é tocada.
+    let substituidas = 0;
+    if (errors === 0 && imported > 0) {
+      const { data: sub, error: subErr } = await supabase.rpc('bolt_substituir_semana_csv', {
+        p_integracao_id: integracao_id,
+        p_periodo: periodoValue,
+        p_chaves: unicos(chavesGravadas),
+      });
+      if (subErr) console.error('bolt-import-csv: substituir semana falhou:', subErr.message);
+      else substituidas = Number(sub ?? 0);
     }
 
     // ── 3. Piso relativo ──
@@ -559,7 +576,7 @@ Deno.serve(async (req) => {
       mensagem = `Semana ${periodoValue}: ${avaliacao.mensagem}`;
     } else {
       status = 'success';
-      mensagem = `Importação Apify/Robot: ${imported} registos processados para ${periodoValue}`;
+      mensagem = `Importação Apify/Robot: ${imported} registos processados para ${periodoValue}${substituidas > 0 ? `, ${substituidas} da importação anterior substituídas` : ''}`;
     }
 
     // Avisos que não mudam o número de linhas mas não podem passar em silêncio.
@@ -595,6 +612,7 @@ Deno.serve(async (req) => {
       erros: errors,
       sem_chave: semChave,
       sem_conteudo: semConteudo,
+      substituidas,
       bruto_importado: Number(brutoImportado.toFixed(2)),
       mediana_linhas: avaliacao.medianaLinhas,
       mediana_bruto: Number(avaliacao.medianaBruto.toFixed(2)),
@@ -619,6 +637,7 @@ Deno.serve(async (req) => {
       errors,
       sem_chave: semChave,
       sem_conteudo: semConteudo,
+      substituidas,
       total_rows: rows.length,
       bruto_importado: detalhes.bruto_importado,
       mediana_linhas: avaliacao.medianaLinhas,

@@ -6,6 +6,7 @@ import {
   formatarIntervaloSemana,
   formatarEuros,
   percentagem,
+  apenasAtivos,
 } from './motoristasSemana';
 
 describe('escolherSemanaFechada', () => {
@@ -155,5 +156,17 @@ describe('percentagem', () => {
 
   it('total zero não rebenta nem inventa 100%', () => {
     expect(percentagem(0, 0)).toBe(0);
+  });
+});
+
+describe('apenasAtivos', () => {
+  it('tira dos negativos quem já não está activo', () => {
+    const linhas = [
+      { motorista_id: 'a', motorista_nome: 'Activo', liquido: -50 },
+      { motorista_id: 'i', motorista_nome: 'Inativo', liquido: -900 },
+    ];
+    const r = apenasAtivos(linhas, new Set(['a']));
+    expect(r.map((l) => l.motorista_id)).toEqual(['a']);
+    expect(ordenarNegativos(r)).toHaveLength(1);
   });
 });

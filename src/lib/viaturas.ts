@@ -8,8 +8,6 @@ export interface ViaturaStatsSummary {
   manutencao: number;
   inativas: number;
   vendidas: number;
-  slot: number;
-  slotDisponiveis: number;
 }
 
 export const CATEGORIAS = [
@@ -161,16 +159,14 @@ export const deriveViaturaEstado = (
   if (fontes?.has('movimento')) return 'em_movimentacao';
   if (fontes?.has('contrato')) return 'em_contrato';
   if (fontes?.has('reserva')) return 'em_reserva';
-  // Carro com motorista (fonte 'tvde'): ocupação TVDE normal — excepto os
-  // carros slot: são do próprio motorista, e a mera associação NÃO os ocupa.
-  // Um carro slot associado fica 'disponivel'; o estado só muda quando entra
-  // uma reserva/contrato (fontes acima).
-  if (fontes?.has('tvde') && !v.is_slot) return 'em_tvde';
+  // Slot é o carro do próprio motorista (decisão de 30/09): nunca está
+  // "disponível" para outro. Com motorista está em uso; sem ele, saiu com o
+  // motorista e conta como inativo.
+  if (v.is_slot) return fontes?.has('tvde') ? 'em_slot' : 'inativo';
+  if (fontes?.has('tvde')) return 'em_tvde';
   // Rede de segurança: campo legado `status='em_uso'` — é o que o main conta
   // como ocupada. Mantém-se até as atribuições reais (motorista_viaturas)
   // estarem todas criadas; depois pode ser removido.
-  // Carros slot NÃO usam esta rede: sem motorista ligado real, um slot está
-  // disponível. Sem isto, mostravam "Em Uso" genérico de forma incoerente.
-  if (!v.is_slot && (base === 'em_uso' || base === 'em uso')) return 'em_uso';
+  if (base === 'em_uso' || base === 'em uso') return 'em_uso';
   return 'disponivel';
 };

@@ -15,13 +15,19 @@ export interface AmbitoViaturas {
   incluiSlot: boolean;
   /** Regimes de contrato/reserva que pertencem ao âmbito. */
   regimes: readonly string[];
+  /** Cartões da página Viaturas que não interessam a este grupo. */
+  cartoesOcultos: readonly CartaoViaturas[];
 }
+
+export type CartaoViaturas = 'inativas' | 'todos_os_tipos' | 'tipos';
 
 const AMBITO_TVDE: AmbitoViaturas = {
   nome: 'TVDE',
   tiposViatura: ['tvde', 'slot'],
   incluiSlot: true,
   regimes: ['tvde', 'slot'],
+  // Pedido do Thiago (30/09): na frota TVDE só interessam os estados e o SLOT.
+  cartoesOcultos: ['inativas', 'todos_os_tipos', 'tipos'],
 };
 
 /** Cargo (nome normalizado) → âmbito. Cada org escreve o cargo à sua maneira. */

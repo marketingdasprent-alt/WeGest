@@ -103,7 +103,7 @@ export function alertasExpiracoesTemplate(input: AlertasExpiracoesInput): {
 <body style="font-family:Arial,sans-serif;color:#333;max-width:700px;margin:0 auto;padding:20px;background:#f5f5f5">
   <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2d6a9f 100%);padding:28px;border-radius:12px;text-align:center;margin-bottom:24px">
     <h1 style="color:white;margin:0;font-size:22px">⚠️ Alertas de Renovação</h1>
-    <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">${orgNome} — ${dateStr}</p>
+    <p style="color:rgba(255,255,255,0.85);margin:8px 0 0">${orgNome}, ${dateStr}</p>
   </div>
   <div style="background:white;padding:24px;border-radius:12px;margin-bottom:20px">
     <p style="margin-top:0">${greeting}</p>
@@ -112,10 +112,10 @@ export function alertasExpiracoesTemplate(input: AlertasExpiracoesInput): {
   ${extSection}
   ${ctSection}
   <div style="text-align:center;color:#888;font-size:12px;padding:16px">
-    <p>Email automático — ${orgNome} CRM. Não responda a esta mensagem.</p>
+    <p>Email automático de ${orgNome} CRM. Não responda a esta mensagem.</p>
   </div>
 </body>
 </html>`;
 
-  return { subject: `⚠️ Alertas de Renovação — ${dateStr}`, html };
+  return { subject: `⚠️ Alertas de Renovação: ${dateStr}`, html };
 }

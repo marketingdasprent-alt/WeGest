@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { contarComTitular } from '../_shared/combustivel/titular.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -199,12 +200,13 @@ Deno.serve(async (req) => {
       if (!motoristaId && sanitized.length >= 4) motoristaId = cardMap.get(sanitized.slice(-4));
       if (!motoristaId && driverName) motoristaId = nameMap.get(normalizeName(driverName));
 
-      if (motoristaId) matched++;
-
+      // O gatilho resolver_motorista decide o titular pelo card_number; sem ele
+      // todos os carregamentos de Setembro de 2026 ficaram sem motorista.
       upsertMap.set(txId, {
         integracao_id,
         transaction_id: txId,
         transaction_date: txDate,
+        card_number: sanitized || null,
         amount,
         quantity: qty,
         fuel_type: 'Elétrico',
@@ -219,17 +221,20 @@ Deno.serve(async (req) => {
     // grandes). O Map já fez dedup por transaction_id (último vence = onConflict).
     const batch = Array.from(upsertMap.values());
     if (batch.length > 0) {
-      const { error } = await supabase
+      const { data: gravadas, error } = await supabase
         .from('edp_transacoes')
-        .upsert(batch, { onConflict: 'integracao_id,transaction_id' });
+        .upsert(batch, { onConflict: 'integracao_id,transaction_id' })
+        .select('motorista_id, cliente_id');
       if (error) {
         console.error('edp-import-csv bulk upsert error:', error.message);
       } else {
         imported = batch.length;
+        // Conta o que ficou gravado: é o gatilho que decide o titular.
+        matched = contarComTitular(gravadas);
       }
     }
 
-    return new Response(JSON.stringify({ success: true, imported, matched, skipped, total: rows.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: true, imported, matched, sem_titular: imported - matched, skipped, total: rows.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro interno';
     return new Response(JSON.stringify({ success: false, error: message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

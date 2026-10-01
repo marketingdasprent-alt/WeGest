@@ -35,5 +35,5 @@ export function candidaturaPendenteTemplate(input: CandidaturaPendenteInput): {
     ctaUrl,
   });
 
-  return { subject: `👤 Nova candidatura — ${candidatoNome}`, html };
+  return { subject: `👤 Nova candidatura: ${candidatoNome}`, html };
 }

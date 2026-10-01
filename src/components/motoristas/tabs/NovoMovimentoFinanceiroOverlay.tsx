@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { mensagemErroMovimento, numeroDeParcelasValido } from '@/utils/parcelasMovimento';
 import { MovimentoDetalhesFields } from './MovimentoDetalhesFields';
 import { MovimentoRepeticaoFields } from './MovimentoRepeticaoFields';
 import { NotaDataMovimento } from './NotaDataMovimento';
@@ -146,7 +147,8 @@ export function NovoMovimentoFinanceiroOverlay({
     : refRaw;
 
   const [referencia, setReferencia] = useState(refLimpa);
-  const [numSemanas, setNumSemanas] = useState('1');
+  // Sem valor por omissão: um "1" esquecido descontava a dívida toda numa semana.
+  const [numSemanas, setNumSemanas] = useState('');
   const [semanaInicio, setSemanaInicio] = useState(
     movimentoParaEditar
       ? movimentoParaEditar.data_movimento
@@ -172,10 +174,20 @@ export function NovoMovimentoFinanceiroOverlay({
   const isRecurring = repeticao === 'parcelas' && parseInt(numSemanas) > 1;
   const isRecorrenciaAutomatica = repeticao === 'semanal' || repeticao === 'mensal';
   const valorNum = parseFloat(valor) || 0;
+  const faltaNumParcelas =
+    !isEdicao && repeticao === 'parcelas' && !numeroDeParcelasValido(numSemanas, isAcordo ? 1 : 2);
 
   const handleSubmit = async () => {
     if (!descricao.trim() || !valor || valorNum <= 0) {
       toast.error('Preencha a descrição e o valor');
+      return;
+    }
+    if (faltaNumParcelas) {
+      toast.error(
+        isAcordo
+          ? 'Indique em quantas semanas o motorista vai pagar'
+          : 'Indique o nº de parcelas (mínimo 2)'
+      );
       return;
     }
     if (
@@ -322,15 +334,15 @@ export function NovoMovimentoFinanceiroOverlay({
             : 'Movimento adicionado com sucesso!'
       );
       onSuccess();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao guardar movimento:', error);
-      toast.error('Erro: ' + error.message);
+      toast.error('Erro: ' + mensagemErroMovimento(error));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const canSubmit = !!descricao.trim() && valorNum > 0;
+  const canSubmit = !!descricao.trim() && valorNum > 0 && !faltaNumParcelas;
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col overflow-hidden">

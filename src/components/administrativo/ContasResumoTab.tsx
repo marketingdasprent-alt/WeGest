@@ -10,6 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MotoristaResumoDialog } from './MotoristaResumoDialog';
 import { ImportarDadosWizard } from './ImportarDadosWizard';
+import { ImportacaoAutomaticaDialog } from './importacao-automatica/ImportacaoAutomaticaDialog';
 import { RelatorioPagamentoDialog } from './RelatorioPagamentoDialog';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useOrgId } from '@/contexts/TenantContext';
@@ -20,7 +21,12 @@ import { matchesSearch } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { normalizeFirstLast, isCompanyName } from './motoristaNomeMatching';
+import { contarInativosEscondidos, inativoVisivelNoResumo } from '@/utils/motoristasInativosResumo';
 import { useContasResumoSemana } from '@/hooks/useContasResumoSemana';
+import { useAbastecimentosSuspeitos } from '@/hooks/useAbastecimentosSuspeitos';
+import { useCombustivelSemDono } from '@/hooks/useCombustivelSemDono';
+import { AbastecimentosSuspeitosAviso } from './AbastecimentosSuspeitosAviso';
+import { CombustivelSemDonoAviso } from './CombustivelSemDonoAviso';
 import {
   gerarRelatoriosIndividuaisPDF,
   gerarRelatorioConsolidadoPrint,
@@ -83,6 +89,7 @@ export function ContasResumoTab() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSending, setIsBulkSending] = useState(false);
   const [importarWizardOpen, setImportarWizardOpen] = useState(false);
+  const [importacaoAutomaticaOpen, setImportacaoAutomaticaOpen] = useState(false);
   const [relatorioPagamentoOpen, setRelatorioPagamentoOpen] = useState(false);
   const [fechandoSemana, setFechandoSemana] = useState(false);
   // `null` acompanha a semana visível; um período personalizado fica fixo.
@@ -125,6 +132,8 @@ export function ContasResumoTab() {
   const [filterRecibo, setFilterRecibo] = useState<'todos' | 'verde' | 'nao_verde'>('todos');
   const [filterSaldo, setFilterSaldo] = useState<'todos' | 'negativos' | 'positivos'>('todos');
   const [filterGestor, setFilterGestor] = useState<string>('todos');
+  // Inativos escondidos por omissão (pedido de 01/10); ligar para fechar o saldo de quem saiu.
+  const [mostrarInativos, setMostrarInativos] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -299,14 +308,10 @@ export function ContasResumoTab() {
       // A ficha do CRM que É a própria empresa (ex.: "PREMIUM RIDE", sem sufixo
       // para a regex apanhar) vem marcada da base — migração 20260917110001.
       if (r.motorista_id && contaFrotaMap[r.motorista_id]) return false;
-      // Mantenha inativos nas semanas anteriores à desativação para fechar saldos.
-      if (r.motorista_id && statusAtivoMap[r.motorista_id] === false) {
-        const desativadoEm = desativadoEmMap[r.motorista_id];
-        if (!desativadoEm || new Date(desativadoEm) < weekStart) return false;
-        const temValores =
-          r.liquido !== 0 || r.total_faturado !== 0 || (r.saldoPendente ?? 0) !== 0;
-        if (!temValores) return false;
-      }
+      if (
+        !inativoVisivelNoResumo(r, { statusAtivoMap, desativadoEmMap, weekStart, mostrarInativos })
+      )
+        return false;
       if (searchTerm && !matchesSearch(r.driver_name, searchTerm)) return false;
       if (filterRecibo === 'verde' && !r.recibo_verde) return false;
       if (filterRecibo === 'nao_verde' && r.recibo_verde) return false;
@@ -360,7 +365,14 @@ export function ContasResumoTab() {
     weekEnd,
     sortField,
     sortDir,
+    mostrarInativos,
   ]);
+  const inativosEscondidos = useMemo(
+    () => contarInativosEscondidos(resumos, { statusAtivoMap, desativadoEmMap, weekStart }),
+    // weekStart é recalculado a cada render; o dia basta para a contagem.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [resumos, statusAtivoMap, desativadoEmMap, weekStart.getTime()]
+  );
 
   const { page, setPage, totalPages, total, pageItems, start, end, pageSizeStr, setPageSizeStr } =
     usePagination(
@@ -386,6 +398,10 @@ export function ContasResumoTab() {
       currency: 'EUR',
     }).format(value);
   };
+
+  // Antes de qualquer return: hooks depois dele mudam de número entre renders.
+  const { data: abastecimentos } = useAbastecimentosSuspeitos(weekStart, weekEnd);
+  const { data: semDono } = useCombustivelSemDono(weekStart, weekEnd);
 
   if (loading && resumos.length === 0) {
     return (
@@ -432,6 +448,7 @@ export function ContasResumoTab() {
         onExportExcel={handleExportAll}
         canImportar={canImportar}
         onOpenImportarWizard={() => setImportarWizardOpen(true)}
+        onOpenImportacaoAutomatica={() => setImportacaoAutomaticaOpen(true)}
         onOpenRelatorioPagamento={() => setRelatorioPagamentoOpen(true)}
         filterRecibo={filterRecibo}
         onFilterReciboChange={setFilterRecibo}
@@ -440,6 +457,16 @@ export function ContasResumoTab() {
         filterGestor={filterGestor}
         onFilterGestorChange={setFilterGestor}
         gestorMap={gestorMap}
+        mostrarInativos={mostrarInativos}
+        onMostrarInativosChange={setMostrarInativos}
+        inativosEscondidos={inativosEscondidos}
+      />
+
+      <CombustivelSemDonoAviso grupos={semDono ?? []} />
+
+      <AbastecimentosSuspeitosAviso
+        suspeitos={abastecimentos?.suspeitos ?? []}
+        nomes={abastecimentos?.nomes ?? {}}
       />
 
       <div className="flex justify-end">
@@ -550,6 +577,12 @@ export function ContasResumoTab() {
       <ImportarDadosWizard
         open={importarWizardOpen}
         onOpenChange={setImportarWizardOpen}
+        onImportComplete={() => recarregar()}
+      />
+
+      <ImportacaoAutomaticaDialog
+        open={importacaoAutomaticaOpen}
+        onOpenChange={setImportacaoAutomaticaOpen}
         onImportComplete={() => recarregar()}
       />
 

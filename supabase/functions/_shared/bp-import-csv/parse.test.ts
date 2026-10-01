@@ -1,6 +1,27 @@
 // supabase/functions/_shared/bp-import-csv/parse.test.ts
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { parseCsv, parseCsvLine, unwrapDoubleEncodedLine } from './parse.ts';
+import { numeroCartaoBp, parseCsv, parseCsvLine, unwrapDoubleEncodedLine } from './parse.ts';
+
+Deno.test('numeroCartaoBp: número curto do export do portal BP', () => {
+  assertEquals(numeroCartaoBp('154'), '154');
+  assertEquals(numeroCartaoBp(' 0048 '), '0048');
+});
+
+Deno.test('numeroCartaoBp: decimal gravado pelo Excel conta a parte inteira', () => {
+  // "105,0" virava o cartão 1050, que não existe (ou pior, outro cartão).
+  assertEquals(numeroCartaoBp('105,0'), '105');
+  assertEquals(numeroCartaoBp('139.1'), '139');
+});
+
+Deno.test('numeroCartaoBp: vazio fica vazio', () => {
+  assertEquals(numeroCartaoBp(''), '');
+});
+
+Deno.test('CSV real do portal: coluna "Nº cartão" chega intacta', () => {
+  const csv = 'Dia Hora;Nº cartão;Valor total fornecido (preço do posto)\n01/09/2026 10:26;154;10,01';
+  const rows = parseCsv(csv);
+  assertEquals(numeroCartaoBp(rows[0]['Nº cartão']), '154');
+});
 
 const DOUBLE_ENCODED_FIXTURE = new URL('./fixtures/double-encoded-sample.csv', import.meta.url);
 

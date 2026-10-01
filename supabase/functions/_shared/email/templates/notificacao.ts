@@ -1,3 +1,5 @@
+import { botaoEmail } from './botao.ts';
+
 export interface NotificacaoTemplateInput {
   titulo: string;
   categoria?: string;
@@ -75,16 +77,7 @@ export function notificacaoTemplate(input: NotificacaoTemplateInput): string {
     : '';
 
   const ctaBlock =
-    ctaLabel && ctaUrl
-      ? `
-              <table role="presentation" style="margin:28px auto 4px">
-                <tr><td style="border-radius:8px;background:${COR_ACENTO}">
-                  <a href="${ctaUrl}" style="display:inline-block;padding:13px 30px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px">
-                    ${ctaLabel}
-                  </a>
-                </td></tr>
-              </table>`
-      : '';
+    ctaLabel && ctaUrl ? botaoEmail(ctaUrl, ctaLabel, { cor: COR_ACENTO }) : '';
 
   const headerBrand = emissorNome
     ? emissorLogoUrl
@@ -101,7 +94,7 @@ export function notificacaoTemplate(input: NotificacaoTemplateInput): string {
                 Plataforma de gestão de frotas licenciada a <strong>${emissorNome}</strong>.
               </p>
               <p style="margin:0;color:${COR_MUTED};font-size:11.5px;line-height:1.5;text-align:center">
-                ${rodape ?? 'Não responda a esta mensagem — em caso de dúvida, contacte diretamente a empresa.'}
+                ${rodape ?? 'Não responda a esta mensagem. Em caso de dúvida, contacte diretamente a empresa.'}
               </p>`
     : `
               <p style="margin:0;color:${COR_MUTED};font-size:12px;line-height:1.5;text-align:center">
@@ -151,9 +144,11 @@ export function notificacaoTemplate(input: NotificacaoTemplateInput): string {
               <div style="font-size:14px;line-height:1.65;color:#1a1f29">
                 ${corpo}
               </div>
-              <table role="presentation" style="width:100%"><tr><td align="center">
-                ${ctaBlock}
-              </td></tr></table>
+              ${
+                ctaBlock
+                  ? `<table role="presentation" style="width:100%"><tr><td align="center" style="padding:26px 0 4px">${ctaBlock}</td></tr></table>`
+                  : ''
+              }
             </td>
           </tr>
 

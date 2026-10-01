@@ -40,5 +40,5 @@ export function assinaturaPedidoTemplate(input: AssinaturaPedidoInput): {
     emissorLogoUrl,
   });
 
-  return { subject: `Documento para assinar — ${documentoNome}`, html };
+  return { subject: `Documento para assinar: ${documentoNome}`, html };
 }

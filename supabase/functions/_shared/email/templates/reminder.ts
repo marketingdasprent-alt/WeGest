@@ -37,8 +37,8 @@ export function reminderTemplate(input: ReminderInput): { subject: string; html:
   const displayTitle = `${matriculaFmt}${cidadeFmt ? ' ' + cidadeFmt : ''}`;
 
   const subject = isVespera
-    ? `📅 Amanhã: ${tipoLabel} - ${displayTitle}`
-    : `📅 Hoje: ${tipoLabel} - ${displayTitle}`;
+    ? `📅 Amanhã: ${tipoLabel}, ${displayTitle}`
+    : `📅 Hoje: ${tipoLabel}, ${displayTitle}`;
 
   const html = `
     <!DOCTYPE html>
@@ -47,7 +47,7 @@ export function reminderTemplate(input: ReminderInput): { subject: string; html:
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       <div style="background: #1a1a2e; padding: 24px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
         <h1 style="color: #fff; margin: 0; font-size: 22px;">
-          ${isVespera ? '🔔 Lembrete - Amanhã' : '🔔 Lembrete - Hoje'}
+          ${isVespera ? '🔔 Lembrete para amanhã' : '🔔 Lembrete para hoje'}
         </h1>
       </div>
       <div style="background: #f9f9f9; padding: 24px; border-radius: 10px;">

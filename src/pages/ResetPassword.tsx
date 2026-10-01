@@ -118,6 +118,10 @@ const ResetPassword = () => {
     }
   };
 
+  // Mesma regra que o handleResetPassword aplica, mas antes do clique: o botão
+  // só desbloqueia com os requisitos cumpridos e as duas passwords iguais.
+  const podeAlterar = isPasswordStrong(password) && password === confirmPassword;
+
   return (
     <AuthMobileShell
       title="Redefinir palavra-passe"
@@ -150,26 +154,26 @@ const ResetPassword = () => {
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
-            {password.length > 0 && (
-              <div className="space-y-1 pt-0.5">
-                {PASSWORD_REQUIREMENTS.map(({ key, label }) => {
-                  const ok = passwordChecks(password)[key];
-                  return (
-                    <p
-                      key={key}
-                      className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
-                    >
-                      {ok ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
-                      ) : (
-                        <Circle className="h-3.5 w-3.5 flex-shrink-0" />
-                      )}
-                      {label}
-                    </p>
-                  );
-                })}
-              </div>
-            )}
+            {/* Sempre visível: os requisitos têm de ser conhecidos ANTES de
+                escrever, senão o botão bloqueado parece uma avaria. */}
+            <div className="space-y-1 pt-0.5">
+              {PASSWORD_REQUIREMENTS.map(({ key, label }) => {
+                const ok = passwordChecks(password)[key];
+                return (
+                  <p
+                    key={key}
+                    className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}
+                  >
+                    {ok ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" />
+                    ) : (
+                      <Circle className="h-3.5 w-3.5 flex-shrink-0" />
+                    )}
+                    {label}
+                  </p>
+                );
+              })}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -195,9 +199,16 @@ const ResetPassword = () => {
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+            {confirmPassword.length > 0 && password !== confirmPassword && (
+              <p className="text-xs text-destructive">As palavras-passe não coincidem.</p>
+            )}
           </div>
 
-          <Button type="submit" disabled={loading} className="auth-primary-button w-full">
+          <Button
+            type="submit"
+            disabled={loading || !podeAlterar}
+            className="auth-primary-button w-full"
+          >
             {loading ? 'A alterar...' : 'Alterar palavra-passe'}
           </Button>
         </form>

@@ -89,5 +89,5 @@ export function cobrancaAtrasoTemplate(input: CobrancaAtrasoInput): { subject: s
     emissorLogoUrl,
   });
 
-  return { subject: `⚠️ Pagamento em atraso (${diasAtraso} dias) — Fatura ${numeroFatura}`, html };
+  return { subject: `⚠️ Pagamento em atraso (${diasAtraso} dias): fatura ${numeroFatura}`, html };
 }

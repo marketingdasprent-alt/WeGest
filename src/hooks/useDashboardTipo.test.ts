@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decidirDashboardTipo } from './useDashboardTipo';
+import { decidirDashboardTipo, ehGrupoFaturacao } from './useDashboardTipo';
 
 const base = {
   isAdmin: false,
@@ -30,5 +30,18 @@ describe('decidirDashboardTipo', () => {
 
   it('sem grupo cai no fallback de frota', () => {
     expect(decidirDashboardTipo(base)).toBe('frota');
+  });
+});
+
+describe('ehGrupoFaturacao', () => {
+  it('reconhece o grupo Faturação escrito de qualquer maneira', () => {
+    expect(ehGrupoFaturacao('Faturação')).toBe(true);
+    expect(ehGrupoFaturacao('FATURACAO')).toBe(true);
+  });
+
+  it('Financeiro, outros grupos e sem grupo: não', () => {
+    expect(ehGrupoFaturacao('Financeiro')).toBe(false);
+    expect(ehGrupoFaturacao('Gestor TVDE')).toBe(false);
+    expect(ehGrupoFaturacao(null)).toBe(false);
   });
 });

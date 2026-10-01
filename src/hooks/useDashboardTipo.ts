@@ -35,6 +35,11 @@ export function decidirDashboardTipo(p: PermissoesParaDashboard): DashboardTipo 
   return 'frota';
 }
 
+/** Faturação partilha a dashboard financeira, mas com cartões próprios. */
+export function ehGrupoFaturacao(cargo: string | null): boolean {
+  return normalizarGrupo(cargo).includes('faturacao');
+}
+
 export function useDashboardTipo(): DashboardTipo {
   return decidirDashboardTipo(usePermissions());
 }
