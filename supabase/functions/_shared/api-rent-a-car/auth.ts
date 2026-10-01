@@ -10,6 +10,18 @@ export interface ContextoApi {
   limitePorMinuto: number;
 }
 
+/** Chave que existe na base mas foi recusada: vai para a auditoria. */
+export interface ChaveRecusada {
+  id: string;
+  orgId: string;
+}
+
+/** Recusa (401/403). `chave` só quando a linha existe (403), nunca no 401. */
+export interface Recusa {
+  recusa: Response;
+  chave?: ChaveRecusada;
+}
+
 export interface DbRpc {
   rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: unknown }>;
 }
@@ -41,31 +53,37 @@ export async function sha256Hex(texto: string): Promise<string> {
   return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Devolve o contexto da chave ou a Response de recusa (401/403). */
-export async function autenticar(req: Request, db: DbRpc): Promise<ContextoApi | Response> {
+/** Devolve o contexto da chave ou a Recusa (401/403) com a chave recusada, se existir. */
+export async function autenticar(req: Request, db: DbRpc): Promise<ContextoApi | Recusa> {
   const chave = readApiKey(req);
   if (!chave || !chave.startsWith(PREFIXO_CHAVE)) {
-    return erro(
-      'NAO_AUTENTICADO',
-      'Chave de API em falta ou inválida. Use o cabeçalho X-API-Key.',
-      401
-    );
+    return {
+      recusa: erro(
+        'NAO_AUTENTICADO',
+        'Chave de API em falta ou inválida. Use o cabeçalho X-API-Key.',
+        401
+      ),
+    };
   }
   const { data, error } = await db.rpc('api_chave_por_hash', { p_hash: await sha256Hex(chave) });
   const linha = (Array.isArray(data) ? data[0] : data) as LinhaChave | undefined;
-  if (error || !linha) return erro('NAO_AUTENTICADO', 'Chave de API desconhecida.', 401);
-  if (linha.escopo !== 'rent_a_car') {
-    return erro('SEM_PERMISSAO', 'Esta chave não serve a API de rent-a-car.', 403);
-  }
-  if (!linha.ativo) return erro('SEM_PERMISSAO', 'Chave desactivada.', 403);
+  if (error || !linha)
+    return { recusa: erro('NAO_AUTENTICADO', 'Chave de API desconhecida.', 401) };
+
+  const recusada = (mensagem: string): Recusa => ({
+    recusa: erro('SEM_PERMISSAO', mensagem, 403),
+    chave: { id: linha.id, orgId: linha.org_id },
+  });
+  if (linha.escopo !== 'rent_a_car') return recusada('Esta chave não serve a API de rent-a-car.');
+  if (!linha.ativo) return recusada('Chave desactivada.');
   if (linha.expires_at && new Date(linha.expires_at) < new Date()) {
-    return erro('SEM_PERMISSAO', 'Chave expirada.', 403);
+    return recusada('Chave expirada.');
   }
   // trustedRequestIp: cf-connecting-ip (posto pelo gateway) antes do ÚLTIMO valor de
   // x-forwarded-for; o primeiro valor é escolhido pelo cliente e não vale nada.
   const whitelist = linha.ip_whitelist ?? [];
   if (whitelist.length > 0 && !whitelist.includes(trustedRequestIp(req))) {
-    return erro('SEM_PERMISSAO', 'Origem não autorizada para esta chave.', 403);
+    return recusada('Origem não autorizada para esta chave.');
   }
   return {
     chaveId: linha.id,

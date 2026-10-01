@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { autenticar, exigirPermissao, readApiKey, sha256Hex } from './auth.ts';
+import { autenticar, exigirPermissao, readApiKey, sha256Hex, type Recusa } from './auth.ts';
 
 const CHAVE = 'wg_ra_' + 'a'.repeat(48);
 
@@ -30,6 +30,8 @@ const linhaOk = {
   expires_at: null,
 };
 
+const recusa = (r: unknown) => r as Recusa;
+
 Deno.test('readApiKey lê X-API-Key ou Authorization Bearer', () => {
   assertEquals(readApiKey(pedido()), CHAVE);
   assertEquals(
@@ -44,15 +46,17 @@ Deno.test('sha256Hex é determinístico e hex de 64', async () => {
   assertEquals(h, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
 });
 
-Deno.test('sem chave → 401 NAO_AUTENTICADO', async () => {
-  const r = await autenticar(new Request('https://x/v1/modelos'), db(linhaOk));
-  assertEquals((r as Response).status, 401);
-  assertEquals((await (r as Response).json()).erro.codigo, 'NAO_AUTENTICADO');
+Deno.test('sem chave → 401 NAO_AUTENTICADO, sem chave identificada', async () => {
+  const r = recusa(await autenticar(new Request('https://x/v1/modelos'), db(linhaOk)));
+  assertEquals(r.recusa.status, 401);
+  assertEquals((await r.recusa.json()).erro.codigo, 'NAO_AUTENTICADO');
+  assertEquals(r.chave, undefined);
 });
 
-Deno.test('chave desconhecida → 401', async () => {
-  const r = await autenticar(pedido(), db(null));
-  assertEquals((r as Response).status, 401);
+Deno.test('chave desconhecida → 401, sem chave identificada', async () => {
+  const r = recusa(await autenticar(pedido(), db(null)));
+  assertEquals(r.recusa.status, 401);
+  assertEquals(r.chave, undefined);
 });
 
 Deno.test('a chave vai à base como hash, nunca em claro', async () => {
@@ -67,35 +71,37 @@ Deno.test('a chave vai à base como hash, nunca em claro', async () => {
   assertEquals(recebido, esperado);
 });
 
-Deno.test('chave de contabilidade não entra nesta API → 403 SEM_PERMISSAO', async () => {
-  const r = await autenticar(pedido(), db({ ...linhaOk, escopo: 'contabilidade' }));
-  assertEquals((r as Response).status, 403);
-  assertEquals((await (r as Response).json()).erro.codigo, 'SEM_PERMISSAO');
-});
+Deno.test(
+  'chave de contabilidade não entra nesta API → 403 SEM_PERMISSAO, com a chave',
+  async () => {
+    const r = recusa(await autenticar(pedido(), db({ ...linhaOk, escopo: 'contabilidade' })));
+    assertEquals(r.recusa.status, 403);
+    assertEquals((await r.recusa.json()).erro.codigo, 'SEM_PERMISSAO');
+    assertEquals(r.chave, { id: 'k1', orgId: 'org1' });
+  }
+);
 
-Deno.test('chave desactivada ou expirada → 403', async () => {
-  assertEquals(
-    ((await autenticar(pedido(), db({ ...linhaOk, ativo: false }))) as Response).status,
-    403
+Deno.test('chave desactivada ou expirada → 403 e identifica a chave recusada', async () => {
+  const desactivada = recusa(await autenticar(pedido(), db({ ...linhaOk, ativo: false })));
+  assertEquals(desactivada.recusa.status, 403);
+  assertEquals(desactivada.chave, { id: 'k1', orgId: 'org1' });
+  const expirada = recusa(
+    await autenticar(pedido(), db({ ...linhaOk, expires_at: '2000-01-01T00:00:00Z' }))
   );
-  assertEquals(
-    (
-      (await autenticar(
-        pedido(),
-        db({ ...linhaOk, expires_at: '2000-01-01T00:00:00Z' })
-      )) as Response
-    ).status,
-    403
-  );
+  assertEquals(expirada.recusa.status, 403);
+  assertEquals(expirada.chave, { id: 'k1', orgId: 'org1' });
 });
 
 Deno.test('whitelist usa o IP de confiança, não o X-Forwarded-For cru', async () => {
   // trustedRequestIp lê cf-connecting-ip primeiro; o 1.º valor do XFF é forjável.
-  const r = await autenticar(
-    pedido({ 'x-forwarded-for': '1.2.3.4, 9.9.9.9', 'cf-connecting-ip': '9.9.9.9' }),
-    db({ ...linhaOk, ip_whitelist: ['1.2.3.4'] })
+  const r = recusa(
+    await autenticar(
+      pedido({ 'x-forwarded-for': '1.2.3.4, 9.9.9.9', 'cf-connecting-ip': '9.9.9.9' }),
+      db({ ...linhaOk, ip_whitelist: ['1.2.3.4'] })
+    )
   );
-  assertEquals((r as Response).status, 403);
+  assertEquals(r.recusa.status, 403);
+  assertEquals(r.chave, { id: 'k1', orgId: 'org1' });
 });
 
 Deno.test('whitelist aceita o IP de confiança quando está na lista', async () => {
