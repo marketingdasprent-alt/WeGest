@@ -306,7 +306,8 @@ jobs:
         if: steps.baseline.outputs.tem_baseline == 'true'
         run: |
           bash scripts/pgtap-suite.sh "API externa" \
-            api_chaves
+            api_chaves \
+            catalogo_site_colunas
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
