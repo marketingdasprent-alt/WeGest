@@ -39,9 +39,17 @@ create policy api_chaves_update on public.api_chaves for update to authenticated
 
 -- A política antiga "Admins podem gerir API keys" (FOR ALL) e o GRANT ALL a
 -- authenticated vinham do Primavera e seguem a tabela no rename: deixavam
--- INSERT e DELETE pelo browser. Só ficam as duas políticas acima.
+-- INSERT e DELETE pelo browser. Só ficam as duas políticas acima, e os
+-- privilégios passam a ser por coluna: o browser lê o que se mostra na lista
+-- e altera o que se edita. api_key, api_secret e api_key_hash nunca saem
+-- pelo PostgREST; criar é só pela RPC.
 drop policy if exists "Admins podem gerir API keys" on public.api_chaves;
-revoke insert, delete on public.api_chaves from authenticated, anon;
+revoke insert, update, delete, truncate, references, trigger on public.api_chaves from authenticated, anon;
+grant update (nome, ativo, ip_whitelist, expires_at, permissoes) on public.api_chaves to authenticated;
+revoke select on public.api_chaves from authenticated;
+grant select (id, org_id, nome, escopo, permissoes, ativo, ip_whitelist, rate_limit_per_minute,
+              expires_at, last_used_at, total_requests, created_at, created_by, prefixo)
+  on public.api_chaves to authenticated;
 
 -- Chaves antigas (Primavera, api_key em claro) passam a resolver também por hash,
 -- para a API de rent-a-car as reconhecer e recusar por escopo (403) em vez de 401.
@@ -62,6 +70,12 @@ declare
 begin
   if v_org is null or not public.is_current_user_admin() then
     raise exception 'Só administradores da organização criam chaves de API';
+  end if;
+  if not coalesce(p_permissoes, '{}') <@ array['catalogo:read', 'disponibilidade:read', 'reservas:read', 'reservas:write'] then
+    raise exception 'Permissão desconhecida';
+  end if;
+  if p_expira_em is not null and p_expira_em <= now() then
+    raise exception 'Expiração no passado';
   end if;
   v_chave := 'wg_ra_' || encode(extensions.gen_random_bytes(24), 'hex');
   insert into public.api_chaves
@@ -118,8 +132,10 @@ create policy rls_org_isolation on public.api_pedidos as restrictive to authenti
   using (org_id = public.get_current_org_id())
   with check (org_id is null or org_id = public.get_current_org_id());
 
--- Só a edge function (service_role) escreve; o browser lê.
-revoke insert, update, delete on public.api_pedidos from authenticated, anon;
+-- Só a edge function (service_role) escreve; o browser lê. A sequência da
+-- identidade também fica fechada: sem ela não há nextval pelo PostgREST.
+revoke insert, update, delete, truncate, references, trigger on public.api_pedidos from authenticated, anon;
+revoke all on sequence public.api_pedidos_id_seq from authenticated;
 
 select cron.schedule('api_pedidos_retencao', '17 3 * * *',
   $$ delete from public.api_pedidos where created_at < now() - interval '30 days' $$)
