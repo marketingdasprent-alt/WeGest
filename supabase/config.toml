@@ -242,6 +242,11 @@ verify_jwt = false
 [functions.faturacao-emitir]
 verify_jwt = true
 
+# API externa de rent-a-car: autentica por X-API-Key (chave da organização,
+# com hash em api_chaves), não por JWT. Limite por chave e auditoria em api_pedidos.
+[functions.api-rent-a-car]
+verify_jwt = false
+
 # Quadro TV público. Aberto por TV sem sessão → tem de aceitar anon.
 # Segurança: resolve org só via token; devolve apenas campos não-sensíveis.
 [functions.quadro-live]
