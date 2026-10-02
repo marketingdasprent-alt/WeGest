@@ -18,7 +18,11 @@ vi.mock('@/components/dashboard/DashboardInicioHeader', () => ({
 // Quem está a olhar: o grupo Faturação troca "Precisa de atenção" pelos negativos.
 const perfil = vi.hoisted(() => ({ cargo: 'Financeiro' as string | null }));
 vi.mock('@/hooks/usePermissions', () => ({
-  usePermissions: () => ({ cargo: perfil.cargo, isAdmin: false }),
+  usePermissions: () => ({
+    cargo: perfil.cargo,
+    cargos: perfil.cargo ? [perfil.cargo] : [],
+    isAdmin: false,
+  }),
 }));
 vi.mock('@/components/dashboard/motoristas/MotoristasSemanaCard', () => ({
   MotoristasSemanaCard: () => <div>cartão dos negativos</div>,

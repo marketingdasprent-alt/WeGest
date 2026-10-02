@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { useDefaultRoute } from '@/hooks/useDefaultRoute';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +36,7 @@ export default function MyAccount() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { defaultRoute } = useDefaultRoute();
+  const { cargos: gruposDaPessoa } = usePermissions();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -263,7 +265,13 @@ export default function MyAccount() {
           </h1>
           <p className="truncate text-sm text-muted-foreground">{profile.email}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <Badge variant="secondary">{profile.cargo || 'Sem cargo'}</Badge>
+            {(gruposDaPessoa.length > 0 ? gruposDaPessoa : [profile.cargo || 'Sem cargo']).map(
+              (nome) => (
+                <Badge key={nome} variant="secondary">
+                  {nome}
+                </Badge>
+              )
+            )}
             {profile.is_admin && <Badge>Administrador</Badge>}
           </div>
         </div>
@@ -303,7 +311,11 @@ export default function MyAccount() {
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Cargo</dt>
-                <dd className="text-sm text-foreground">{profile.cargo || 'Não definido'}</dd>
+                <dd className="text-sm text-foreground">
+                  {gruposDaPessoa.length > 0
+                    ? gruposDaPessoa.join(', ')
+                    : profile.cargo || 'Não definido'}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs font-medium text-muted-foreground">Data de criação</dt>

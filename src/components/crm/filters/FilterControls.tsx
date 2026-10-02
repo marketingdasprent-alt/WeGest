@@ -65,13 +65,20 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
         return;
       }
 
-      // Buscar profiles pelo cargo_id (foreign key - mais confiável)
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('nome')
-        .not('nome', 'is', null)
-        .eq('cargo_id', cargoData.id)
-        .order('nome');
+      // Quem tem o grupo "Gestor TVDE", principal ou adicional (uma pessoa pode ter vários).
+      const { data: membros } = await supabase.rpc('get_utilizadores_dos_grupos', {
+        p_cargo_ids: [cargoData.id],
+      });
+      const ids = (membros ?? []).map((m) => m.user_id);
+      const { data, error } =
+        ids.length === 0
+          ? { data: [], error: null }
+          : await supabase
+              .from('profiles')
+              .select('nome')
+              .not('nome', 'is', null)
+              .in('id', ids)
+              .order('nome');
 
       if (error) throw error;
       const uniqueNomes = Array.from(new Set((data || []).map((u) => u.nome))).map((nome) => ({

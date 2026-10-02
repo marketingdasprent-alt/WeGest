@@ -24,6 +24,31 @@ describe('decidirDashboardTipo', () => {
     expect(decidirDashboardTipo({ ...base, cargo: 'Gestão de Assistência' })).toBe('assistencia');
   });
 
+  it('com vários grupos, conta qualquer um: Gestor TVDE + Faturação vê a financeira', () => {
+    expect(
+      decidirDashboardTipo({
+        ...base,
+        cargo: 'Gestor TVDE',
+        cargos: ['Gestor TVDE', 'Faturação'],
+      })
+    ).toBe('financeiro');
+  });
+
+  it('com vários grupos sem financeiro nem assistência, fica na frota', () => {
+    expect(
+      decidirDashboardTipo({
+        ...base,
+        cargo: 'Gestor TVDE',
+        cargos: ['Gestor TVDE', 'Operacional'],
+      })
+    ).toBe('frota');
+  });
+
+  it('ehGrupoFaturacao aceita a lista de grupos', () => {
+    expect(ehGrupoFaturacao(['Gestor TVDE', 'Faturação'])).toBe(true);
+    expect(ehGrupoFaturacao(['Gestor TVDE'])).toBe(false);
+  });
+
   it('grupos não reconhecidos ficam na dashboard de frota', () => {
     expect(decidirDashboardTipo({ ...base, cargo: 'Operacional' })).toBe('frota');
   });

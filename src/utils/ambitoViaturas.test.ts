@@ -26,6 +26,23 @@ describe('ambitoDoUtilizador', () => {
     expect(TVDE.cartoesOcultos).toEqual(['inativas', 'todos_os_tipos', 'tipos']);
   });
 
+  it('com vários grupos só há âmbito se todos o tiverem', () => {
+    expect(
+      ambitoDoUtilizador({
+        isAdmin: false,
+        cargo: 'Gestor TVDE',
+        cargos: ['Gestor TVDE', 'Supervisor Gestor TVDE'],
+      })?.nome
+    ).toBe('TVDE');
+    expect(
+      ambitoDoUtilizador({
+        isAdmin: false,
+        cargo: 'Gestor TVDE',
+        cargos: ['Gestor TVDE', 'Faturação'],
+      })
+    ).toBeNull();
+  });
+
   it('o admin nunca tem âmbito — vê a frota toda, mesmo com cargo de Gestor TVDE', () => {
     expect(ambitoDoUtilizador({ isAdmin: true, cargo: 'Gestor TVDE' })).toBeNull();
   });

@@ -26,8 +26,8 @@ import {
 } from './sidebarMenuItems';
 
 export const SidebarMenu: React.FC = () => {
-  const { isAdmin, hasAccessToResource, cargo, loading } = usePermissions();
-  const isSupervisorTvde = isAdmin || cargo === 'Supervisor Gestor TVDE';
+  const { isAdmin, hasAccessToResource, cargo, cargos, loading } = usePermissions();
+  const isSupervisorTvde = isAdmin || cargos.includes('Supervisor Gestor TVDE');
   const { orgId } = useTenant();
   const { user } = useAuth();
   const userName = user?.user_metadata?.nome || user?.email?.split('@')[0] || 'Utilizador';

@@ -45,13 +45,20 @@ export function normalizarNome(texto: string | null | undefined): string {
     .trim();
 }
 
-/** `null` = sem âmbito, vê a frota toda. O admin nunca tem âmbito. */
+/**
+ * `null` = sem âmbito, vê a frota toda. O admin nunca tem âmbito. Com vários
+ * grupos só há âmbito se TODOS tiverem: basta um grupo sem âmbito para ver tudo.
+ */
 export function ambitoDoUtilizador(p: {
   isAdmin: boolean;
   cargo: string | null | undefined;
+  cargos?: readonly string[];
 }): AmbitoViaturas | null {
   if (p.isAdmin) return null;
-  return AMBITO_POR_CARGO[normalizarNome(p.cargo)] ?? null;
+  const grupos = p.cargos && p.cargos.length > 0 ? p.cargos : [p.cargo];
+  const ambitos = grupos.map((g) => AMBITO_POR_CARGO[normalizarNome(g)] ?? null);
+  if (ambitos.some((a) => a === null)) return null;
+  return ambitos[0];
 }
 
 /** Viatura sem tipo nunca entra num âmbito — só o admin (ou "toda a frota") a vê. */

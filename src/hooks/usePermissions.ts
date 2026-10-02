@@ -18,6 +18,9 @@ interface UsePermissionsReturn {
   recursosEditaveis: string[];
   cargo: string | null;
   cargo_id: string | null;
+  /** Nomes e ids de todos os grupos da pessoa, o principal primeiro. */
+  cargos: string[];
+  cargoIds: string[];
   tipoUtilizador: 'motorista' | 'colaborador';
 }
 
@@ -28,6 +31,8 @@ export const usePermissions = (): UsePermissionsReturn => {
     recursosEditaveis,
     cargo,
     cargo_id,
+    cargos,
+    cargoIds,
     tipoUtilizador,
     loading,
     hasAccessToResource,
@@ -57,6 +62,8 @@ export const usePermissions = (): UsePermissionsReturn => {
     recursosEditaveis,
     cargo,
     cargo_id,
+    cargos,
+    cargoIds,
     tipoUtilizador,
   };
 };

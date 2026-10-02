@@ -39,12 +39,27 @@ serve(async (req: Request) => {
 
     if (gError) throw gError;
 
-    const recipientIds = (orgMembers || [])
-      .filter((m: any) => {
-        const cargoNome = (m.cargos?.nome || '').toLowerCase();
-        return m.is_admin || cargoNome.includes('gestor de assistência') || cargoNome.includes('gestor de assistencia');
-      })
-      .map((m: any) => m.user_id);
+    const ehGestorAssistencia = (nome: string | null | undefined) => {
+      const cargoNome = (nome || '').toLowerCase();
+      return cargoNome.includes('gestor de assistência') || cargoNome.includes('gestor de assistencia');
+    };
+
+    // Uma pessoa pode ter vários grupos: o Gestor de Assistência também conta como adicional.
+    const { data: gruposAdicionais } = await supabase
+      .from('user_organizacoes_cargos')
+      .select('user_id, cargos(nome)')
+      .eq('org_id', orgId);
+
+    const recipientIds = [
+      ...new Set([
+        ...(orgMembers || [])
+          .filter((m: any) => m.is_admin || ehGestorAssistencia(m.cargos?.nome))
+          .map((m: any) => m.user_id),
+        ...(gruposAdicionais || [])
+          .filter((g: any) => ehGestorAssistencia(g.cargos?.nome))
+          .map((g: any) => g.user_id),
+      ]),
+    ];
 
     let emails: string[] = [];
     if (recipientIds.length > 0) {

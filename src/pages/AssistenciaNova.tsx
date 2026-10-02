@@ -412,6 +412,12 @@ export default function AssistenciaNova() {
           }
         });
 
+        // Quem tem um destes grupos como adicional (uma pessoa pode ter vários).
+        const { data: gestoresDosGrupos } = await supabase.rpc('get_utilizadores_dos_grupos', {
+          p_cargo_ids: GESTOR_ASSISTENCIA_CARGO_IDS,
+        });
+        (gestoresDosGrupos ?? []).forEach((g) => userIdsSet.add(g.user_id));
+
         if (motoristaId) {
           const { data: motorista } = await supabase
             .from('motoristas_ativos')
