@@ -34,7 +34,9 @@ Deno.test(
   () => {
     assertEquals(origemPermitida(comOrigem('https://wegest.pt')), 'https://wegest.pt');
     assertEquals(origemPermitida(comOrigem('https://www.wegest.pt')), 'https://www.wegest.pt');
+    assertEquals(origemPermitida(comOrigem('https://docs.wegest.pt')), 'https://docs.wegest.pt');
     assertEquals(origemPermitida(comOrigem('https://evil.example')), null);
+    assertEquals(origemPermitida(comOrigem('https://docs.wegest.pt.evil.example')), null);
     assertEquals(origemPermitida(comOrigem()), null);
 
     const a = comCors(comOrigem('https://wegest.pt'), ok({}));

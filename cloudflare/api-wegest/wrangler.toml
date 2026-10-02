@@ -1,0 +1,15 @@
+# Exemplo para publicar com o Wrangler (opcional: o README explica como fazer
+# tudo pelo painel). Sem segredos: o Worker não precisa de nenhum, a chave da
+# API vem em cada pedido no cabeçalho X-API-Key.
+name = "api-wegest"
+main = "worker.js"
+# >= 2024-11-11 para o fetch aceitar cache: 'no-store' (o Worker não guarda nada).
+compatibility_date = "2026-09-01"
+
+# O Cloudflare cria o registo DNS de api.wegest.pt sozinho.
+routes = [
+  { pattern = "api.wegest.pt", custom_domain = true },
+]
+
+# Sem workers.dev: a API só existe em api.wegest.pt.
+workers_dev = false
