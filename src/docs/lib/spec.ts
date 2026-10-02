@@ -116,6 +116,30 @@ export function operacoes(): Operacao[] {
   );
 }
 
+/**
+ * O que a resposta devolve, para a linha "200 — Lista de Modelo": o rótulo, o
+ * esquema nomeado (quando há) e o esquema de onde saem os atributos.
+ */
+export function resumoDaResposta(r: Resposta): { rotulo: string; ref?: string; esquema?: Esquema } {
+  const s = r.esquema;
+  if (!s) return { rotulo: r.descricao };
+  if (typeof s.$ref === 'string') {
+    const ref = nomeDoRef(s.$ref);
+    return { rotulo: ref, ref, esquema: resolverRef(s.$ref) };
+  }
+  const item = s.items as Esquema | undefined;
+  if (s.type === 'array' && typeof item?.$ref === 'string') {
+    const ref = nomeDoRef(item.$ref);
+    return { rotulo: `Lista de ${ref}`, ref, esquema: resolverRef(item.$ref) };
+  }
+  return { rotulo: r.descricao, esquema: s };
+}
+
+/** Erros possíveis da operação (4xx/5xx com código), por estado. */
+export function errosDaOperacao(op: Operacao): Resposta[] {
+  return op.respostas.filter((r) => !r.estado.startsWith('2') && r.codigo);
+}
+
 export function operacao(id: string): Operacao {
   const op = operacoes().find((o) => o.id === id);
   if (!op) throw new Error(`Operação desconhecida: ${id}`);
