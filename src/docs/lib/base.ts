@@ -2,6 +2,7 @@
 // (o rewrite da Vercel não muda o URL do browser, o React Router vê '/erros');
 // dentro da app, em /docs/*.
 export const DOMINIO_DOCS = 'docs.wegest.pt';
+export const URL_DOCS = `https://${DOMINIO_DOCS}`;
 
 export function ehDominioDocs(hostname: string): boolean {
   return hostname === DOMINIO_DOCS;
