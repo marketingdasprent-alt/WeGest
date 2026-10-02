@@ -245,3 +245,35 @@ Deno.test('outro recurso → null (segue para o próximo serviço)', async () =>
   );
   assertEquals(r, null);
 });
+
+Deno.test(
+  'erro do PG → 500 e o console.error leva só o código e a RPC, nunca a mensagem',
+  async () => {
+    const mensagemPg = 'invalid input syntax for type date: "carla@novo.pt"';
+    const registos: unknown[][] = [];
+    const original = console.error;
+    console.error = (...a: unknown[]) => {
+      registos.push(a);
+    };
+    try {
+      const r = await servirReservas(
+        { metodo: 'POST', recurso: 'reservas', id: null },
+        pedido('POST', 'reservas', corpo()),
+        ctx,
+        {
+          rpc: () => Promise.resolve({ data: null, error: { code: '22007', message: mensagemPg } }),
+        }
+      );
+      assertEquals(r?.status, 500);
+      assertEquals((await r!.json()).erro.codigo, 'ERRO_INTERNO');
+    } finally {
+      console.error = original;
+    }
+    assertEquals(registos.length, 1);
+    const linha = JSON.stringify(registos[0]);
+    assert(!linha.includes('carla'), linha);
+    assert(!linha.includes('invalid input'), linha);
+    assert(linha.includes('22007'), linha);
+    assert(linha.includes('api_criar_reserva'), linha);
+  }
+);

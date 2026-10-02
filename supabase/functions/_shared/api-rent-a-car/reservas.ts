@@ -179,9 +179,14 @@ export function validarCorpoReserva(corpo: unknown): Validacao {
   };
 }
 
-function responder(data: unknown, error: unknown, status: number): Response {
+function responder(rpc: string, data: unknown, error: unknown, status: number): Response {
   if (error) {
-    console.error('[api-rent-a-car] reservas falhou:', (error as { message?: string }).message);
+    // Só o código (SQLSTATE) e a RPC: a mensagem do Postgres pode citar dados do cliente.
+    const codigo = (error as { code?: unknown }).code;
+    console.error('[api-rent-a-car] reservas falhou:', {
+      rpc,
+      codigo: typeof codigo === 'string' ? codigo : null,
+    });
     return erro(
       'ERRO_INTERNO',
       'Falha a gravar ou ler a reserva. Pode repetir: a mesma referencia_externa nunca cria duas.',
@@ -225,7 +230,7 @@ async function servir(
     if (!CODIGO.test(rota.id)) return erro('NAO_ENCONTRADO', 'Reserva não encontrada.', 404);
     const fn = rota.metodo === 'GET' ? 'api_obter_reserva' : 'api_cancelar_reserva';
     const { data, error } = await db.rpc(fn, { p_org_id: ctx.orgId, p_codigo: Number(rota.id) });
-    return responder(data, error, 200);
+    return responder(fn, data, error, 200);
   }
 
   let corpo: unknown;
@@ -246,5 +251,5 @@ async function servir(
       fim: new Date(v.valor.fim).toISOString(),
     },
   });
-  return responder(data, error, 201);
+  return responder('api_criar_reserva', data, error, 201);
 }
