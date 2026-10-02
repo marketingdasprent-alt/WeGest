@@ -7,6 +7,7 @@ import { pt } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { DanoFotosGallery } from '@/components/viaturas/DanoFotosGallery';
 import { DanoCategoriaBadge } from '@/components/viaturas/DanoCategoriaBadge';
+import { idsDasVersoes } from '@/utils/versoesDoContrato';
 
 interface ContratoTabDanosProps {
   /** Contrato de renting cujos danos (entrega/recolha) se mostram. */
@@ -54,6 +55,22 @@ export const ContratoTabDanos: React.FC<ContratoTabDanosProps> = ({ contratoId }
     if (!contratoId) return;
     setLoading(true);
     try {
+      // Os danos da entrega ficam na versão em que foram registados; após uma
+      // renovação a versão aberta é outra, por isso procura-se em todas.
+      const { data: atual } = await supabase
+        .from('contratos_renting')
+        .select('org_id, codigo')
+        .eq('id', contratoId)
+        .maybeSingle();
+      const { data: versoes } = atual
+        ? await supabase
+            .from('contratos_renting')
+            .select('id')
+            .eq('org_id', atual.org_id)
+            .eq('codigo', atual.codigo)
+            .is('deleted_at', null)
+        : { data: [] };
+
       const { data, error } = await supabase
         .from('viatura_danos')
         .select(
@@ -62,7 +79,7 @@ export const ContratoTabDanos: React.FC<ContratoTabDanosProps> = ({ contratoId }
           categoria:assistencia_categorias (id, nome, cor)
         `
         )
-        .eq('contrato_renting_id', contratoId)
+        .in('contrato_renting_id', idsDasVersoes(contratoId, versoes ?? []))
         .order('created_at', { ascending: false });
       if (error) throw error;
 

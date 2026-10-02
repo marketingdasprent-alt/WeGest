@@ -9,8 +9,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Camera, Upload, Loader2, Eye, Trash2, ImageIcon, Wrench } from 'lucide-react';
+import {
+  Camera,
+  Upload,
+  Loader2,
+  Eye,
+  Trash2,
+  ImageIcon,
+  Wrench,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { indiceVizinho } from '@/utils/galeriaIndice';
 import { toast } from 'sonner';
 
 type DanoBucket = 'viatura-documentos' | 'assistencia-anexos' | 'viatura-danos';
@@ -106,8 +117,8 @@ export function DanoFotosGallery({
   readonly = false,
 }: DanoFotosGalleryProps) {
   const [uploading, setUploading] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [selectedFoto, setSelectedFoto] = useState<DanoFoto | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const selectedFoto = selectedIndex === null ? null : (fotos[selectedIndex] ?? null);
   const [editingDescricao, setEditingDescricao] = useState<{
     id: string;
     descricao: string;
@@ -198,8 +209,15 @@ export function DanoFotosGallery({
   };
 
   const openLightbox = (foto: DanoFoto) => {
-    setSelectedFoto(foto);
-    setLightboxOpen(true);
+    setSelectedIndex(fotos.findIndex((f) => f.id === foto.id));
+  };
+
+  const navegar = (passo: 1 | -1) =>
+    setSelectedIndex((i) => (i === null ? i : indiceVizinho(i, fotos.length, passo)));
+
+  const handleLightboxKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowRight') navegar(1);
+    else if (e.key === 'ArrowLeft') navegar(-1);
   };
 
   return (
@@ -315,23 +333,56 @@ export function DanoFotosGallery({
       )}
 
       {/* Lightbox */}
-      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>{selectedFoto?.nome_ficheiro || 'Foto do Dano'}</DialogTitle>
+      <Dialog open={selectedFoto !== null} onOpenChange={(open) => !open && setSelectedIndex(null)}>
+        <DialogContent
+          className="fixed inset-0 left-0 top-0 h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 gap-0 rounded-none border-0 bg-black/95 p-0 text-white sm:rounded-none [&>button]:text-white"
+          onKeyDown={handleLightboxKeyDown}
+        >
+          <DialogHeader className="px-4 pt-4">
+            <DialogTitle className="text-white">
+              {selectedFoto?.nome_ficheiro || 'Foto do Dano'}
+              {selectedIndex !== null && fotos.length > 1 && (
+                <span className="ml-3 text-sm font-normal text-white/70">
+                  {selectedIndex + 1} / {fotos.length}
+                </span>
+              )}
+            </DialogTitle>
             <DialogDescription className="sr-only">
-              Visualização ampliada da foto selecionada.
+              Visualização ampliada da foto selecionada. Setas para mudar de foto.
             </DialogDescription>
           </DialogHeader>
           {selectedFoto && (
-            <div className="flex flex-col items-center gap-4">
+            <div className="relative flex flex-1 flex-col items-center justify-center gap-3 overflow-hidden px-14 pb-4">
+              {fotos.length > 1 && (
+                <>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Foto anterior"
+                    className="absolute left-2 top-1/2 h-12 w-12 -translate-y-1/2 rounded-full text-white hover:bg-white/20 hover:text-white"
+                    onClick={() => navegar(-1)}
+                  >
+                    <ChevronLeft className="h-8 w-8" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Foto seguinte"
+                    className="absolute right-2 top-1/2 h-12 w-12 -translate-y-1/2 rounded-full text-white hover:bg-white/20 hover:text-white"
+                    onClick={() => navegar(1)}
+                  >
+                    <ChevronRight className="h-8 w-8" />
+                  </Button>
+                </>
+              )}
               <DanoFotoImage
+                key={selectedFoto.id}
                 ficheiroUrl={selectedFoto.ficheiro_url}
                 alt={selectedFoto.nome_ficheiro || 'Foto do dano'}
-                className="max-h-[60vh] max-w-full object-contain rounded-lg"
+                className="max-h-[80dvh] max-w-full object-contain"
               />
               {selectedFoto.descricao && (
-                <p className="text-center italic text-muted-foreground border-t pt-2 w-full">
+                <p className="w-full max-w-3xl border-t border-white/20 pt-2 text-center italic text-white/80">
                   {selectedFoto.descricao}
                 </p>
               )}
