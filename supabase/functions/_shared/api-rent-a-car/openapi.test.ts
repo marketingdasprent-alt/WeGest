@@ -2,6 +2,7 @@ import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.t
 import { ROTAS_CATALOGO } from './catalogo.ts';
 import { ROTAS_DISPONIBILIDADE } from './disponibilidade.ts';
 import { OPENAPI, caminhosDocumentados } from './openapi.ts';
+import { ROTAS_RESERVAS } from './reservas.ts';
 
 Deno.test(
   'toda a rota de catálogo e disponibilidade está documentada, e só essas mais health/openapi',
@@ -19,6 +20,9 @@ Deno.test(
       if (r.comId) esperados.add(`GET /${r.recurso}/{id}`);
     }
     for (const r of ROTAS_DISPONIBILIDADE) esperados.add(`${r.metodo} /${r.recurso}`);
+    for (const r of ROTAS_RESERVAS) {
+      esperados.add(`${r.metodo} /reservas${r.comCodigo ? '/{codigo}' : ''}`);
+    }
     assertEquals([...doc].sort(), [...esperados].sort());
   }
 );
@@ -57,6 +61,20 @@ Deno.test('disponibilidade e cotações documentadas com x-permissao, exemplos e
     cot.responses['409'].content['application/json'].example.erro.codigo,
     'SEM_DISPONIBILIDADE'
   );
+});
+
+Deno.test('reservas documentadas com a permissão do router, 201/200 no POST e 409', () => {
+  // deno-lint-ignore no-explicit-any
+  const paths = OPENAPI.paths as Record<string, Record<string, any>>;
+  for (const r of ROTAS_RESERVAS) {
+    const op = paths[`/reservas${r.comCodigo ? '/{codigo}' : ''}`][r.metodo.toLowerCase()];
+    assertEquals(op['x-permissao'], r.permissao);
+    // O GET só lê: não tem 409. Criar e cancelar têm.
+    if (r.metodo !== 'GET') assert(op.responses['409'], `${r.metodo}: sem 409`);
+  }
+  const post = paths['/reservas'].post;
+  assert(post.responses['201'].content['application/json'].example);
+  assert(post.responses['200'], 'POST sem 200 (reserva repetida)');
 });
 
 Deno.test('documento declara a segurança por X-API-Key e o envelope de erro', () => {

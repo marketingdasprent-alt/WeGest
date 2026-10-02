@@ -1,5 +1,5 @@
 // Especificação OpenAPI 3.1 da API externa de rent-a-car (Fase A: catálogo;
-// Fase B: disponibilidade e cotação).
+// Fase B: disponibilidade e cotação; Fase C: reservas, em openapi.reservas.ts).
 // Fonte única: o endpoint /v1/openapi.json e o site docs.wegest.pt saem daqui.
 // Os esquemas seguem exactamente as chaves devolvidas pelas funções SQL api_*.
 // Em 3.1 não existe `nullable`: um campo opcional é `type: [X, 'null']`.
@@ -26,6 +26,7 @@ import {
   EX_PRECO,
   exErro,
 } from './openapi.exemplos.ts';
+import { caminhosReservas, esquemasReservas } from './openapi.reservas.ts';
 
 type Esquema = Record<string, unknown>;
 
@@ -390,6 +391,7 @@ export const OPENAPI: Record<string, unknown> = {
     { name: 'Coberturas' },
     { name: 'Disponibilidade' },
     { name: 'Cotações' },
+    { name: 'Reservas' },
   ],
   paths: {
     '/': {
@@ -645,6 +647,7 @@ export const OPENAPI: Record<string, unknown> = {
         },
       },
     },
+    ...caminhosReservas({ json, respostaErro, erros: ERROS_DISPONIBILIDADE }),
   },
   components: {
     securitySchemes: { ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
@@ -663,6 +666,7 @@ export const OPENAPI: Record<string, unknown> = {
       CotacaoPedido,
       LinhaCotacao,
       Cotacao,
+      ...esquemasReservas({ CotacaoPedido }),
     },
     responses: {
       NaoAutenticado: respostaErro(

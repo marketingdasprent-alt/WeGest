@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { atributosDe, tipoDoParametro } from './atributos';
-import { ERROS_EM_BREVE, ERROS_FASE_A } from './erros';
+import { ERROS_FASE_A } from './erros';
 import { realcar } from './realce';
 import { esquemaComponente, operacao, operacoes } from './spec';
 
@@ -48,9 +48,11 @@ describe('códigos de erro', () => {
     }
   });
 
-  it('os códigos em breve não se repetem com os da fase A', () => {
-    const a = new Set(ERROS_FASE_A.map((e) => e.codigo));
-    for (const e of ERROS_EM_BREVE) expect(a.has(e.codigo), e.codigo).toBe(false);
+  it('os códigos das reservas (fase C) estão activos, com 409', () => {
+    const porCodigo = new Map(ERROS_FASE_A.map((e) => [e.codigo, e]));
+    for (const codigo of ['PRECO_ALTERADO', 'ESTADO_INVALIDO']) {
+      expect(porCodigo.get(codigo)?.estados, codigo).toEqual(['409']);
+    }
   });
 });
 

@@ -6,6 +6,7 @@ import {
   errosDaOperacao,
   esquemaComponente,
   operacao,
+  respostaDeSucesso,
   resumoDaResposta,
 } from './spec';
 
@@ -34,6 +35,13 @@ describe('spec da documentação', () => {
     expect(health.ref).toBeUndefined();
     expect(health.rotulo).toBe('A chave é válida');
     expect(Object.keys(health.esquema?.properties as object)).toContain('tarifa_site');
+  });
+
+  it('respostaDeSucesso: o 201 vem antes do 200; sem 201, o primeiro 2xx', () => {
+    // As chaves numéricas ordenam-se sozinhas ('200' antes de '201'): a escolha é explícita.
+    expect(respostaDeSucesso(operacao('POST /reservas').respostas)?.estado).toBe('201');
+    expect(respostaDeSucesso(operacao('GET /modelos').respostas)?.estado).toBe('200');
+    expect(respostaDeSucesso([])).toBeUndefined();
   });
 
   it('errosDaOperacao: só 4xx/5xx com código, nunca o 200', () => {

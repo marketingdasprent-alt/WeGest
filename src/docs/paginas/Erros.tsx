@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { CodeBlock } from '../componentes/CodeBlock';
 import { C, GuiaPagina, Seccao } from '../componentes/GuiaPagina';
-import { ERROS_EM_BREVE, ERROS_FASE_A } from '../lib/erros';
+import { ERROS_FASE_A } from '../lib/erros';
 
 const ENVELOPE = JSON.stringify(
   { erro: { codigo: 'SEM_PERMISSAO', mensagem: 'A chave não tem a permissão catalogo:read.' } },
@@ -43,17 +43,6 @@ export default function Erros() {
             </div>
           ))}
         </div>
-      </Seccao>
-      <Seccao id="em-breve" titulo="Em breve">
-        <p className="text-muted-foreground">Códigos reservados para as fases B e C.</p>
-        <dl className="grid gap-2 text-sm leading-6 sm:grid-cols-[14rem_1fr]">
-          {ERROS_EM_BREVE.map((e) => (
-            <div key={e.codigo} className="contents">
-              <dt className="font-mono">{e.codigo}</dt>
-              <dd className="text-muted-foreground">{e.quando}</dd>
-            </div>
-          ))}
-        </dl>
       </Seccao>
     </GuiaPagina>
   );

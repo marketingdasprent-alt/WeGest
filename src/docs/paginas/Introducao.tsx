@@ -34,8 +34,9 @@ export default function Introducao() {
         <p>
           A API de rent-a-car do WeGest dá ao site da sua organização o catálogo de aluguer
           (estações, categorias, modelos com preço por dia, extras e coberturas), a disponibilidade
-          num período e a cotação com cobertura e extras. As reservas chegam na fase seguinte.
-          Versão actual: {VERSAO}.
+          num período, a cotação com cobertura e extras, e as reservas: o site cria, consulta e
+          cancela reservas, que entram como pendentes e a equipa confirma no WeGest. Versão actual:{' '}
+          {VERSAO}.
         </p>
       }
     >

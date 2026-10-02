@@ -94,6 +94,23 @@ export const RECURSOS: Recurso[] = [
       'IVA. Uma cotação não reserva a viatura.',
   },
   {
+    slug: 'recursos/reservas',
+    titulo: 'Reservas',
+    objecto: 'Reserva',
+    operacoes: [
+      { id: 'POST /reservas', ancora: 'criar' },
+      { id: 'GET /reservas/{codigo}', ancora: 'consultar' },
+      { id: 'DELETE /reservas/{codigo}', ancora: 'cancelar' },
+    ],
+    introducao:
+      'A reserva entra como pendente, sem matrícula: o cliente escolhe o modelo e a equipa ' +
+      'atribui a viatura e confirma no WeGest. Mande sempre a mesma referencia_externa ao repetir ' +
+      'um pedido — nunca cria duas reservas. Uma referência já usada devolve a reserva existente, ' +
+      'mesmo cancelada: depois de cancelar, um pedido novo precisa de referência nova. Consultar e ' +
+      'cancelar servem a qualquer chave da organização com a permissão, não só à que criou a ' +
+      'reserva: uma chave só se dá ao vosso próprio site.',
+  },
+  {
     slug: 'recursos/health',
     titulo: 'Health',
     operacoes: [{ id: 'GET /health', ancora: 'estado' }],
@@ -151,7 +168,6 @@ export const PAGINAS: PaginaNav[] = [
     seccoes: [
       { id: 'envelope', titulo: 'O envelope de erro' },
       { id: 'codigos', titulo: 'Códigos' },
-      { id: 'em-breve', titulo: 'Em breve' },
     ],
   },
   {
@@ -165,12 +181,6 @@ export const PAGINAS: PaginaNav[] = [
     ],
   },
   ...RECURSOS.map((r): PaginaNav => ({ slug: r.slug, titulo: r.titulo, grupo: 'Recursos' })),
-  {
-    slug: 'recursos/reservas',
-    titulo: 'Reservas',
-    grupo: 'Em breve',
-    emBreve: 'Reservas chegam na fase C.',
-  },
   { slug: 'referencia', titulo: 'Referência interactiva', grupo: 'Ferramentas' },
   {
     slug: 'openapi.json',
@@ -183,8 +193,12 @@ export const PAGINAS: PaginaNav[] = [
 
 export const GRUPOS: Grupo[] = ['Começar', 'Conceitos', 'Recursos', 'Em breve', 'Ferramentas'];
 
+/** Grupos com páginas, pela ordem de GRUPOS (um grupo vazio não aparece). */
 export function navegacao(): { grupo: Grupo; paginas: PaginaNav[] }[] {
-  return GRUPOS.map((grupo) => ({ grupo, paginas: PAGINAS.filter((p) => p.grupo === grupo) }));
+  return GRUPOS.map((grupo) => ({
+    grupo,
+    paginas: PAGINAS.filter((p) => p.grupo === grupo),
+  })).filter((g) => g.paginas.length > 0);
 }
 
 export const pagina = (slug: string) => PAGINAS.find((p) => p.slug === slug);
