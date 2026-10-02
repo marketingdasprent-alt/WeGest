@@ -32,7 +32,7 @@ begin
     (org_id, codigo, canal, idioma, assunto, corpo_template, corpo_formato, versao, ativo)
   values (
     p_org_id, 'reserva.site_recebida', 'email', 'pt-PT',
-    'Reserva #{{codigo}} do site — {{modelo}}',
+    'Reserva #{{codigo}} do site: {{modelo}}',
     'Chegou a reserva <b>#{{codigo}}</b> do site: <b>{{modelo}}</b> para <b>{{cliente}}</b>, ' ||
     'de {{data_inicio}} a {{data_fim}}. Total {{total}} €.<br><br>Atribuir viatura e confirmar.',
     'html', 1, true
@@ -47,7 +47,7 @@ begin
 
   if v_cargo_admin is null then
     raise warning
-      'seed_alerta_reserva_site_recebida: organização % não tem cargo "Administrador" — regra não criada.',
+      'seed_alerta_reserva_site_recebida: organização % não tem cargo "Administrador", regra não criada.',
       p_org_id;
     return;
   end if;

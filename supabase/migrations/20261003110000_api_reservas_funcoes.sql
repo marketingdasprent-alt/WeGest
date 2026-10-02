@@ -178,10 +178,10 @@ begin
 
   v_mensagem := 'Reserva #' || v_codigo || ' do site: ' || v_m.marca || ' ' || v_m.modelo || ', '
                 || to_char(v_inicio at time zone 'Europe/Lisbon', 'DD/MM HH24:MI') || ' a '
-                || to_char(v_fim at time zone 'Europe/Lisbon', 'DD/MM HH24:MI') || ' — ' || v_cliente_nome
+                || to_char(v_fim at time zone 'Europe/Lisbon', 'DD/MM HH24:MI') || ', ' || v_cliente_nome
                 || '. Atribuir viatura e confirmar.';
   if v_divergente then
-    v_mensagem := v_mensagem || ' Dados do site diferentes da ficha do cliente — confirmar identidade ao balcão.';
+    v_mensagem := v_mensagem || ' Dados do site diferentes da ficha do cliente: confirmar identidade ao balcão.';
   end if;
 
   insert into public.domain_events (org_id, event_type, entity_table, entity_id, payload, emitted_by)
