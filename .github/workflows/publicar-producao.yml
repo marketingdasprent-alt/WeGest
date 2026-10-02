@@ -1,0 +1,135 @@
+name: 🚀 Publicar em produção
+
+# Botão manual. Aplica migrações e/ou publica edge functions no projecto de
+# PRODUÇÃO, com os segredos que já existem no repositório:
+#   SUPABASE_DB_URL        → migrações (psql, numa só transacção)
+#   SUPABASE_ACCESS_TOKEN  → edge functions (CLI da Supabase, sem Docker)
+#
+# Só corre a partir do main: o que se publica é o que passou no CI.
+#
+# Migrações: nomes dos ficheiros de supabase/migrations separados por espaço.
+#   "ensaio" (ligado por omissão) aplica tudo e DESFAZ no fim, para ver se corre.
+#   Desligado, grava. Uma migração que falha não deixa nada a meio.
+#
+# Edge functions: uma lista COM verificação de sessão (verify_jwt) e outra SEM.
+#   A flag tem de ser explícita: a CLI assume "com verificação" nas funções que
+#   não têm entrada em supabase/config.toml e partia webhooks e o registo.
+on:
+  workflow_dispatch:
+    inputs:
+      migracoes:
+        description: 'Migrações a aplicar (ficheiros de supabase/migrations, separados por espaço)'
+        required: false
+        default: ''
+      ensaio:
+        description: 'Ensaio das migrações: aplica e desfaz, não grava'
+        type: boolean
+        default: true
+      funcoes_com_jwt:
+        description: 'Edge functions COM verificação de sessão (nomes separados por espaço)'
+        required: false
+        default: ''
+      funcoes_sem_jwt:
+        description: 'Edge functions SEM verificação de sessão (nomes separados por espaço)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publicar-producao
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    name: 🚀 Publicar
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MIGRACOES: ${{ inputs.migracoes }}
+      ENSAIO: ${{ inputs.ensaio }}
+      COM_JWT: ${{ inputs.funcoes_com_jwt }}
+      SEM_JWT: ${{ inputs.funcoes_sem_jwt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar as entradas
+        run: |
+          set -eu
+          for v in "$MIGRACOES" "$COM_JWT" "$SEM_JWT"; do
+            if [ -n "$v" ] && ! printf '%s' "$v" | grep -Eq '^[A-Za-z0-9._ -]+$'; then
+              echo "::error::Entrada com caracteres inválidos: só letras, números, ponto, hífen, underscore e espaço."
+              exit 1
+            fi
+          done
+          if [ -z "$MIGRACOES$COM_JWT$SEM_JWT" ]; then
+            echo "::error::Nada para publicar: indica migrações e/ou funções."
+            exit 1
+          fi
+          for f in $MIGRACOES; do
+            test -f "supabase/migrations/$f" || { echo "::error::Não existe supabase/migrations/$f"; exit 1; }
+          done
+          for f in $COM_JWT $SEM_JWT; do
+            test -f "supabase/functions/$f/index.ts" || { echo "::error::Não existe supabase/functions/$f/index.ts"; exit 1; }
+          done
+
+      - name: Aplicar migrações
+        if: ${{ inputs.migracoes != '' }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -eu
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Falta o segredo SUPABASE_DB_URL."
+            exit 1
+          fi
+          for f in $MIGRACOES; do
+            echo "::group::$f ($( [ "$ENSAIO" = "true" ] && echo ensaio || echo GRAVA ))"
+            if [ "$ENSAIO" = "true" ]; then
+              { echo 'begin;'; cat "supabase/migrations/$f"; echo; echo 'rollback;'; } \
+                | psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1
+            else
+              psql "$SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 --single-transaction -f "supabase/migrations/$f"
+            fi
+            echo "::endgroup::"
+            echo "- \`$f\`: $( [ "$ENSAIO" = "true" ] && echo 'ensaio OK (desfeito)' || echo 'aplicada' )" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: supabase/setup-cli@v1
+        if: ${{ inputs.funcoes_com_jwt != '' || inputs.funcoes_sem_jwt != '' }}
+        with:
+          version: latest
+
+      - name: Publicar edge functions
+        if: ${{ inputs.funcoes_com_jwt != '' || inputs.funcoes_sem_jwt != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        run: |
+          set -u
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "::error::Falta o segredo SUPABASE_ACCESS_TOKEN."
+            exit 1
+          fi
+          REF="$(printf '%s' "$SUPABASE_URL" | sed -E 's#https?://([^.]+)\..*#\1#')"
+          [ -n "$REF" ] || { echo "::error::Não consegui extrair o project ref de VITE_SUPABASE_URL."; exit 1; }
+          falharam=""
+          for f in $COM_JWT; do
+            echo "::group::$f (verify_jwt=true)"
+            supabase functions deploy "$f" --project-ref "$REF" --use-api || falharam="$falharam $f"
+            echo "::endgroup::"
+          done
+          for f in $SEM_JWT; do
+            echo "::group::$f (verify_jwt=false)"
+            supabase functions deploy "$f" --project-ref "$REF" --use-api --no-verify-jwt || falharam="$falharam $f"
+            echo "::endgroup::"
+          done
+          total=$(( $(printf '%s\n' $COM_JWT $SEM_JWT | grep -c .) ))
+          if [ -n "$falharam" ]; then
+            echo "- Funções: falharam${falharam} (de $total)" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Falharam:${falharam}"
+            exit 1
+          fi
+          echo "- Funções: $total publicadas" >> "$GITHUB_STEP_SUMMARY"
