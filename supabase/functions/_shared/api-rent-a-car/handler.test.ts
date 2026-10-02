@@ -26,6 +26,8 @@ interface Opcoes {
   anonIndisponivel?: boolean;
   tarifa?: string | null;
   rebentar?: boolean;
+  /** O que api_cotacao devolve. */
+  cotacao?: unknown;
 }
 
 function dbFalso(o: Opcoes = {}) {
@@ -58,6 +60,7 @@ function dbFalso(o: Opcoes = {}) {
       }
       if (name === 'api_tarifa_site')
         return Promise.resolve({ data: o.tarifa ?? null, error: null });
+      if (name === 'api_cotacao') return Promise.resolve({ data: o.cotacao ?? null, error: null });
       if (name === 'api_modelos') {
         if (o.rebentar) throw new Error('base em baixo');
         return Promise.resolve({ data: [{ id: UUID }], error: null });
@@ -336,4 +339,52 @@ Deno.test('GET /v1 (sem recurso) apresenta a API sem chave e sem auditoria', asy
 Deno.test('POST /v1 continua a ser rota inexistente', async () => {
   const r = await correr(new Request('https://x/v1', { method: 'POST' }), dbFalso());
   assertEquals(r.status, 404);
+});
+
+Deno.test('POST /v1/cotacoes chega a servirDisponibilidade e é auditado', async () => {
+  const db = dbFalso({
+    chave: { ...linhaOk, permissoes: ['catalogo:read', 'disponibilidade:read'] },
+    cotacao: { erro: { codigo: 'SEM_DISPONIBILIDADE', mensagem: 'Sem viaturas livres.' } },
+  });
+  const req = new Request('https://x/v1/cotacoes', {
+    method: 'POST',
+    headers: {
+      'x-api-key': CHAVE,
+      'cf-connecting-ip': '203.0.113.9',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      modelo_id: UUID,
+      inicio: '2026-10-20T10:00:00+01:00',
+      fim: '2026-10-23T10:00:00+01:00',
+      entrega: UUID,
+      recolha: UUID,
+      extras: [],
+    }),
+  });
+  const r = await correr(req, db);
+  assertEquals(r.status, 409);
+  assertEquals((await r.json()).erro.codigo, 'SEM_DISPONIBILIDADE');
+  assertEquals(
+    db.rpcs.map((c) => c.name),
+    ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_cotacao']
+  );
+  assertEquals(db.rpcs[2].args.p_org_id, 'org1');
+  assertEquals(db.pedidos.length, 1);
+  assertEquals(db.pedidos[0].metodo, 'POST');
+  assertEquals(db.pedidos[0].caminho, '/v1/cotacoes');
+  assertEquals(db.pedidos[0].estado_http, 409);
+});
+
+Deno.test('GET /v1/disponibilidade com chave só de catálogo → 403 auditado', async () => {
+  const db = dbFalso();
+  const r = await correr(
+    pedido(
+      `/v1/disponibilidade?inicio=2026-10-20T10:00:00Z&fim=2026-10-23T10:00:00Z&entrega=${UUID}&recolha=${UUID}`
+    ),
+    db
+  );
+  assertEquals(r.status, 403);
+  assertEquals((await r.json()).erro.codigo, 'SEM_PERMISSAO');
+  assertEquals(db.pedidos[0].estado_http, 403);
 });
