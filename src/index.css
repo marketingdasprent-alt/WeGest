@@ -91,6 +91,16 @@ html[data-native-app='true'] .native-bottom {
     /* Cor de marca WeGest — azul-marinho da logo (destaque secundário) */
     --brand-navy: 210 64% 30%;
     --brand-navy-foreground: 0 0% 100%;
+    /* Blocos de código da documentação (docs.wegest.pt): escuros nos DOIS temas,
+       por isso :root e .dark têm os mesmos valores. Medidos no index.contraste.test.ts. */
+    --code-bg: 220 10% 9%;
+    --code-fg: 220 15% 92%;
+    --code-muted: 220 8% 65%;
+    --code-linha: 220 8% 55%;
+    --syntax-string: 150 45% 62%;
+    --syntax-number: 38 70% 65%;
+    --syntax-key: 199 90% 68%;
+    --syntax-keyword: 262 85% 78%;
 
     /* Paleta do construtor de automações.
        Um bloco por módulo/acção, para o canvas se ler de relance em vez de ser
@@ -190,6 +200,16 @@ html[data-native-app='true'] .native-bottom {
     /* Azul-marinho mais claro p/ contraste em fundo escuro */
     --brand-navy: 212 55% 68%;
     --brand-navy-foreground: 222 47% 8%;
+    /* Blocos de código da documentação (docs.wegest.pt): escuros nos DOIS temas,
+       por isso :root e .dark têm os mesmos valores. Medidos no index.contraste.test.ts. */
+    --code-bg: 220 10% 9%;
+    --code-fg: 220 15% 92%;
+    --code-muted: 220 8% 65%;
+    --code-linha: 220 8% 55%;
+    --syntax-string: 150 45% 62%;
+    --syntax-number: 38 70% 65%;
+    --syntax-key: 199 90% 68%;
+    --syntax-keyword: 262 85% 78%;
 
     /* Mesmos matizes da paleta do construtor, clareados: as versões do :root
        são escuras de mais para se lerem sobre --card em tema escuro. */
