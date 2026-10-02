@@ -18,6 +18,13 @@ const LIMITE_MAXIMO = 10000;
 const LIMITE_ANONIMO_POR_MINUTO = 60;
 const CAMINHO_MAXIMO = 200;
 
+const RAIZ_V1 = /^(?:\/api-rent-a-car)?\/v1\/?$/;
+const APRESENTACAO = {
+  nome: (OPENAPI.info as { title: string }).title,
+  versao: (OPENAPI.info as { version: string }).version,
+  documentacao: 'https://docs.wegest.pt',
+};
+
 /** O que a edge function precisa do cliente Supabase (service_role). */
 export interface DbApi extends DbRpc {
   from(tabela: 'api_pedidos'): {
@@ -54,6 +61,13 @@ async function tratar(req: Request, db: DbApi): Promise<Resultado> {
   }
 
   const url = new URL(req.url);
+  // GET /v1 sem recurso: apresenta a API (público, sem chave, sem auditoria).
+  if (req.method === 'GET' && RAIZ_V1.test(url.pathname)) {
+    return {
+      resposta: ok(APRESENTACAO, { cacheSeconds: CACHE_OPENAPI_SEGUNDOS, publico: true }),
+      auditoria: null,
+    };
+  }
   const rota = resolverRota(url, req.method);
   if (!rota) {
     return {

@@ -317,3 +317,23 @@ Deno.test('excepção inesperada → 500 ERRO_INTERNO auditado', async () => {
   assertEquals((await r.json()).erro.codigo, 'ERRO_INTERNO');
   assertEquals(db.pedidos[0].estado_http, 500);
 });
+
+Deno.test('GET /v1 (sem recurso) apresenta a API sem chave e sem auditoria', async () => {
+  for (const caminho of ['/v1', '/v1/', '/api-rent-a-car/v1', '/api-rent-a-car/v1/']) {
+    const db = dbFalso();
+    const r = await correr(new Request(`https://x${caminho}`), db);
+    assertEquals(r.status, 200, caminho);
+    assertEquals(await r.json(), {
+      nome: 'WeGest — API Rent-a-Car',
+      versao: '1.0.0',
+      documentacao: 'https://docs.wegest.pt',
+    });
+    assertEquals(db.rpcs, []);
+    assertEquals(db.pedidos, []);
+  }
+});
+
+Deno.test('POST /v1 continua a ser rota inexistente', async () => {
+  const r = await correr(new Request('https://x/v1', { method: 'POST' }), dbFalso());
+  assertEquals(r.status, 404);
+});

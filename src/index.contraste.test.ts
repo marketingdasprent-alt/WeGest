@@ -227,3 +227,45 @@ describe('geometria', () => {
     expect(ESCURO['--radius']).toBeUndefined();
   });
 });
+
+/**
+ * Blocos de código da documentação (docs.wegest.pt). São escuros nos DOIS
+ * temas, por isso os tokens têm de ser iguais em :root e .dark, e cada cor de
+ * texto é medida contra --code-bg.
+ */
+describe('blocos de código (docs)', () => {
+  const TOKENS = [
+    '--code-bg',
+    '--code-fg',
+    '--code-muted',
+    '--code-linha',
+    '--syntax-string',
+    '--syntax-number',
+    '--syntax-key',
+    '--syntax-keyword',
+  ];
+
+  it('têm os mesmos valores nos dois temas', () => {
+    for (const t of TOKENS) {
+      expect(CLARO[t], t).toBeTruthy();
+      expect(ESCURO[t], t).toBe(CLARO[t]);
+    }
+  });
+
+  it.each([
+    '--code-fg',
+    '--code-muted',
+    '--syntax-string',
+    '--syntax-number',
+    '--syntax-key',
+    '--syntax-keyword',
+  ])('%s legível sobre --code-bg', (t) => {
+    expect(contraste(CLARO[t], CLARO['--code-bg'])).toBeGreaterThanOrEqual(MIN_TEXTO);
+  });
+
+  it('números de linha (decorativos) visíveis sobre --code-bg', () => {
+    expect(contraste(CLARO['--code-linha'], CLARO['--code-bg'])).toBeGreaterThanOrEqual(
+      MIN_NAO_TEXTO
+    );
+  });
+});

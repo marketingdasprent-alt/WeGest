@@ -40,3 +40,20 @@ describe('headers HTTP', () => {
     expect(diretiva('frame-src')).toContain('https://challenges.cloudflare.com');
   });
 });
+
+describe('CSP da documentação da API', () => {
+  it('a Referência interactiva pode ler e experimentar api.wegest.pt', () => {
+    const config = JSON.parse(readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8')) as {
+      headers: HeaderRule[];
+    };
+    const csp =
+      config.headers
+        .find((rule) => rule.source === '/(.*)')
+        ?.headers.find(({ key }) => key === 'Content-Security-Policy-Report-Only')?.value ?? '';
+    const connect = csp
+      .split(';')
+      .map((parte) => parte.trim())
+      .find((parte) => parte.startsWith('connect-src '));
+    expect(connect).toContain('https://api.wegest.pt');
+  });
+});
