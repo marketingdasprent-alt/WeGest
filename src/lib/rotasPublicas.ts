@@ -1,3 +1,5 @@
+import { ehDominioDocs } from '@/docs/lib/base';
+
 /**
  * Rotas servidas sem sessão — a landing, as páginas institucionais e os acessos
  * por token (galeria de danos, quadro de TV, formulários públicos).
@@ -42,8 +44,16 @@ const PREFIXOS = ['/formulario/', '/danos/', '/quadro/', '/docs/'];
  *
  * Normaliza a barra final para que `/termos` e `/termos/` sejam o mesmo — sem
  * isto, uma barra a mais reintroduzia o problema em silêncio.
+ *
+ * Em docs.wegest.pt tudo é público: o site da documentação vive na raiz
+ * ('/erros', '/autenticacao'…), sem o prefixo /docs. Sem isto, uma sessão
+ * nessa origem mostrava notificações internas por cima da documentação.
  */
-export function isRotaPublica(pathname: string): boolean {
+export function isRotaPublica(
+  pathname: string,
+  hostname: string = typeof window === 'undefined' ? '' : window.location.hostname
+): boolean {
+  if (ehDominioDocs(hostname)) return true;
   const normalizado =
     pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 

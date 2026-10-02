@@ -133,6 +133,8 @@ describe('Referência interactiva', () => {
     expect(c.mcp).toEqual({ disabled: true });
     expect(c.showDeveloperTools).toBe('never');
     expect(c.hideDarkModeToggle).toBe(true);
+    // Sem exemplos de browser (levavam a chave literal); ficam node, shell e php.
+    expect(c.hiddenClients).toEqual({ js: true });
     expect(c.forceDarkModeState).toBe('light');
     expect(String(c.customCss)).toContain('hsl(var(--primary-text))');
   });
@@ -143,7 +145,10 @@ describe('Referência interactiva', () => {
       vi.fn(async () => new Response('{}', { status: 200 }))
     );
     abrir('/docs/referencia');
-    expect(screen.getByText(/chave só com catalogo:read/)).toBeTruthy();
+    expect(
+      screen.getByText(/só com permissões de leitura \(catalogo:read, disponibilidade:read\)/)
+    ).toBeTruthy();
+    expect(screen.getByText(/nunca uma com reservas:write/)).toBeTruthy();
     await screen.findByTestId('scalar');
   });
 
