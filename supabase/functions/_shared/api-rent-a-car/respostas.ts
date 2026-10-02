@@ -53,17 +53,20 @@ export function comCors(req: Request, resposta: Response): Response {
 /**
  * Resposta JSON. Com cacheSeconds é `private` e varia por chave (o catálogo é por
  * organização); só `publico: true` (openapi.json) pode ir para caches partilhadas.
+ * `semCache: true` (disponibilidade, cotação) proíbe qualquer cache: muda de minuto a minuto.
  */
 export function ok(
   body: unknown,
-  init: { status?: number; cacheSeconds?: number; publico?: boolean } = {}
+  init: { status?: number; cacheSeconds?: number; publico?: boolean; semCache?: boolean } = {}
 ): Response {
   const headers: Record<string, string> = {
     ...CORS_HEADERS,
     Vary: 'Origin',
     'Content-Type': 'application/json',
   };
-  if (init.cacheSeconds) {
+  if (init.semCache) {
+    headers['Cache-Control'] = 'no-store';
+  } else if (init.cacheSeconds) {
     const tipo = init.publico ? 'public' : 'private';
     headers['Cache-Control'] = `${tipo}, max-age=${init.cacheSeconds}`;
     if (!init.publico) headers.Vary = VARY_PRIVADO;
