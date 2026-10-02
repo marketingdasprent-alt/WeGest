@@ -80,7 +80,7 @@ export function esquemasReservas(base: { CotacaoPedido: Esquema }): Record<strin
         email: texto('Email do cliente.', { format: 'email', maxLength: 254 }),
         telefone: texto('Com ou sem indicativo.', { maxLength: 20 }),
         nif: textoOuNulo('NIF português (9 dígitos). Clientes estrangeiros omitem-no.', 9),
-        data_nascimento: data('AAAA-MM-DD, no passado.'),
+        data_nascimento: data('AAAA-MM-DD, no passado, de 1900-01-01 em diante.'),
         morada: textoOuNulo('Morada.', 200),
         codigo_postal: textoOuNulo('Código postal.', 20),
         localidade: textoOuNulo('Localidade.', 100),
@@ -216,7 +216,10 @@ export function caminhosReservas(a: Ajudas): Record<string, Esquema> {
     '/reservas/{codigo}': {
       get: {
         summary: 'Estado de uma reserva criada pelo site',
-        description: 'Só reservas criadas pela API desta organização. Sem cache.',
+        description:
+          'Só reservas criadas pela API desta organização. Serve a qualquer chave da organização ' +
+          'com reservas:read, não só à que criou a reserva: uma chave só se dá ao vosso próprio ' +
+          'site. Sem cache.',
         tags: ['Reservas'],
         'x-permissao': 'reservas:read',
         parameters: [parametroCodigo],
@@ -229,7 +232,9 @@ export function caminhosReservas(a: Ajudas): Record<string, Esquema> {
         summary: 'Cancelar uma reserva pendente',
         description:
           'Só enquanto está pendente. Cancelar outra vez devolve a reserva cancelada. Depois de ' +
-          'confirmada, o cancelamento é feito com a equipa.',
+          'confirmada, o cancelamento é feito com a equipa. Serve a qualquer chave da organização ' +
+          'com reservas:write, não só à que criou a reserva: uma chave só se dá ao vosso próprio ' +
+          'site.',
         tags: ['Reservas'],
         'x-permissao': 'reservas:write',
         parameters: [parametroCodigo],
