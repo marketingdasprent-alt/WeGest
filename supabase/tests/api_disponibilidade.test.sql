@@ -6,7 +6,7 @@
 -- Datas relativas a now(): nunca dependem do dia da semana.
 -- ============================================================
 begin;
-select plan(29);
+select plan(54);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000d01ff', 'bootstrap@dispon.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -33,8 +33,10 @@ insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id, grupo_i
   ('00000000-0000-0000-0000-0000000d0e04', '00000000-0000-0000-0000-0000000d0a00', 'DA-04-AA', '00000000-0000-0000-0000-0000000d0aa1', '00000000-0000-0000-0000-0000000d0d02', '00000000-0000-0000-0000-0000000d0102', false);
 -- Clio que viaturas_com_disponibilidade dá como livres mas o site não pode vender (salvo e06):
 -- e05 com motorista TVDE sem data_fim, e06 com atribuição terminada antes do período,
--- e07 inactiva, e08 vendida antes do início (is_vendida ainda false).
+-- e07 inactiva, e08 vendida antes do início (is_vendida ainda false), e09 vendida
+-- durante o período (now()+12 dias cai sempre entre o dia do início e o do fim).
 insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id, grupo_id, is_slot, status, data_venda) values
+  ('00000000-0000-0000-0000-0000000d0e09', '00000000-0000-0000-0000-0000000d0a00', 'DA-09-AA', '00000000-0000-0000-0000-0000000d0aa1', '00000000-0000-0000-0000-0000000d0d01', '00000000-0000-0000-0000-0000000d0101', false, 'disponivel', (now() + interval '12 days')::date),
   ('00000000-0000-0000-0000-0000000d0e05', '00000000-0000-0000-0000-0000000d0a00', 'DA-05-AA', '00000000-0000-0000-0000-0000000d0aa1', '00000000-0000-0000-0000-0000000d0d01', '00000000-0000-0000-0000-0000000d0101', false, 'em_uso', null),
   ('00000000-0000-0000-0000-0000000d0e06', '00000000-0000-0000-0000-0000000d0a00', 'DA-06-AA', '00000000-0000-0000-0000-0000000d0aa1', '00000000-0000-0000-0000-0000000d0d01', '00000000-0000-0000-0000-0000000d0101', false, 'em_uso', null),
   ('00000000-0000-0000-0000-0000000d0e07', '00000000-0000-0000-0000-0000000d0a00', 'DA-07-AA', '00000000-0000-0000-0000-0000000d0aa1', '00000000-0000-0000-0000-0000000d0d01', '00000000-0000-0000-0000-0000000d0101', false, 'inativo', null),
@@ -66,7 +68,8 @@ insert into public.renting_extras (id, org_id, nome, preco_unidade, tipo_calculo
   ('00000000-0000-0000-0000-0000000d0402', '00000000-0000-0000-0000-0000000d0a00', 'Limpeza', 20, 'fixo', 1, true),
   ('00000000-0000-0000-0000-0000000d04b1', '00000000-0000-0000-0000-0000000d0b00', 'Extra B', 9, 'fixo', 1, true);
 insert into public.renting_coberturas (id, org_id, nome, preco_dia, franquia_valor, ativa) values
-  ('00000000-0000-0000-0000-0000000d0501', '00000000-0000-0000-0000-0000000d0a00', 'Premium', 12, 0, true);
+  ('00000000-0000-0000-0000-0000000d0501', '00000000-0000-0000-0000-0000000d0a00', 'Premium', 12, 0, true),
+  ('00000000-0000-0000-0000-0000000d05b1', '00000000-0000-0000-0000-0000000d0b00', 'Premium B', 10, 0, true);
 
 -- Período de referência: 3 dias a começar daqui a 10 dias, às 10h de Lisboa.
 create temp table p as select
@@ -113,6 +116,7 @@ select ok(not exists (select 1 from l where viatura_id = '00000000-0000-0000-000
 select ok(exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-0000000d0e06'), 'atribuição que acaba antes do período não tira a viatura');
 select ok(not exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-0000000d0e07'), 'viatura inactiva não conta');
 select ok(not exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-0000000d0e08'), 'viatura vendida antes do início não conta');
+select ok(not exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-0000000d0e09'), 'viatura vendida durante o período não conta');
 select is((select r->'modelos'->0->'cotacao'->'aluguer'->>'sem_iva' from d), '105.00', '3 × 35,00');
 select is((select r->'modelos'->0->'cotacao'->'aluguer'->>'com_iva' from d), '129.15', 'com IVA a 23%');
 select is(jsonb_array_length(public.api_disponibilidade('00000000-0000-0000-0000-0000000d0a00', (select inicio from p), (select fim from p),
@@ -141,8 +145,37 @@ select is((public.api_cotacao('00000000-0000-0000-0000-0000000d0a00', '00000000-
 select is((public.api_cotacao('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d02', (select inicio from p), (select fim from p),
   '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301', '[]'::jsonb))->'erro'->>'codigo',
   'SEM_DISPONIBILIDADE', 'Captur sem viatura livre');
-select ok(not has_function_privilege('authenticated',
-  'public.api_cotacao(uuid,uuid,timestamptz,timestamptz,uuid,uuid,jsonb,uuid)', 'EXECUTE'), 'authenticated não executa api_cotacao');
+select is((public.api_cotacao('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01', (select inicio from p), (select fim from p),
+  '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301',
+  (select jsonb_agg(jsonb_build_object('extra_id', '00000000-0000-0000-0000-0000000d0401', 'quantidade', 1)) from generate_series(1, 21))))->'erro'->>'codigo',
+  'PARAMETRO_INVALIDO', 'mais de 20 extras');
+
+-- isolamento: nada da org B entra numa cotação da org A
+select is((public.api_cotacao('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0db1', (select inicio from p), (select fim from p),
+  '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301', '[]'::jsonb))->'erro'->>'codigo',
+  'NAO_ENCONTRADO', 'modelo da org B');
+select is((public.api_cotacao('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01', (select inicio from p), (select fim from p),
+  '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301',
+  '[{"extra_id":"00000000-0000-0000-0000-0000000d04b1","quantidade":1}]'::jsonb))->'erro'->>'codigo',
+  'NAO_ENCONTRADO', 'extra da org B');
+select is((public.api_cotacao('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01', (select inicio from p), (select fim from p),
+  '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301', '[]'::jsonb,
+  '00000000-0000-0000-0000-0000000d05b1'))->'erro'->>'codigo',
+  'NAO_ENCONTRADO', 'cobertura da org B');
+
+-- privilégios: só service_role executa (uma linha TAP por função)
+create temp table fns as select unnest(array[
+  'public.api_erro(text,text)',
+  'public.api_dias(timestamptz,timestamptz)',
+  'public.api_validar_periodo(uuid,timestamptz,timestamptz,uuid,uuid)',
+  'public.api_viaturas_livres(uuid,timestamptz,timestamptz)',
+  'public.api_quantidade_disponivel(uuid,uuid,timestamptz,timestamptz)',
+  'public.api_disponibilidade(uuid,timestamptz,timestamptz,uuid,uuid,uuid,text)',
+  'public.api_cotacao(uuid,uuid,timestamptz,timestamptz,uuid,uuid,jsonb,uuid)']) as f;
+grant select on fns to public;
+select ok(not has_function_privilege('anon', f, 'EXECUTE'), 'anon não executa ' || f) from fns;
+select ok(not has_function_privilege('authenticated', f, 'EXECUTE'), 'authenticated não executa ' || f) from fns;
+select ok(has_function_privilege('service_role', f, 'EXECUTE'), 'service_role executa ' || f) from fns;
 
 select * from finish();
 rollback;

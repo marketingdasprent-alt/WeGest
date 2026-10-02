@@ -54,7 +54,7 @@ end $$;
 
 -- Viaturas que o site pode vender no período. viaturas_com_disponibilidade
 -- (partilhada com o ecrã) só vê contratos, reservas, movimentos e reparações;
--- aqui tiram-se também as viaturas paradas, vendidas até ao início e as que
+-- aqui tiram-se também as viaturas paradas, vendidas até ao fim e as que
 -- têm motorista TVDE no período ('ativo' com data_fim futura é válido, como
 -- em src/utils/associacaoViatura.ts). 'reservada'/'em_uso' são o estado de
 -- hoje: o período futuro já vem dos contratos e reservas.
@@ -68,11 +68,13 @@ language sql stable security definer set search_path = public as $$
    where d.disponivel
      and v.modelo_id is not null
      and coalesce(v.status, 'disponivel') not in ('inativo', 'manutencao', 'em_recolha')
-     and (v.data_venda is null or v.data_venda > (p_inicio at time zone 'Europe/Lisbon')::date)
+     -- Vendida antes do fim do período também não conta: não chega ao fim do aluguer.
+     and (v.data_venda is null or v.data_venda > (p_fim at time zone 'Europe/Lisbon')::date)
+     -- Sem filtro por mv.org_id: uma atribuição com org_id divergente continua a
+     -- bloquear o carro. O isolamento vem de v.org_id = p_org_id.
      and not exists (
        select 1 from public.motorista_viaturas mv
         where mv.viatura_id = v.id
-          and mv.org_id = p_org_id
           and mv.status = 'ativo'
           and (mv.data_inicio is null or mv.data_inicio <= (p_fim at time zone 'Europe/Lisbon')::date)
           and (mv.data_fim is null or mv.data_fim >= (p_inicio at time zone 'Europe/Lisbon')::date));
@@ -142,6 +144,9 @@ begin
   if v_erro is not null then return v_erro; end if;
   if p_extras is not null and jsonb_typeof(p_extras) <> 'array' then
     return public.api_erro('PARAMETRO_INVALIDO', 'extras tem de ser uma lista.');
+  end if;
+  if jsonb_array_length(coalesce(p_extras, '[]'::jsonb)) > 20 then
+    return public.api_erro('PARAMETRO_INVALIDO', 'Máximo de 20 extras.');
   end if;
   v_dias := public.api_dias(p_inicio, p_fim);
   v_iva := public.api_iva_rent_a_car(p_org_id);
