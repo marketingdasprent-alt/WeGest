@@ -32,6 +32,37 @@ create index if not exists idx_reservas_modelo_sem_viatura
   on public.reservas (org_id, modelo_id)
   where viatura_id is null and modelo_id is not null and deleted_at is null;
 
+-- As FKs não vêem a organização: uma reserva da org A não pode apontar para a
+-- chave ou o modelo da org B. Nulos passam (o balcão nunca escreve estas
+-- colunas). SECURITY DEFINER porque api_chaves só é legível por admins (RLS):
+-- um utilizador do balcão que reenvie a linha inteira num UPDATE não pode
+-- ser recusado por não ver a chave. Num UPDATE só se valida o que mudou
+-- (a coluna ou a organização).
+create or replace function public.tg_reservas_api_mesma_org()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.api_chave_id is not null
+     and (tg_op = 'INSERT' or new.api_chave_id is distinct from old.api_chave_id or new.org_id is distinct from old.org_id)
+     and not exists (select 1 from public.api_chaves k where k.id = new.api_chave_id and k.org_id = new.org_id) then
+    raise exception 'reservas.api_chave_id tem de ser uma chave da mesma organização da reserva.'
+      using errcode = '23503';
+  end if;
+  if new.modelo_id is not null
+     and (tg_op = 'INSERT' or new.modelo_id is distinct from old.modelo_id or new.org_id is distinct from old.org_id)
+     and not exists (select 1 from public.viatura_modelos m where m.id = new.modelo_id and m.org_id = new.org_id) then
+    raise exception 'reservas.modelo_id tem de ser um modelo da mesma organização da reserva.'
+      using errcode = '23503';
+  end if;
+  return new;
+end $$;
+
+revoke all on function public.tg_reservas_api_mesma_org() from public, anon, authenticated;
+
+drop trigger if exists trg_reservas_api_mesma_org on public.reservas;
+create trigger trg_reservas_api_mesma_org
+  before insert or update of api_chave_id, modelo_id, org_id on public.reservas
+  for each row execute function public.tg_reservas_api_mesma_org();
+
 -- Reservas sem viatura, por modelo, que ocupam o período: pendente, confirmada ou em curso.
 create or replace function public.api_procura_sem_viatura(
   p_org_id uuid, p_inicio timestamptz, p_fim timestamptz)
@@ -58,7 +89,7 @@ returns int language sql stable security definer set search_path = public as $$
                  where s.modelo_id = p_modelo_id), 0))::int;
 $$;
 
--- Igual à 20261002110000, com a procura sem viatura descontada (CTE saldo).
+-- Igual à 20261002110001, com a procura sem viatura descontada (CTE saldo).
 create or replace function public.api_disponibilidade(
   p_org_id uuid, p_inicio timestamptz, p_fim timestamptz, p_entrega uuid, p_recolha uuid,
   p_categoria uuid default null, p_tipo text default null)
