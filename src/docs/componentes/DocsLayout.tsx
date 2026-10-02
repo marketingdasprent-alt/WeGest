@@ -1,8 +1,9 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Menu } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { DocsContexto, useDocs } from '../contexto';
 import { DocLink } from './DocLink';
 import { RodapePagina } from './RodapePagina';
 import { BotaoPesquisa, Search } from './Search';
@@ -20,6 +21,11 @@ export function DocsLayout({ slug, children, semRodape = false }: Props) {
   const [menu, setMenu] = useState(false);
   const [pesquisa, setPesquisa] = useState(false);
   const mudarPesquisa = useCallback((a: boolean) => setPesquisa(a), []);
+  const contexto = useDocs();
+  const comPesquisa = useMemo(
+    () => ({ ...contexto, abrirPesquisa: () => setPesquisa(true) }),
+    [contexto]
+  );
 
   return (
     <div className="min-h-screen bg-background font-body text-foreground">
@@ -71,7 +77,7 @@ export function DocsLayout({ slug, children, semRodape = false }: Props) {
           </ScrollArea>
         </aside>
         <main id="conteudo" tabIndex={-1} className="min-w-0 flex-1 px-4 py-8 md:px-8 lg:py-10">
-          {children}
+          <DocsContexto.Provider value={comPesquisa}>{children}</DocsContexto.Provider>
           {!semRodape && (
             <div className="max-w-3xl xl:max-w-[42rem]">
               <RodapePagina slug={slug} />

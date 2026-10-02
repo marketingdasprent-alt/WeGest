@@ -6,6 +6,8 @@ export interface ContextoDocs {
   base: '' | '/docs';
   linguagem: Linguagem;
   escolherLinguagem: (l: Linguagem) => void;
+  /** Abre a pesquisa (quem a tem é o DocsLayout). */
+  abrirPesquisa?: () => void;
 }
 
 export const DocsContexto = createContext<ContextoDocs>({
