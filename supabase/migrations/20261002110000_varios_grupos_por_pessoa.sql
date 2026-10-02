@@ -34,6 +34,12 @@ DROP POLICY IF EXISTS rls_deny_anon ON public.user_organizacoes_cargos;
 CREATE POLICY rls_deny_anon ON public.user_organizacoes_cargos
   AS PERMISSIVE FOR ALL TO anon USING (false) WITH CHECK (false);
 
+-- Regra do projecto: toda a tabela com org_id isola por organização (RESTRICTIVE).
+DROP POLICY IF EXISTS rls_org_isolation ON public.user_organizacoes_cargos;
+CREATE POLICY rls_org_isolation ON public.user_organizacoes_cargos
+  AS RESTRICTIVE FOR ALL TO public
+  USING (org_id = get_current_org_id() OR is_decada_ousada_admin());
+
 DROP POLICY IF EXISTS "Admins gerem os grupos da sua org" ON public.user_organizacoes_cargos;
 CREATE POLICY "Admins gerem os grupos da sua org" ON public.user_organizacoes_cargos
   FOR ALL TO authenticated

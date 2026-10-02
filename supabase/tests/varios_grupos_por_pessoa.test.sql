@@ -34,6 +34,11 @@ insert into public.user_org_ativa (user_id, org_id) values
   ('00000000-0000-0000-0000-0000004e0002', '00000000-0000-0000-0000-0000004e0000')
 on conflict (user_id) do update set org_id = excluded.org_id;
 
+-- Criar a organização já cria os grupos de base (Gestor TVDE...): tira-se o que
+-- este teste vai criar com o seu próprio id.
+delete from public.cargos
+ where org_id = '00000000-0000-0000-0000-0000004e0000' and nome = 'Gestor TVDE';
+
 insert into public.cargos (id, nome, org_id) values
   ('00000000-0000-0000-0000-000000ce0a01', 'Grupo A teste', '00000000-0000-0000-0000-0000004e0000'),
   ('00000000-0000-0000-0000-000000ce0a02', 'Gestor TVDE', '00000000-0000-0000-0000-0000004e0000'),
