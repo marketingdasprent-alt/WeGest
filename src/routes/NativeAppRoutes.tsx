@@ -79,6 +79,10 @@ const NativeAppRoutes = () => {
       {/* Mesma fronteira da variante web — ver a nota em WebAppRoutes.tsx. */}
       <RouteErrorBoundary>
         <Routes>
+          {/* /docs/* e /api/docs ficam de fora DE PROPÓSITO, apesar da regra de
+              manter Web e Native em sincronia: a documentação da API é para
+              programadores externos e vive em docs.wegest.pt; a app nativa
+              (só motorista) não a serve. */}
           <Route path="/" element={<EntradaNativa />} />
 
           <Route path="/motorista" element={<EntradaMotoristaNativa />} />

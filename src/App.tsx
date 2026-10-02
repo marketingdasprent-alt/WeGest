@@ -9,7 +9,9 @@ import { PermissionsProvider } from '@/contexts/PermissionsContext';
 import { NotificacoesProvider } from '@/contexts/NotificacoesContext';
 import { TenantProvider } from '@/contexts/TenantContext';
 import { ThemeProvider } from 'next-themes';
-import { isNativeDriverOnlyMode } from '@/lib/native';
+import { isNativeApp, isNativeDriverOnlyMode } from '@/lib/native';
+import { usaServiceWorker } from '@/lib/pwaArranque';
+import { ehDominioDocs } from '@/docs/lib/base';
 import NativeAppRoutes from '@/routes/NativeAppRoutes';
 import WebAppRoutes from '@/routes/WebAppRoutes';
 import { UpdateNotification } from '@/components/UpdateNotification';
@@ -47,7 +49,11 @@ const App = () => {
                 <TooltipProvider>
                   <Toaster />
                   <Sonner />
-                  <UpdateNotification />
+                  {/* Aviso de versão nova só onde há service worker: nem no
+                      nativo nem em docs.wegest.pt (ver pwaArranque). */}
+                  {usaServiceWorker(isNativeApp(), window.location.hostname) && (
+                    <UpdateNotification />
+                  )}
                   {/*
                   NotificacoesProvider vive DENTRO do BrowserRouter porque decide
                   pela rota atual: notificações internas não podem ser lidas nem
@@ -59,6 +65,10 @@ const App = () => {
                     <NotificacoesProvider>
                       {isNativeDriverOnlyMode() ? (
                         <NativeAppRoutes />
+                      ) : ehDominioDocs(window.location.hostname) ? (
+                        // docs.wegest.pt é o site público da documentação: sem
+                        // popup de notificações nem onboarding de colaborador.
+                        <WebAppRoutes />
                       ) : (
                         <>
                           <WebAppRoutes />
