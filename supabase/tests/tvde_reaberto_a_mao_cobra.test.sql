@@ -107,7 +107,7 @@ select ('00000000-0000-0000-0000-0000003e0b2' || n)::uuid, '00000000-0000-0000-0
        'TR-0' || n || '-AA', timestamptz '2026-10-01 10:00+00', null::timestamptz,
        timestamptz '2026-10-14 10:00+00', 'em_curso', 'pendente', 'tvde', 23, true, 3,
        ('00000000-0000-0000-0000-0000003e0b1' || n)::uuid,
-       'Renovação: reaberto a 01/10/2026', '00000000-0000-0000-0000-0000003e0a01'
+       'Versao aberta a 01/10/2026 (fixture: o gatilho so recua os reaberto)', '00000000-0000-0000-0000-0000003e0a01'
   from generate_series(1, 3) as n;
 
 insert into public.contratos_renting
