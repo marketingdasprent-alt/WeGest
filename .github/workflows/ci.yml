@@ -311,7 +311,8 @@ jobs:
             catalogo_site_colunas \
             api_catalogo \
             api_disponibilidade \
-            api_procura_sem_viatura
+            api_procura_sem_viatura \
+            api_reservas
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
