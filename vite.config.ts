@@ -5,14 +5,15 @@ import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
 import type { Plugin } from 'vite';
 
-// ─── Leitor da documentação da API (Scalar) fora do precache ────────────────
-// O Scalar parte-se em ~90 chunks (Vue, ícones, codemirror…) e só serve a rota
-// pública /api/docs. Um módulo é "só da documentação" quando se alcança a
-// partir do ApiDocsPage mas não a partir de nenhuma entrada da app sem passar
-// por ele. Os chunks feitos só desses módulos vão para assets/scalar/, que o
-// workbox ignora. Critério pelo grafo, não pelo nome do pacote: um sub-chunk
-// do Scalar pode ter Vue ou outras dependências dele lá dentro.
-const PAGINA_DOCS = path.resolve(__dirname, 'src/pages/ApiDocsPage.tsx').replace(/\\/g, '/');
+// ─── Site da documentação da API (docs.wegest.pt) fora do precache ─────────
+// O DocsApp traz o OpenAPI, as páginas e, em lazy, o Scalar (~90 chunks: Vue,
+// ícones, codemirror…), e só serve docs.wegest.pt e /docs/*. Um módulo é "só
+// da documentação" quando se alcança a partir do DocsApp mas não a partir de
+// nenhuma entrada da app sem passar por ele. Os chunks feitos só desses módulos
+// vão para assets/docs/, que o workbox ignora. Critério pelo grafo, não pelo
+// nome do pacote: um sub-chunk do Scalar pode ter Vue ou outras dependências
+// dele lá dentro.
+const PAGINA_DOCS = path.resolve(__dirname, 'src/docs/DocsApp.tsx').replace(/\\/g, '/');
 const modulosSoDaDocumentacao = new Set<string>();
 const normalizarId = (id: string) => id.replace(/\\/g, '/').split('?')[0];
 
@@ -123,9 +124,11 @@ export default defineConfig(({ mode }) => ({
         skipWaiting: false,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,ico,svg,woff2}'],
-        // O leitor da documentação da API (Scalar, ~1 MB gzip) só serve a rota
-        // pública /api/docs: não vai para o precache de todos os utilizadores.
-        globIgnores: ['**/images/**', '**/assets/scalar/**', '**/assets/ApiDocsPage-*'],
+        // O site da documentação da API (com o Scalar, ~1 MB gzip) só serve
+        // docs.wegest.pt e /docs/*: não vai para o precache de todos os utilizadores.
+        // O CSS do Scalar (~260 KB) sai com o nome do chunk que o importa, fora
+        // de assets/docs/, por isso vai pelo nome.
+        globIgnores: ['**/images/**', '**/assets/docs/**', '**/assets/LeitorScalar-*'],
         // /api/rent-a-car[/*] é a API externa (rewrite da Vercel), não uma rota da
         // SPA: o SW não pode responder-lhe com o index.html.
         navigateFallbackDenylist: [/^\/~oauth/, /^\/api\/rent-a-car(\/|$)/],
@@ -162,12 +165,12 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        // Chunks feitos só de módulos da documentação da API → assets/scalar/
+        // Chunks feitos só de módulos da documentação da API → assets/docs/
         // (fora do precache, ver separarDocumentacaoDaApi). O resto fica igual.
         chunkFileNames: (chunk) =>
           chunk.moduleIds.length > 0 &&
           chunk.moduleIds.every((id) => modulosSoDaDocumentacao.has(id))
-            ? 'assets/scalar/[name]-[hash].js'
+            ? 'assets/docs/[name]-[hash].js'
             : 'assets/[name]-[hash].js',
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],

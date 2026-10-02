@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { URL_DOCS, ehDominioDocs } from '@/docs/lib/base';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { RaizDaApp } from '@/components/auth/RaizDaApp';
 import { DashboardLayout } from '@/components/DashboardLayout';
@@ -32,7 +33,7 @@ const FormularioPublico = lazy(() => import('@/pages/FormularioPublico'));
 const DanosPublicosPage = lazy(() => import('@/pages/DanosPublicosPage'));
 const AssinarDocumento = lazy(() => import('@/pages/AssinarDocumento'));
 const QuadroLive = lazy(() => import('@/pages/QuadroLive'));
-const ApiDocsPage = lazy(() => import('@/pages/ApiDocsPage'));
+const DocsApp = lazy(() => import('@/docs/DocsApp'));
 const LinkCurto = lazy(() => import('@/pages/LinkCurto'));
 const TicketsTI = lazy(() => import('@/pages/TicketsTI'));
 const TicketTIAutor = lazy(() => import('@/pages/TicketTIAutor'));
@@ -111,8 +112,29 @@ const PageLoader = () => (
   </div>
 );
 
+/** O antigo /api/docs. Em produção redirecciona a Vercel; isto cobre o SPA servido pelo SW. */
+const IrParaDocs = () => {
+  useEffect(() => window.location.replace(URL_DOCS), []);
+  return <PageLoader />;
+};
+
 const WebAppRoutes = () => {
   usePageTracking();
+
+  // Em docs.wegest.pt só existe a documentação, na raiz (o rewrite da Vercel
+  // serve o index.html sem mudar o URL): nada da app, nem a landing, nem o login.
+  if (ehDominioDocs(window.location.hostname)) {
+    return (
+      <>
+        <ScrollToTop />
+        <Suspense fallback={<PageLoader />}>
+          <RouteErrorBoundary>
+            <DocsApp base="" />
+          </RouteErrorBoundary>
+        </Suspense>
+      </>
+    );
+  }
 
   return (
     <>
@@ -156,8 +178,10 @@ const WebAppRoutes = () => {
             <Route path="/r/:codigo" element={<LinkCurto />} />
             {/* Quadro TV público — sem login, acesso por token */}
             <Route path="/quadro/:token" element={<QuadroLive />} />
-            {/* Documentação pública da API de rent-a-car — sem login */}
-            <Route path="/api/docs" element={<ApiDocsPage />} />
+            {/* Documentação pública da API de rent-a-car — sem login. Vive em
+                docs.wegest.pt; /docs/* é o mesmo site dentro da app. */}
+            <Route path="/docs/*" element={<DocsApp base="/docs" />} />
+            <Route path="/api/docs" element={<IrParaDocs />} />
             {/* A rota do autor vem ANTES: /ti/:token capturaria /ti/ticket/xxx com
                 token="ticket", e quem clicasse no link do email cairia no
                 formulário de submissão em vez do próprio pedido. */}

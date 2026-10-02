@@ -54,7 +54,7 @@ Deno.test('disponibilidade e cotações documentadas com x-permissao, exemplos e
   );
   for (const p of parametros) assert(p.description, `parâmetro ${p.name} sem description`);
   assertEquals(
-    cot.responses['409'].content['application/json'].examples.sem_disponibilidade.value.erro.codigo,
+    cot.responses['409'].content['application/json'].example.erro.codigo,
     'SEM_DISPONIBILIDADE'
   );
 });

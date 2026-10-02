@@ -14,6 +14,8 @@ describe('isRotaPublica', () => {
       '/cookies',
       '/eliminar-conta',
       '/api/docs',
+      '/docs',
+      '/docs/recursos/modelos',
     ]) {
       expect(isRotaPublica(rota), rota).toBe(true);
     }
@@ -54,6 +56,7 @@ describe('isRotaPublica', () => {
     // '/danos' (sem token) não é a galeria pública, e '/quadros' não é '/quadro/'.
     expect(isRotaPublica('/quadros')).toBe(false);
     expect(isRotaPublica('/formularios')).toBe(false);
+    expect(isRotaPublica('/docsx')).toBe(false);
   });
 
   it('cobre todas as rotas públicas declaradas em WebAppRoutes', () => {
@@ -78,6 +81,7 @@ describe('isRotaPublica', () => {
       '/danos/:token',
       '/quadro/:token',
       '/api/docs',
+      '/docs/*',
     ];
 
     for (const path of publicasEsperadas) {

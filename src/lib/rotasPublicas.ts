@@ -24,7 +24,9 @@ const EXATAS = new Set([
   '/privacidade',
   '/cookies',
   '/eliminar-conta',
-  // Documentação pública da API de rent-a-car (lida por programadores externos).
+  // Documentação pública da API de rent-a-car (lida por programadores externos):
+  // /docs é o site docs.wegest.pt dentro da app; /api/docs reencaminha para lá.
+  '/docs',
   '/api/docs',
 ]);
 
@@ -33,7 +35,7 @@ const EXATAS = new Set([
  * Estes são os mais sensíveis da lista — o quadro de TV fica projetado numa
  * parede, e a galeria de danos é enviada por QR a clientes.
  */
-const PREFIXOS = ['/formulario/', '/danos/', '/quadro/'];
+const PREFIXOS = ['/formulario/', '/danos/', '/quadro/', '/docs/'];
 
 /**
  * `true` quando o caminho é servido sem sessão autenticada.
