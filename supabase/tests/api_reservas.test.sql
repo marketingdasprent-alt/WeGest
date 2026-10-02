@@ -4,7 +4,7 @@
 -- Fixture copiada de api_disponibilidade.test.sql (do auth.users à temp table p).
 -- ============================================================
 begin;
-select plan(40);
+select plan(50);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000d01ff', 'bootstrap@dispon.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -82,6 +82,9 @@ insert into public.clientes (id, org_id, nome, tipo_cliente, is_emissora) values
 insert into public.clientes (id, org_id, nome, nif, email) values
   ('00000000-0000-0000-0000-0000000d0911', '00000000-0000-0000-0000-0000000d0a00', 'Ana Antiga', '123456789', 'ana@antiga.pt'),
   ('00000000-0000-0000-0000-0000000d0912', '00000000-0000-0000-0000-0000000d0a00', 'Bruno Antigo', null, 'Bruno@Exemplo.pt');
+-- O mesmo NIF na org B, com id menor: sem o filtro de org seria o escolhido (order by created_at, id).
+insert into public.clientes (id, org_id, nome, nif, email) values
+  ('00000000-0000-0000-0000-0000000d0011', '00000000-0000-0000-0000-0000000d0b00', 'Ana da Org B', '123456789', 'ana@orgb.pt');
 insert into public.api_chaves (id, org_id, nome, escopo, permissoes) values
   ('00000000-0000-0000-0000-0000000d0901', '00000000-0000-0000-0000-0000000d0a00', 'Site', 'rent_a_car', '{reservas:write,reservas:read}'),
   ('00000000-0000-0000-0000-0000000d0902', '00000000-0000-0000-0000-0000000d0a00', 'Site 2', 'rent_a_car', '{reservas:write}');
@@ -110,6 +113,26 @@ select is((select count(*)::int from public.reservas where origem = 'site'), 0, 
 update public.org_definicoes set emissor_rent_a_car_id = '00000000-0000-0000-0000-0000000d0910'
  where org_id = '00000000-0000-0000-0000-0000000d0a00';
 
+-- Campos obrigatórios: sem referência não há idempotência
+select is((public.api_criar_reserva('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0901',
+  (select pedido - 'referencia_externa' from q)))->'erro'->>'codigo', 'PARAMETRO_INVALIDO', 'sem referencia_externa → PARAMETRO_INVALIDO');
+
+-- Ids de outra organização nunca entram numa reserva da org A
+select is((public.api_criar_reserva('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0901',
+  (select jsonb_set(pedido || '{"referencia_externa":"site-x1"}'::jsonb, '{extras}',
+     '[{"extra_id":"00000000-0000-0000-0000-0000000d04b1","quantidade":1}]') from q)))->'erro'->>'codigo', 'NAO_ENCONTRADO',
+  'extra da org B → NAO_ENCONTRADO');
+select is((public.api_criar_reserva('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0901',
+  (select pedido || '{"referencia_externa":"site-x2","cobertura_id":"00000000-0000-0000-0000-0000000d05b1"}'::jsonb from q)))
+  ->'erro'->>'codigo', 'NAO_ENCONTRADO', 'cobertura da org B → NAO_ENCONTRADO');
+select is((public.api_criar_reserva('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0901',
+  (select pedido || '{"referencia_externa":"site-x3","entrega":"00000000-0000-0000-0000-0000000d03b1"}'::jsonb from q)))
+  ->'erro'->>'codigo', 'NAO_ENCONTRADO', 'estação da org B → NAO_ENCONTRADO');
+select is((public.api_criar_reserva('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0901',
+  (select pedido || '{"referencia_externa":"site-x4","modelo_id":"00000000-0000-0000-0000-0000000d0db1"}'::jsonb from q)))
+  ->'erro'->>'codigo', 'NAO_ENCONTRADO', 'modelo da org B → NAO_ENCONTRADO');
+select is((select count(*)::int from public.reservas where origem = 'site'), 0, 'nada gravado com ids de outra organização');
+
 -- Criar
 insert into res select 'r1', public.api_criar_reserva('00000000-0000-0000-0000-0000000d0a00',
   '00000000-0000-0000-0000-0000000d0901', (select pedido from q));
@@ -135,6 +158,7 @@ select ok(exists (select 1 from public.reserva_condutores rc join r1 on rc.reser
 select is((select count(*)::int from public.clientes where org_id = '00000000-0000-0000-0000-0000000d0a00'
             and email = 'carla@novo.pt' and tipo_cliente = 'particular'), 1, 'cliente novo criado como particular');
 select is((select dados_site->'carta_conducao'->>'numero' from r1), 'L-123', 'carta de condução em dados_site');
+select is((select dados_site->>'cliente_divergente' from r1), 'false', 'cliente novo: cliente_divergente false');
 select is((select count(*)::int from public.domain_events where event_type = 'reserva.site_recebida'
             and entity_id = (select id from r1) and org_id = '00000000-0000-0000-0000-0000000d0a00'), 1, 'um evento para o sino');
 select is(public.api_quantidade_disponivel('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01',
@@ -180,7 +204,13 @@ insert into res select 'r3', public.api_criar_reserva('00000000-0000-0000-0000-0
   (select jsonb_set(pedido || '{"referencia_externa":"site-003"}'::jsonb, '{cliente}',
      '{"nome":"Ana Nova","email":"outra@x.pt","telefone":"912345678","nif":"123456789","data_nascimento":"1985-01-01","pais":"Portugal"}') from q));
 select is((select cliente_id from public.reservas where id = ((select r from res where nome = 'r3')->>'id')::uuid),
-  '00000000-0000-0000-0000-0000000d0911'::uuid, 'encontrado por NIF');
+  '00000000-0000-0000-0000-0000000d0911'::uuid, 'encontrado por NIF na ficha da org A, nunca na da org B');
+select is((select dados_site->>'cliente_divergente' from public.reservas where id = ((select r from res where nome = 'r3')->>'id')::uuid),
+  'true', 'nome e email diferentes da ficha → cliente_divergente');
+select ok(exists (select 1 from public.domain_events where event_type = 'reserva.site_recebida'
+                   and entity_id = ((select r from res where nome = 'r3')->>'id')::uuid
+                   and payload->>'mensagem' like '%confirmar identidade%'
+                   and payload->>'cliente_divergente' = 'true'), 'o sino pede para confirmar a identidade');
 select is((select nome::text from public.clientes where id = '00000000-0000-0000-0000-0000000d0911'), 'Ana Antiga',
   'cliente existente não é alterado');
 select is((public.api_cancelar_reserva('00000000-0000-0000-0000-0000000d0a00',
@@ -193,6 +223,8 @@ insert into res select 'r4', public.api_criar_reserva('00000000-0000-0000-0000-0
      '{"nome":"Bruno","email":"bruno@exemplo.pt","telefone":"912345678","data_nascimento":"1980-01-01","pais":"Portugal"}') from q));
 select is((select cliente_id from public.reservas where id = ((select r from res where nome = 'r4')->>'id')::uuid),
   '00000000-0000-0000-0000-0000000d0912'::uuid, 'encontrado por email, maiúsculas à parte');
+select is((select dados_site->>'cliente_divergente' from public.reservas where id = ((select r from res where nome = 'r4')->>'id')::uuid),
+  'true', 'Bruno ≠ Bruno Antigo → cliente_divergente');
 select is((public.api_cancelar_reserva('00000000-0000-0000-0000-0000000d0a00',
   ((select r from res where nome = 'r4')->>'codigo')::bigint))->>'estado', 'cancelada', 'r4 cancelada (liberta a Clio)');
 

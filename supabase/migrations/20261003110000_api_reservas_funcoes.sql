@@ -23,8 +23,8 @@ returns jsonb language sql stable security definer set search_path = public as $
     'total', r.dados_site->'cotacao'->'subtotal',
     'criada_em', r.created_at)
     from public.reservas r
-    left join public.estacoes ee on ee.id = r.estacao_entrega_id
-    left join public.estacoes er on er.id = r.estacao_recolha_id
+    left join public.estacoes ee on ee.id = r.estacao_entrega_id and ee.org_id = p_org_id
+    left join public.estacoes er on er.id = r.estacao_recolha_id and er.org_id = p_org_id
    where r.id = p_reserva_id and r.org_id = p_org_id;
 $$;
 
@@ -47,12 +47,18 @@ declare
   v_cliente uuid; v_cliente_nome text; v_reserva uuid; v_codigo bigint; v_dias int;
   v_m record; v_pr record; v_tarifa uuid; v_tarifa_nome text;
   v_cob_nome text; v_cob_preco numeric; v_cob_franquia numeric;
+  v_cliente_email text; v_por_nif boolean := false; v_divergente boolean := false; v_mensagem text;
 begin
+  -- Sem modelo o lock seria hashtext(null): não serializava nada.
+  if v_modelo is null or v_ref is null then
+    return public.api_erro('PARAMETRO_INVALIDO', 'modelo_id e referencia_externa são obrigatórios.');
+  end if;
+
   -- Lock antes de tudo: serializa a última viatura do modelo e repetições do mesmo pedido.
   perform pg_advisory_xact_lock(hashtext('api_reserva:' || p_org_id::text || ':' || v_modelo::text));
 
   select id into v_existente from public.reservas
-   where api_chave_id = p_api_chave_id and referencia_externa = v_ref;
+   where org_id = p_org_id and api_chave_id = p_api_chave_id and referencia_externa = v_ref;
   if found then
     return public.api_reserva_resumo(p_org_id, v_existente) || jsonb_build_object('repetida', true);
   end if;
@@ -82,30 +88,9 @@ begin
       '{erro,detalhes}', v_cot);
   end if;
 
-  -- Cliente: por NIF, senão por email; o mais antigo; nunca uma emissora; nunca alterado.
-  if v_nif is not null then
-    select id, nome into v_cliente, v_cliente_nome from public.clientes
-     where org_id = p_org_id and deleted_at is null and not is_emissora and nif = v_nif
-     order by created_at, id limit 1;
-  end if;
-  if v_cliente is null then
-    select id, nome into v_cliente, v_cliente_nome from public.clientes
-     where org_id = p_org_id and deleted_at is null and not is_emissora and lower(btrim(email)) = v_email
-     order by created_at, id limit 1;
-  end if;
-  if v_cliente is null then
-    insert into public.clientes (org_id, nome, email, telefone, nif, data_nascimento, morada,
-                                 codigo_postal, localidade, pais, tipo_cliente, created_by)
-    values (p_org_id, btrim(v_cli->>'nome'), v_email, btrim(v_cli->>'telefone'), v_nif,
-            (v_cli->>'data_nascimento')::date, nullif(btrim(v_cli->>'morada'), ''),
-            nullif(btrim(v_cli->>'codigo_postal'), ''), nullif(btrim(v_cli->>'localidade'), ''),
-            coalesce(nullif(btrim(v_cli->>'pais'), ''), 'Portugal'), 'particular', null)
-    returning id, nome into v_cliente, v_cliente_nome;
-  end if;
-
   select * into v_m from public.api_modelos_publicaveis(p_org_id) where modelo_id = v_modelo;
   v_tarifa := public.api_tarifa_site(p_org_id);
-  select nome into v_tarifa_nome from public.renting_tarifas where id = v_tarifa;
+  select nome into v_tarifa_nome from public.renting_tarifas where id = v_tarifa and org_id = p_org_id;
   select * into v_pr from public.renting_tarifa_precos_modelo
    where modelo_id = v_modelo and tarifa_id = v_tarifa and org_id = p_org_id;
   v_dias := (v_cot->'periodo'->>'dias')::int;
@@ -114,7 +99,38 @@ begin
       from public.renting_coberturas where id = v_cobertura and org_id = p_org_id;
   end if;
 
+  -- Cliente e reserva no mesmo bloco: se o insert da reserva perder a corrida
+  -- da idempotência, o cliente novo também é desfeito.
   begin
+    -- Cliente: por NIF, senão por email; o mais antigo; nunca uma emissora; nunca alterado.
+    if v_nif is not null then
+      select id, nome, email into v_cliente, v_cliente_nome, v_cliente_email from public.clientes
+       where org_id = p_org_id and deleted_at is null and not is_emissora and nif = v_nif
+       order by created_at, id limit 1;
+      v_por_nif := v_cliente is not null;
+    end if;
+    if v_cliente is null then
+      select id, nome, email into v_cliente, v_cliente_nome, v_cliente_email from public.clientes
+       where org_id = p_org_id and deleted_at is null and not is_emissora and lower(btrim(email)) = v_email
+       order by created_at, id limit 1;
+    end if;
+    if v_cliente is not null then
+      -- Liga e avisa: a ficha não muda, mas a equipa confirma a identidade ao balcão.
+      v_divergente :=
+        lower(regexp_replace(btrim(v_cliente_nome), '\s+', ' ', 'g'))
+          is distinct from lower(regexp_replace(btrim(v_cli->>'nome'), '\s+', ' ', 'g'))
+        or (v_por_nif and v_cliente_email is not null
+            and lower(btrim(v_cliente_email)) is distinct from v_email);
+    else
+      insert into public.clientes (org_id, nome, email, telefone, nif, data_nascimento, morada,
+                                   codigo_postal, localidade, pais, tipo_cliente, created_by)
+      values (p_org_id, btrim(v_cli->>'nome'), v_email, btrim(v_cli->>'telefone'), v_nif,
+              (v_cli->>'data_nascimento')::date, nullif(btrim(v_cli->>'morada'), ''),
+              nullif(btrim(v_cli->>'codigo_postal'), ''), nullif(btrim(v_cli->>'localidade'), ''),
+              coalesce(nullif(btrim(v_cli->>'pais'), ''), 'Portugal'), 'particular', null)
+      returning id, nome into v_cliente, v_cliente_nome;
+    end if;
+
     insert into public.reservas (
       org_id, estado, regime, modelo_id, grupo_id, grupo_nome,
       data_inicio, data_fim, estacao_entrega_id, estacao_recolha_id,
@@ -134,13 +150,14 @@ begin
       v_pr.caucao_valor, v_pr.km_mensal, v_pr.km_adicional_valor,
       nullif(btrim(p_pedido->>'mensagem'), ''), 'site', p_api_chave_id, v_ref,
       jsonb_build_object('cliente', v_cli, 'carta_conducao', p_pedido->'carta_conducao',
-                         'mensagem', p_pedido->>'mensagem', 'total_esperado', v_esperado, 'cotacao', v_cot),
+                         'mensagem', p_pedido->>'mensagem', 'total_esperado', v_esperado, 'cotacao', v_cot,
+                         'cliente_divergente', v_divergente),
       null, null)
     returning id, codigo into v_reserva, v_codigo;
   exception when unique_violation then
     -- O mesmo pedido noutro modelo (outro lock) chegou primeiro: devolve o que existe.
     select id into v_existente from public.reservas
-     where api_chave_id = p_api_chave_id and referencia_externa = v_ref;
+     where org_id = p_org_id and api_chave_id = p_api_chave_id and referencia_externa = v_ref;
     if v_existente is null then raise; end if;
     return public.api_reserva_resumo(p_org_id, v_existente) || jsonb_build_object('repetida', true);
   end;
@@ -159,18 +176,24 @@ begin
   insert into public.reserva_condutores (org_id, reserva_id, cliente_id, is_principal)
   values (p_org_id, v_reserva, v_cliente, true);
 
+  v_mensagem := 'Reserva #' || v_codigo || ' do site: ' || v_m.marca || ' ' || v_m.modelo || ', '
+                || to_char(v_inicio at time zone 'Europe/Lisbon', 'DD/MM HH24:MI') || ' a '
+                || to_char(v_fim at time zone 'Europe/Lisbon', 'DD/MM HH24:MI') || ' — ' || v_cliente_nome
+                || '. Atribuir viatura e confirmar.';
+  if v_divergente then
+    v_mensagem := v_mensagem || ' Dados do site diferentes da ficha do cliente — confirmar identidade ao balcão.';
+  end if;
+
   insert into public.domain_events (org_id, event_type, entity_table, entity_id, payload, emitted_by)
   values (p_org_id, 'reserva.site_recebida', 'reservas', v_reserva, jsonb_build_object(
     'codigo', v_codigo,
     'modelo', v_m.marca || ' ' || v_m.modelo,
     'cliente', v_cliente_nome,
+    'cliente_divergente', v_divergente,
     'data_inicio', v_inicio,
     'data_fim', v_fim,
     'total', v_total,
-    'mensagem', 'Reserva #' || v_codigo || ' do site: ' || v_m.marca || ' ' || v_m.modelo || ', '
-                || to_char(v_inicio at time zone 'Europe/Lisbon', 'DD/MM HH24:MI') || ' a '
-                || to_char(v_fim at time zone 'Europe/Lisbon', 'DD/MM HH24:MI') || ' — ' || v_cliente_nome
-                || '. Atribuir viatura e confirmar.'),
+    'mensagem', v_mensagem),
     'edge_function');
 
   return public.api_reserva_resumo(p_org_id, v_reserva);
