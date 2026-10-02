@@ -345,6 +345,7 @@ jobs:
             gerar_cobrancas_slot_tolerante \
             atribuicao_segue_estado_do_contrato \
             tvde_parado_volta_a_cobrar \
+            tvde_reaberto_a_mao_cobra \
             fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
