@@ -48,31 +48,48 @@ export const TicketAccessPanel = forwardRef<TicketAccessPanelRef, TicketAccessPa
       const targetId = ticketIdOverride || ticketId;
       if (!targetId) return;
       try {
-        const [accessRes, ticketRes, adminsRes, gestoresByIdRes, gestoresByNomeRes] =
-          await Promise.all([
-            supabase
-              .from('assistencia_ticket_acessos')
-              .select(`profile_id, profiles!profile_id (id, nome, cargo, is_admin, cargo_id)`)
-              .eq('ticket_id', targetId),
-            supabase.from('assistencia_tickets').select('criado_por').eq('id', targetId).single(),
-            supabase
-              .from('profiles')
-              .select('id, nome, cargo, is_admin, cargo_id')
-              .eq('is_admin', true),
-            supabase
-              .from('profiles')
-              .select('id, nome, cargo, is_admin, cargo_id')
-              .in('cargo_id', GESTOR_CARGO_IDS),
-            supabase
-              .from('profiles')
-              .select('id, nome, cargo, is_admin, cargo_id')
-              .ilike('cargo', '%Gestor%Assist%'),
-          ]);
+        const [
+          accessRes,
+          ticketRes,
+          adminsRes,
+          gestoresByIdRes,
+          gestoresByNomeRes,
+          gestoresDosGruposRes,
+        ] = await Promise.all([
+          supabase
+            .from('assistencia_ticket_acessos')
+            .select(`profile_id, profiles!profile_id (id, nome, cargo, is_admin, cargo_id)`)
+            .eq('ticket_id', targetId),
+          supabase.from('assistencia_tickets').select('criado_por').eq('id', targetId).single(),
+          supabase
+            .from('profiles')
+            .select('id, nome, cargo, is_admin, cargo_id')
+            .eq('is_admin', true),
+          supabase
+            .from('profiles')
+            .select('id, nome, cargo, is_admin, cargo_id')
+            .in('cargo_id', GESTOR_CARGO_IDS),
+          supabase
+            .from('profiles')
+            .select('id, nome, cargo, is_admin, cargo_id')
+            .ilike('cargo', '%Gestor%Assist%'),
+          // Quem tem o Gestor de Assistência como grupo adicional (o perfil só guarda o principal).
+          supabase.rpc('get_utilizadores_dos_grupos', { p_cargo_ids: GESTOR_CARGO_IDS }),
+        ]);
 
         const peopleMap = new Map<string, any>();
         adminsRes.data?.forEach((p) => peopleMap.set(p.id, p));
         gestoresByIdRes.data?.forEach((p) => peopleMap.set(p.id, p));
         gestoresByNomeRes.data?.forEach((p) => peopleMap.set(p.id, p));
+
+        const idsDosGrupos = (gestoresDosGruposRes.data ?? []).map((r) => r.user_id);
+        if (idsDosGrupos.length > 0) {
+          const { data: gestoresAdicionais } = await supabase
+            .from('profiles')
+            .select('id, nome, cargo, is_admin, cargo_id')
+            .in('id', idsDosGrupos);
+          gestoresAdicionais?.forEach((p) => peopleMap.set(p.id, p));
+        }
 
         if (ticketRes.data?.criado_por) {
           const { data: creator } = await supabase

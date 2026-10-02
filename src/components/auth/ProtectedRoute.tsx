@@ -41,11 +41,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     hasAccessToResource,
     loading: permissionsLoading,
     cargo_id,
-    cargo,
+    cargos,
     recursos,
     tipoUtilizador,
   } = usePermissions();
-  const isSupervisorTvde = isAdmin || cargo === 'Supervisor Gestor TVDE';
+  const isSupervisorTvde = isAdmin || cargos.includes('Supervisor Gestor TVDE');
   const { has: hasModulo, isLoading: modulesLoading } = useModules();
   const navigate = useNavigate();
   const location = useLocation();

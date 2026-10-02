@@ -34,11 +34,11 @@ export interface UseAmbitoViaturas {
 
 /** Âmbito do utilizador e o interruptor "Ver toda a frota" (no URL). */
 export function useAmbitoViaturas(): UseAmbitoViaturas {
-  const { isAdmin, cargo, loading } = usePermissions();
+  const { isAdmin, cargo, cargos, loading } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
   const ambito = useMemo(
-    () => (loading ? null : ambitoDoUtilizador({ isAdmin, cargo })),
-    [isAdmin, cargo, loading]
+    () => (loading ? null : ambitoDoUtilizador({ isAdmin, cargo, cargos })),
+    [isAdmin, cargo, cargos, loading]
   );
   const verTudo = searchParams.get(PARAM_FROTA_TODA) === 'toda';
 

@@ -47,12 +47,16 @@ import { Loader2, Pencil, Trash2, Key, Search, Plus } from 'lucide-react';
 import type { Cargo } from '@/hooks/useRBAC';
 import { matchesSearch } from '@/lib/utils';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { GruposDoUtilizadorField } from '@/components/admin/GruposDoUtilizadorField';
+import { algumGrupoAdmin, diferencaGrupos } from '@/utils/gruposDoUtilizador';
 
 interface Profile {
   id: string;
   email: string;
   nome: string;
   cargo_id: string | null;
+  /** Outros grupos da pessoa, além do principal (cargo_id). */
+  cargos_extra: string[];
   is_admin: boolean;
   created_at: string;
   disponivel_transferista: boolean;
@@ -143,12 +147,21 @@ export const UsersTab = () => {
 
       const membershipMap = Object.fromEntries(memberships.map((m) => [m.user_id, m]));
 
+      // Grupos adicionais de cada pessoa (um admin lê os de toda a org).
+      const { data: extras } = await supabase
+        .from('user_organizacoes_cargos')
+        .select('user_id, cargo_id')
+        .in('user_id', userIds);
+      const extrasPorUser: Record<string, string[]> = {};
+      (extras || []).forEach((e) => (extrasPorUser[e.user_id] ||= []).push(e.cargo_id));
+
       const mapped = (profilesData || []).map((p) => ({
         id: p.id,
         email: p.email,
         nome: p.nome,
         created_at: p.created_at,
         cargo_id: membershipMap[p.id]?.cargo_id ?? null,
+        cargos_extra: extrasPorUser[p.id] ?? [],
         is_admin: membershipMap[p.id]?.is_admin ?? false,
         disponivel_transferista: p.disponivel_transferista ?? true,
         periodo_ativo_ate: periodoAtivoMap.get(p.id) ?? null,
@@ -198,7 +211,9 @@ export const UsersTab = () => {
 
     // Filtro por grupo
     if (filterGrupo) {
-      result = result.filter((p) => p.cargo_id === filterGrupo);
+      result = result.filter(
+        (p) => p.cargo_id === filterGrupo || p.cargos_extra.includes(filterGrupo)
+      );
     }
 
     // Ordenação
@@ -308,9 +323,14 @@ export const UsersTab = () => {
 
     setIsSaving(true);
     try {
-      const cargoNome = grupos.find((g) => g.id === editingProfile.cargo_id)?.nome || null;
-      // O nome do grupo define se é administrador (alinhado com a edge function create-user).
-      const isAdminCargo = (cargoNome || '').toLowerCase().includes('admin');
+      // O nome de QUALQUER dos grupos define se é administrador (alinhado com a
+      // edge function create-user e com a base).
+      const nomesDosGrupos = grupos
+        .filter(
+          (g) => g.id === editingProfile.cargo_id || editingProfile.cargos_extra.includes(g.id)
+        )
+        .map((g) => g.nome);
+      const isAdminCargo = algumGrupoAdmin(nomesDosGrupos);
 
       // Papel (cargo/admin) é PER-ORG: escrever no membership da org ativa,
       // não em profiles (legado single-org). O trigger trg_uorg_sync_is_admin
@@ -322,6 +342,31 @@ export const UsersTab = () => {
         .eq('org_id', orgId);
 
       if (roleError) throw roleError;
+
+      // Grupos adicionais: primeiro o que sai, depois o que entra. Feito depois
+      // do principal, que arruma por si um adicional que passou a principal.
+      const antes = profiles.find((p) => p.id === editingProfile.id)?.cargos_extra ?? [];
+      const { inserir, remover } = diferencaGrupos(
+        antes,
+        editingProfile.cargos_extra.filter((id) => id !== editingProfile.cargo_id)
+      );
+      if (remover.length > 0) {
+        const { error: removeError } = await supabase
+          .from('user_organizacoes_cargos')
+          .delete()
+          .eq('user_id', editingProfile.id)
+          .eq('org_id', orgId)
+          .in('cargo_id', remover);
+        if (removeError) throw removeError;
+      }
+      if (inserir.length > 0) {
+        const { error: insertError } = await supabase
+          .from('user_organizacoes_cargos')
+          .insert(
+            inserir.map((cargo_id) => ({ org_id: orgId, user_id: editingProfile.id, cargo_id }))
+          );
+        if (insertError) throw insertError;
+      }
 
       // Nome e disponibilidade de transferista são identidade global (org-neutra) — ficam em profiles.
       const { error: nomeError } = await supabase
@@ -546,7 +591,9 @@ export const UsersTab = () => {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{profile.email}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {getGrupoName(profile.cargo_id)}
+                    {[profile.cargo_id, ...profile.cargos_extra]
+                      .map((id) => getGrupoName(id))
+                      .join(', ')}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatDate(profile.created_at)}
@@ -747,28 +794,16 @@ export const UsersTab = () => {
                 className="bg-background border-border"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="grupo" className="text-foreground">
-                Grupo
-              </Label>
-              <Select
-                value={editingProfile?.cargo_id || ''}
-                onValueChange={(value) =>
-                  setEditingProfile((prev) => (prev ? { ...prev, cargo_id: value } : null))
-                }
-              >
-                <SelectTrigger className="bg-background border-border">
-                  <SelectValue placeholder="Selecionar grupo" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  {grupos.map((grupo) => (
-                    <SelectItem key={grupo.id} value={grupo.id}>
-                      {grupo.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <GruposDoUtilizadorField
+              grupos={grupos}
+              principal={editingProfile?.cargo_id ?? null}
+              adicionais={editingProfile?.cargos_extra ?? []}
+              onChange={(principal, adicionais) =>
+                setEditingProfile((prev) =>
+                  prev ? { ...prev, cargo_id: principal, cargos_extra: adicionais } : null
+                )
+              }
+            />
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
                 <Label className="text-foreground">Disponível como transferista</Label>

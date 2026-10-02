@@ -205,6 +205,12 @@ export const NovoTicketDialog: React.FC<NovoTicketDialogProps> = ({
           }
         });
 
+        // Quem tem o Gestor de Assistência como grupo adicional (uma pessoa pode ter vários).
+        const { data: gestoresDosGrupos } = await supabase.rpc('get_utilizadores_dos_grupos', {
+          p_cargo_ids: GESTOR_ASSISTENCIA_CARGO_IDS,
+        });
+        (gestoresDosGrupos ?? []).forEach((g) => userIdsSet.add(g.user_id));
+
         if (motoristaId) {
           const { data: motorista } = await supabase
             .from('motoristas_ativos')

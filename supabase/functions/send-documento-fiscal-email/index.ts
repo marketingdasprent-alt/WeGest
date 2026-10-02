@@ -140,10 +140,19 @@ serve(async (req) => {
         if (membro.is_admin || !membro.cargo_id) {
           return { is_admin: !!membro.is_admin, recursos: [] };
         }
+        // Uma pessoa pode ter vários grupos: contam as permissões de todos.
+        const { data: gruposDaPessoa } = await supabase.rpc("cargo_ids_do_utilizador", {
+          p_user: userId,
+          p_org: requestedOrgId,
+        });
+        const cargoIds: string[] =
+          Array.isArray(gruposDaPessoa) && gruposDaPessoa.length > 0
+            ? gruposDaPessoa
+            : [membro.cargo_id];
         const { data: perms } = await supabase
           .from("cargo_permissoes")
           .select("recursos(nome)")
-          .eq("cargo_id", membro.cargo_id)
+          .in("cargo_id", cargoIds)
           .eq("tem_acesso", true);
         const recursos = (perms ?? [])
           // O embed chega como objecto ou lista, conforme a relação inferida.

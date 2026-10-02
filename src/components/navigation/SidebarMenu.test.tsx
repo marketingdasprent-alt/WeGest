@@ -59,6 +59,8 @@ function mockPermissions(hasAccessToResource: (recurso: string) => boolean) {
     isAdmin: false,
     cargo: null,
     cargo_id: null,
+    cargos: [],
+    cargoIds: [],
     tipoUtilizador: 'colaborador' as const,
     hasRole: vi.fn(() => false),
     hasPermission: vi.fn(() => false),

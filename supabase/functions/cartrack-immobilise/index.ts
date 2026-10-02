@@ -69,15 +69,24 @@ serve(async (req) => {
         .eq('nome', 'viaturas_imobilizar')
         .maybeSingle();
       if (recurso) {
+        // Uma pessoa pode ter vários grupos: vale o acesso de qualquer um.
+        const { data: gruposDaPessoa } = await svc.rpc('cargo_ids_do_utilizador', {
+          p_user: user.id,
+          p_org: config.org_id,
+        });
+        const cargoIds: string[] =
+          Array.isArray(gruposDaPessoa) && gruposDaPessoa.length > 0
+            ? gruposDaPessoa
+            : [membership.cargo_id];
         const { data: perm } = await svc
           .from('cargo_permissoes')
           .select('tem_acesso')
-          .eq('cargo_id', membership.cargo_id)
+          .in('cargo_id', cargoIds)
           .eq('recurso_id', recurso.id)
           .eq('org_id', config.org_id)
           .eq('tem_acesso', true)
-          .maybeSingle();
-        permitido = !!perm;
+          .limit(1);
+        permitido = !!perm && perm.length > 0;
       }
     }
     if (!permitido)

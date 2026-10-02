@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { carregarGrupoPrevisto, type GrupoPrevisto } from '@/lib/verComoGrupo';
+import { idsDosGrupos, somarPermissoes } from '@/utils/gruposDoUtilizador';
 
 export type AppRole = 'admin' | 'gestor_tvde' | 'gestor_comercial' | 'colaborador';
 
@@ -12,8 +13,12 @@ interface PermissionsState {
   isAdmin: boolean;
   recursos: string[];
   recursosEditaveis: string[];
+  /** Grupo principal. Quem tem vários grupos vê todos em `cargos`/`cargoIds`. */
   cargo: string | null;
   cargo_id: string | null;
+  /** Nomes de todos os grupos da pessoa, o principal primeiro. */
+  cargos: string[];
+  cargoIds: string[];
   tipoUtilizador: 'motorista' | 'colaborador';
   loading: boolean;
   initialized: boolean;
@@ -33,6 +38,8 @@ const DEFAULT_STATE: PermissionsState = {
   recursosEditaveis: [],
   cargo: null,
   cargo_id: null,
+  cargos: [],
+  cargoIds: [],
   tipoUtilizador: 'colaborador',
   loading: true,
   initialized: false,
@@ -120,6 +127,29 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         tipo_utilizador: tipoUtilizador,
       };
 
+      // Grupos adicionais da mesma pessoa. Se a leitura falhar fica só o principal,
+      // que é o comportamento de quem nunca teve mais do que um.
+      let adicionais: { cargo_id: string; nome: string | null }[] = [];
+      if (!previsto) {
+        const { data: extras } = await supabase
+          .from('user_organizacoes_cargos')
+          .select('cargo_id, cargos(nome)')
+          .eq('user_id', user.id)
+          .eq('org_id', orgId);
+        adicionais = (extras ?? []).map((e) => ({
+          cargo_id: e.cargo_id,
+          nome: (e.cargos as { nome?: string } | null)?.nome ?? null,
+        }));
+        if (currentFetchId !== fetchIdRef.current) return;
+      }
+      const cargoIds = idsDosGrupos(
+        profile.cargo_id,
+        adicionais.map((a) => a.cargo_id)
+      );
+      const cargos = [profile.cargo, ...adicionais.map((a) => a.nome)].filter(
+        (n): n is string => !!n
+      );
+
       // Admins têm tudo
       if (profile?.is_admin) {
         lastFetchedUserIdRef.current = user.id;
@@ -127,6 +157,8 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
           isAdmin: true,
           cargo: profile.cargo || null,
           cargo_id: profile.cargo_id || null,
+          cargos,
+          cargoIds,
           tipoUtilizador,
           recursos: [],
           recursosEditaveis: [],
@@ -136,11 +168,13 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         return;
       }
 
-      if (!profile?.cargo_id) {
+      if (cargoIds.length === 0) {
         lastFetchedUserIdRef.current = user.id;
         setState({
           ...DEFAULT_STATE,
           cargo: profile?.cargo || null,
+          cargos,
+          cargoIds,
           tipoUtilizador,
           loading: false,
           initialized: true,
@@ -148,10 +182,11 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         return;
       }
 
+      // Permissões de TODOS os grupos da pessoa, somadas.
       const { data: permissoesList, error: permissoesError } = await supabase
         .from('cargo_permissoes')
-        .select('recurso_id, tem_acesso')
-        .eq('cargo_id', profile.cargo_id)
+        .select('recurso_id, tem_acesso, pode_editar')
+        .in('cargo_id', cargoIds)
         .eq('tem_acesso', true);
 
       if (permissoesError || currentFetchId !== fetchIdRef.current) {
@@ -161,6 +196,8 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
             ...DEFAULT_STATE,
             cargo: profile.cargo || null,
             cargo_id: profile.cargo_id,
+            cargos,
+            cargoIds,
             tipoUtilizador,
             loading: false,
             initialized: true,
@@ -175,6 +212,8 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
           ...DEFAULT_STATE,
           cargo: profile.cargo || null,
           cargo_id: profile.cargo_id,
+          cargos,
+          cargoIds,
           tipoUtilizador,
           loading: false,
           initialized: true,
@@ -182,39 +221,27 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         return;
       }
 
-      const allRecursoIds = permissoesList.map((p) => p.recurso_id);
+      const { acesso, edicao } = somarPermissoes(permissoesList);
 
       const { data: recursosList, error: recursosError } = await supabase
         .from('recursos')
         .select('id, nome')
-        .in('id', allRecursoIds);
+        .in('id', acesso);
 
       if (currentFetchId !== fetchIdRef.current) return;
 
       const allNomes = recursosError ? [] : recursosList?.map((r) => r.nome) || [];
-
-      let editNomes: string[] = [];
-      try {
-        const { data: editData } = await supabase
-          .from('cargo_permissoes')
-          .select('recurso_id, pode_editar')
-          .eq('cargo_id', profile.cargo_id)
-          .eq('tem_acesso', true)
-          .eq('pode_editar', true);
-
-        if (editData && editData.length > 0 && currentFetchId === fetchIdRef.current) {
-          const editIds = editData.map((p: any) => p.recurso_id);
-          editNomes = (recursosList || []).filter((r) => editIds.includes(r.id)).map((r) => r.nome);
-        }
-      } catch {
-        // pode_editar ainda não existe na DB
-      }
+      const editNomes = (recursosList || [])
+        .filter((r) => edicao.includes(r.id))
+        .map((r) => r.nome);
 
       lastFetchedUserIdRef.current = user.id;
       setState({
         isAdmin: false,
         cargo: profile.cargo || null,
         cargo_id: profile.cargo_id,
+        cargos,
+        cargoIds,
         tipoUtilizador,
         recursos: allNomes,
         recursosEditaveis: editNomes,

@@ -66,7 +66,7 @@ const PLATAFORMA_SUB: Record<string, string> = {
 export function DashboardFinanceiro() {
   const navigate = useNavigate();
   // Pedido do Thiago (01/10): a Faturação vê os negativos da semana em vez de "Precisa de atenção".
-  const verNegativos = ehGrupoFaturacao(usePermissions().cargo);
+  const verNegativos = ehGrupoFaturacao(usePermissions().cargos);
   // Calculado uma vez: `new Date()` a cada render dava instantes sempre novos,
   // e um hook que dependesse deles voltava a pedir os dados em ciclo.
   const { semana, mes } = useMemo(() => {

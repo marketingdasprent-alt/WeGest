@@ -161,16 +161,25 @@ export const GruposTab = () => {
       // popover sem ir outra vez à base de dados.
       if (data && data.length > 0) {
         const ids = data.map((g: Cargo) => g.id);
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('cargo_id, nome, email')
-          .in('cargo_id', ids)
-          .order('nome');
+        // Principal e adicionais: uma pessoa pode estar em vários grupos.
+        const { data: pares } = await supabase.rpc('get_utilizadores_dos_grupos', {
+          p_cargo_ids: ids,
+        });
+        const userIds = [...new Set((pares ?? []).map((p) => p.user_id))];
+        const { data: profiles } =
+          userIds.length === 0
+            ? { data: [] }
+            : await supabase.from('profiles').select('id, nome, email').in('id', userIds);
+        const perfilPorId = new Map((profiles || []).map((p) => [p.id, p]));
         const porGrupo: Record<string, MembroGrupo[]> = {};
         ids.forEach((id) => (porGrupo[id] = []));
-        (profiles || []).forEach((p: any) => {
-          (porGrupo[p.cargo_id] ||= []).push({ nome: p.nome, email: p.email });
+        (pares ?? []).forEach((par) => {
+          const p = perfilPorId.get(par.user_id);
+          if (p) (porGrupo[par.cargo_id] ||= []).push({ nome: p.nome, email: p.email });
         });
+        Object.values(porGrupo).forEach((lista) =>
+          lista.sort((a, b) => (a.nome ?? '').localeCompare(b.nome ?? '', 'pt'))
+        );
         setMembros(porGrupo);
 
         // Contar permissões (ver/editar) por grupo — numa só query, para os

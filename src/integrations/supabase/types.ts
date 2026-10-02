@@ -13169,6 +13169,52 @@ export type Database = {
           },
         ]
       }
+      user_organizacoes_cargos: {
+        Row: {
+          cargo_id: string
+          created_at: string
+          id: string
+          org_id: string
+          user_id: string
+        }
+        Insert: {
+          cargo_id: string
+          created_at?: string
+          id?: string
+          org_id: string
+          user_id: string
+        }
+        Update: {
+          cargo_id?: string
+          created_at?: string
+          id?: string
+          org_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_organizacoes_cargos_cargo_id_fkey"
+            columns: ["cargo_id"]
+            isOneToOne: false
+            referencedRelation: "cargos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_organizacoes_cargos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uoc_membro_fkey"
+            columns: ["user_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "user_organizacoes"
+            referencedColumns: ["user_id", "org_id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -15756,6 +15802,13 @@ export type Database = {
           periodo_fim: string
           periodo_inicio: string
           ultima_data: string
+        }[]
+      }
+      get_utilizadores_dos_grupos: {
+        Args: { p_cargo_ids: string[] }
+        Returns: {
+          cargo_id: string
+          user_id: string
         }[]
       }
       get_viatura_historico_portagens: {
