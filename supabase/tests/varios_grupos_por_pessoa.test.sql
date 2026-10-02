@@ -55,10 +55,10 @@ on conflict (user_id, org_id) do update
 
 -- A (principal): edita 'automacoes'. B (Gestor TVDE, adicional): só vê 'viaturas_ver'.
 insert into public.cargo_permissoes (cargo_id, recurso_id, org_id, tem_acesso, pode_editar)
-select '00000000-0000-0000-0000-000000ce0a01', r.id, '00000000-0000-0000-0000-0000004e0000', true, true
+select '00000000-0000-0000-0000-000000ce0a01'::uuid, r.id, '00000000-0000-0000-0000-0000004e0000'::uuid, true, true
   from public.recursos r where r.nome = 'automacoes'
 union all
-select '00000000-0000-0000-0000-000000ce0a02', r.id, '00000000-0000-0000-0000-0000004e0000', true, false
+select '00000000-0000-0000-0000-000000ce0a02'::uuid, r.id, '00000000-0000-0000-0000-0000004e0000'::uuid, true, false
   from public.recursos r where r.nome = 'viaturas_ver';
 
 -- U tem o grupo adicional Gestor TVDE; V só tem o principal.
