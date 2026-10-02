@@ -220,6 +220,56 @@ Deno.test('método errado ou id no caminho → 404', async () => {
   assertEquals(comId?.status, 404);
 });
 
+Deno.test('erros também levam Cache-Control: no-store (409 da base, 400 local, 500)', async () => {
+  const cotar = (db: Parameters<typeof servirDisponibilidade>[4], corpo: unknown) => {
+    const req = new Request('https://x/v1/cotacoes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    return servirDisponibilidade(
+      { metodo: 'POST', recurso: 'cotacoes', id: null },
+      new URL(req.url),
+      req,
+      ctx,
+      db
+    );
+  };
+  const corpo = {
+    modelo_id: M,
+    inicio: '2026-10-10T10:00:00Z',
+    fim: '2026-10-12T10:00:00Z',
+    entrega: E,
+    recolha: E,
+  };
+  const r409 = await cotar(
+    base('api_cotacao', { erro: { codigo: 'SEM_DISPONIBILIDADE', mensagem: 'x' } }),
+    corpo
+  );
+  assertEquals(r409?.status, 409);
+  assertEquals(r409?.headers.get('cache-control'), 'no-store');
+  const r400 = await cotar(semBase, { ...corpo, extras: [{ extra_id: X, quantidade: 0 }] });
+  assertEquals(r400?.status, 400);
+  assertEquals((await r400!.json()).erro.codigo, 'PARAMETRO_INVALIDO');
+  assertEquals(r400?.headers.get('cache-control'), 'no-store');
+  const r500 = await cotar(
+    { rpc: () => Promise.resolve({ data: null, error: { message: 'base em baixo' } }) },
+    corpo
+  );
+  assertEquals(r500?.status, 500);
+  assertEquals(r500?.headers.get('cache-control'), 'no-store');
+  const url = new URL('https://x/v1/disponibilidade?inicio=ontem');
+  const r400get = await servirDisponibilidade(
+    { metodo: 'GET', recurso: 'disponibilidade', id: null },
+    url,
+    new Request(url),
+    ctx,
+    semBase
+  );
+  assertEquals(r400get?.status, 400);
+  assertEquals(r400get?.headers.get('cache-control'), 'no-store');
+});
+
 Deno.test('recurso de catálogo devolve null', async () => {
   const url = new URL('https://x/v1/modelos');
   assertEquals(

@@ -124,8 +124,24 @@ function responder(data: unknown, error: unknown): Response {
   return ok(data, { semCache: true });
 }
 
-/** Devolve a Response de disponibilidade/cotação, ou null quando a rota não é destas. */
+/**
+ * Devolve a Response de disponibilidade/cotação, ou null quando a rota não é destas.
+ * Nenhuma resposta destas rotas vai para cache, erros incluídos: um 409 de agora
+ * não pode ser servido daqui a um minuto, quando a viatura já pode estar livre.
+ */
 export async function servirDisponibilidade(
+  rota: Rota,
+  url: URL,
+  req: Request,
+  ctx: ContextoApi,
+  db: DbRpc
+): Promise<Response | null> {
+  const resposta = await servir(rota, url, req, ctx, db);
+  resposta?.headers.set('Cache-Control', 'no-store');
+  return resposta;
+}
+
+async function servir(
   rota: Rota,
   url: URL,
   req: Request,
