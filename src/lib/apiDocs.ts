@@ -21,6 +21,9 @@ export const CONFIGURACAO_BASE = {
   hideModels: false,
   // O tema segue o next-themes da página (forceDarkModeState), sem botão próprio.
   hideDarkModeToggle: true,
+  // Os exemplos de JavaScript do Scalar são de browser e levam a chave literal;
+  // ficam os de Node.js, shell e PHP, que correm no servidor.
+  hiddenClients: { js: true },
   theme: 'default',
 } as const;
 

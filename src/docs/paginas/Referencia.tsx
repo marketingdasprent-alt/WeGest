@@ -71,8 +71,8 @@ export default function Referencia() {
       </header>
       <div className="max-w-3xl">
         <Callout tipo="perigo" titulo="Só com chave de testes">
-          Use uma chave só com catalogo:read; a chave fica no seu browser enquanto a página está
-          aberta.
+          Use uma chave de testes só com permissões de leitura (catalogo:read,
+          disponibilidade:read); nunca uma com reservas:write.
         </Callout>
       </div>
 

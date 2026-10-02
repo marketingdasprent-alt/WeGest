@@ -1,13 +1,23 @@
+import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-// @ts-ignore — virtual module gerado pelo vite-plugin-pwa em tempo de build
-import { useRegisterSW } from 'virtual:pwa-register/react';
+import { EVENTO_VERSAO_NOVA } from '@/lib/pwaArranque';
 
+/**
+ * Aviso de versão nova. Quem regista o service worker é o main.tsx (uma vez,
+ * e só na web da app); aqui só se ouve o evento que ele emite. Antes isto
+ * chamava useRegisterSW, que registava o SW uma segunda vez, sem condição,
+ * também na app nativa e em docs.wegest.pt.
+ */
 export function UpdateNotification() {
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW();
+  // window.__swUpdate já definido: o evento pode ter saído antes da montagem.
+  const [needRefresh, setNeedRefresh] = useState(() => !!window.__swUpdate);
+
+  useEffect(() => {
+    const aoHaverVersao = () => setNeedRefresh(true);
+    window.addEventListener(EVENTO_VERSAO_NOVA, aoHaverVersao);
+    return () => window.removeEventListener(EVENTO_VERSAO_NOVA, aoHaverVersao);
+  }, []);
 
   if (!needRefresh) return null;
 
@@ -28,7 +38,7 @@ export function UpdateNotification() {
       <Button
         size="sm"
         onClick={async () => {
-          await updateServiceWorker(true);
+          await window.__swUpdate?.();
           if ('caches' in window) {
             const keys = await caches.keys();
             await Promise.all(keys.map((k) => caches.delete(k)));

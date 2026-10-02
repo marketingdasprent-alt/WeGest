@@ -3,6 +3,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { Capacitor } from '@capacitor/core';
 
 import { removeLegacyAuthenticatedCache } from '@/lib/pwaCacheCleanup';
+import { arrancarPwa, usaServiceWorker } from '@/lib/pwaArranque';
 
 import App from './App.tsx';
 import './index.css';
@@ -22,35 +23,10 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
   });
 }
 
-// Service Worker só na web — na app nativa causa tela branca e reloads em loop
-if (!Capacitor.isNativePlatform()) {
-  void removeLegacyAuthenticatedCache();
-
-  const updateSW = registerSW({
-    onNeedRefresh() {
-      // Guardar a função de atualização globalmente para o App.tsx usar
-      (window as any).__swUpdate = () => updateSW(true);
-      window.dispatchEvent(new CustomEvent('sw-update-available'));
-    },
-    onOfflineReady() {},
-    onRegisteredSW(_swUrl, registration) {
-      if (registration) {
-        // Verificar atualizações a cada 5 minutos (não a cada 20 segundos)
-        setInterval(
-          () => {
-            registration.update();
-          },
-          5 * 60 * 1000
-        );
-
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            registration.update();
-          }
-        });
-      }
-    },
-  });
-}
+// Service worker só na web da app: nem no nativo (tela branca e reloads em
+// loop) nem em docs.wegest.pt, onde se desliga a quem já o tinha (ver pwaArranque).
+const nativo = Capacitor.isNativePlatform();
+if (usaServiceWorker(nativo, window.location.hostname)) void removeLegacyAuthenticatedCache();
+arrancarPwa({ nativo, hostname: window.location.hostname, registerSW });
 
 createRoot(document.getElementById('root')!).render(<App />);

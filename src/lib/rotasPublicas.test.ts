@@ -93,3 +93,23 @@ describe('isRotaPublica', () => {
     }
   });
 });
+
+describe('isRotaPublica em docs.wegest.pt', () => {
+  it('no host docs tudo é público, mesmo sem o prefixo /docs', () => {
+    for (const rota of ['/', '/erros', '/autenticacao', '/recursos/modelos', '/referencia']) {
+      expect(isRotaPublica(rota, 'docs.wegest.pt'), rota).toBe(true);
+    }
+  });
+
+  it('nos outros hosts os mesmos caminhos continuam a não ser públicos', () => {
+    expect(isRotaPublica('/erros', 'wegest.pt')).toBe(false);
+    expect(isRotaPublica('/dashboard', 'www.wegest.pt')).toBe(false);
+    // Um host parecido não passa por docs.
+    expect(isRotaPublica('/erros', 'docs.wegest.pt.evil.example')).toBe(false);
+  });
+
+  it('sem host explícito usa o window.location.hostname', () => {
+    expect(window.location.hostname).not.toBe('docs.wegest.pt');
+    expect(isRotaPublica('/erros')).toBe(false);
+  });
+});

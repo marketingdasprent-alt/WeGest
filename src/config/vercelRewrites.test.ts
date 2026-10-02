@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 interface Rewrite {
   source: string;
   destination: string;
+  missing?: { type: string; value: string }[];
 }
 
 const config = JSON.parse(readFileSync(resolve(process.cwd(), 'vercel.json'), 'utf8')) as {
@@ -17,6 +18,11 @@ describe('rewrites da Vercel', () => {
     expect(api?.destination).toBe(
       'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/:path*'
     );
+  });
+
+  it('em docs.wegest.pt o /api/rent-a-car não chega à edge function', () => {
+    const api = config.rewrites.find((r) => r.source === '/api/rent-a-car/:path*');
+    expect(api?.missing).toEqual([{ type: 'host', value: 'docs.wegest.pt' }]);
   });
 
   it('o catch-all da SPA vem depois: senão engolia a API com o index.html', () => {
