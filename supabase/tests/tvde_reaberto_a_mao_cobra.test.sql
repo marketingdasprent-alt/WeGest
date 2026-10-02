@@ -53,6 +53,10 @@ select ('00000000-0000-0000-0000-0000003e0f0' || n)::uuid, '00000000-0000-0000-0
        '00000000-0000-0000-0000-0000003e0c01', 'concluida'
   from (values (1, 1), (2, 2), (3, 3), (4, 4), (5, 2), (6, 5), (7, 6)) as x(n, v);
 
+-- trg_a_tvde_nasce_sem_data_fim limpa a data de fim ao inserir: fica desligado
+-- só enquanto entram as versões antigas, que têm o fim de legado.
+alter table public.contratos_renting disable trigger trg_a_tvde_nasce_sem_data_fim;
+
 -- Versões antigas, já substituídas, com o fim de legado.
 insert into public.contratos_renting
   (id, org_id, codigo, reserva_id, cliente_id, viatura_id, matricula, data_inicio, data_fim,
@@ -89,6 +93,8 @@ select ('00000000-0000-0000-0000-0000003e0b3' || n)::uuid, '00000000-0000-0000-0
        timestamptz '2026-06-16 10:00+00', 'fechado', 'pendente', 'tvde', 23, true,
        now(), 2, '00000000-0000-0000-0000-0000003e0a01'
   from generate_series(1, 2) as n;
+
+alter table public.contratos_renting enable trigger trg_a_tvde_nasce_sem_data_fim;
 
 -- Versões vivas, abertas a 01-10. A do #990204 não tem versão anterior.
 insert into public.contratos_renting
