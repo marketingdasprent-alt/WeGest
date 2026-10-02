@@ -308,6 +308,7 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "API externa" \
             api_chaves \
+            disponibilidade_ignora_reservas_apagadas \
             catalogo_site_colunas \
             api_catalogo \
             api_disponibilidade
