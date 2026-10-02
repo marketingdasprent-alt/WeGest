@@ -62,6 +62,19 @@ Deno.test('recusas de formato', () => {
       'data impossível',
       (c) => ({ ...c, cliente: { ...c.cliente, data_nascimento: '1990-02-31' } }),
     ],
+    // O Postgres recusa o ano 0 com erro (500): a edge corta antes de 1900.
+    [
+      'nascimento no ano 0',
+      (c) => ({ ...c, cliente: { ...c.cliente, data_nascimento: '0000-01-01' } }),
+    ],
+    [
+      'nascimento antes de 1900',
+      (c) => ({ ...c, cliente: { ...c.cliente, data_nascimento: '1899-12-31' } }),
+    ],
+    [
+      'validade da carta no ano 0',
+      (c) => ({ ...c, carta_conducao: { ...c.carta_conducao, validade: '0000-01-01' } }),
+    ],
     [
       'carta caduca antes do fim',
       (c) => ({ ...c, carta_conducao: { ...c.carta_conducao, validade: '2026-10-22' } }),
@@ -75,6 +88,26 @@ Deno.test('recusas de formato', () => {
   ];
   for (const [nome, f] of casos) assertEquals(validarCorpoReserva(f(corpo())).ok, false, nome);
 });
+
+Deno.test(
+  'nascimento 0000-01-01 → 400 PARAMETRO_INVALIDO sem ir à base; 1900-01-01 passa',
+  async () => {
+    const c = corpo();
+    const r = await servirReservas(
+      { metodo: 'POST', recurso: 'reservas', id: null },
+      pedido('POST', 'reservas', {
+        ...c,
+        cliente: { ...c.cliente, data_nascimento: '0000-01-01' },
+      }),
+      ctx,
+      semBase
+    );
+    assertEquals(r?.status, 400);
+    assertEquals((await r!.json()).erro.codigo, 'PARAMETRO_INVALIDO');
+    const limite = { ...c, cliente: { ...c.cliente, data_nascimento: '1900-01-01' } };
+    assertEquals(validarCorpoReserva(limite).ok, true);
+  }
+);
 
 Deno.test('sem reservas:write → 403 sem ir à base', async () => {
   const r = await servirReservas(
@@ -212,3 +245,35 @@ Deno.test('outro recurso → null (segue para o próximo serviço)', async () =>
   );
   assertEquals(r, null);
 });
+
+Deno.test(
+  'erro do PG → 500 e o console.error leva só o código e a RPC, nunca a mensagem',
+  async () => {
+    const mensagemPg = 'invalid input syntax for type date: "carla@novo.pt"';
+    const registos: unknown[][] = [];
+    const original = console.error;
+    console.error = (...a: unknown[]) => {
+      registos.push(a);
+    };
+    try {
+      const r = await servirReservas(
+        { metodo: 'POST', recurso: 'reservas', id: null },
+        pedido('POST', 'reservas', corpo()),
+        ctx,
+        {
+          rpc: () => Promise.resolve({ data: null, error: { code: '22007', message: mensagemPg } }),
+        }
+      );
+      assertEquals(r?.status, 500);
+      assertEquals((await r!.json()).erro.codigo, 'ERRO_INTERNO');
+    } finally {
+      console.error = original;
+    }
+    assertEquals(registos.length, 1);
+    const linha = JSON.stringify(registos[0]);
+    assert(!linha.includes('carla'), linha);
+    assert(!linha.includes('invalid input'), linha);
+    assert(linha.includes('22007'), linha);
+    assert(linha.includes('api_criar_reserva'), linha);
+  }
+);

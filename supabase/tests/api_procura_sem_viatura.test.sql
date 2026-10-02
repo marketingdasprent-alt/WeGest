@@ -6,7 +6,7 @@
 -- Fixture copiada de api_disponibilidade.test.sql (do auth.users à temp table p).
 -- ============================================================
 begin;
-select plan(16);
+select plan(18);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000d01ff', 'bootstrap@dispon.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -128,8 +128,9 @@ values ('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000
 select is(public.api_quantidade_disponivel('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01',
   (select inicio from p), (select fim from p)), 2, 'reserva fora do período não conta');
 
+-- A org B com o seu próprio Clio (apontar para o modelo da org A é recusado: ver trg_reservas_api_mesma_org abaixo).
 insert into public.reservas (org_id, modelo_id, data_inicio, data_fim)
-values ('00000000-0000-0000-0000-0000000d0b00', '00000000-0000-0000-0000-0000000d0d01', (select inicio from p), (select fim from p));
+values ('00000000-0000-0000-0000-0000000d0b00', '00000000-0000-0000-0000-0000000d0db1', (select inicio from p), (select fim from p));
 select is(public.api_quantidade_disponivel('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01',
   (select inicio from p), (select fim from p)), 2, 'reserva de outra organização não conta');
 
@@ -158,6 +159,20 @@ select throws_ok(
      values ('00000000-0000-0000-0000-0000000d0a00', 'site', '00000000-0000-0000-0000-0000000d0901', 'ref-1',
              now() + interval '22 days', now() + interval '23 days') $$,
   '23505', null, 'a mesma referencia_externa na mesma chave é única');
+
+-- Chave e modelo têm de ser da organização da reserva.
+insert into public.api_chaves (id, org_id, nome, escopo, permissoes) values
+  ('00000000-0000-0000-0000-0000000d09b1', '00000000-0000-0000-0000-0000000d0b00', 'Site B', 'rent_a_car', '{reservas:write}');
+select throws_ok(
+  $$ insert into public.reservas (org_id, origem, api_chave_id, referencia_externa, data_inicio, data_fim)
+     values ('00000000-0000-0000-0000-0000000d0a00', 'site', '00000000-0000-0000-0000-0000000d09b1', 'ref-b',
+             now() + interval '24 days', now() + interval '25 days') $$,
+  '23503', null, 'chave de outra organização é recusada');
+select throws_ok(
+  $$ insert into public.reservas (org_id, modelo_id, data_inicio, data_fim)
+     values ('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0db1',
+             now() + interval '24 days', now() + interval '25 days') $$,
+  '23503', null, 'modelo de outra organização é recusado');
 
 select ok(not has_function_privilege('anon', 'public.api_procura_sem_viatura(uuid,timestamptz,timestamptz)', 'execute'),
   'anon não executa api_procura_sem_viatura');

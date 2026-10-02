@@ -106,7 +106,9 @@ export const RECURSOS: Recurso[] = [
       'A reserva entra como pendente, sem matrícula: o cliente escolhe o modelo e a equipa ' +
       'atribui a viatura e confirma no WeGest. Mande sempre a mesma referencia_externa ao repetir ' +
       'um pedido — nunca cria duas reservas. Uma referência já usada devolve a reserva existente, ' +
-      'mesmo cancelada: depois de cancelar, um pedido novo precisa de referência nova.',
+      'mesmo cancelada: depois de cancelar, um pedido novo precisa de referência nova. Consultar e ' +
+      'cancelar servem a qualquer chave da organização com a permissão, não só à que criou a ' +
+      'reserva: uma chave só se dá ao vosso próprio site.',
   },
   {
     slug: 'recursos/health',

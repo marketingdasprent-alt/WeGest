@@ -15,6 +15,8 @@ const TELEFONE = /^\+?[0-9 ().-]{6,20}$/;
 const NIF = /^\d{9}$/;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 const REFERENCIA = /^[A-Za-z0-9._:-]{1,100}$/;
+// O Postgres rebenta (500) com o ano 0; nenhuma data de nascimento ou de carta é anterior.
+const DATA_MINIMA = '1900-01-01';
 
 export const ROTAS_RESERVAS = [
   { metodo: 'POST', comCodigo: false, permissao: 'reservas:write' },
@@ -50,9 +52,9 @@ export interface CorpoReserva extends CorpoCotacao {
 
 type Validacao = { ok: true; valor: CorpoReserva } | { ok: false; mensagem: string };
 
-/** AAAA-MM-DD que existe no calendário (31-02 não passa). */
+/** AAAA-MM-DD que existe no calendário (31-02 não passa), de 1900-01-01 em diante. */
 function lerData(v: unknown): string | null {
-  if (typeof v !== 'string' || !DATA.test(v)) return null;
+  if (typeof v !== 'string' || !DATA.test(v) || v < DATA_MINIMA) return null;
   const d = new Date(`${v}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v ? v : null;
 }
@@ -102,7 +104,8 @@ export function validarCorpoReserva(corpo: unknown): Validacao {
   if (!nascimento || nascimento >= new Date().toISOString().slice(0, 10)) {
     return {
       ok: false,
-      mensagem: 'cliente.data_nascimento tem de ser uma data AAAA-MM-DD no passado.',
+      mensagem:
+        'cliente.data_nascimento tem de ser uma data AAAA-MM-DD no passado, de 1900 em diante.',
     };
   }
   const morada = opcional(cl.morada, 200);
@@ -121,7 +124,8 @@ export function validarCorpoReserva(corpo: unknown): Validacao {
   if (!numero || !validade || !paisCarta) {
     return {
       ok: false,
-      mensagem: 'carta_conducao precisa de numero, validade (AAAA-MM-DD) e pais.',
+      mensagem:
+        'carta_conducao precisa de numero, validade (AAAA-MM-DD, de 1900 em diante) e pais.',
     };
   }
   // A data do fim no fuso que o site mandou: a carta tem de valer até lá.
@@ -175,9 +179,14 @@ export function validarCorpoReserva(corpo: unknown): Validacao {
   };
 }
 
-function responder(data: unknown, error: unknown, status: number): Response {
+function responder(rpc: string, data: unknown, error: unknown, status: number): Response {
   if (error) {
-    console.error('[api-rent-a-car] reservas falhou:', (error as { message?: string }).message);
+    // Só o código (SQLSTATE) e a RPC: a mensagem do Postgres pode citar dados do cliente.
+    const codigo = (error as { code?: unknown }).code;
+    console.error('[api-rent-a-car] reservas falhou:', {
+      rpc,
+      codigo: typeof codigo === 'string' ? codigo : null,
+    });
     return erro(
       'ERRO_INTERNO',
       'Falha a gravar ou ler a reserva. Pode repetir: a mesma referencia_externa nunca cria duas.',
@@ -221,7 +230,7 @@ async function servir(
     if (!CODIGO.test(rota.id)) return erro('NAO_ENCONTRADO', 'Reserva não encontrada.', 404);
     const fn = rota.metodo === 'GET' ? 'api_obter_reserva' : 'api_cancelar_reserva';
     const { data, error } = await db.rpc(fn, { p_org_id: ctx.orgId, p_codigo: Number(rota.id) });
-    return responder(data, error, 200);
+    return responder(fn, data, error, 200);
   }
 
   let corpo: unknown;
@@ -242,5 +251,5 @@ async function servir(
       fim: new Date(v.valor.fim).toISOString(),
     },
   });
-  return responder(data, error, 201);
+  return responder('api_criar_reserva', data, error, 201);
 }
