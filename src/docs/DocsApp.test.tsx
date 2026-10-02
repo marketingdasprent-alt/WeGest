@@ -68,9 +68,21 @@ describe('DocsApp', () => {
     expect(conteudo().getByRole('link', { name: 'Introdução' })).toBeTruthy();
   });
 
-  it('recurso em breve abre o estado vazio, nunca um link morto', () => {
+  it('Reservas é página de recurso, com criar, consultar e cancelar', () => {
     abrir('/docs/recursos/reservas');
-    expect(screen.getByText('Reservas chegam na fase C.')).toBeTruthy();
+    const c = conteudo();
+    expect(c.getByRole('heading', { level: 1, name: 'Reservas' })).toBeTruthy();
+    expect(screen.queryByText('Reservas chegam na fase C.')).toBeNull();
+    const seccao = (id: string) => within(document.getElementById(id) as HTMLElement);
+    expect(seccao('criar').getByRole('heading', { level: 2, name: '/v1/reservas' })).toBeTruthy();
+    for (const id of ['consultar', 'cancelar']) {
+      expect(
+        seccao(id).getByRole('heading', { level: 2, name: '/v1/reservas/{codigo}' }),
+        id
+      ).toBeTruthy();
+    }
+    expect(seccao('criar').getByText('reservas:write')).toBeTruthy();
+    expect(seccao('consultar').getByText('reservas:read')).toBeTruthy();
   });
 });
 

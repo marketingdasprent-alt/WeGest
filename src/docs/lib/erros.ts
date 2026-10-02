@@ -1,5 +1,5 @@
 // Códigos de erro da API, para a página Erros e para a pesquisa. Os activos
-// (fases A e B, em ERROS_FASE_A) têm de bater com os exemplos de erro do
+// (fases A, B e C, em ERROS_FASE_A) têm de bater com os exemplos de erro do
 // OpenAPI (ver o teste).
 
 export interface CodigoDeErro {
@@ -67,6 +67,19 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
     fazer: 'Volte a /disponibilidade e proponha outro modelo ou outras datas.',
   },
   {
+    codigo: 'PRECO_ALTERADO',
+    estados: ['409'],
+    quando: 'Ao criar a reserva, o total já não é o total_esperado: o preço mudou desde a cotação.',
+    fazer: 'Mostre ao cliente a cotação nova, que vem em erro.detalhes, e repita com o novo total.',
+  },
+  {
+    codigo: 'ESTADO_INVALIDO',
+    estados: ['409'],
+    quando:
+      'A reserva não está num estado que permita a acção (ex.: cancelar depois de confirmada).',
+    fazer: 'Consulte a reserva; depois de confirmada, o cancelamento é feito com a equipa.',
+  },
+  {
     codigo: 'LIMITE_EXCEDIDO',
     estados: ['429'],
     quando: 'Passou o limite de pedidos por minuto.',
@@ -84,10 +97,4 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
     quando: 'A organização ainda não marcou a tarifa do site (disponibilidade e cotação).',
     fazer: 'Não é um erro do seu pedido: avise o gestor da organização no WeGest.',
   },
-];
-
-/** Códigos da fase C, já reservados. */
-export const ERROS_EM_BREVE: { codigo: string; quando: string }[] = [
-  { codigo: 'PRECO_ALTERADO', quando: 'O preço mudou desde a cotação.' },
-  { codigo: 'ESTADO_INVALIDO', quando: 'A reserva não está num estado que permita a acção.' },
 ];
