@@ -11,8 +11,8 @@ export default function Testes() {
       slug="testes"
       introducao={
         <p>
-          Nesta fase a API só lê dados, por isso não há um ambiente de testes separado: testa-se
-          contra a organização verdadeira com uma chave só de leitura.
+          Não há um ambiente de testes separado: testa-se contra a organização verdadeira, com uma
+          chave só de leitura para o catálogo, a disponibilidade e as cotações.
         </p>
       }
     >
@@ -42,8 +42,10 @@ export default function Testes() {
           </li>
         </ol>
         <Callout tipo="nota" titulo="Reservas">
-          Quando chegarem as reservas (fase C), haverá uma organização de testes para criar reservas
-          sem tocar na frota verdadeira. Até lá, nenhuma chave consegue escrever.
+          Uma chave com <C>reservas:write</C> cria reservas verdadeiras: entram como pendentes na
+          organização e a equipa recebe o aviso. Para testar a criação, avise a equipa antes e
+          cancele a reserva logo a seguir com <C>DELETE /reservas/{'{codigo}'}</C>, enquanto está
+          pendente. Cada teste precisa de uma <C>referencia_externa</C> nova.
         </Callout>
       </div>
     </GuiaPagina>

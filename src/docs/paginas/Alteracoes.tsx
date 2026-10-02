@@ -10,8 +10,17 @@ interface Alteracao {
   texto: string;
 }
 
-/** Lista cronológica, mais recente primeiro. 1.0.0 = fase A. */
+/** Lista cronológica, mais recente primeiro. A versão é a do OpenAPI (info.version). */
 const ALTERACOES: Alteracao[] = [
+  {
+    data: '2026-10-02',
+    versao: '1.0.0',
+    tipo: 'Novo',
+    texto:
+      'Reservas (fase C): POST /reservas cria uma reserva pendente, GET /reservas/{codigo} ' +
+      'consulta-a e DELETE /reservas/{codigo} cancela-a enquanto está pendente. Códigos novos: ' +
+      'PRECO_ALTERADO (409) e ESTADO_INVALIDO (409).',
+  },
   {
     data: '2026-10-01',
     versao: '1.0.0',

@@ -84,6 +84,17 @@ describe('DocsApp', () => {
     expect(seccao('criar').getByText('reservas:write')).toBeTruthy();
     expect(seccao('consultar').getByText('reservas:read')).toBeTruthy();
   });
+
+  it('POST /reservas mostra primeiro o 201 (criada), não o 200 (repetida)', () => {
+    abrir('/docs/recursos/reservas');
+    const criar = within(document.getElementById('criar') as HTMLElement);
+    // A linha "Resposta" do texto e o separador aberto no cartão de código.
+    expect(
+      criar.getByText((_, el) => el?.tagName === 'P' && el.textContent === '201 — Reserva')
+    ).toBeTruthy();
+    expect(criar.getByRole('tab', { name: '201', selected: true })).toBeTruthy();
+    expect(criar.getByRole('tab', { name: '200', selected: false })).toBeTruthy();
+  });
 });
 
 describe('página de recurso', () => {

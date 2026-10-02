@@ -2,7 +2,7 @@ import { ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { atributosDe } from '../lib/atributos';
-import { errosDaOperacao, resumoDaResposta, type Operacao } from '../lib/spec';
+import { errosDaOperacao, respostaDeSucesso, resumoDaResposta, type Operacao } from '../lib/spec';
 import { AtributosTabela } from './AtributosTabela';
 import { CopiarBotao } from './CopiarBotao';
 import { DocLink } from './DocLink';
@@ -34,7 +34,7 @@ interface Props {
 /** Uma operação: cabeçalho, permissão, parâmetros, resposta e erros; Pedido e Resposta ao lado. */
 export function OperacaoSeccao({ op, ancora, objecto }: Props) {
   const caminho = `/v1${op.caminho === '/' ? '' : op.caminho}`;
-  const sucesso = op.respostas.find((r) => r.estado.startsWith('2'));
+  const sucesso = respostaDeSucesso(op.respostas);
   const resumo = sucesso && resumoDaResposta(sucesso);
   const ligaAoObjecto = !!resumo?.ref && resumo.ref === objecto;
   const atributos = resumo?.esquema && !ligaAoObjecto ? atributosDe(resumo.esquema) : [];

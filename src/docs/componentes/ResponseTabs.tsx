@@ -1,11 +1,16 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import type { Resposta } from '../lib/spec';
+import { respostaDeSucesso, type Resposta } from '../lib/spec';
 import { CodeBlock } from './CodeBlock';
 
-/** Cartão "Resposta": um separador por estado HTTP, com o número sempre escrito. */
+/**
+ * Cartão "Resposta": um separador por estado HTTP, com o número sempre escrito.
+ * A resposta de sucesso principal (201 antes de 200) vem primeiro e aberta.
+ */
 export function ResponseTabs({ respostas }: { respostas: Resposta[] }) {
-  const comExemplo = respostas.filter((r) => r.exemplo !== undefined);
+  const lista = respostas.filter((r) => r.exemplo !== undefined);
+  const principal = respostaDeSucesso(lista);
+  const comExemplo = principal ? [principal, ...lista.filter((r) => r !== principal)] : lista;
   if (comExemplo.length === 0) return null;
   return (
     <Tabs defaultValue={comExemplo[0].estado}>
