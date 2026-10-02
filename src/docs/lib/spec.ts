@@ -31,6 +31,8 @@ export interface Operacao {
   permissao: string;
   publica: boolean;
   parametros: Parametro[];
+  /** Corpo JSON do pedido (POST), com o esquema já resolvido. */
+  corpo?: { esquema: Esquema; exemplo: unknown };
   respostas: Resposta[];
 }
 
@@ -46,6 +48,7 @@ interface OpBruta {
     schema: Esquema;
     example: unknown;
   }[];
+  requestBody?: { content: Record<string, { schema: Esquema; example: unknown }> };
   responses: Record<string, Esquema>;
 }
 
@@ -88,6 +91,14 @@ function lerResposta(estado: string, bruta: Esquema): Resposta {
   };
 }
 
+function lerCorpo(op: OpBruta): Operacao['corpo'] {
+  const json = op.requestBody?.content['application/json'];
+  if (!json) return undefined;
+  const esquema =
+    typeof json.schema.$ref === 'string' ? resolverRef(json.schema.$ref) : json.schema;
+  return { esquema, exemplo: json.example };
+}
+
 export function operacoes(): Operacao[] {
   return Object.entries(spec.paths).flatMap(([caminho, ops]) =>
     Object.entries(ops).map(([m, op]) => {
@@ -108,6 +119,7 @@ export function operacoes(): Operacao[] {
           esquema: p.schema,
           exemplo: p.example,
         })),
+        corpo: lerCorpo(op),
         respostas: Object.entries(op.responses)
           .map(([estado, r]) => lerResposta(estado, r))
           .sort((a, b) => a.estado.localeCompare(b.estado)),

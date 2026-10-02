@@ -32,9 +32,10 @@ export default function Introducao() {
       trilho="Documentação"
       introducao={
         <p>
-          A API de rent-a-car do WeGest dá ao site da sua organização o catálogo de aluguer:
-          estações, categorias, modelos com preço por dia, extras e coberturas. Disponibilidade,
-          cotações e reservas chegam nas fases seguintes. Versão actual: {VERSAO}.
+          A API de rent-a-car do WeGest dá ao site da sua organização o catálogo de aluguer
+          (estações, categorias, modelos com preço por dia, extras e coberturas), a disponibilidade
+          num período e a cotação com cobertura e extras. As reservas chegam na fase seguinte.
+          Versão actual: {VERSAO}.
         </p>
       }
     >

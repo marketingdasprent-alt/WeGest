@@ -97,3 +97,91 @@ export const EX_APRESENTACAO = {
 };
 
 export const exErro = (codigo: string, mensagem: string) => ({ erro: { codigo, mensagem } });
+
+// --- Fase B: disponibilidade e cotação ----------------------------------------
+// 3 dias de Clio, de 20 a 23 de Outubro de 2026 às 10h de Lisboa (+01:00).
+
+export const EX_INICIO = '2026-10-20T10:00:00+01:00';
+export const EX_FIM = '2026-10-23T10:00:00+01:00';
+/** Segunda estação, para mostrar entrega e recolha em sítios diferentes. */
+export const EX_LOCALIZACAO_RECOLHA_ID = '4a2d3b7f-9c5e-4d2f-8b8a-2e3f4a5b6c7d';
+
+export const EX_PERIODO = {
+  inicio: '2026-10-20T09:00:00+00:00',
+  fim: '2026-10-23T09:00:00+00:00',
+  dias: 3,
+};
+
+export const EX_MODELO_DISPONIVEL = {
+  ...EX_MODELO,
+  quantidade_disponivel: 2,
+  cotacao: {
+    dias: 3,
+    preco_dia: EX_PRECO,
+    aluguer: preco(105),
+    franquia: EX_MODELO_DETALHE.tarifa.franquia,
+    caucao: EX_MODELO_DETALHE.tarifa.caucao,
+    km_incluidos: EX_MODELO_DETALHE.tarifa.km_incluidos,
+  },
+};
+
+export const EX_DISPONIBILIDADE = { periodo: EX_PERIODO, modelos: [EX_MODELO_DISPONIVEL] };
+
+const EXTRA_LIMPEZA_ID = 'e2f3a4b5-6c7d-4e8f-9a0b-1c2d3e4f5a6b';
+
+export const EX_COTACAO_PEDIDO = {
+  modelo_id: EX_MODELO.id,
+  inicio: EX_INICIO,
+  fim: EX_FIM,
+  entrega: EX_LOCALIZACAO.id,
+  recolha: EX_LOCALIZACAO_RECOLHA_ID,
+  extras: [
+    { extra_id: EX_EXTRA.id, quantidade: 2 },
+    { extra_id: EXTRA_LIMPEZA_ID, quantidade: 1 },
+  ],
+  cobertura_id: EX_COBERTURA.id,
+};
+
+export const EX_LINHA_COTACAO = {
+  tipo: 'aluguer',
+  descricao: 'Renault Clio ou similar',
+  quantidade: 3,
+  preco_unitario: EX_PRECO,
+  total: preco(105),
+};
+
+// Aluguer 105 + cobertura 3 × 12 = 36 + cadeira 2 × 5 × 3 dias = 30 + limpeza 20 = 191,00.
+export const EX_COTACAO = {
+  periodo: EX_PERIODO,
+  modelo: { id: EX_MODELO.id, marca: EX_MODELO.marca, modelo: EX_MODELO.modelo },
+  linhas: [
+    EX_LINHA_COTACAO,
+    {
+      tipo: 'cobertura',
+      descricao: EX_COBERTURA.nome,
+      quantidade: 3,
+      preco_unitario: preco(12),
+      total: preco(36),
+    },
+    {
+      tipo: 'extra',
+      descricao: EX_EXTRA.nome,
+      quantidade: 2,
+      preco_unitario: preco(5),
+      total: preco(30),
+    },
+    {
+      tipo: 'extra',
+      descricao: 'Limpeza final',
+      quantidade: 1,
+      preco_unitario: preco(20),
+      total: preco(20),
+    },
+  ],
+  subtotal: preco(191),
+  franquia: EX_COBERTURA.franquia,
+  caucao: EX_MODELO_DETALHE.tarifa.caucao,
+  km_incluidos: EX_MODELO_DETALHE.tarifa.km_incluidos,
+  km_adicional: EX_MODELO_DETALHE.tarifa.km_adicional,
+  quantidade_disponivel: 2,
+};

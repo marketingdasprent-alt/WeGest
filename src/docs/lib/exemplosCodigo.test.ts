@@ -65,4 +65,24 @@ describe('exemplos de pedido', () => {
     expect(exemploDePedido(post, 'javascript', S)).toContain("method: 'POST'");
     expect(exemploDePedido(post, 'php', S)).toContain("CURLOPT_CUSTOMREQUEST => 'POST'");
   });
+
+  it('POST /cotacoes manda o corpo de exemplo do OpenAPI, em JSON, nas três linguagens', () => {
+    const cot = operacao('POST /cotacoes');
+    expect(cot.corpo?.exemplo).toBeTruthy();
+    const json = JSON.stringify(cot.corpo?.exemplo);
+    const curl = exemploDePedido(cot, 'curl', S);
+    expect(curl).toContain('-H "Content-Type: application/json"');
+    expect(curl).toContain(`-d '${json}'`);
+    const js = exemploDePedido(cot, 'javascript', S);
+    expect(js).toContain("'Content-Type': 'application/json'");
+    expect(js).toContain(`body: JSON.stringify(${json})`);
+    const php = exemploDePedido(cot, 'php', S);
+    expect(php).toContain("'Content-Type: application/json'");
+    expect(php).toContain(`CURLOPT_POSTFIELDS => '${json}'`);
+  });
+
+  it('GET não leva corpo', () => {
+    expect(operacao('GET /disponibilidade').corpo).toBeUndefined();
+    expect(exemploDePedido(operacao('GET /disponibilidade'), 'curl', S)).not.toContain('-d ');
+  });
 });

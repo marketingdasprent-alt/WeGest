@@ -9,8 +9,9 @@ export default function DatasEDinheiro() {
       <Seccao id="datas" titulo="Datas">
         <p>
           Datas e horas em ISO 8601, sempre com fuso: <C>2026-10-10T10:00:00+01:00</C> ou{' '}
-          <C>2026-10-10T09:00:00Z</C>. Nas fases seguintes, os pedidos com datas sem fuso são
-          recusados.
+          <C>2026-10-10T09:00:00Z</C>. Um pedido com uma data sem fuso é ambíguo e recebe{' '}
+          <C>400 PARAMETRO_INVALIDO</C>. Os dias de aluguer contam-se em blocos de 24 horas no
+          calendário de Lisboa: uma mudança de hora não acrescenta um dia.
         </p>
       </Seccao>
       <Seccao id="dinheiro" titulo="Dinheiro">

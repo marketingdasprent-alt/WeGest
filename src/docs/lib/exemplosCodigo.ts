@@ -25,16 +25,34 @@ export function urlExemplo(op: Operacao, servidor: string): string {
   return query ? `${base}?${query}` : base;
 }
 
+/** Corpo de exemplo numa linha de JSON, ou null quando a operação não leva corpo. */
+const corpoJson = (op: Operacao): string | null =>
+  op.corpo?.exemplo === undefined ? null : JSON.stringify(op.corpo.exemplo);
+
+/** Entre plicas (shell e PHP): só a plica e, no PHP, a barra precisam de escape. */
+const plicasShell = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+const plicasPhp = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+
 function curl(op: Operacao, url: string): string {
   const linhas = [op.metodo === 'GET' ? `curl "${url}"` : `curl -X ${op.metodo} "${url}"`];
   if (!op.publica) linhas.push('  -H "X-API-Key: $WEGEST_API_KEY"');
+  const corpo = corpoJson(op);
+  if (corpo) linhas.push('  -H "Content-Type: application/json"', `  -d ${plicasShell(corpo)}`);
   return linhas.join(' \\\n');
 }
 
 function javascript(op: Operacao, url: string): string {
   const opcoes: string[] = [];
+  const corpo = corpoJson(op);
   if (op.metodo !== 'GET') opcoes.push(`  method: '${op.metodo}',`);
-  if (!op.publica) opcoes.push(`  headers: { 'X-API-Key': process.env.WEGEST_API_KEY },`);
+  if (!op.publica && corpo) {
+    opcoes.push(
+      `  headers: { 'X-API-Key': process.env.WEGEST_API_KEY, 'Content-Type': 'application/json' },`
+    );
+  } else if (!op.publica) {
+    opcoes.push(`  headers: { 'X-API-Key': process.env.WEGEST_API_KEY },`);
+  }
+  if (corpo) opcoes.push(`  body: JSON.stringify(${corpo}),`);
   const chamada = opcoes.length
     ? `await fetch('${url}', {\n${opcoes.join('\n')}\n})`
     : `await fetch('${url}')`;
@@ -48,9 +66,12 @@ function javascript(op: Operacao, url: string): string {
 function php(op: Operacao, url: string): string {
   const opcoes = ['    CURLOPT_RETURNTRANSFER => true,'];
   if (op.metodo !== 'GET') opcoes.push(`    CURLOPT_CUSTOMREQUEST => '${op.metodo}',`);
+  const corpo = corpoJson(op);
   if (!op.publica) {
-    opcoes.push(`    CURLOPT_HTTPHEADER => ['X-API-Key: ' . getenv('WEGEST_API_KEY')],`);
+    const json = corpo ? ", 'Content-Type: application/json'" : '';
+    opcoes.push(`    CURLOPT_HTTPHEADER => ['X-API-Key: ' . getenv('WEGEST_API_KEY')${json}],`);
   }
+  if (corpo) opcoes.push(`    CURLOPT_POSTFIELDS => ${plicasPhp(corpo)},`);
   return [
     '<?php',
     `$ch = curl_init('${url}');`,

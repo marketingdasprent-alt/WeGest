@@ -76,6 +76,24 @@ export const RECURSOS: Recurso[] = [
     introducao: 'Seguros opcionais que reduzem a franquia, com preço por dia.',
   },
   {
+    slug: 'recursos/disponibilidade',
+    titulo: 'Disponibilidade',
+    objecto: 'Disponibilidade',
+    operacoes: [{ id: 'GET /disponibilidade', ancora: 'consultar' }],
+    introducao:
+      'Os modelos com viatura livre num período, entre duas localizações, com o preço do ' +
+      'aluguer. Calculado na hora: nunca guarde a resposta em cache.',
+  },
+  {
+    slug: 'recursos/cotacoes',
+    titulo: 'Cotações',
+    objecto: 'Cotacao',
+    operacoes: [{ id: 'POST /cotacoes', ancora: 'criar' }],
+    introducao:
+      'O preço de um modelo no período, linha a linha: aluguer, cobertura e extras, sem e com ' +
+      'IVA. Uma cotação não reserva a viatura.',
+  },
+  {
     slug: 'recursos/health',
     titulo: 'Health',
     operacoes: [{ id: 'GET /health', ancora: 'estado' }],
@@ -147,18 +165,6 @@ export const PAGINAS: PaginaNav[] = [
     ],
   },
   ...RECURSOS.map((r): PaginaNav => ({ slug: r.slug, titulo: r.titulo, grupo: 'Recursos' })),
-  {
-    slug: 'recursos/disponibilidade',
-    titulo: 'Disponibilidade',
-    grupo: 'Em breve',
-    emBreve: 'Disponibilidade chega na fase B.',
-  },
-  {
-    slug: 'recursos/cotacoes',
-    titulo: 'Cotações',
-    grupo: 'Em breve',
-    emBreve: 'Cotações chegam na fase B.',
-  },
   {
     slug: 'recursos/reservas',
     titulo: 'Reservas',

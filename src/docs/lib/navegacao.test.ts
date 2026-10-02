@@ -37,8 +37,15 @@ describe('navegação do docs', () => {
 
   it('"Em breve" abre página de estado vazio, nunca um link morto', () => {
     const emBreve = navegacao().find((g) => g.grupo === 'Em breve')?.paginas ?? [];
-    expect(emBreve.map((p) => p.titulo)).toEqual(['Disponibilidade', 'Cotações', 'Reservas']);
+    expect(emBreve.map((p) => p.titulo)).toEqual(['Reservas']);
     for (const p of emBreve) expect(p.emBreve).toBeTruthy();
+  });
+
+  it('disponibilidade e cotações (fase B) são páginas de recurso, fora do "Em breve"', () => {
+    for (const slug of ['recursos/disponibilidade', 'recursos/cotacoes']) {
+      expect(pagina(slug)?.grupo, slug).toBe('Recursos');
+      expect(pagina(slug)?.emBreve, slug).toBeUndefined();
+    }
   });
 
   it('Anterior/Seguinte saltam o "em breve" e as ligações externas', () => {

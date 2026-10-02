@@ -29,6 +29,12 @@ Deno.test('ok sem cacheSeconds não põe Cache-Control', () => {
   assertEquals(ok({}).headers.get('cache-control'), null);
 });
 
+Deno.test('ok com semCache põe Cache-Control: no-store (disponibilidade e cotação)', () => {
+  const r = ok({}, { semCache: true });
+  assertEquals(r.headers.get('cache-control'), 'no-store');
+  assertEquals(r.headers.get('vary'), 'Origin');
+});
+
 Deno.test(
   'CORS: wegest.pt e www.wegest.pt recebem o seu ACAO; origem estranha não recebe nenhum',
   () => {

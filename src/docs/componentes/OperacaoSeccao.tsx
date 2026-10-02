@@ -80,6 +80,13 @@ export function OperacaoSeccao({ op, ancora, objecto }: Props) {
           <ParamTable parametros={op.parametros} publica={op.publica} />
         </div>
 
+        {op.corpo && (
+          <div className="space-y-2">
+            <h3 className={SUB}>Corpo do pedido</h3>
+            <AtributosTabela atributos={atributosDe(op.corpo.esquema)} />
+          </div>
+        )}
+
         {sucesso && resumo && (
           <div className="space-y-2">
             <h3 className={SUB}>Resposta</h3>
