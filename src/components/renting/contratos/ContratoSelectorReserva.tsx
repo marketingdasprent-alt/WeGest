@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components
 
 import { useReservas } from '@/hooks/useReservas';
 import { useContratosRenting } from '@/hooks/useContratosRenting';
+import { reservaUsaContratoRenting } from '@/utils/contratoPrestacao';
 import { formatDateTime, matchesCodigo, normalizeMatricula } from './contratosUtils';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 
@@ -57,6 +58,8 @@ export const ContratoSelectorReserva: React.FC<ContratoSelectorReservaProps> = (
     const list = reservas.filter((r) => {
       // Estado tem que ser confirmada ou em_curso
       if (!ESTADOS_ELEGIVEIS.includes(r.estado as (typeof ESTADOS_ELEGIVEIS)[number])) return false;
+      // Slot tem contrato de prestação (na própria reserva), nunca de renting
+      if (!reservaUsaContratoRenting(r.regime)) return false;
       // Tem que ter cliente E viatura (necessários para o contrato)
       if (!r.cliente_id || !r.viatura_id) return false;
       // Não pode ter contrato já criado (UNIQUE na BD)
