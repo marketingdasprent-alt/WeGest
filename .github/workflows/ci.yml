@@ -353,6 +353,7 @@ jobs:
             tvde_reaberto_a_mao_cobra \
             varios_grupos_por_pessoa \
             slot_so_contrato_de_prestacao \
+            repsol_chave_sem_valor \
             fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────

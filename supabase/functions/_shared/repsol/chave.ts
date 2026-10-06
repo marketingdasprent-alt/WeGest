@@ -19,9 +19,16 @@ import { stripAcc } from './campos.ts';
  * `ID. OPERAÇÃO` também não serve: em 86 dos 87 pares duplicados que o traziam
  * dos dois lados, a Repsol tinha dado um id diferente à MESMA abastecida.
  *
- * O que identifica a abastecida é cartão + instante + valor + litros. Dois
- * abastecimentos do mesmo cartão no mesmo minuto, com o mesmo valor e os
- * mesmos litros, são a mesma compra.
+ * O que identifica a abastecida é cartão + instante + litros. O VALOR NÃO ENTRA:
+ * a Repsol revê-o dias depois (aplica o desconto: 40,00 € passa a 39,65 €,
+ * 6,00 € a 4,00 €) e a reimportação criava uma linha nova ao lado da antiga,
+ * que o resumo somava. A 2026-10-06 eram ~900 compras a dobrar, em 55
+ * motoristas. Com o valor fora da chave, o upsert actualiza a linha e fica o
+ * valor final. Só o sinal entra (-dev), para uma devolução não se colar à
+ * compra que reverte.
+ *
+ * Dois abastecimentos do mesmo cartão no mesmo minuto com os mesmos litros são
+ * a mesma compra.
  *
  * Exports antigos (até 2026-07-06) vinham sem hora, e aí o instante não chega:
  * o mesmo cartão abastecia duas vezes no mesmo dia em postos diferentes. Nesse
@@ -36,10 +43,10 @@ export function transactionKey(args: {
   station: string;
   hasTime: boolean;
 }): string {
-  const valor = args.amount == null ? '' : args.amount.toFixed(2);
   const litros = args.qty == null ? '' : args.qty.toFixed(2);
   const instante = args.txDate.replace(/\D/g, '');
-  const base = `repsol-${args.card}-${instante}-${valor}-${litros}`;
+  const devolucao = args.amount != null && args.amount < 0 ? '-dev' : '';
+  const base = `repsol-${args.card}-${instante}-${litros}${devolucao}`;
   if (args.hasTime) return base;
   const posto = stripAcc(args.station || '')
     .replace(/\W/g, '')

@@ -37,8 +37,6 @@ Deno.test('abastecidas mesmo parecidas continuam distintas', () => {
     transactionKey(COMPLETO),
     transactionKey({ ...COMPLETO, txDate: '2026-09-04T13:31:00Z' })
   );
-  // Valor diferente.
-  assertNotEquals(transactionKey(COMPLETO), transactionKey({ ...COMPLETO, amount: 100.01 }));
   // Litros diferentes.
   assertNotEquals(transactionKey(COMPLETO), transactionKey({ ...COMPLETO, qty: 46.98 }));
   // Cartão diferente.
@@ -78,10 +76,25 @@ Deno.test('sem hora, o mesmo posto com acentos ou espaços a mais continua o mes
   );
 });
 
-Deno.test('valor e litros em falta não colam abastecidas diferentes', () => {
-  const semValor = { ...COMPLETO, amount: null };
-  assertNotEquals(transactionKey(semValor), transactionKey(COMPLETO));
-  assertEquals(transactionKey(semValor), transactionKey({ ...COMPLETO, amount: null }));
+Deno.test('litros em falta não colam abastecidas diferentes', () => {
+  const semLitros = { ...COMPLETO, qty: null };
+  assertNotEquals(transactionKey(semLitros), transactionKey(COMPLETO));
+  assertEquals(transactionKey(semLitros), transactionKey({ ...COMPLETO, qty: null }));
+});
+
+// Caso Alysson (cartão 2459, 28/09/2026): a mesma compra veio a 40,00 € e depois a
+// 39,65 € (desconto aplicado) e ficou duas vezes. O valor revisto tem de dar a mesma chave.
+Deno.test('o valor revisto pela Repsol não parte a chave', () => {
+  const bruto = { ...COMPLETO, amount: 40, qty: 17.36 };
+  assertEquals(transactionKey(bruto), transactionKey({ ...bruto, amount: 39.65 }));
+  assertEquals(transactionKey({ ...bruto, amount: null }), transactionKey(bruto));
+});
+
+Deno.test('uma devolução não se cola à compra que reverte', () => {
+  assertNotEquals(
+    transactionKey({ ...COMPLETO, amount: 100 }),
+    transactionKey({ ...COMPLETO, amount: -100 })
+  );
 });
 
 Deno.test('temHora: a hora pode vir na coluna ou colada à data', () => {
@@ -107,8 +120,8 @@ const COMPRA = {
   hasTime: true,
 };
 
-Deno.test('cartão, instante, valor e litros identificam a compra', () => {
-  assertEquals(transactionKey(COMPRA), 'repsol-9724998589692509-20260906150200-40.00-19.06');
+Deno.test('cartão, instante e litros identificam a compra', () => {
+  assertEquals(transactionKey(COMPRA), 'repsol-9724998589692509-20260906150200-19.06');
 });
 
 Deno.test('o posto truncado pelo export curto não muda a chave quando há hora', () => {
@@ -129,11 +142,11 @@ Deno.test(
     const semHora = { ...COMPRA, txDate: '2026-09-06T00:00:00Z', hasTime: false };
     assertEquals(
       transactionKey({ ...semHora, station: 'E.S. LEIRIA SUL' }),
-      'repsol-9724998589692509-20260906000000-40.00-19.06-esleiriasul'
+      'repsol-9724998589692509-20260906000000-19.06-esleiriasul'
     );
     assertEquals(
       transactionKey({ ...semHora, station: 'E.S. LEIRIA SUL QT TABORD' }),
-      'repsol-9724998589692509-20260906000000-40.00-19.06-esleiriasulqtta'
+      'repsol-9724998589692509-20260906000000-19.06-esleiriasulqtta'
     );
   }
 );
@@ -141,6 +154,6 @@ Deno.test(
 Deno.test('valor e litros ausentes não rebentam a chave', () => {
   assertEquals(
     transactionKey({ ...COMPRA, amount: null, qty: null }),
-    'repsol-9724998589692509-20260906150200--'
+    'repsol-9724998589692509-20260906150200-'
   );
 });
