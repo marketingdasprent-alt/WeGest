@@ -46,3 +46,48 @@ Deno.test('id só aceita [A-Za-z0-9_-]: espaços codificados e barras não entra
     '2b7c0b7e-1111-4222-8333-444455556666'
   );
 });
+
+Deno.test('tvde/ é prefixo do recurso, não recurso com id', () => {
+  const uuid = '2b7c0b7e-1111-4222-8333-444455556666';
+  assertEquals(resolverRota(new URL('https://x/v1/tvde/modelos'), 'GET'), {
+    metodo: 'GET',
+    recurso: 'tvde/modelos',
+    id: null,
+  });
+  assertEquals(resolverRota(new URL(`https://x/v1/tvde/modelos/${uuid}`), 'GET'), {
+    metodo: 'GET',
+    recurso: 'tvde/modelos',
+    id: uuid,
+  });
+  assertEquals(resolverRota(new URL('https://x/api-rent-a-car/v1/tvde/disponibilidade'), 'GET'), {
+    metodo: 'GET',
+    recurso: 'tvde/disponibilidade',
+    id: null,
+  });
+});
+
+Deno.test('tvde sozinho, repetido ou colado ao recurso não abre rotas TVDE', () => {
+  // /v1/tvde e /v1/tvdemodelos resolvem, mas nenhum serviço os conhece (404 no handler).
+  assertEquals(resolverRota(new URL('https://x/v1/tvde'), 'GET')?.recurso, 'tvde');
+  assertEquals(resolverRota(new URL('https://x/v1/tvde/'), 'GET')?.recurso, 'tvde');
+  assertEquals(resolverRota(new URL('https://x/v1/tvdemodelos'), 'GET')?.recurso, 'tvdemodelos');
+  assertEquals(resolverRota(new URL('https://x/v1/tvde/tvde/modelos'), 'GET'), null);
+  assertEquals(resolverRota(new URL('https://x/v1/tvde/modelos/a/b'), 'GET'), null);
+});
+
+Deno.test('rotas existentes não mudam com o prefixo tvde/', () => {
+  const casos: [string, string, string | null][] = [
+    ['/v1/openapi.json', 'openapi.json', null],
+    ['/api-rent-a-car/v1/health', 'health', null],
+    ['/v1/reservas/123', 'reservas', '123'],
+    ['/v1/modelos/abc/', 'modelos', 'abc'],
+    ['/v1/disponibilidade', 'disponibilidade', null],
+  ];
+  for (const [caminho, recurso, id] of casos) {
+    assertEquals(
+      resolverRota(new URL(`https://x${caminho}`), 'GET'),
+      { metodo: 'GET', recurso, id },
+      caminho
+    );
+  }
+});
