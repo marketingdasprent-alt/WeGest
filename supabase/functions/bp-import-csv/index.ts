@@ -157,6 +157,9 @@ Deno.serve(async (req) => {
         const station = findField(row, ['Posto', 'Station', 'Site', 'Local']);
         const location = findField(row, ['Localização', 'Location', 'City', 'Cidade', 'Address']);
 
+        // Abastecimento rejeitado pelo posto/Fleet Manager não aconteceu: não entra nas contas.
+        if (/rejeit/i.test(findField(row, ['Status']))) { skipped++; continue; }
+
         if (!dateStr) { skipped++; continue; }
         const transactionDate = parseBpDate(dateStr);
         if (!transactionDate) { skipped++; continue; }
