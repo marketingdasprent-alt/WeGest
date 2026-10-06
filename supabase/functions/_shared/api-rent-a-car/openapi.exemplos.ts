@@ -88,6 +88,7 @@ export const EX_HEALTH = {
   organizacao: 'e5f6a7b8-9c0d-4e1f-8a2b-3c4d5e6f7a8b',
   permissoes: ['catalogo:read'],
   tarifa_site: true,
+  tarifa_site_tvde: false,
 };
 
 export const EX_APRESENTACAO = {

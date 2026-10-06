@@ -111,11 +111,26 @@ export const RECURSOS: Recurso[] = [
       'reserva: uma chave só se dá ao vosso próprio site.',
   },
   {
+    slug: 'recursos/tvde',
+    titulo: 'TVDE',
+    objecto: 'ModeloTvde',
+    operacoes: [
+      { id: 'GET /tvde/modelos', ancora: 'listar' },
+      { id: 'GET /tvde/modelos/{id}', ancora: 'obter' },
+      { id: 'GET /tvde/disponibilidade', ancora: 'disponibilidade' },
+    ],
+    introducao:
+      'Carros para aluguer semanal a motoristas TVDE. As candidaturas chegam na fase seguinte. ' +
+      'O aluguer TVDE não tem fim: um carro só está disponível se estiver livre a partir do ' +
+      'início, sem nada marcado depois. Precisa da permissão tvde:catalogo:read.',
+  },
+  {
     slug: 'recursos/health',
     titulo: 'Health',
     operacoes: [{ id: 'GET /health', ancora: 'estado' }],
     introducao:
-      'Confirma que a chave autentica, que permissões tem e se a organização tem tarifa do site.',
+      'Confirma que a chave autentica, que permissões tem e se a organização tem tarifa do ' +
+      'site, de rent-a-car e TVDE.',
   },
 ];
 
