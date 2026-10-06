@@ -147,6 +147,16 @@ export function resumoDaResposta(r: Resposta): { rotulo: string; ref?: string; e
   return { rotulo: r.descricao, esquema: s };
 }
 
+/**
+ * A resposta de sucesso a mostrar primeiro. O 201 (criado) ganha ao 200 de forma
+ * explícita: as chaves numéricas ordenam-se sozinhas e o '200' viria à frente.
+ */
+export function respostaDeSucesso(respostas: Resposta[]): Resposta | undefined {
+  return (
+    respostas.find((r) => r.estado === '201') ?? respostas.find((r) => r.estado.startsWith('2'))
+  );
+}
+
 /** Erros possíveis da operação (4xx/5xx com código), por estado. */
 export function errosDaOperacao(op: Operacao): Resposta[] {
   return op.respostas.filter((r) => !r.estado.startsWith('2') && r.codigo);

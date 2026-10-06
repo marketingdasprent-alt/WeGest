@@ -23,26 +23,24 @@ describe('navegação do docs', () => {
     }
   });
 
-  it('slugs únicos e os cinco grupos pela ordem da spec', () => {
+  it('slugs únicos e os grupos pela ordem da spec', () => {
     const slugs = PAGINAS.map((p) => p.slug);
     expect(new Set(slugs).size).toBe(slugs.length);
     expect(navegacao().map((g) => g.grupo)).toEqual([
       'Começar',
       'Conceitos',
       'Recursos',
-      'Em breve',
       'Ferramentas',
     ]);
   });
 
-  it('"Em breve" abre página de estado vazio, nunca um link morto', () => {
-    const emBreve = navegacao().find((g) => g.grupo === 'Em breve')?.paginas ?? [];
-    expect(emBreve.map((p) => p.titulo)).toEqual(['Reservas']);
-    for (const p of emBreve) expect(p.emBreve).toBeTruthy();
+  it('sem páginas "em breve", o grupo "Em breve" não aparece', () => {
+    expect(PAGINAS.filter((p) => p.emBreve)).toEqual([]);
+    expect(navegacao().find((g) => g.grupo === 'Em breve')).toBeUndefined();
   });
 
-  it('disponibilidade e cotações (fase B) são páginas de recurso, fora do "Em breve"', () => {
-    for (const slug of ['recursos/disponibilidade', 'recursos/cotacoes']) {
+  it('disponibilidade, cotações e reservas são páginas de recurso, fora do "Em breve"', () => {
+    for (const slug of ['recursos/disponibilidade', 'recursos/cotacoes', 'recursos/reservas']) {
       expect(pagina(slug)?.grupo, slug).toBe('Recursos');
       expect(pagina(slug)?.emBreve, slug).toBeUndefined();
     }
@@ -53,7 +51,8 @@ describe('navegação do docs', () => {
     expect(anteriorSeguinte('').seguinte?.slug).toBe('inicio-rapido');
     expect(anteriorSeguinte('recursos/health').seguinte?.slug).toBe('referencia');
     expect(anteriorSeguinte('referencia').seguinte?.slug).toBe('alteracoes');
-    expect(anteriorSeguinte('recursos/reservas')).toEqual({});
+    expect(anteriorSeguinte('recursos/reservas').anterior?.slug).toBe('recursos/cotacoes');
+    expect(anteriorSeguinte('recursos/reservas').seguinte?.slug).toBe('recursos/health');
   });
 
   it('a descarga do OpenAPI aponta para o servidor público', () => {

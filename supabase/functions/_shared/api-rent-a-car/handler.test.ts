@@ -28,6 +28,8 @@ interface Opcoes {
   rebentar?: boolean;
   /** O que api_cotacao devolve. */
   cotacao?: unknown;
+  /** O que api_criar_reserva devolve. */
+  reserva?: unknown;
 }
 
 function dbFalso(o: Opcoes = {}) {
@@ -61,6 +63,9 @@ function dbFalso(o: Opcoes = {}) {
       if (name === 'api_tarifa_site')
         return Promise.resolve({ data: o.tarifa ?? null, error: null });
       if (name === 'api_cotacao') return Promise.resolve({ data: o.cotacao ?? null, error: null });
+      if (name === 'api_criar_reserva') {
+        return Promise.resolve({ data: o.reserva ?? null, error: null });
+      }
       if (name === 'api_modelos') {
         if (o.rebentar) throw new Error('base em baixo');
         return Promise.resolve({ data: [{ id: UUID }], error: null });
@@ -374,6 +379,50 @@ Deno.test('POST /v1/cotacoes chega a servirDisponibilidade e é auditado', async
   assertEquals(db.pedidos[0].metodo, 'POST');
   assertEquals(db.pedidos[0].caminho, '/v1/cotacoes');
   assertEquals(db.pedidos[0].estado_http, 409);
+});
+
+Deno.test('POST /v1/reservas chega a servirReservas, cria (201) e é auditado', async () => {
+  const db = dbFalso({
+    chave: { ...linhaOk, permissoes: ['reservas:write'] },
+    reserva: { id: 'r1', codigo: 7, estado: 'pendente' },
+  });
+  const req = new Request('https://x/v1/reservas', {
+    method: 'POST',
+    headers: {
+      'x-api-key': CHAVE,
+      'cf-connecting-ip': '203.0.113.9',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      modelo_id: UUID,
+      inicio: '2026-10-20T10:00:00+01:00',
+      fim: '2026-10-23T10:00:00+01:00',
+      entrega: UUID,
+      recolha: UUID,
+      extras: [],
+      cliente: {
+        nome: 'Carla Nova',
+        email: 'Carla@Novo.pt',
+        telefone: '+351 912 345 678',
+        data_nascimento: '1990-05-01',
+        pais: 'Portugal',
+      },
+      carta_conducao: { numero: 'L-123', validade: '2030-01-01', pais: 'Portugal' },
+      total_esperado: 129.15,
+      referencia_externa: 'site-001',
+    }),
+  });
+  const r = await correr(req, db);
+  assertEquals(r.status, 201);
+  assertEquals((await r.json()).codigo, 7);
+  assertEquals(
+    db.rpcs.map((c) => c.name),
+    ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_criar_reserva']
+  );
+  assertEquals(db.rpcs[2].args.p_api_chave_id, 'k1');
+  assertEquals(db.pedidos.length, 1);
+  assertEquals(db.pedidos[0].caminho, '/v1/reservas');
+  assertEquals(db.pedidos[0].estado_http, 201);
 });
 
 Deno.test('GET /v1/disponibilidade com chave só de catálogo → 403 auditado', async () => {

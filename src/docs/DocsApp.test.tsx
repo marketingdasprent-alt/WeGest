@@ -68,9 +68,32 @@ describe('DocsApp', () => {
     expect(conteudo().getByRole('link', { name: 'Introdução' })).toBeTruthy();
   });
 
-  it('recurso em breve abre o estado vazio, nunca um link morto', () => {
+  it('Reservas é página de recurso, com criar, consultar e cancelar', () => {
     abrir('/docs/recursos/reservas');
-    expect(screen.getByText('Reservas chegam na fase C.')).toBeTruthy();
+    const c = conteudo();
+    expect(c.getByRole('heading', { level: 1, name: 'Reservas' })).toBeTruthy();
+    expect(screen.queryByText('Reservas chegam na fase C.')).toBeNull();
+    const seccao = (id: string) => within(document.getElementById(id) as HTMLElement);
+    expect(seccao('criar').getByRole('heading', { level: 2, name: '/v1/reservas' })).toBeTruthy();
+    for (const id of ['consultar', 'cancelar']) {
+      expect(
+        seccao(id).getByRole('heading', { level: 2, name: '/v1/reservas/{codigo}' }),
+        id
+      ).toBeTruthy();
+    }
+    expect(seccao('criar').getByText('reservas:write')).toBeTruthy();
+    expect(seccao('consultar').getByText('reservas:read')).toBeTruthy();
+  });
+
+  it('POST /reservas mostra primeiro o 201 (criada), não o 200 (repetida)', () => {
+    abrir('/docs/recursos/reservas');
+    const criar = within(document.getElementById('criar') as HTMLElement);
+    // A linha "Resposta" do texto e o separador aberto no cartão de código.
+    expect(
+      criar.getByText((_, el) => el?.tagName === 'P' && el.textContent === '201 — Reserva')
+    ).toBeTruthy();
+    expect(criar.getByRole('tab', { name: '201', selected: true })).toBeTruthy();
+    expect(criar.getByRole('tab', { name: '200', selected: false })).toBeTruthy();
   });
 });
 
