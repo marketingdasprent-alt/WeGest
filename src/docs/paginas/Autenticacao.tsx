@@ -34,8 +34,9 @@ export default function Autenticacao() {
           ))}
         </ul>
         <p>
-          Sem a permissão do recurso, a resposta é <C>403 SEM_PERMISSAO</C>. Na fase A basta{' '}
-          <C>catalogo:read</C>.
+          Sem a permissão do recurso, a resposta é <C>403 SEM_PERMISSAO</C>. O catálogo de
+          rent-a-car pede <C>catalogo:read</C>; o de TVDE pede <C>tvde:catalogo:read</C>. Uma não
+          abre as rotas da outra.
         </p>
       </Seccao>
       <Seccao id="whitelist" titulo="Whitelist de IP">

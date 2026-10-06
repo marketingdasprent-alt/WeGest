@@ -1,6 +1,6 @@
-// Tratamento de um pedido da API externa: router, openapi público, limite anónimo
-// por IP, chave, limite por chave, catálogo/disponibilidade/reservas/health e auditoria. Vive
-// aqui, e não na edge function, para ser testável (o CI só corre testes Deno em _shared).
+// Tratamento de um pedido da API externa: router, openapi público, limite anónimo por
+// IP, chave, limite por chave, TVDE/catálogo/disponibilidade/reservas/health e auditoria.
+// Vive aqui, e não na edge function, para ser testável (o CI só corre testes Deno em _shared).
 import { consumeRateLimit, trustedRequestIp } from '../rate-limit/rateLimit.ts';
 import { autenticar, type ChaveRecusada, type DbRpc } from './auth.ts';
 import { servirCatalogo } from './catalogo.ts';
@@ -9,6 +9,7 @@ import { OPENAPI } from './openapi.ts';
 import { servirReservas } from './reservas.ts';
 import { comCors, CORS_HEADERS, erro, ok, respostaLimite } from './respostas.ts';
 import { resolverRota } from './router.ts';
+import { servirTvde } from './tvde.ts';
 
 const CACHE_OPENAPI_SEGUNDOS = 3600;
 const LIMITE_MINIMO = 1;
@@ -132,16 +133,22 @@ async function tratar(req: Request, db: DbApi): Promise<Resultado> {
   let resposta: Response;
   try {
     if (rota.recurso === 'health') {
-      const { data } = await db.rpc('api_tarifa_site', { p_org_id: ctx.orgId });
+      const [site, tvde] = await Promise.all([
+        db.rpc('api_tarifa_site', { p_org_id: ctx.orgId }),
+        db.rpc('api_tarifa_site_tvde', { p_org_id: ctx.orgId }),
+      ]);
       resposta = ok({
         ok: true,
         organizacao: ctx.orgId,
         permissoes: ctx.permissoes,
-        tarifa_site: !!data,
+        tarifa_site: !!site.data,
+        tarifa_site_tvde: !!tvde.data,
       });
     } else {
-      // Mensagem fixa: não ecoar o que o cliente pediu.
+      // Mensagem fixa: não ecoar o que o cliente pediu. O TVDE vem primeiro para que
+      // tvde/modelos nunca chegue ao catálogo de rent-a-car.
       resposta =
+        (await servirTvde(rota, url, ctx, db)) ??
         (await servirCatalogo(rota, url, ctx, db)) ??
         (await servirDisponibilidade(rota, url, req, ctx, db)) ??
         (await servirReservas(rota, req, ctx, db)) ??

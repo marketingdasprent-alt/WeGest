@@ -25,6 +25,7 @@ interface Opcoes {
   /** O armazém falha só para o balde anónimo (o helper responde 503). */
   anonIndisponivel?: boolean;
   tarifa?: string | null;
+  tarifaTvde?: string | null;
   rebentar?: boolean;
   /** O que api_cotacao devolve. */
   cotacao?: unknown;
@@ -62,6 +63,10 @@ function dbFalso(o: Opcoes = {}) {
       }
       if (name === 'api_tarifa_site')
         return Promise.resolve({ data: o.tarifa ?? null, error: null });
+      if (name === 'api_tarifa_site_tvde')
+        return Promise.resolve({ data: o.tarifaTvde ?? null, error: null });
+      if (name === 'api_tvde_modelos')
+        return Promise.resolve({ data: [{ id: UUID }], error: null });
       if (name === 'api_cotacao') return Promise.resolve({ data: o.cotacao ?? null, error: null });
       if (name === 'api_criar_reserva') {
         return Promise.resolve({ data: o.reserva ?? null, error: null });
@@ -243,16 +248,18 @@ Deno.test('limite da chave fica preso a 1..10000', async () => {
   }
 });
 
-Deno.test('/health diz se há tarifa do site', async () => {
+Deno.test('/health diz se há tarifa do site, de rent-a-car e TVDE', async () => {
   const r = await correr(pedido('/v1/health'), dbFalso({ tarifa: 't1' }));
   assertEquals(await r.json(), {
     ok: true,
     organizacao: 'org1',
     permissoes: ['catalogo:read'],
     tarifa_site: true,
+    tarifa_site_tvde: false,
   });
-  const semTarifa = await correr(pedido('/v1/health'), dbFalso());
-  assertEquals((await semTarifa.json()).tarifa_site, false);
+  const soTvde = await correr(pedido('/v1/health'), dbFalso({ tarifaTvde: 't2' }));
+  const corpo = await soTvde.json();
+  assertEquals([corpo.tarifa_site, corpo.tarifa_site_tvde], [false, true]);
 });
 
 Deno.test(
@@ -436,4 +443,48 @@ Deno.test('GET /v1/disponibilidade com chave só de catálogo → 403 auditado',
   assertEquals(r.status, 403);
   assertEquals((await r.json()).erro.codigo, 'SEM_PERMISSAO');
   assertEquals(db.pedidos[0].estado_http, 403);
+});
+
+Deno.test('chave só com catalogo:read em /v1/tvde/modelos → 403 auditado', async () => {
+  const db = dbFalso();
+  const r = await correr(pedido('/v1/tvde/modelos'), db);
+  assertEquals(r.status, 403);
+  assertEquals((await r.json()).erro.codigo, 'SEM_PERMISSAO');
+  assertEquals(db.pedidos[0].estado_http, 403);
+  assertEquals(
+    db.rpcs.some((c) => c.name.startsWith('api_tvde') || c.name === 'api_modelos'),
+    false
+  );
+});
+
+Deno.test('chave só com tvde:catalogo:read em /v1/modelos (rent-a-car) → 403', async () => {
+  const db = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:catalogo:read'] } });
+  const r = await correr(pedido('/v1/modelos'), db);
+  assertEquals(r.status, 403);
+  assertEquals((await r.json()).erro.codigo, 'SEM_PERMISSAO');
+  assertEquals(
+    db.rpcs.some((c) => c.name === 'api_modelos'),
+    false
+  );
+});
+
+Deno.test('GET /v1/tvde/modelos com a permissão chega a api_tvde_modelos', async () => {
+  const db = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:catalogo:read'] } });
+  const r = await correr(pedido('/api-rent-a-car/v1/tvde/modelos'), db);
+  assertEquals(r.status, 200);
+  assertEquals(await r.json(), [{ id: UUID }]);
+  assertEquals(
+    db.rpcs.map((c) => c.name),
+    ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_tvde_modelos']
+  );
+  assertEquals(db.pedidos[0].caminho, '/api-rent-a-car/v1/tvde/modelos');
+});
+
+Deno.test('/v1/tvde, /v1/tvde/xyz e /v1/tvdemodelos → 404', async () => {
+  for (const caminho of ['/v1/tvde', '/v1/tvde/xyz', '/v1/tvdemodelos', '/v1/tvde/tvde/modelos']) {
+    const db = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:catalogo:read'] } });
+    const r = await correr(pedido(caminho), db);
+    assertEquals(r.status, 404, caminho);
+    assertEquals((await r.json()).erro.codigo, 'NAO_ENCONTRADO');
+  }
 });

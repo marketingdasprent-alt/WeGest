@@ -39,8 +39,13 @@ describe('navegação do docs', () => {
     expect(navegacao().find((g) => g.grupo === 'Em breve')).toBeUndefined();
   });
 
-  it('disponibilidade, cotações e reservas são páginas de recurso, fora do "Em breve"', () => {
-    for (const slug of ['recursos/disponibilidade', 'recursos/cotacoes', 'recursos/reservas']) {
+  it('disponibilidade, cotações, reservas e TVDE são páginas de recurso, fora do "Em breve"', () => {
+    for (const slug of [
+      'recursos/disponibilidade',
+      'recursos/cotacoes',
+      'recursos/reservas',
+      'recursos/tvde',
+    ]) {
       expect(pagina(slug)?.grupo, slug).toBe('Recursos');
       expect(pagina(slug)?.emBreve, slug).toBeUndefined();
     }
@@ -52,7 +57,8 @@ describe('navegação do docs', () => {
     expect(anteriorSeguinte('recursos/health').seguinte?.slug).toBe('referencia');
     expect(anteriorSeguinte('referencia').seguinte?.slug).toBe('alteracoes');
     expect(anteriorSeguinte('recursos/reservas').anterior?.slug).toBe('recursos/cotacoes');
-    expect(anteriorSeguinte('recursos/reservas').seguinte?.slug).toBe('recursos/health');
+    expect(anteriorSeguinte('recursos/reservas').seguinte?.slug).toBe('recursos/tvde');
+    expect(anteriorSeguinte('recursos/tvde').seguinte?.slug).toBe('recursos/health');
   });
 
   it('a descarga do OpenAPI aponta para o servidor público', () => {

@@ -1,5 +1,6 @@
 // Especificação OpenAPI 3.1 da API externa de rent-a-car (Fase A: catálogo;
-// Fase B: disponibilidade e cotação; Fase C: reservas, em openapi.reservas.ts).
+// Fase B: disponibilidade e cotação; Fase C: reservas, em openapi.reservas.ts;
+// Fase D1: catálogo e disponibilidade TVDE, em openapi.tvde.ts).
 // Fonte única: o endpoint /v1/openapi.json e o site docs.wegest.pt saem daqui.
 // Os esquemas seguem exactamente as chaves devolvidas pelas funções SQL api_*.
 // Em 3.1 não existe `nullable`: um campo opcional é `type: [X, 'null']`.
@@ -27,6 +28,7 @@ import {
   exErro,
 } from './openapi.exemplos.ts';
 import { caminhosReservas, esquemasReservas } from './openapi.reservas.ts';
+import { caminhosTvde, esquemasTvde } from './openapi.tvde.ts';
 
 type Esquema = Record<string, unknown>;
 
@@ -365,7 +367,8 @@ export const OPENAPI: Record<string, unknown> = {
     title: 'WeGest — API Rent-a-Car',
     version: '1.0.0',
     description:
-      'Catálogo, disponibilidade, cotação e reservas de rent-a-car da organização. ' +
+      'Catálogo, disponibilidade, cotação e reservas de rent-a-car da organização, e o ' +
+      'catálogo de aluguer semanal TVDE (/tvde). ' +
       'Chave no cabeçalho X-API-Key, só a partir do backend do site. Datas ISO 8601 com fuso. ' +
       'Dinheiro em euros com 2 casas, sempre sem e com IVA. ' +
       'Erros sempre no envelope { "erro": { "codigo", "mensagem" } }. ' +
@@ -392,6 +395,7 @@ export const OPENAPI: Record<string, unknown> = {
     { name: 'Disponibilidade' },
     { name: 'Cotações' },
     { name: 'Reservas' },
+    { name: 'TVDE' },
   ],
   paths: {
     '/': {
@@ -417,7 +421,8 @@ export const OPENAPI: Record<string, unknown> = {
     '/health': {
       get: {
         summary: 'Estado da API e da chave',
-        description: 'Confirma que a chave autentica e se a organização tem tarifa do site.',
+        description:
+          'Confirma que a chave autentica e se a organização tem tarifa do site, de rent-a-car e TVDE.',
         tags: ['API'],
         'x-permissao': 'chave',
         responses: {
@@ -433,6 +438,10 @@ export const OPENAPI: Record<string, unknown> = {
                   tarifa_site: {
                     type: 'boolean',
                     description: 'false quando a organização não tem tarifa do site activa.',
+                  },
+                  tarifa_site_tvde: {
+                    type: 'boolean',
+                    description: 'false quando a organização não tem tarifa TVDE do site activa.',
                   },
                 },
               },
@@ -648,6 +657,7 @@ export const OPENAPI: Record<string, unknown> = {
       },
     },
     ...caminhosReservas({ json, respostaErro, erros: ERROS_DISPONIBILIDADE }),
+    ...caminhosTvde({ json, errosCatalogo: ERROS_CATALOGO, errosPeriodo: ERROS_DISPONIBILIDADE }),
   },
   components: {
     securitySchemes: { ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
@@ -667,6 +677,7 @@ export const OPENAPI: Record<string, unknown> = {
       LinhaCotacao,
       Cotacao,
       ...esquemasReservas({ CotacaoPedido }),
+      ...esquemasTvde({ Modelo, Preco }),
     },
     responses: {
       NaoAutenticado: respostaErro(

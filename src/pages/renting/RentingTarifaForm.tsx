@@ -4,6 +4,7 @@ import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaForm
 import {
   MENSAGEM_TARIFA_SITE_DUPLICADA,
   ehConflitoTarifaSite,
+  rotuloTarifaSite,
   tarifaSiteNoPayload,
 } from './tarifaSite';
 import type { Json } from '@/integrations/supabase/types';
@@ -835,21 +836,20 @@ const RentingTarifaForm = () => {
                   onCheckedChange={(v) => setForm((p) => ({ ...p, ativa: v }))}
                 />
               </div>
-              {!form.para_tvde && (
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <Label htmlFor="tarifa-site">Tarifa do site de rent-a-car</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Só uma por organização. A API pública lê os preços por modelo desta tarifa.
-                    </p>
-                  </div>
-                  <Switch
-                    id="tarifa-site"
-                    checked={form.tarifa_site}
-                    onCheckedChange={(v) => setForm((p) => ({ ...p, tarifa_site: v }))}
-                  />
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <Label htmlFor="tarifa-site">{rotuloTarifaSite(form.para_tvde)}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Só uma por organização e por tipo. A API pública lê os preços por modelo desta
+                    tarifa.
+                  </p>
                 </div>
-              )}
+                <Switch
+                  id="tarifa-site"
+                  checked={form.tarifa_site}
+                  onCheckedChange={(v) => setForm((p) => ({ ...p, tarifa_site: v }))}
+                />
+              </div>
             </div>
 
             {/* Resumo */}
