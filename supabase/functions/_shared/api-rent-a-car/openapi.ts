@@ -657,7 +657,18 @@ export const OPENAPI: Record<string, unknown> = {
       },
     },
     ...caminhosReservas({ json, respostaErro, erros: ERROS_DISPONIBILIDADE }),
-    ...caminhosTvde({ json, errosCatalogo: ERROS_CATALOGO, errosPeriodo: ERROS_DISPONIBILIDADE }),
+    ...caminhosTvde({
+      json,
+      errosCatalogo: ERROS_CATALOGO,
+      errosPeriodo: {
+        '409': respostaErro(
+          'Ainda não há preços TVDE para esta data (TARIFA_INDISPONIVEL)',
+          'TARIFA_INDISPONIVEL',
+          'Ainda não há preços TVDE para esta data.'
+        ),
+        ...ERROS_DISPONIBILIDADE,
+      },
+    }),
   },
   components: {
     securitySchemes: { ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },

@@ -5,6 +5,7 @@ import {
   MENSAGEM_TARIFA_SITE_DUPLICADA,
   ehConflitoTarifaSite,
   rotuloTarifaSite,
+  tarifaSiteAoTrocarTipo,
   tarifaSiteNoPayload,
 } from './tarifaSite';
 import type { Json } from '@/integrations/supabase/types';
@@ -402,7 +403,13 @@ const RentingTarifaForm = () => {
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, para_tvde: false }))}
+                  onClick={() =>
+                    setForm((p) => ({
+                      ...p,
+                      para_tvde: false,
+                      tarifa_site: tarifaSiteAoTrocarTipo(p.para_tvde, false, p.tarifa_site),
+                    }))
+                  }
                   className={cn(
                     'flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors',
                     !form.para_tvde
@@ -430,7 +437,13 @@ const RentingTarifaForm = () => {
 
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, para_tvde: true }))}
+                  onClick={() =>
+                    setForm((p) => ({
+                      ...p,
+                      para_tvde: true,
+                      tarifa_site: tarifaSiteAoTrocarTipo(p.para_tvde, true, p.tarifa_site),
+                    }))
+                  }
                   className={cn(
                     'flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors',
                     form.para_tvde

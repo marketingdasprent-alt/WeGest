@@ -22,6 +22,15 @@ export function tarifaSiteNoPayload(_paraTvde: boolean, tarifaSite: boolean): bo
   return tarifaSite;
 }
 
+// Trocar o tipo desmarca "do site": senão a tarifa pública de um tipo passava a sê-lo do outro sem decisão.
+export function tarifaSiteAoTrocarTipo(
+  paraTvdeAtual: boolean,
+  paraTvdeNovo: boolean,
+  tarifaSite: boolean
+): boolean {
+  return paraTvdeAtual === paraTvdeNovo ? tarifaSite : false;
+}
+
 export function rotuloTarifaSite(paraTvde: boolean): string {
   return paraTvde ? 'Tarifa do site TVDE' : 'Tarifa do site de rent-a-car';
 }

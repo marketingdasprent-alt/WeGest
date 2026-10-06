@@ -7,7 +7,7 @@
 -- Datas relativas a now(): nunca dependem do dia da semana.
 -- ============================================================
 begin;
-select plan(68);
+select plan(70);
 
 -- Bootstrap antes das organizações: consome a vaga do primeiro utilizador.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000e1d01ff', 'bootstrap@tvdecat.pt');
@@ -171,6 +171,17 @@ select is(public.api_tvde_disponibilidade('00000000-0000-0000-0000-00000e1d0b00'
   'CONFIG_EM_FALTA', 'org sem tarifa TVDE do site');
 select is(public.api_tvde_modelos('00000000-0000-0000-0000-00000e1d0b00'), '[]'::jsonb,
   'org sem tarifa TVDE do site: catálogo vazio, nunca erro');
+
+-- 8b) tarifa TVDE fora da validade em inicio
+update public.renting_tarifas set valido_de = ((select inicio from p) at time zone 'Europe/Lisbon')::date + 1
+ where id = '00000000-0000-0000-0000-00000e1d0f02';
+select is(public.api_tvde_disponibilidade('00000000-0000-0000-0000-00000e1d0a00', (select inicio from p))->'erro'->>'codigo',
+  'TARIFA_INDISPONIVEL', 'tarifa TVDE que só começa depois de inicio');
+update public.renting_tarifas set valido_de = null, valido_ate = ((select inicio from p) at time zone 'Europe/Lisbon')::date - 1
+ where id = '00000000-0000-0000-0000-00000e1d0f02';
+select is(public.api_tvde_disponibilidade('00000000-0000-0000-0000-00000e1d0a00', (select inicio from p))->'erro'->>'codigo',
+  'TARIFA_INDISPONIVEL', 'tarifa TVDE que já acabou antes de inicio');
+update public.renting_tarifas set valido_ate = null where id = '00000000-0000-0000-0000-00000e1d0f02';
 
 -- 9) isolamento: a org B tem a sua tarifa e uma linha de preço a apontar para o Corolla da A.
 insert into public.renting_tarifas (id, org_id, nome, tipo, ativa, tarifa_site) values

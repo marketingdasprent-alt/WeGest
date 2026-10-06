@@ -41,7 +41,8 @@ returns table (viatura_id uuid, modelo_id uuid)
 language sql stable security definer set search_path = '' as $$
   select v.id, v.modelo_id
     from public.viaturas v
-    join public.viatura_tipos t on t.id = v.tipo_id and t.elegivel_tvde
+    join public.viatura_tipos t
+      on t.id = v.tipo_id and t.org_id = p_org_id and t.elegivel_tvde
    where v.org_id = p_org_id
      and v.modelo_id is not null
      and coalesce(v.is_vendida, false) = false
@@ -114,6 +115,9 @@ $$;
 -- onde os sinais da D3 vão entrar.
 create or replace function public.api_tvde_disponibilidade(p_org_id uuid, p_inicio timestamptz)
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_de date;
+  v_ate date;
 begin
   if p_inicio is null or p_inicio <= now() or p_inicio > now() + interval '180 days' then
     return public.api_erro('PERIODO_INVALIDO',
@@ -121,6 +125,14 @@ begin
   end if;
   if public.api_tarifa_site_tvde(p_org_id) is null then
     return public.api_erro('CONFIG_EM_FALTA', 'A organização não tem tarifa TVDE do site.');
+  end if;
+  -- Mesma regra do rent-a-car (api_validar_periodo): fora da validade não há preço.
+  select t.valido_de, t.valido_ate into v_de, v_ate
+    from public.renting_tarifas t
+   where t.id = public.api_tarifa_site_tvde(p_org_id) and t.org_id = p_org_id;
+  if (v_de is not null and (p_inicio at time zone 'Europe/Lisbon')::date < v_de)
+     or (v_ate is not null and (p_inicio at time zone 'Europe/Lisbon')::date > v_ate) then
+    return public.api_erro('TARIFA_INDISPONIVEL', 'Ainda não há preços TVDE para esta data.');
   end if;
   return jsonb_build_object(
     'inicio', p_inicio,

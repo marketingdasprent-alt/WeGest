@@ -3,6 +3,7 @@ import {
   MENSAGEM_TARIFA_SITE_DUPLICADA,
   ehConflitoTarifaSite,
   rotuloTarifaSite,
+  tarifaSiteAoTrocarTipo,
   tarifaSiteNoPayload,
 } from './tarifaSite';
 
@@ -44,5 +45,16 @@ describe('rotuloTarifaSite e mensagem do conflito', () => {
     expect(MENSAGEM_TARIFA_SITE_DUPLICADA).toBe(
       'Já existe uma tarifa do site deste tipo activa. Desmarque-a primeiro.'
     );
+  });
+});
+
+describe('tarifaSiteAoTrocarTipo', () => {
+  it('mantém o interruptor quando o tipo não muda', () => {
+    expect(tarifaSiteAoTrocarTipo(false, false, true)).toBe(true);
+    expect(tarifaSiteAoTrocarTipo(true, true, true)).toBe(true);
+  });
+  it('desmarca ao trocar de tipo, nos dois sentidos', () => {
+    expect(tarifaSiteAoTrocarTipo(false, true, true)).toBe(false);
+    expect(tarifaSiteAoTrocarTipo(true, false, true)).toBe(false);
   });
 });

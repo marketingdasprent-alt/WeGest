@@ -46,7 +46,8 @@ const DESCRICAO_DISPONIBILIDADE =
   'estiver livre a partir de inicio sem nada marcado depois — uma reserva de rent-a-car daqui ' +
   'a três meses já a tira daqui. Descontam-se as reservas sem viatura do modelo. inicio tem de ' +
   'estar no futuro e a no máximo 180 dias (senão 400 PERIODO_INVALIDO). Sem tarifa TVDE do site ' +
-  'a resposta é 503 CONFIG_EM_FALTA. Calculado na hora e nunca guardado em cache ' +
+  'a resposta é 503 CONFIG_EM_FALTA; com inicio fora da validade dessa tarifa, 409 ' +
+  'TARIFA_INDISPONIVEL. Calculado na hora e nunca guardado em cache ' +
   '(Cache-Control: no-store, também nos erros). Só aparecem modelos com pelo menos uma viatura ' +
   'livre.';
 
