@@ -9229,6 +9229,7 @@ export type Database = {
       org_definicoes: {
         Row: {
           created_at: string
+          emissor_rent_a_car_id: string | null
           faturacao_provider: string | null
           iva_rent_a_car: number
           iva_tvde: number
@@ -9238,6 +9239,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          emissor_rent_a_car_id?: string | null
           faturacao_provider?: string | null
           iva_rent_a_car?: number
           iva_tvde?: number
@@ -9247,6 +9249,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          emissor_rent_a_car_id?: string | null
           faturacao_provider?: string | null
           iva_rent_a_car?: number
           iva_tvde?: number
@@ -9255,6 +9258,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "org_definicoes_emissor_rent_a_car_id_fkey"
+            columns: ["emissor_rent_a_car_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "org_definicoes_org_id_fkey"
             columns: ["org_id"]
@@ -11310,6 +11320,7 @@ export type Database = {
       }
       reservas: {
         Row: {
+          api_chave_id: string | null
           caucao_valor: number | null
           cliente_id: string | null
           cliente_nome: string | null
@@ -11322,6 +11333,7 @@ export type Database = {
           condutor_nome: string | null
           created_at: string
           created_by: string | null
+          dados_site: Json | null
           data_fim: string | null
           data_inicio: string
           deleted_at: string | null
@@ -11340,10 +11352,13 @@ export type Database = {
           km_adicional_valor: number | null
           kms_incluidos: number | null
           matricula: string | null
+          modelo_id: string | null
           observacoes: string | null
           observacoes_internas: string | null
           org_id: string
+          origem: string
           periodo: unknown
+          referencia_externa: string | null
           regime: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias: number | null
           renovacao_opcao: string | null
@@ -11359,6 +11374,7 @@ export type Database = {
           viatura_id: string | null
         }
         Insert: {
+          api_chave_id?: string | null
           caucao_valor?: number | null
           cliente_id?: string | null
           cliente_nome?: string | null
@@ -11371,6 +11387,7 @@ export type Database = {
           condutor_nome?: string | null
           created_at?: string
           created_by?: string | null
+          dados_site?: Json | null
           data_fim?: string | null
           data_inicio: string
           deleted_at?: string | null
@@ -11389,10 +11406,13 @@ export type Database = {
           km_adicional_valor?: number | null
           kms_incluidos?: number | null
           matricula?: string | null
+          modelo_id?: string | null
           observacoes?: string | null
           observacoes_internas?: string | null
           org_id?: string
+          origem?: string
           periodo?: unknown
+          referencia_externa?: string | null
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
@@ -11408,6 +11428,7 @@ export type Database = {
           viatura_id?: string | null
         }
         Update: {
+          api_chave_id?: string | null
           caucao_valor?: number | null
           cliente_id?: string | null
           cliente_nome?: string | null
@@ -11420,6 +11441,7 @@ export type Database = {
           condutor_nome?: string | null
           created_at?: string
           created_by?: string | null
+          dados_site?: Json | null
           data_fim?: string | null
           data_inicio?: string
           deleted_at?: string | null
@@ -11438,10 +11460,13 @@ export type Database = {
           km_adicional_valor?: number | null
           kms_incluidos?: number | null
           matricula?: string | null
+          modelo_id?: string | null
           observacoes?: string | null
           observacoes_internas?: string | null
           org_id?: string
+          origem?: string
           periodo?: unknown
+          referencia_externa?: string | null
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
           renovacao_opcao?: string | null
@@ -11457,6 +11482,13 @@ export type Database = {
           viatura_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "reservas_api_chave_id_fkey"
+            columns: ["api_chave_id"]
+            isOneToOne: false
+            referencedRelation: "api_chaves"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "reservas_cliente_id_fkey"
             columns: ["cliente_id"]
@@ -11518,6 +11550,13 @@ export type Database = {
             columns: ["grupo_id"]
             isOneToOne: false
             referencedRelation: "renting_grupos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservas_modelo_id_fkey"
+            columns: ["modelo_id"]
+            isOneToOne: false
+            referencedRelation: "viatura_modelos"
             referencedColumns: ["id"]
           },
           {
@@ -13193,6 +13232,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "uoc_membro_fkey"
+            columns: ["user_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "user_organizacoes"
+            referencedColumns: ["user_id", "org_id"]
+          },
+          {
             foreignKeyName: "user_organizacoes_cargos_cargo_id_fkey"
             columns: ["cargo_id"]
             isOneToOne: false
@@ -13205,13 +13251,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizacoes"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "uoc_membro_fkey"
-            columns: ["user_id", "org_id"]
-            isOneToOne: false
-            referencedRelation: "user_organizacoes"
-            referencedColumns: ["user_id", "org_id"]
           },
         ]
       }
@@ -14710,6 +14749,24 @@ export type Database = {
           },
         ]
       }
+      zz_bkp_juliano_20261002: {
+        Row: {
+          coluna: string
+          linha: Json
+          tabela: string
+        }
+        Insert: {
+          coluna: string
+          linha: Json
+          tabela: string
+        }
+        Update: {
+          coluna?: string
+          linha?: Json
+          tabela?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       automacao_estatisticas_por_regra: {
@@ -14931,6 +14988,10 @@ export type Database = {
         Returns: string
       }
       alteracoes_numa_linha: { Args: { p_alteracoes: Json }; Returns: string }
+      api_cancelar_reserva: {
+        Args: { p_codigo: number; p_org_id: string }
+        Returns: Json
+      }
       api_categorias: { Args: { p_org_id: string }; Returns: Json }
       api_chave_por_hash: {
         Args: { p_hash: string }
@@ -14962,8 +15023,43 @@ export type Database = {
       }
       api_chaves_desativar: { Args: { p_id: string }; Returns: undefined }
       api_coberturas: { Args: { p_org_id: string }; Returns: Json }
+      api_cotacao: {
+        Args: {
+          p_cobertura_id?: string
+          p_entrega: string
+          p_extras: Json
+          p_fim: string
+          p_inicio: string
+          p_modelo_id: string
+          p_org_id: string
+          p_recolha: string
+        }
+        Returns: Json
+      }
+      api_criar_reserva: {
+        Args: { p_api_chave_id: string; p_org_id: string; p_pedido: Json }
+        Returns: Json
+      }
+      api_dias: { Args: { p_fim: string; p_inicio: string }; Returns: number }
+      api_disponibilidade: {
+        Args: {
+          p_categoria?: string
+          p_entrega: string
+          p_fim: string
+          p_inicio: string
+          p_org_id: string
+          p_recolha: string
+          p_tipo?: string
+        }
+        Returns: Json
+      }
+      api_erro: {
+        Args: { p_codigo: string; p_mensagem: string }
+        Returns: Json
+      }
       api_extras: { Args: { p_org_id: string }; Returns: Json }
       api_iva_rent_a_car: { Args: { p_org_id: string }; Returns: number }
+      api_iva_tvde: { Args: { p_org_id: string }; Returns: number }
       api_localizacoes: { Args: { p_org_id: string }; Returns: Json }
       api_modelo: {
         Args: { p_modelo_id: string; p_org_id: string }
@@ -14993,11 +15089,92 @@ export type Database = {
           tipo: string
         }[]
       }
+      api_obter_reserva: {
+        Args: { p_codigo: number; p_org_id: string }
+        Returns: Json
+      }
       api_preco_json: {
         Args: { p_iva: number; p_valor: number }
         Returns: Json
       }
+      api_procura_sem_viatura: {
+        Args: { p_fim: string; p_inicio: string; p_org_id: string }
+        Returns: {
+          modelo_id: string
+          n: number
+        }[]
+      }
+      api_quantidade_disponivel: {
+        Args: {
+          p_fim: string
+          p_inicio: string
+          p_modelo_id: string
+          p_org_id: string
+        }
+        Returns: number
+      }
+      api_reserva_resumo: {
+        Args: { p_org_id: string; p_reserva_id: string }
+        Returns: Json
+      }
       api_tarifa_site: { Args: { p_org_id: string }; Returns: string }
+      api_tarifa_site_tvde: { Args: { p_org_id: string }; Returns: string }
+      api_tvde_disponibilidade: {
+        Args: { p_inicio: string; p_org_id: string }
+        Returns: Json
+      }
+      api_tvde_modelo: {
+        Args: { p_modelo_id: string; p_org_id: string }
+        Returns: Json
+      }
+      api_tvde_modelos: { Args: { p_org_id: string }; Returns: Json }
+      api_tvde_modelos_publicaveis: {
+        Args: { p_org_id: string }
+        Returns: {
+          ar_condicionado: boolean
+          bagageira: number
+          caixa: string
+          caucao: number
+          combustivel: string
+          franquia: number
+          frota: number
+          grupo_id: string
+          grupo_nome: string
+          imagem_url: string
+          km_adicional: number
+          km_mensal: number
+          lugares: number
+          marca: string
+          modelo: string
+          modelo_id: string
+          portas: number
+          preco_semana: number
+        }[]
+      }
+      api_tvde_viaturas_elegiveis: {
+        Args: { p_org_id: string }
+        Returns: {
+          modelo_id: string
+          viatura_id: string
+        }[]
+      }
+      api_validar_periodo: {
+        Args: {
+          p_entrega: string
+          p_fim: string
+          p_inicio: string
+          p_org_id: string
+          p_recolha: string
+        }
+        Returns: Json
+      }
+      api_viaturas_livres: {
+        Args: { p_fim: string; p_inicio: string; p_org_id: string }
+        Returns: {
+          modelo_id: string
+          viatura_id: string
+        }[]
+      }
       aplicar_textos_padrao_email: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -15249,6 +15426,10 @@ export type Database = {
         Returns: boolean
       }
       can_view_financeiro: { Args: never; Returns: boolean }
+      cargo_ids_do_utilizador: {
+        Args: { p_org: string; p_user: string }
+        Returns: string[]
+      }
       cartao_frota_tipo_label: { Args: { p_tipo: string }; Returns: string }
       cartao_frota_titular_nome: {
         Args: { p_cliente_id: string; p_motorista_id: string }
@@ -15341,6 +15522,10 @@ export type Database = {
         Args: { p_viatura_id: string }
         Returns: string
       }
+      corrigir_inicio_tvde_reaberto: {
+        Args: { p_contrato: string; p_desde: string }
+        Returns: string
+      }
       criar_versao_contrato_renting:
         | { Args: { p_contrato_id: string; p_motivo: string }; Returns: string }
         | {
@@ -15362,6 +15547,7 @@ export type Database = {
         Returns: number
       }
       current_user_cargo: { Args: never; Returns: string }
+      current_user_tem_cargo: { Args: { p_nomes: string[] }; Returns: boolean }
       dashboard_resumo_plataformas: {
         Args: {
           p_org_id: string
@@ -15926,6 +16112,11 @@ export type Database = {
         Args: { p_principal: string; p_secundaria: string }
         Returns: undefined
       }
+      migrar_reservas_slot_para_prestacao: { Args: never; Returns: number }
+      motivo_tvde_parado_nao_reabre: {
+        Args: { p_contrato: string; p_desde: string }
+        Returns: string
+      }
       motorista_extrato_periodo: {
         Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
         Returns: {
@@ -15965,6 +16156,17 @@ export type Database = {
           motorista_id: string
           saldo: number
         }[]
+      }
+      mover_identidade_plataforma: {
+        Args: {
+          p_desde?: string
+          p_identificador: string
+          p_motorista: string
+          p_org: string
+          p_plataforma: string
+          p_substituir_na_ficha?: boolean
+        }
+        Returns: undefined
       }
       nif_pt_valido: { Args: { p_nif: string }; Returns: boolean }
       norm_nome_match: { Args: { t: string }; Returns: string }
@@ -16107,6 +16309,10 @@ export type Database = {
         }
         Returns: string
       }
+      reabrir_tvde_parado: {
+        Args: { p_contrato: string; p_desde: string }
+        Returns: string
+      }
       realizar_token_realizacao: {
         Args: {
           p_combustivel: string
@@ -16244,6 +16450,10 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      seed_alerta_reserva_site_recebida: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       seed_alerta_semana_em_falta: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -16255,6 +16465,10 @@ export type Database = {
       seed_automacao_defaults: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      semana_ja_liquidada: {
+        Args: { p_fim: string; p_inicio: string; p_motorista: string }
+        Returns: boolean
       }
       set_email_api_key: {
         Args: { p_api_key: string; p_integracao_id: string }
@@ -16307,6 +16521,10 @@ export type Database = {
         Returns: Json
       }
       unaccent: { Args: { "": string }; Returns: string }
+      utilizador_tem_cargo: {
+        Args: { p_nomes: string[]; p_org: string; p_user: string }
+        Returns: boolean
+      }
       validar_convite_token: {
         Args: { p_token: string }
         Returns: {
