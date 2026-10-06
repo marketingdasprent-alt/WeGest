@@ -3,7 +3,7 @@
 -- ============================================================
 -- Corre com:  supabase db start  &&  supabase test db
 --
--- Ver a migração 20261002110000. O grupo principal continua em
+-- Ver a migração 20261002115000. O grupo principal continua em
 -- user_organizacoes.cargo_id; os adicionais em user_organizacoes_cargos.
 --   (1) as permissões somam-se; quem só tem um grupo não muda;
 --   (2) um grupo de administrador torna admin, e tirá-lo desfaz;
