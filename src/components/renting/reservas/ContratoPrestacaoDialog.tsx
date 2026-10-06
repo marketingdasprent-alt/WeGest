@@ -11,8 +11,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import {
+  useContratoPrestacaoDaReserva,
+  useCreateContratoPrestacao,
+} from '@/hooks/useContratosPrestacao';
+import { montarContratoPrestacao } from '@/utils/contratoPrestacao';
 import { generateContratoPrestacaoPdf } from '@/utils/generateContratoPrestacaoPdf';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 
@@ -28,6 +32,10 @@ interface Props {
   viaturas: ViaturaBasic[];
 }
 
+// Os erros do Supabase são objectos simples, não `Error`: sem isto a mensagem real perde-se.
+const mensagemDeErro = (err: unknown) =>
+  (err as { message?: string } | null)?.message ?? 'Erro inesperado';
+
 const fmtEur = (n: number | null) =>
   n != null ? `${n.toLocaleString('pt-PT', { minimumFractionDigits: 2 })} €` : '—';
 
@@ -40,6 +48,8 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
 }) => {
   const { toast } = useToast();
   const { empresas } = useClientesEmpresas();
+  const { data: existente } = useContratoPrestacaoDaReserva(reserva.id);
+  const criar = useCreateContratoPrestacao();
   const [loading, setLoading] = useState(false);
   const [cidadeAssinatura, setCidadeAssinatura] = useState('');
 
@@ -74,33 +84,9 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
     }
     setLoading(true);
     try {
-      // 1) Regista o contrato de prestação (devolve o código gerado).
-      // `codigo` é NOT NULL sem default, por isso os tipos gerados marcam-no
-      // obrigatório — mas quem o preenche é o trigger BEFORE INSERT
-      // `trg_contrato_prestacao_codigo_por_org` (numeração por organização),
-      // que o gerador não consegue ver. Verificado em produção a 31/07/2026.
-      const { data: inserted, error } = await (supabase as any)
-        .from('contratos_prestacao')
-        .insert({
-          motorista_id: motorista.id,
-          viatura_id: reserva.viatura_id,
-          reserva_id: reserva.id,
-          data_inicio: reserva.data_inicio
-            ? new Date(reserva.data_inicio).toISOString().split('T')[0]
-            : undefined,
-          // Coluna chama-se valor_semanal por legado, mas o slot é cobrado ao
-          // mês — usa slot_valor_mensal (o campo que a app realmente preenche).
-          valor_semanal: reserva.slot_valor_mensal,
-          motorista_nome: motorista.nome,
-          motorista_nif: motorista.nif ?? null,
-          motorista_morada: motorista.morada ?? null,
-          motorista_email: motorista.email ?? null,
-          motorista_telefone: motorista.telefone ?? null,
-        })
-        .select('id, codigo')
-        .single();
-
-      if (error) throw error;
+      // 1) Regista o contrato (devolve o código gerado). Se a reserva já tem, só reimprime.
+      const contrato =
+        existente ?? (await criar.mutateAsync(montarContratoPrestacao(reserva, motorista)));
 
       // 2) Gera o PDF a partir do template, já com o número do contrato.
       await generateContratoPrestacaoPdf({
@@ -108,21 +94,21 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
         viatura,
         valorSemanal: reserva.slot_valor_mensal,
         dataInicio: reserva.data_inicio,
-        numeroContrato: inserted?.codigo ?? null,
+        numeroContrato: contrato.codigo ?? null,
         empresa,
         action: 'print',
         cidadeAssinatura,
       });
 
       toast({
-        title: 'Contrato de prestação gerado',
-        description: `Registado${inserted?.codigo ? ` (#${inserted.codigo})` : ''} e aberto para impressão.`,
+        title: existente ? 'Contrato de prestação reimpresso' : 'Contrato de prestação gerado',
+        description: `${existente ? 'Contrato' : 'Registado'}${contrato.codigo ? ` #${contrato.codigo}` : ''} aberto para impressão.`,
       });
       onOpenChange(false);
     } catch (err) {
       toast({
         title: 'Erro ao gerar contrato',
-        description: err instanceof Error ? err.message : 'Erro inesperado',
+        description: mensagemDeErro(err),
         variant: 'destructive',
       });
     } finally {
@@ -187,7 +173,7 @@ export const ContratoPrestacaoDialog: React.FC<Props> = ({
             ) : (
               <FileText className="h-4 w-4" />
             )}
-            Gerar e Registar
+            {existente ? `Reimprimir #${existente.codigo ?? ''}` : 'Gerar e Registar'}
           </Button>
         </DialogFooter>
       </DialogContent>
