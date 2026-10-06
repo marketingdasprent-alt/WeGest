@@ -28,6 +28,9 @@ import { useReservaCoberturas, useSyncReservaCoberturas } from '@/hooks/useReser
 import { useReservaExtras, useSyncReservaExtras, calcExtraTotal } from '@/hooks/useReservaExtras';
 import { useReservaTaxas, useSyncReservaTaxas } from '@/hooks/useReservaTaxas';
 import { useContratoIdByReserva } from '@/hooks/useContratosRenting';
+import { useContratoPrestacaoDaReserva } from '@/hooks/useContratosPrestacao';
+import { reservaUsaContratoRenting } from '@/utils/contratoPrestacao';
+import { ContratoPrestacaoDialog } from '@/components/renting/reservas/ContratoPrestacaoDialog';
 import { uploadReservaAnexoSync } from '@/hooks/useReservaAnexos';
 import { useRentingCoberturas } from '@/hooks/useRentingCoberturas';
 import { useRentingExtras } from '@/hooks/useRentingExtras';
@@ -119,6 +122,7 @@ const RentingReservaForm = () => {
   const { data: extrasAtuais = [] } = useReservaExtras(isEdit ? id : null);
   const { data: taxasAtuais = [] } = useReservaTaxas(isEdit ? id : null);
   const { data: contratoExistente } = useContratoIdByReserva(isEdit ? id : null);
+  const { data: contratoPrestacao } = useContratoPrestacaoDaReserva(isEdit ? id : null);
 
   const { data: coberturasCatalogo = [] } = useRentingCoberturas({ apenasAtivas: true });
   const { data: extrasCatalogo = [] } = useRentingExtras({ apenasAtivos: true });
@@ -155,6 +159,7 @@ const RentingReservaForm = () => {
   const [motoristaDialogOpen, setMotoristaDialogOpen] = useState(false);
   const [condutorProvisorioOpen, setCondutorProvisorioOpen] = useState(false);
   const [documentosDialogOpen, setDocumentosDialogOpen] = useState(false);
+  const [prestacaoDialogOpen, setPrestacaoDialogOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -782,22 +787,36 @@ const RentingReservaForm = () => {
           )}
           {isEdit &&
             reserva &&
-            (reserva.regime === 'slot' ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setDocumentosDialogOpen(true)}
-                disabled={!reserva.condutor_id}
-                title={
-                  reserva.condutor_id
-                    ? undefined
-                    : 'Define o motorista na aba Motoristas antes de gerar documentos.'
-                }
-                className="gap-2"
-              >
-                <FileText className="h-4 w-4" />
-                Gerar Documentos
-              </Button>
+            (!reservaUsaContratoRenting(reserva.regime) ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setPrestacaoDialogOpen(true)}
+                  disabled={!reserva.condutor_id}
+                  title={
+                    reserva.condutor_id
+                      ? undefined
+                      : 'Define o motorista na aba Motoristas antes de criar o contrato.'
+                  }
+                  className="gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  {contratoPrestacao
+                    ? `Contrato de Prestação #${contratoPrestacao.codigo ?? ''}`
+                    : 'Criar Contrato de Prestação'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setDocumentosDialogOpen(true)}
+                  disabled={!reserva.condutor_id}
+                  className="gap-2"
+                >
+                  <FileText className="h-4 w-4" />
+                  Gerar Documentos
+                </Button>
+              </>
             ) : contratoExistente ? (
               <Button
                 type="button"
@@ -966,6 +985,16 @@ const RentingReservaForm = () => {
           queryClient.invalidateQueries({ queryKey: ['motoristas'] });
         }}
       />
+
+      {reserva && (
+        <ContratoPrestacaoDialog
+          open={prestacaoDialogOpen}
+          onOpenChange={setPrestacaoDialogOpen}
+          reserva={reserva}
+          motoristas={motoristas}
+          viaturas={viaturas}
+        />
+      )}
 
       {reserva && (
         <GenerateDocumentsDialog
