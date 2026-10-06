@@ -13,7 +13,7 @@
 -- ============================================================
 
 begin;
-select plan(7);
+select plan(6);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000006b00ff', 'bootstrap@bp-rejeitadas.pt');
@@ -26,6 +26,9 @@ insert into public.plataformas_configuracao (id, org_id, nome, plataforma) value
 
 insert into public.motoristas_ativos (id, org_id, nome, status_ativo) values
   ('00000000-0000-0000-0000-0000006b0d01', '00000000-0000-0000-0000-0000006b0000', 'Motorista BP', true);
+
+-- O gatilho do titular reatribuía o motorista ao inserir; aqui o motorista vai à mão.
+alter table public.bp_transacoes disable trigger resolver_motorista;
 
 -- ── (1) Rejeitada não fica ─────────────────────────────────
 
@@ -81,6 +84,8 @@ select is(
   0,
   'e também não fica guardada'
 );
+
+alter table public.bp_transacoes enable trigger resolver_motorista;
 
 -- ── (3) A soma do combustível só tem os aceites ────────────
 
