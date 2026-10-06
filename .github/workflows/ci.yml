@@ -313,7 +313,8 @@ jobs:
             api_disponibilidade \
             api_procura_sem_viatura \
             api_reservas \
-            evento_reserva_site_recebida
+            evento_reserva_site_recebida \
+            api_tvde_catalogo
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
@@ -353,6 +354,7 @@ jobs:
             varios_grupos_por_pessoa \
             slot_so_contrato_de_prestacao \
             bp_rejeitadas_fora_das_contas \
+            repsol_chave_sem_valor \
             fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────

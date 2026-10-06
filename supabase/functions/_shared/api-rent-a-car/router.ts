@@ -8,7 +8,10 @@ export interface Rota {
 
 // O recurso admite ponto por causa de openapi.json. O id só leva [A-Za-z0-9_-]
 // (UUIDs e afins): nada de %-codificação, pontos ou barras chega às RPCs.
-const PADRAO = /^(?:\/api-rent-a-car)?\/v1\/([a-z][a-z.-]*)(?:\/([A-Za-z0-9_-]+))?\/?$/;
+// O único prefixo de recurso é `tvde/`. O grupo é guloso: /v1/tvde/modelos é o
+// recurso tvde/modelos, nunca tvde com id modelos; tvde/tvde/... não entra.
+const PADRAO =
+  /^(?:\/api-rent-a-car)?\/v1\/((?:tvde\/(?!tvde\/))?[a-z][a-z.-]*)(?:\/([A-Za-z0-9_-]+))?\/?$/;
 
 export function resolverRota(url: URL, metodo: string): Rota | null {
   const m = PADRAO.exec(url.pathname);

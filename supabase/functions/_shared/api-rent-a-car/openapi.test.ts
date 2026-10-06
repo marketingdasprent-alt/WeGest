@@ -3,6 +3,7 @@ import { ROTAS_CATALOGO } from './catalogo.ts';
 import { ROTAS_DISPONIBILIDADE } from './disponibilidade.ts';
 import { OPENAPI, caminhosDocumentados } from './openapi.ts';
 import { ROTAS_RESERVAS } from './reservas.ts';
+import { ROTAS_TVDE } from './tvde.ts';
 
 Deno.test(
   'toda a rota de catálogo e disponibilidade está documentada, e só essas mais health/openapi',
@@ -22,6 +23,10 @@ Deno.test(
     for (const r of ROTAS_DISPONIBILIDADE) esperados.add(`${r.metodo} /${r.recurso}`);
     for (const r of ROTAS_RESERVAS) {
       esperados.add(`${r.metodo} /reservas${r.comCodigo ? '/{codigo}' : ''}`);
+    }
+    for (const r of ROTAS_TVDE) {
+      esperados.add(`GET /${r.recurso}`);
+      if (r.comId) esperados.add(`GET /${r.recurso}/{id}`);
     }
     assertEquals([...doc].sort(), [...esperados].sort());
   }
@@ -125,4 +130,42 @@ Deno.test('servidor principal é api.wegest.pt/v1; o URL directo do Supabase vem
   );
   assertEquals(servers[1].description, 'directo');
   assertEquals(servers.length, 2);
+});
+
+Deno.test('TVDE documentado: tag, permissão, só inicio obrigatório, IVA a 6% e health', () => {
+  // deno-lint-ignore no-explicit-any
+  const paths = OPENAPI.paths as Record<string, Record<string, any>>;
+  // deno-lint-ignore no-explicit-any
+  const comp = OPENAPI.components as Record<string, any>;
+  for (const caminho of ['/tvde/modelos', '/tvde/modelos/{id}', '/tvde/disponibilidade']) {
+    const op = paths[caminho].get;
+    assertEquals(op.tags, ['TVDE'], caminho);
+    assertEquals(op['x-permissao'], 'tvde:catalogo:read', caminho);
+  }
+  const disp = paths['/tvde/disponibilidade'].get;
+  const parametros = disp.parameters as { name: string; required?: boolean }[];
+  assertEquals(
+    parametros.filter((p) => p.required).map((p) => p.name),
+    ['inicio']
+  );
+  for (const codigo of ['200', '400', '401', '403', '429', '503']) {
+    assert(disp.responses[codigo], `disponibilidade TVDE sem ${codigo}`);
+  }
+  assert(/sem nada marcado depois/.test(disp.description), 'falta explicar o aluguer sem fim');
+  const ex = comp.schemas.ModeloTvde.example;
+  for (const campo of ['preco_semana', 'caucao', 'franquia', 'km_adicional']) {
+    const p = ex[campo];
+    assertEquals(p.iva, 6, campo);
+    assertEquals(Math.round(p.sem_iva * 1.06 * 100) / 100, p.com_iva, campo);
+  }
+  assertEquals('tipo' in comp.schemas.ModeloTvde.properties, false);
+  assertEquals('preco_dia' in comp.schemas.ModeloTvde.properties, false);
+  // TVDE publica modelos sem caixa/lugares preenchidos: o contrato tem de admitir null.
+  assertEquals(comp.schemas.ModeloTvde.properties.caixa.type, ['string', 'null']);
+  assertEquals(comp.schemas.ModeloTvde.properties.lugares.type, ['integer', 'null']);
+  assertEquals(comp.schemas.Modelo.properties.caixa.type, 'string');
+  assert((OPENAPI.tags as { name: string }[]).some((t) => t.name === 'TVDE'));
+  const health = paths['/health'].get.responses['200'].content['application/json'];
+  assert(health.schema.properties.tarifa_site_tvde, 'health sem tarifa_site_tvde');
+  assertEquals(typeof health.example.tarifa_site_tvde, 'boolean');
 });

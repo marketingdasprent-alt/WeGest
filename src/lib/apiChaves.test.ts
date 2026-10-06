@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   PERMISSOES_POR_ESCOPO,
+  ROTULO_ESCOPO,
   descreverValidade,
   mostrarPrefixo,
   parseIpWhitelist,
@@ -20,19 +21,26 @@ describe('validarPermissoes', () => {
       'Permissão desconhecida: faturas:read.'
     );
   });
-  it('o escopo rent_a_car tem as quatro permissões da API', () => {
+  it('o escopo rent_a_car tem as permissões da API do site, TVDE incluído', () => {
     expect([...PERMISSOES_POR_ESCOPO.rent_a_car]).toEqual([
       'catalogo:read',
       'disponibilidade:read',
       'reservas:read',
       'reservas:write',
+      'tvde:catalogo:read',
     ]);
+    expect(validarPermissoes('rent_a_car', ['tvde:catalogo:read'])).toBeNull();
+    expect(validarPermissoes('rent_a_car', ['tvde:xpto'])).toBe(
+      'Permissão desconhecida: tvde:xpto.'
+    );
   });
 });
 
 describe('rotuloPermissao', () => {
   it('traduz para PT', () => {
     expect(rotuloPermissao('reservas:write')).toBe('Criar e cancelar reservas');
+    expect(rotuloPermissao('tvde:catalogo:read')).toBe('TVDE: catálogo e disponibilidade');
+    expect(ROTULO_ESCOPO.rent_a_car).toBe('Site (rent-a-car e TVDE)');
     expect(rotuloPermissao('x:y')).toBe('x:y');
   });
 });

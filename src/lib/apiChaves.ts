@@ -4,7 +4,13 @@
 export type EscopoApi = 'rent_a_car' | 'contabilidade';
 
 export const PERMISSOES_POR_ESCOPO: Record<EscopoApi, readonly string[]> = {
-  rent_a_car: ['catalogo:read', 'disponibilidade:read', 'reservas:read', 'reservas:write'],
+  rent_a_car: [
+    'catalogo:read',
+    'disponibilidade:read',
+    'reservas:read',
+    'reservas:write',
+    'tvde:catalogo:read',
+  ],
   contabilidade: [
     'clientes:read',
     'clientes:write',
@@ -23,10 +29,11 @@ const ROTULOS: Record<string, string> = {
   'disponibilidade:read': 'Consultar disponibilidade e cotações',
   'reservas:read': 'Consultar reservas do site',
   'reservas:write': 'Criar e cancelar reservas',
+  'tvde:catalogo:read': 'TVDE: catálogo e disponibilidade',
 };
 
 export const ROTULO_ESCOPO: Record<EscopoApi, string> = {
-  rent_a_car: 'Rent-a-car (site)',
+  rent_a_car: 'Site (rent-a-car e TVDE)',
   contabilidade: 'Contabilidade (Primavera)',
 };
 

@@ -39,7 +39,9 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
   {
     codigo: 'PERIODO_INVALIDO',
     estados: ['400'],
-    quando: 'O fim não é depois do início, ou o início já passou.',
+    quando:
+      'O fim não é depois do início, ou o início já passou. No TVDE, também o início a mais de ' +
+      '180 dias.',
     fazer: 'Peça um período no futuro, com o fim depois do início.',
   },
   {
@@ -94,7 +96,9 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
   {
     codigo: 'CONFIG_EM_FALTA',
     estados: ['503'],
-    quando: 'A organização ainda não marcou a tarifa do site (disponibilidade e cotação).',
+    quando:
+      'A organização ainda não marcou a tarifa do site (disponibilidade e cotação) ou a tarifa ' +
+      'TVDE do site (disponibilidade TVDE).',
     fazer: 'Não é um erro do seu pedido: avise o gestor da organização no WeGest.',
   },
 ];

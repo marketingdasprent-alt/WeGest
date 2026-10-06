@@ -4,6 +4,8 @@ import { getTarifaFormValidationError, type PrecoModeloForm } from './tarifaForm
 import {
   MENSAGEM_TARIFA_SITE_DUPLICADA,
   ehConflitoTarifaSite,
+  rotuloTarifaSite,
+  tarifaSiteAoTrocarTipo,
   tarifaSiteNoPayload,
 } from './tarifaSite';
 import type { Json } from '@/integrations/supabase/types';
@@ -401,7 +403,13 @@ const RentingTarifaForm = () => {
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, para_tvde: false }))}
+                  onClick={() =>
+                    setForm((p) => ({
+                      ...p,
+                      para_tvde: false,
+                      tarifa_site: tarifaSiteAoTrocarTipo(p.para_tvde, false, p.tarifa_site),
+                    }))
+                  }
                   className={cn(
                     'flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors',
                     !form.para_tvde
@@ -429,7 +437,13 @@ const RentingTarifaForm = () => {
 
                 <button
                   type="button"
-                  onClick={() => setForm((p) => ({ ...p, para_tvde: true }))}
+                  onClick={() =>
+                    setForm((p) => ({
+                      ...p,
+                      para_tvde: true,
+                      tarifa_site: tarifaSiteAoTrocarTipo(p.para_tvde, true, p.tarifa_site),
+                    }))
+                  }
                   className={cn(
                     'flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors',
                     form.para_tvde
@@ -835,21 +849,20 @@ const RentingTarifaForm = () => {
                   onCheckedChange={(v) => setForm((p) => ({ ...p, ativa: v }))}
                 />
               </div>
-              {!form.para_tvde && (
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <Label htmlFor="tarifa-site">Tarifa do site de rent-a-car</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Só uma por organização. A API pública lê os preços por modelo desta tarifa.
-                    </p>
-                  </div>
-                  <Switch
-                    id="tarifa-site"
-                    checked={form.tarifa_site}
-                    onCheckedChange={(v) => setForm((p) => ({ ...p, tarifa_site: v }))}
-                  />
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <Label htmlFor="tarifa-site">{rotuloTarifaSite(form.para_tvde)}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Só uma por organização e por tipo. A API pública lê os preços por modelo desta
+                    tarifa.
+                  </p>
                 </div>
-              )}
+                <Switch
+                  id="tarifa-site"
+                  checked={form.tarifa_site}
+                  onCheckedChange={(v) => setForm((p) => ({ ...p, tarifa_site: v }))}
+                />
+              </div>
             </div>
 
             {/* Resumo */}

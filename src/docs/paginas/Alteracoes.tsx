@@ -13,6 +13,15 @@ interface Alteracao {
 /** Lista cronológica, mais recente primeiro. A versão é a do OpenAPI (info.version). */
 const ALTERACOES: Alteracao[] = [
   {
+    data: '2026-10-06',
+    versao: '1.0.0',
+    tipo: 'Novo',
+    texto:
+      'TVDE (fase D1): GET /tvde/modelos e GET /tvde/modelos/{id} com o preço por semana e o IVA ' +
+      'do TVDE, e GET /tvde/disponibilidade?inicio= com os carros livres a partir dessa data, sem ' +
+      'fim. Permissão nova tvde:catalogo:read. O /health passa a dizer também tarifa_site_tvde.',
+  },
+  {
     data: '2026-10-02',
     versao: '1.0.0',
     tipo: 'Novo',
