@@ -160,6 +160,10 @@ Deno.test('TVDE documentado: tag, permissão, só inicio obrigatório, IVA a 6% 
   }
   assertEquals('tipo' in comp.schemas.ModeloTvde.properties, false);
   assertEquals('preco_dia' in comp.schemas.ModeloTvde.properties, false);
+  // TVDE publica modelos sem caixa/lugares preenchidos: o contrato tem de admitir null.
+  assertEquals(comp.schemas.ModeloTvde.properties.caixa.type, ['string', 'null']);
+  assertEquals(comp.schemas.ModeloTvde.properties.lugares.type, ['integer', 'null']);
+  assertEquals(comp.schemas.Modelo.properties.caixa.type, 'string');
   assert((OPENAPI.tags as { name: string }[]).some((t) => t.name === 'TVDE'));
   const health = paths['/health'].get.responses['200'].content['application/json'];
   assert(health.schema.properties.tarifa_site_tvde, 'health sem tarifa_site_tvde');

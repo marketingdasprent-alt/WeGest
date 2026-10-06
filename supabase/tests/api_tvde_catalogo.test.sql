@@ -7,7 +7,7 @@
 -- Datas relativas a now(): nunca dependem do dia da semana.
 -- ============================================================
 begin;
-select plan(70);
+select plan(73);
 
 -- Bootstrap antes das organizações: consome a vaga do primeiro utilizador.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000e1d01ff', 'bootstrap@tvdecat.pt');
@@ -119,6 +119,16 @@ select is(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0a00', '000000
   'api_tvde_modelo de um modelo comercial é null');
 select is(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0a00', '00000000-0000-0000-0000-00000e1d0d03'), null,
   'api_tvde_modelo de um modelo sem preço/semana é null');
+
+-- Caixa e lugares por preencher não tiram o modelo do catálogo: saem null.
+update public.viatura_modelos set caixa = null, lugares = null where id = '00000000-0000-0000-0000-00000e1d0d01';
+select isnt(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0a00', '00000000-0000-0000-0000-00000e1d0d01'), null,
+  'modelo sem caixa nem lugares continua publicável');
+select ok(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0a00', '00000000-0000-0000-0000-00000e1d0d01')->'caixa' = 'null'::jsonb,
+  'caixa por preencher sai null');
+select ok(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0a00', '00000000-0000-0000-0000-00000e1d0d01')->'lugares' = 'null'::jsonb,
+  'lugares por preencher sai null');
+update public.viatura_modelos set caixa = 'automatica', lugares = 5 where id = '00000000-0000-0000-0000-00000e1d0d01';
 
 -- Viaturas elegíveis: e01, e02, e03 e e05.
 select is((select count(*)::int from public.api_tvde_viaturas_elegiveis('00000000-0000-0000-0000-00000e1d0a00')), 4,
