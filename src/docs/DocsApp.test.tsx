@@ -85,6 +85,24 @@ describe('DocsApp', () => {
     expect(seccao('consultar').getByText('reservas:read')).toBeTruthy();
   });
 
+  it('TVDE é página de recurso: modelos, detalhe e disponibilidade com tvde:catalogo:read', () => {
+    abrir('/docs/recursos/tvde');
+    const c = conteudo();
+    expect(c.getByRole('heading', { level: 1, name: 'TVDE' })).toBeTruthy();
+    expect(c.getByText(/Carros para aluguer semanal a motoristas TVDE/)).toBeTruthy();
+    expect(document.getElementById('objecto')).toBeTruthy();
+    const seccao = (id: string) => within(document.getElementById(id) as HTMLElement);
+    const titulos: [string, string][] = [
+      ['listar', '/v1/tvde/modelos'],
+      ['obter', '/v1/tvde/modelos/{id}'],
+      ['disponibilidade', '/v1/tvde/disponibilidade'],
+    ];
+    for (const [id, nome] of titulos) {
+      expect(seccao(id).getByRole('heading', { level: 2, name: nome }), id).toBeTruthy();
+      expect(seccao(id).getByText('tvde:catalogo:read'), id).toBeTruthy();
+    }
+  });
+
   it('POST /reservas mostra primeiro o 201 (criada), não o 200 (repetida)', () => {
     abrir('/docs/recursos/reservas');
     const criar = within(document.getElementById('criar') as HTMLElement);
@@ -131,7 +149,7 @@ describe('página de recurso', () => {
     expect(document.getElementById('objecto')).toBeNull();
     const estado = within(document.getElementById('estado') as HTMLElement);
     expect(estado.getByText('qualquer chave válida')).toBeTruthy();
-    expect(estado.getByText(/Mostrar 4 atributos/)).toBeTruthy();
+    expect(estado.getByText(/Mostrar 5 atributos/)).toBeTruthy();
   });
 });
 

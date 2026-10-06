@@ -313,7 +313,8 @@ jobs:
             api_disponibilidade \
             api_procura_sem_viatura \
             api_reservas \
-            evento_reserva_site_recebida
+            evento_reserva_site_recebida \
+            api_tvde_catalogo
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de

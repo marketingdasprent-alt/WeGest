@@ -4,6 +4,7 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { ROTAS_CATALOGO } from './catalogo.ts';
 import { OPENAPI, PERMISSOES_ESPECIAIS } from './openapi.ts';
+import { ROTAS_TVDE } from './tvde.ts';
 
 type Op = {
   'x-permissao'?: string;
@@ -23,11 +24,12 @@ Deno.test('todas as operações têm x-permissao, e a do catálogo bate com o ro
     const p = op['x-permissao'];
     assert(p, `${id} sem x-permissao`);
     assert(
-      (PERMISSOES_ESPECIAIS as readonly string[]).includes(p) || /^[a-z]+:(read|write)$/.test(p),
+      (PERMISSOES_ESPECIAIS as readonly string[]).includes(p) ||
+        /^(tvde:)?[a-z]+:(read|write)$/.test(p),
       `${id}: x-permissao estranha "${p}"`
     );
   }
-  for (const r of ROTAS_CATALOGO) {
+  for (const r of [...ROTAS_CATALOGO, ...ROTAS_TVDE]) {
     assertEquals(paths[`/${r.recurso}`].get['x-permissao'], r.permissao, r.recurso);
     if (r.comId) assertEquals(paths[`/${r.recurso}/{id}`].get['x-permissao'], r.permissao);
   }
