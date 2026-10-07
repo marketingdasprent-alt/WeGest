@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const useTenant = vi.fn();
 vi.mock('@/contexts/TenantContext', () => ({ useTenant: () => useTenant() }));
@@ -15,6 +15,13 @@ const abrirMenu = () => {
 };
 
 describe('AdicionarMotoristaButton', () => {
+  // Ao desmontar, o FocusScope do Radix agenda um setTimeout que dispara um evento; se
+  // correr depois de o jsdom ser desmontado, o vitest acusa um erro não tratado (CI 07-10).
+  afterEach(async () => {
+    cleanup();
+    await act(() => new Promise((r) => setTimeout(r, 0)));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     useTenant.mockReturnValue({
