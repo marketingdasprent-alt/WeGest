@@ -13,6 +13,7 @@ import { FormulariosTab } from '@/components/admin/FormulariosTab';
 import { CategoriasAssistenciaTab } from '@/components/admin/CategoriasAssistenciaTab';
 import { MecanicosTab } from '@/components/admin/MecanicosTab';
 import { IntegracoesTab } from '@/components/admin/IntegracoesTab';
+import { NotificacoesTab } from '@/components/admin/NotificacoesTab';
 import { EstacoesTab } from '@/components/admin/EstacoesTab';
 import { EmpresasTab } from '@/components/admin/EmpresasTab';
 import { ViaturasTiposTab } from '@/components/admin/ViaturasTiposTab';
@@ -123,6 +124,12 @@ const AdminSettings = () => {
           Integrações
         </TabsTrigger>
         <TabsTrigger
+          value="notificacoes"
+          className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
+        >
+          Notificações
+        </TabsTrigger>
+        <TabsTrigger
           value="estacoes"
           className="data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto text-xs"
         >
@@ -203,6 +210,10 @@ const AdminSettings = () => {
 
         <TabsContent value="integracoes" className="mt-0">
           <IntegracoesTab />
+        </TabsContent>
+
+        <TabsContent value="notificacoes" className="mt-0">
+          <NotificacoesTab />
         </TabsContent>
 
         <TabsContent value="estacoes" className="mt-0">
