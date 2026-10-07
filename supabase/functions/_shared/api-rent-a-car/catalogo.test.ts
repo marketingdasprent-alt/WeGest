@@ -30,7 +30,7 @@ Deno.test('GET /modelos chama api_modelos com filtros e cache PRIVADA de 5 minut
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
   assertEquals(r?.headers.get('vary'), 'Origin, X-API-Key, Authorization');
-  assertEquals(await r?.json(), [{ id: 'm1' }]);
+  assertEquals(await r?.json(), [{ id: 'm1', imagem_url: null }]);
 });
 
 Deno.test('GET /modelos sem filtros passa null nos dois parâmetros', async () => {
@@ -52,7 +52,7 @@ Deno.test('GET /modelos/{id} chama api_modelo e devolve o detalhe, cache privada
   );
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
-  assertEquals(await r?.json(), { id: UUID, tarifa: {} });
+  assertEquals(await r?.json(), { id: UUID, tarifa: {}, imagem_url: null });
 });
 
 Deno.test('GET /modelos/{id} com UUID inexistente → 404', async () => {
@@ -152,4 +152,69 @@ Deno.test('categoria que não é UUID → 400 PARAMETRO_INVALIDO sem tocar na ba
   );
   assertEquals(r?.status, 400);
   assertEquals((await r?.json()).erro.codigo, 'PARAMETRO_INVALIDO');
+});
+
+const armazem = {
+  storage: {
+    from: (_bucket: string) => ({
+      createSignedUrls: (caminhos: string[], _validade: number) =>
+        Promise.resolve({
+          data: caminhos.map((p) => ({ path: p, signedUrl: `https://s/${p}?t=1`, error: null })),
+          error: null,
+        }),
+    }),
+  },
+};
+
+Deno.test(
+  'GET /modelos e /modelos/{id}: imagem_url assinada da viatura, foto_path nunca sai',
+  async () => {
+    const lista = await servirCatalogo(
+      { metodo: 'GET', recurso: 'modelos', id: null },
+      new URL('https://x/v1/modelos'),
+      ctx,
+      {
+        ...db('api_modelos', { p_org_id: 'org1', p_categoria: null, p_tipo: null }, [
+          { id: 'm1', imagem_url: null, foto_path: 'v1/fotos/capa' },
+          { id: 'm2', imagem_url: null, foto_path: null },
+        ]),
+        ...armazem,
+      }
+    );
+    assertEquals(await lista?.json(), [
+      { id: 'm1', imagem_url: 'https://s/v1/fotos/capa?t=1' },
+      { id: 'm2', imagem_url: null },
+    ]);
+    const detalhe = await servirCatalogo(
+      { metodo: 'GET', recurso: 'modelos', id: UUID },
+      new URL(`https://x/v1/modelos/${UUID}`),
+      ctx,
+      {
+        ...db(
+          'api_modelo',
+          { p_org_id: 'org1', p_modelo_id: UUID },
+          {
+            id: UUID,
+            imagem_url: null,
+            foto_path: 'v1/fotos/capa',
+          }
+        ),
+        ...armazem,
+      }
+    );
+    assertEquals(await detalhe?.json(), { id: UUID, imagem_url: 'https://s/v1/fotos/capa?t=1' });
+  }
+);
+
+Deno.test('GET /categorias mantém a imagem da categoria', async () => {
+  const r = await servirCatalogo(
+    { metodo: 'GET', recurso: 'categorias', id: null },
+    new URL('https://x/v1/categorias'),
+    ctx,
+    {
+      ...db('api_categorias', { p_org_id: 'org1' }, [{ id: 'g1', imagem_url: 'https://cat.webp' }]),
+      ...armazem,
+    }
+  );
+  assertEquals(await r?.json(), [{ id: 'g1', imagem_url: 'https://cat.webp' }]);
 });

@@ -2,8 +2,9 @@
 // Sem regra de negócio: valida o pedido, chama a função SQL api_* com o org_id
 // da chave e devolve o JSON tal como vem, com cache PRIVADA curta (a resposta
 // depende da organização da chave; uma cache partilhada não a pode guardar).
-import type { ContextoApi, DbRpc } from './auth.ts';
+import type { ContextoApi } from './auth.ts';
 import { exigirPermissao } from './auth.ts';
+import { type DbComFotos, preencherFotos } from './fotos.ts';
 import type { Rota } from './router.ts';
 import { erro, ok } from './respostas.ts';
 
@@ -24,7 +25,7 @@ export async function servirCatalogo(
   rota: Rota,
   url: URL,
   ctx: ContextoApi,
-  db: DbRpc
+  db: DbComFotos
 ): Promise<Response | null> {
   const def = ROTAS_CATALOGO.find((r) => r.recurso === rota.recurso);
   if (!def || rota.metodo !== 'GET') return null;
@@ -41,6 +42,7 @@ export async function servirCatalogo(
     });
     if (error) return erro('ERRO_INTERNO', 'Falha a ler o catálogo.', 500);
     if (!data) return erro('NAO_ENCONTRADO', 'Modelo não encontrado.', 404);
+    await preencherFotos(data, db);
     return ok(data, { cacheSeconds: CACHE_CATALOGO_SEGUNDOS });
   }
 
@@ -59,5 +61,6 @@ export async function servirCatalogo(
   }
   const { data, error } = await db.rpc(def.rpc, args);
   if (error) return erro('ERRO_INTERNO', 'Falha a ler o catálogo.', 500);
+  if (def.recurso === 'modelos') await preencherFotos(data, db);
   return ok(data ?? [], { cacheSeconds: CACHE_CATALOGO_SEGUNDOS });
 }

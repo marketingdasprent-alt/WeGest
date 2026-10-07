@@ -98,7 +98,10 @@ const Modelo: Esquema = {
     portas: inteiroOuNulo(),
     bagageira: inteiroOuNulo('Malas grandes que cabem na bagageira.'),
     ar_condicionado: { type: 'boolean' },
-    imagem_url: textoOuNulo('Foto de marketing do modelo.'),
+    imagem_url: textoOuNulo(
+      'Foto de uma viatura deste modelo (link temporário, válido 24 h; pode mudar entre ' +
+        'pedidos). null se nenhuma viatura do modelo tiver foto.'
+    ),
     preco_dia: { ...Preco, description: 'Preço por dia na tarifa do site.' },
     frota: { type: 'integer', description: 'Viaturas deste modelo na frota de aluguer.' },
   },

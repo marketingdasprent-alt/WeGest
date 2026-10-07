@@ -15,6 +15,16 @@ const ALTERACOES: Alteracao[] = [
   {
     data: '2026-10-06',
     versao: '1.0.0',
+    tipo: 'Correcção',
+    texto:
+      'imagem_url dos modelos (rent-a-car e TVDE, no catálogo e na disponibilidade) passa a ser ' +
+      'a foto de uma viatura desse modelo, num link temporário válido 24 h que pode mudar entre ' +
+      'pedidos: guarde o modelo, não o link. null se nenhuma viatura do modelo tiver foto. A ' +
+      'imagem das categorias não muda.',
+  },
+  {
+    data: '2026-10-06',
+    versao: '1.0.0',
     tipo: 'Novo',
     texto:
       'TVDE (fase D1): GET /tvde/modelos e GET /tvde/modelos/{id} com o preço por semana e o IVA ' +
@@ -53,8 +63,9 @@ export default function Alteracoes() {
       introducao={<p>O que mudou na API, por versão. Mudanças incompatíveis vêm assinaladas.</p>}
     >
       <ol className="space-y-6">
-        {ALTERACOES.map((a) => (
-          <li key={`${a.data}-${a.versao}`} className="border-t pt-4">
+        {ALTERACOES.map((a, i) => (
+          // Lista fixa: o índice desempata duas alterações no mesmo dia e versão.
+          <li key={`${a.data}-${i}`} className="border-t pt-4">
             <div className="flex flex-wrap items-center gap-2">
               <time dateTime={a.data} className="font-mono text-sm tabular-nums">
                 {a.data}

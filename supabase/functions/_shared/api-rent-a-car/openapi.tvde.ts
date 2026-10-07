@@ -1,5 +1,7 @@
 // OpenAPI das rotas TVDE (fase D1). Funções puras: recebem os esquemas e helpers de
 // openapi.ts, que as chama, para não haver import circular.
+import { EX_FOTO_VIATURA } from './openapi.exemplos.ts';
+
 type Esquema = Record<string, unknown>;
 
 // IVA do TVDE (org_definicoes.iva_tvde), 6% por omissão; não é o de rent-a-car.
@@ -22,8 +24,7 @@ export const EX_MODELO_TVDE = {
   portas: 5,
   bagageira: 3,
   ar_condicionado: true,
-  imagem_url:
-    'https://hkqzzxgeedsmjnhyquke.supabase.co/storage/v1/object/public/modelos-viaturas/org/corolla.webp',
+  imagem_url: EX_FOTO_VIATURA,
   preco_semana: precoTvde(230),
   caucao: precoTvde(500),
   franquia: precoTvde(1500),

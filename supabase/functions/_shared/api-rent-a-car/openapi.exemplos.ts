@@ -11,6 +11,10 @@ const preco = (semIva: number) => ({
 
 export const EX_PRECO = preco(35);
 
+// Foto de uma viatura do modelo: link assinado, válido 24 h.
+export const EX_FOTO_VIATURA =
+  'https://hkqzzxgeedsmjnhyquke.supabase.co/storage/v1/object/sign/viatura-documentos/6f1e3d5b-7a9c-4b2e-8d4f-1a3c5e7b9d2f/fotos/1790777910834.webp?token=exemplo';
+
 export const EX_LOCALIZACAO = {
   id: '3f1c2a6e-8b4d-4c1e-9a7f-1d2e3f4a5b6c',
   nome: 'Leiria — Centro',
@@ -49,8 +53,7 @@ export const EX_MODELO = {
   portas: 5,
   bagageira: 2,
   ar_condicionado: true,
-  imagem_url:
-    'https://hkqzzxgeedsmjnhyquke.supabase.co/storage/v1/object/public/modelos-viaturas/org/clio.webp',
+  imagem_url: EX_FOTO_VIATURA,
   preco_dia: EX_PRECO,
   frota: 4,
 };
