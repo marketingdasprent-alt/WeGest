@@ -1,9 +1,10 @@
 // Rotas TVDE da API externa (fase D1): catálogo de aluguer semanal e disponibilidade
 // aberta (o contrato TVDE não tem fim). Valida o formato, chama a função SQL api_tvde_*
 // com o org_id da chave e traduz o código de erro em HTTP, como o catálogo e a fase B.
-import type { ContextoApi, DbRpc } from './auth.ts';
+import type { ContextoApi } from './auth.ts';
 import { exigirPermissao } from './auth.ts';
 import { ESTADO_POR_CODIGO, lerDataComFuso } from './disponibilidade.ts';
+import { type DbComFotos, preencherFotos } from './fotos.ts';
 import type { Rota } from './router.ts';
 import { type CodigoErro, erro, ok } from './respostas.ts';
 
@@ -30,7 +31,7 @@ export async function servirTvde(
   rota: Rota,
   url: URL,
   ctx: ContextoApi,
-  db: DbRpc
+  db: DbComFotos
 ): Promise<Response | null> {
   const def = ROTAS_TVDE.find((r) => r.recurso === rota.recurso);
   if (!def) return null;
@@ -56,15 +57,17 @@ export async function servirTvde(
     });
     if (error) return falhou('api_tvde_modelo', error, 'Falha a ler o catálogo TVDE.');
     if (!data) return erro('NAO_ENCONTRADO', 'Modelo não encontrado.', 404);
+    await preencherFotos(data, db);
     return ok(data, { cacheSeconds: CACHE_CATALOGO_SEGUNDOS });
   }
 
   const { data, error } = await db.rpc('api_tvde_modelos', { p_org_id: ctx.orgId });
   if (error) return falhou('api_tvde_modelos', error, 'Falha a ler o catálogo TVDE.');
+  await preencherFotos(data, db);
   return ok(data ?? [], { cacheSeconds: CACHE_CATALOGO_SEGUNDOS });
 }
 
-async function disponibilidade(url: URL, ctx: ContextoApi, db: DbRpc): Promise<Response> {
+async function disponibilidade(url: URL, ctx: ContextoApi, db: DbComFotos): Promise<Response> {
   const inicio = lerDataComFuso(url.searchParams.get('inicio'));
   if (!inicio) {
     return erro(
@@ -82,5 +85,6 @@ async function disponibilidade(url: URL, ctx: ContextoApi, db: DbRpc): Promise<R
   }
   const e = (data as { erro?: { codigo: string; mensagem: string } } | null)?.erro;
   if (e) return erro(e.codigo as CodigoErro, e.mensagem, ESTADO_POR_CODIGO[e.codigo] ?? 400);
+  await preencherFotos((data as { modelos?: unknown } | null)?.modelos, db);
   return ok(data, { semCache: true });
 }

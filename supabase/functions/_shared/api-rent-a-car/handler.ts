@@ -5,6 +5,7 @@ import { consumeRateLimit, trustedRequestIp } from '../rate-limit/rateLimit.ts';
 import { autenticar, type ChaveRecusada, type DbRpc } from './auth.ts';
 import { servirCatalogo } from './catalogo.ts';
 import { servirDisponibilidade } from './disponibilidade.ts';
+import type { ArmazemFotos } from './fotos.ts';
 import { OPENAPI } from './openapi.ts';
 import { servirReservas } from './reservas.ts';
 import { comCors, CORS_HEADERS, erro, ok, respostaLimite } from './respostas.ts';
@@ -29,7 +30,7 @@ const APRESENTACAO = {
 };
 
 /** O que a edge function precisa do cliente Supabase (service_role). */
-export interface DbApi extends DbRpc {
+export interface DbApi extends DbRpc, ArmazemFotos {
   from(tabela: 'api_pedidos'): {
     insert(linha: LinhaAuditoria): PromiseLike<{ error: { message: string } | null }>;
   };

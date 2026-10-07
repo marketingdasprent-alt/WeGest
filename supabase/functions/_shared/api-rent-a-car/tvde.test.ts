@@ -61,7 +61,7 @@ Deno.test('GET /tvde/modelos chama api_tvde_modelos com cache PRIVADA de 5 minut
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
   assertEquals(r?.headers.get('vary'), 'Origin, X-API-Key, Authorization');
-  assertEquals(await r?.json(), [{ id: UUID }]);
+  assertEquals(await r?.json(), [{ id: UUID, imagem_url: null }]);
 });
 
 Deno.test('GET /tvde/modelos sem dados devolve lista vazia', async () => {
@@ -83,7 +83,7 @@ Deno.test('GET /tvde/modelos/{id} chama api_tvde_modelo; null → 404', async ()
   );
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
-  assertEquals(await r?.json(), { id: UUID });
+  assertEquals(await r?.json(), { id: UUID, imagem_url: null });
 
   const naoPublicavel = await servirTvde(
     rota('tvde/modelos', UUID),
@@ -208,3 +208,50 @@ Deno.test('erro do PG → 500 e o log leva só o código e a RPC, nunca a mensag
     console.error = original;
   }
 });
+
+const armazem = {
+  storage: {
+    from: (_bucket: string) => ({
+      createSignedUrls: (caminhos: string[], _validade: number) =>
+        Promise.resolve({
+          data: caminhos.map((p) => ({ path: p, signedUrl: `https://s/${p}?t=1`, error: null })),
+          error: null,
+        }),
+    }),
+  },
+};
+
+Deno.test(
+  'cartões TVDE (lista, detalhe e disponibilidade) levam a foto assinada sem foto_path',
+  async () => {
+    const cartao = () => ({ id: UUID, imagem_url: null, foto_path: 'v1/fotos/capa' });
+    const esperado = { id: UUID, imagem_url: 'https://s/v1/fotos/capa?t=1' };
+    const lista = await servirTvde(rota('tvde/modelos'), url('tvde/modelos'), ctx, {
+      ...base('api_tvde_modelos', { p_org_id: 'org1' }, [cartao()]),
+      ...armazem,
+    });
+    assertEquals(await lista?.json(), [esperado]);
+    const detalhe = await servirTvde(rota('tvde/modelos', UUID), url(`tvde/modelos/${UUID}`), ctx, {
+      ...base('api_tvde_modelo', { p_org_id: 'org1', p_modelo_id: UUID }, cartao()),
+      ...armazem,
+    });
+    assertEquals(await detalhe?.json(), esperado);
+    const disp = await servirTvde(
+      rota('tvde/disponibilidade'),
+      url(`tvde/disponibilidade?inicio=${encodeURIComponent(INICIO)}`),
+      ctx,
+      {
+        ...base(
+          'api_tvde_disponibilidade',
+          { p_org_id: 'org1', p_inicio: '2026-10-12T08:00:00.000Z' },
+          { inicio: 'x', modelos: [{ ...cartao(), quantidade_disponivel: 2 }] }
+        ),
+        ...armazem,
+      }
+    );
+    assertEquals(await disp?.json(), {
+      inicio: 'x',
+      modelos: [{ ...esperado, quantidade_disponivel: 2 }],
+    });
+  }
+);
