@@ -30,7 +30,7 @@ Deno.test('GET /modelos chama api_modelos com filtros e cache PRIVADA de 5 minut
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
   assertEquals(r?.headers.get('vary'), 'Origin, X-API-Key, Authorization');
-  assertEquals(await r?.json(), [{ id: 'm1', imagem_url: null }]);
+  assertEquals(await r?.json(), [{ id: 'm1' }]);
 });
 
 Deno.test('GET /modelos sem filtros passa null nos dois parâmetros', async () => {
@@ -52,7 +52,7 @@ Deno.test('GET /modelos/{id} chama api_modelo e devolve o detalhe, cache privada
   );
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
-  assertEquals(await r?.json(), { id: UUID, tarifa: {}, imagem_url: null });
+  assertEquals(await r?.json(), { id: UUID, tarifa: {} });
 });
 
 Deno.test('GET /modelos/{id} com UUID inexistente → 404', async () => {

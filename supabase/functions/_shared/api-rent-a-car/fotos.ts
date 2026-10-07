@@ -30,8 +30,9 @@ export type DbComFotos = DbRpc & Partial<ArmazemFotos>;
 type Cartao = Record<string, unknown>;
 
 /**
- * Preenche imagem_url de cada cartão (um só ou uma lista) com o URL assinado da
- * foto, ou null, e retira foto_path. Nunca rebenta: sem assinatura fica null.
+ * Preenche imagem_url de cada cartão (um só ou uma lista) que traz foto_path com
+ * o URL assinado da foto, ou null, e retira foto_path. Cartão sem foto_path fica
+ * como está. Nunca rebenta: sem assinatura fica null.
  */
 export async function preencherFotos(cartoes: unknown, db: Partial<ArmazemFotos>): Promise<void> {
   const lista = (Array.isArray(cartoes) ? cartoes : [cartoes]).filter(
@@ -39,6 +40,7 @@ export async function preencherFotos(cartoes: unknown, db: Partial<ArmazemFotos>
   );
   const caminhos = new Map<Cartao, string>();
   for (const c of lista) {
+    if (!('foto_path' in c)) continue;
     const caminho = c.foto_path;
     delete c.foto_path;
     c.imagem_url = null;
