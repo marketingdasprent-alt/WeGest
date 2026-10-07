@@ -2,8 +2,9 @@
 // chama a função SQL api_* com o org_id da chave e traduz o código de erro de
 // negócio em HTTP. Sem cache: a disponibilidade muda de minuto a minuto.
 import { readBoundedJson, RequestBodyError } from '../http/boundedJson.ts';
-import type { ContextoApi, DbRpc } from './auth.ts';
+import type { ContextoApi } from './auth.ts';
 import { exigirPermissao } from './auth.ts';
+import { type DbComFotos, preencherFotos } from './fotos.ts';
 import type { Rota } from './router.ts';
 import { type CodigoErro, erro, ok } from './respostas.ts';
 
@@ -136,7 +137,7 @@ export async function servirDisponibilidade(
   url: URL,
   req: Request,
   ctx: ContextoApi,
-  db: DbRpc
+  db: DbComFotos
 ): Promise<Response | null> {
   const resposta = await servir(rota, url, req, ctx, db);
   resposta?.headers.set('Cache-Control', 'no-store');
@@ -148,7 +149,7 @@ async function servir(
   url: URL,
   req: Request,
   ctx: ContextoApi,
-  db: DbRpc
+  db: DbComFotos
 ): Promise<Response | null> {
   const def = ROTAS_DISPONIBILIDADE.find((r) => r.recurso === rota.recurso);
   if (!def) return null;
@@ -186,6 +187,7 @@ async function servir(
       p_categoria: categoria || null,
       p_tipo: tipo || null,
     });
+    if (!error) await preencherFotos((data as { modelos?: unknown } | null)?.modelos, db);
     return responder(data, error);
   }
 

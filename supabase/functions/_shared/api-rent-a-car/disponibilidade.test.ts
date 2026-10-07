@@ -283,3 +283,44 @@ Deno.test('recurso de catálogo devolve null', async () => {
     null
   );
 });
+
+const armazem = {
+  storage: {
+    from: (_bucket: string) => ({
+      createSignedUrls: (caminhos: string[], _validade: number) =>
+        Promise.resolve({
+          data: caminhos.map((p) => ({ path: p, signedUrl: `https://s/${p}?t=1`, error: null })),
+          error: null,
+        }),
+    }),
+  },
+};
+
+Deno.test('GET /disponibilidade: cartões com a foto assinada e sem foto_path', async () => {
+  const url = new URL(
+    `https://x/v1/disponibilidade?inicio=2026-10-10T10:00:00Z&fim=2026-10-12T10:00:00Z&entrega=${E}&recolha=${E}`
+  );
+  const r = await servirDisponibilidade(
+    { metodo: 'GET', recurso: 'disponibilidade', id: null },
+    url,
+    new Request(url),
+    ctx,
+    {
+      ...base('api_disponibilidade', {
+        periodo: { dias: 2 },
+        modelos: [
+          { id: M, imagem_url: null, foto_path: 'v1/fotos/capa', quantidade_disponivel: 1 },
+          { id: X, imagem_url: null, foto_path: null, quantidade_disponivel: 3 },
+        ],
+      }),
+      ...armazem,
+    }
+  );
+  assertEquals(await r?.json(), {
+    periodo: { dias: 2 },
+    modelos: [
+      { id: M, imagem_url: 'https://s/v1/fotos/capa?t=1', quantidade_disponivel: 1 },
+      { id: X, imagem_url: null, quantidade_disponivel: 3 },
+    ],
+  });
+});

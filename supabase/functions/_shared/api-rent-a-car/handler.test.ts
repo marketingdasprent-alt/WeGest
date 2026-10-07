@@ -31,6 +31,8 @@ interface Opcoes {
   cotacao?: unknown;
   /** O que api_criar_reserva devolve. */
   reserva?: unknown;
+  /** O que api_modelos devolve. */
+  modelos?: unknown;
 }
 
 function dbFalso(o: Opcoes = {}) {
@@ -73,9 +75,18 @@ function dbFalso(o: Opcoes = {}) {
       }
       if (name === 'api_modelos') {
         if (o.rebentar) throw new Error('base em baixo');
-        return Promise.resolve({ data: [{ id: UUID }], error: null });
+        return Promise.resolve({ data: o.modelos ?? [{ id: UUID }], error: null });
       }
       return Promise.resolve({ data: null, error: { message: `rpc desconhecida: ${name}` } });
+    },
+    storage: {
+      from: (_bucket: string) => ({
+        createSignedUrls: (caminhos: string[], _validade: number) =>
+          Promise.resolve({
+            data: caminhos.map((p) => ({ path: p, signedUrl: `https://s/${p}?t=1`, error: null })),
+            error: null,
+          }),
+      }),
     },
     from(tabela: string) {
       return {
@@ -221,7 +232,7 @@ Deno.test('pedido bom: chave → limite da chave → catálogo, e auditoria com 
   const db = dbFalso();
   const r = await correr(pedido(`/api-rent-a-car/v1/modelos?categoria=${UUID}`), db);
   assertEquals(r.status, 200);
-  assertEquals(await r.json(), [{ id: UUID }]);
+  assertEquals(await r.json(), [{ id: UUID, imagem_url: null }]);
   assertEquals(
     db.rpcs.map((c) => c.name),
     ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_modelos']
@@ -472,7 +483,7 @@ Deno.test('GET /v1/tvde/modelos com a permissão chega a api_tvde_modelos', asyn
   const db = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:catalogo:read'] } });
   const r = await correr(pedido('/api-rent-a-car/v1/tvde/modelos'), db);
   assertEquals(r.status, 200);
-  assertEquals(await r.json(), [{ id: UUID }]);
+  assertEquals(await r.json(), [{ id: UUID, imagem_url: null }]);
   assertEquals(
     db.rpcs.map((c) => c.name),
     ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_tvde_modelos']
@@ -487,4 +498,21 @@ Deno.test('/v1/tvde, /v1/tvde/xyz e /v1/tvdemodelos → 404', async () => {
     assertEquals(r.status, 404, caminho);
     assertEquals((await r.json()).erro.codigo, 'NAO_ENCONTRADO');
   }
+});
+
+Deno.test('GET /v1/modelos devolve a foto da viatura assinada e nunca o foto_path', async () => {
+  const db = dbFalso({
+    modelos: [
+      { id: UUID, imagem_url: null, foto_path: 'v1/fotos/capa' },
+      { id: 'm2', imagem_url: null, foto_path: null },
+    ],
+  });
+  const r = await correr(pedido('/v1/modelos'), db);
+  assertEquals(r.status, 200);
+  const texto = await r.text();
+  assertEquals(JSON.parse(texto), [
+    { id: UUID, imagem_url: 'https://s/v1/fotos/capa?t=1' },
+    { id: 'm2', imagem_url: null },
+  ]);
+  assertEquals(texto.includes('foto_path'), false);
 });
