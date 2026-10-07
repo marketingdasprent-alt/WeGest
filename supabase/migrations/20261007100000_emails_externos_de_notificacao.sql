@@ -183,4 +183,29 @@ SELECT pg_temp.remendar('public.seed_automacao_defaults(uuid)'::regprocedure, AR
   $b$'template_codigo', 'contrato_renting.criado', 'destinatarios_estrategia', 'cargo', 'destinatarios_cargo_ids', v_cargo_admin,$b$
 ]);
 
+-- 4d. "Contrato fechado com danos" procura o grupo Gestor de Assistência, que uma organização
+-- nova não tem (nasce só com Administrador, Gestor TVDE e Supervisor): sem ele, cai no Administrador.
+SELECT pg_temp.remendar('public.seed_automacao_danos_assistencia(uuid)'::regprocedure, ARRAY[
+  $a$or c.nome ilike '%gestor de assistencia%');$a$,
+  $b$or c.nome ilike '%gestor de assistencia%'); if v_cargo_assistencia = '[]'::jsonb then select coalesce(jsonb_agg(c.id), '[]'::jsonb) into v_cargo_assistencia from public.cargos c where c.org_id = p_org_id and lower(btrim(c.nome)) = 'administrador'; end if;$b$
+]);
+
+-- ── 5. Regras já existentes sem destinatário: o mesmo acerto de 09/09 ──────────
+UPDATE public.automation_rules r
+   SET acao_config = r.acao_config
+       || jsonb_build_object(
+            'destinatarios_modo', 'grupo',
+            'destinatarios_estrategia', 'cargo',
+            'destinatarios_cargo_ids', jsonb_build_array(c.id::text)
+          )
+  FROM public.cargos c
+ WHERE c.org_id = r.org_id
+   AND lower(btrim(c.nome)) = 'administrador'
+   AND r.ativo
+   AND r.acao_tipo IN ('notificacao', 'email')
+   AND COALESCE(r.acao_config->>'destinatarios_estrategia', 'cargo') = 'cargo'
+   AND jsonb_array_length(COALESCE(r.acao_config->'destinatarios_cargo_ids', '[]'::jsonb)) = 0
+   AND jsonb_array_length(COALESCE(r.acao_config->'destinatarios_user_ids', '[]'::jsonb)) = 0
+   AND jsonb_array_length(COALESCE(r.acao_config->'destinatarios_emails_livres', '[]'::jsonb)) = 0;
+
 NOTIFY pgrst, 'reload schema';
