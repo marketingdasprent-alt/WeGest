@@ -8730,6 +8730,86 @@ export type Database = {
           },
         ]
       }
+      notificacao_emails_externos: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          email: string
+          id: string
+          nome: string | null
+          org_id: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          email: string
+          id?: string
+          nome?: string | null
+          org_id?: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          email?: string
+          id?: string
+          nome?: string | null
+          org_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacao_emails_externos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notificacao_emails_externos_tipos: {
+        Row: {
+          created_at: string
+          email_id: string
+          event_type: string
+          org_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_id: string
+          event_type: string
+          org_id?: string
+        }
+        Update: {
+          created_at?: string
+          email_id?: string
+          event_type?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificacao_emails_externos_tipos_email_id_fkey"
+            columns: ["email_id"]
+            isOneToOne: false
+            referencedRelation: "notificacao_emails_externos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacao_emails_externos_tipos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notificacao_tipo_map: {
         Row: {
           descricao: string | null

@@ -8,6 +8,12 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/utils/emailsExternosNotificacao.ts",
+    "src/utils/emailsExternosNotificacao.test.ts",
+    "src/hooks/useNotificacaoEmailsExternos.ts",
+    "src/components/admin/NotificacoesEmailCard.tsx",
+    "src/components/admin/NotificacoesTab.tsx",
+    "src/components/admin/NotificacoesEmailCard.test.tsx",
     "src/utils/importacaoAutomatica.ts",
     "src/utils/importacaoAutomatica.test.ts",
     "src/utils/respostaImportacao.ts",

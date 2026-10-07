@@ -356,6 +356,7 @@ jobs:
             slot_so_contrato_de_prestacao \
             bp_rejeitadas_fora_das_contas \
             repsol_chave_sem_valor \
+            emails_externos_de_notificacao \
             fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
