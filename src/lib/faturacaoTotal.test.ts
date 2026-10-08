@@ -2,8 +2,25 @@ import { describe, it, expect } from 'vitest';
 // TS puro, sem APIs de Deno: a edge function faturacao-emitir usa o mesmo ficheiro.
 import {
   avisoTotalDivergente,
+  precoParaProvider,
   totalComIva,
 } from '../../supabase/functions/_shared/faturacao/totais';
+
+describe('precoParaProvider', () => {
+  it('conta normal recebe o preço sem IVA, tal como está', () => {
+    expect(precoParaProvider(1115, 23, false)).toBe(1115);
+  });
+
+  // A conta da Sul tira o IVA de dentro: 1371,45 / 1,23 = 1115 + 256,45 de IVA.
+  it('conta com IVA incluído recebe o preço já com IVA', () => {
+    expect(precoParaProvider(1115, 23, true)).toBe(1371.45);
+    expect(precoParaProvider(1118.45, 23, true)).toBe(1375.69);
+  });
+
+  it('a 0 % o preço não muda em nenhuma das contas', () => {
+    expect(precoParaProvider(47.8, 0, true)).toBe(47.8);
+  });
+});
 
 describe('totalComIva', () => {
   it('soma o IVA por cima do preço sem IVA', () => {

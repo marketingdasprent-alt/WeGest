@@ -13,6 +13,7 @@ import type {
   VoidReceiptInput,
 } from '../types.ts';
 import { EmissaoAmbiguaError } from '../types.ts';
+import { precoParaProvider } from '../../_shared/faturacao/totais.ts';
 
 const env = (k: string) => Deno.env.get(k);
 
@@ -48,6 +49,7 @@ function resolve(cfg: ProviderConfig) {
     docseries: (s.docseries ?? {}) as Record<string, unknown>,
     defaultProduct: String(s.default_product || env('KI_DEFAULT_PRODUCT') || ''),
     defaultIdTax: String(s.default_idtax || env('KI_DEFAULT_IDTAX') || ''),
+    precosComIva: s.precos_com_iva === true,
   };
 }
 
@@ -256,7 +258,7 @@ export const keyInvoiceProvider: FaturacaoProvider = {
           IdProduct: String(idProduct),
           ProductName: it.descricao,
           Qty: String(Number(it.quantidade) || 1),
-          Price: String(Number(it.preco_unitario) || 0),
+          Price: String(precoParaProvider(it.preco_unitario, it.taxa_iva, r.precosComIva)),
           ...(idTax ? { IdTax: String(idTax) } : {}),
           ...(it.desconto ? { Discount: String(Number(it.desconto)) } : {}),
         };

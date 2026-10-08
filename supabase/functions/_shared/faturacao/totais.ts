@@ -21,6 +21,21 @@ export function totalComIva(itens: LinhaParaTotal[]): number {
 }
 
 /**
+ * Preço por unidade a mandar ao provider. O WeGest trabalha sem IVA; uma conta
+ * configurada com preços com IVA incluído (Dasp Rent Sul, 10/2026) tira o IVA de
+ * dentro do valor recebido, por isso para ela manda-se o preço já com IVA.
+ */
+export function precoParaProvider(
+  precoSemIva: number,
+  taxaIva: number,
+  precosComIva: boolean
+): number {
+  const preco = Number(precoSemIva) || 0;
+  if (!precosComIva) return preco;
+  return Math.round(preco * (1 + (Number(taxaIva) || 0) / 100) * 100) / 100;
+}
+
+/**
  * Aviso quando o documento emitido não tem o total pedido. Em 10/2026 a conta da
  * Dasp Rent Sul leu o preço sem IVA como IVA incluído e 26 faturas saíram mais baixas
  * sem ninguém notar, porque o WeGest só guardava o total que tinha calculado.
