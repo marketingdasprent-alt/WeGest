@@ -232,7 +232,7 @@ Deno.test('pedido bom: chave → limite da chave → catálogo, e auditoria com 
   const db = dbFalso();
   const r = await correr(pedido(`/api-rent-a-car/v1/modelos?categoria=${UUID}`), db);
   assertEquals(r.status, 200);
-  assertEquals(await r.json(), [{ id: UUID, imagem_url: null }]);
+  assertEquals(await r.json(), [{ id: UUID }]);
   assertEquals(
     db.rpcs.map((c) => c.name),
     ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_modelos']
@@ -483,7 +483,7 @@ Deno.test('GET /v1/tvde/modelos com a permissão chega a api_tvde_modelos', asyn
   const db = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:catalogo:read'] } });
   const r = await correr(pedido('/api-rent-a-car/v1/tvde/modelos'), db);
   assertEquals(r.status, 200);
-  assertEquals(await r.json(), [{ id: UUID, imagem_url: null }]);
+  assertEquals(await r.json(), [{ id: UUID }]);
   assertEquals(
     db.rpcs.map((c) => c.name),
     ['api_chave_por_hash', 'consume_edge_rate_limit', 'api_tvde_modelos']

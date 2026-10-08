@@ -10,7 +10,9 @@
 -- ============================================================
 
 -- Capa (viatura_capas) de uma viatura da org desse modelo, não vendida e não slot.
--- A view não filtra por org: o isolamento vem de viaturas.org_id. Escolhe-se a
+-- A view não filtra por org: o isolamento vem de viaturas.org_id e da org da foto.
+-- ficheiro_url é texto do cliente e a edge assina-o com service_role: só passa um
+-- caminho da própria viatura (<viatura_id>/fotos/...), sem '..'. Escolhe-se a
 -- capa mais recente, com a matrícula a desempatar.
 create or replace function public.api_foto_modelo(p_org_id uuid, p_modelo_id uuid)
 returns text language sql stable security definer set search_path = '' as $$
@@ -19,6 +21,9 @@ returns text language sql stable security definer set search_path = '' as $$
     join public.viatura_capas c on c.viatura_id = v.id
     join public.viatura_documentos vd on vd.id = c.foto_id
    where v.org_id = p_org_id
+     and vd.org_id = p_org_id
+     and c.ficheiro_url like (v.id::text || '/fotos/%')
+     and c.ficheiro_url not like '%..%'
      and v.modelo_id = p_modelo_id
      and coalesce(v.is_vendida, false) = false
      and coalesce(v.is_slot, false) = false
@@ -28,7 +33,7 @@ $$;
 
 -- Igual à 20261001120000, com imagem_url a null e foto_path para a edge.
 create or replace function public.api_modelos(p_org_id uuid, p_categoria uuid default null, p_tipo text default null)
-returns jsonb language sql stable security definer set search_path = public as $$
+returns jsonb language sql stable security definer set search_path = '' as $$
   select coalesce(jsonb_agg(jsonb_build_object(
     'id', m.modelo_id, 'marca', m.marca, 'modelo', m.modelo,
     'categoria', case when m.grupo_id is null then null else jsonb_build_object('id', m.grupo_id, 'nome', m.grupo_nome) end,
