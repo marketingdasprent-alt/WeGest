@@ -78,6 +78,10 @@ export interface ProviderConfig {
    *  fila pôr o pedido. NULL no teste de credenciais ainda não guardadas
    *  (acção 'health' com apiKey no body, antes de existir uma org por trás). */
   orgId?: string | null;
+  /** Linha de plataformas_configuracao resolvida (a integração concreta).
+   *  O Primavera precisa dela: a fila é por integração, não por organização,
+   *  para o agente de uma empresa nunca emitir os pedidos da outra. */
+  integracaoId?: string | null;
 }
 
 /** Identificadores genéricos devolvidos pela emissão. */

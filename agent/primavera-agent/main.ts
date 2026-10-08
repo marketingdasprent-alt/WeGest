@@ -27,6 +27,18 @@
 // fechar/o PC reiniciar.
 // ============================================================
 
+import { lerRespostaInserir } from '../../supabase/functions/_shared/primavera/resposta.ts';
+
+// Tempos máximos por pedido. Sem eles um pedido pendurado deixava o agente
+// parado para sempre, e a fila dava o job por ambíguo passados 2 minutos.
+const TIMEOUT_TOKEN_MS = 20_000;
+const TIMEOUT_INSERIR_MS = 60_000;
+const TIMEOUT_WEGEST_MS = 30_000;
+
+/** O pedido saiu para o Primavera e não se sabe se o documento foi criado.
+ *  Nunca se reporta como falha: a fila reemitiria. */
+class AmbiguoError extends Error {}
+
 interface ConfigAgente {
   /** URL base das edge functions do WeGest, ex.:
    *  "https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1" */
@@ -89,7 +101,7 @@ async function carregarConfig(caminho: string): Promise<ConfigAgente> {
 }
 
 // ── Cliente AS Connect (protocolo descrito na doc "Webservice Primavera /
-//    Asconnect", 2026-07-30) — corre inteiramente dentro desta rede. ──
+//    Asconnect", 2026-09-18) — corre inteiramente dentro desta rede. ──
 
 async function obterToken(cfg: ConfigAgente): Promise<string> {
   const res = await fetch(`${cfg.primavera.endpoint}/auth/gettoken`, {
@@ -100,6 +112,7 @@ async function obterToken(cfg: ConfigAgente): Promise<string> {
       password: cfg.primavera.password,
       enterprise: cfg.primavera.enterprise,
     }),
+    signal: AbortSignal.timeout(TIMEOUT_TOKEN_MS),
   });
   const texto = await res.text();
   if (!res.ok) {
@@ -115,14 +128,6 @@ async function obterToken(cfg: ConfigAgente): Promise<string> {
   }
   if (!token) throw new Error(`gettoken: resposta sem token reconhecível (${texto.slice(0, 200)})`);
   return token;
-}
-
-interface RespostaDocumento {
-  TipoDocGerado?: string;
-  SerieDocGerado?: string;
-  NumeroDocGerado?: string | number;
-  Documento?: string;
-  Estado?: { Mensagem?: string };
 }
 
 function resolveCodIva(cfg: ConfigAgente, taxaIva: number): string {
@@ -169,43 +174,38 @@ async function executarEmit(
     .filter((v) => typeof v === 'string' && v.trim())
     .join(' | ');
 
+  // Até aqui nada saiu para o Primavera: qualquer erro é falha segura.
   const token = await obterToken(cfg);
-  const res = await fetch(`${cfg.primavera.endpoint}/documentos/vendas/inserir`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify({
-      Documento: {
-        Entidade: nif,
-        DataDoc: new Date().toISOString(),
-        ...(payload.referencia_externa ? { Referencia: payload.referencia_externa } : {}),
-        ...(comentarios ? { Observacoes: comentarios } : {}),
-        Linhas: linhas,
-      },
-    }),
-  });
-  const texto = await res.text();
-  if (!res.ok) {
-    throw new Error(`inserir documento falhou (HTTP ${res.status}): ${texto.slice(0, 300)}`);
-  }
-  let d: RespostaDocumento;
-  try {
-    d = JSON.parse(texto);
-  } catch {
-    throw new Error(`inserir documento: resposta não-JSON (${texto.slice(0, 300)})`);
-  }
-  const mensagem = d?.Estado?.Mensagem;
-  if (mensagem && mensagem !== 'Sucesso') throw new Error(`Primavera recusou: ${mensagem}`);
-  if (!d?.NumeroDocGerado) {
-    throw new Error(`resposta sem NumeroDocGerado (${texto.slice(0, 300)})`);
-  }
 
-  return {
-    doctype: d.TipoDocGerado || 'FT',
-    docnum: String(d.NumeroDocGerado),
-    serie: String(d.SerieDocGerado ?? ''),
-    numero: d.Documento || `${d.TipoDocGerado ?? 'FT'} ${d.SerieDocGerado ?? ''}/${d.NumeroDocGerado}`,
-    raw: d,
-  };
+  // A partir daqui o pedido pode ter chegado: um corte de rede, um timeout ou
+  // uma resposta sem forma são AMBÍGUOS (o documento pode existir), nunca falha.
+  let res: Response;
+  try {
+    res = await fetch(`${cfg.primavera.endpoint}/documentos/vendas/inserir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        Documento: {
+          Entidade: nif,
+          DataDoc: new Date().toISOString(),
+          ...(payload.referencia_externa ? { Referencia: payload.referencia_externa } : {}),
+          ...(comentarios ? { Observacoes: comentarios } : {}),
+          Linhas: linhas,
+        },
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_INSERIR_MS),
+    });
+  } catch (erro) {
+    const msg = erro instanceof Error ? erro.message : String(erro);
+    throw new AmbiguoError(
+      `inserir documento: a ligação caiu depois de o pedido sair (${msg}). O documento pode ter sido criado.`
+    );
+  }
+  const texto = await res.text();
+  const leitura = lerRespostaInserir(res.status, texto, String(payload.tipo ?? 'FT'));
+  if (leitura.tipo === 'recusado') throw new Error(leitura.mensagem);
+  if (leitura.tipo === 'ambiguo') throw new AmbiguoError(leitura.mensagem);
+  return { ...leitura.documento };
 }
 
 async function executarHealth(cfg: ConfigAgente): Promise<Record<string, unknown>> {
@@ -222,6 +222,7 @@ async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
       Authorization: `Bearer ${cfg.chave_agente}`,
       'Content-Type': 'application/json',
     },
+    signal: AbortSignal.timeout(TIMEOUT_WEGEST_MS),
   });
   const corpo = await res.json().catch(() => null);
   if (!res.ok || !corpo?.success) {
@@ -230,38 +231,63 @@ async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
   return (corpo.jobs ?? []) as JobRecebido[];
 }
 
-async function reportarResultado(
-  cfg: ConfigAgente,
-  jobId: string,
-  sucesso: boolean,
-  resultado?: unknown,
-  erro?: string
-): Promise<void> {
-  const res = await fetch(`${cfg.wegest_url}/primavera-agent-result`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cfg.chave_agente}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ job_id: jobId, success: sucesso, resultado, error: erro }),
-  });
-  if (!res.ok) {
-    const texto = await res.text().catch(() => '');
-    log(`AVISO: falha ao reportar o resultado do job ${jobId} (HTTP ${res.status}): ${texto.slice(0, 200)}`);
+interface Resultado {
+  success: boolean;
+  ambiguous?: boolean;
+  resultado?: unknown;
+  error?: string;
+}
+
+/** Entrega o resultado ao WeGest. Insiste: um resultado perdido deixava o job
+ *  reclamado até a fila o dar por ambíguo, com o documento já emitido. */
+async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado): Promise<void> {
+  const tentativas = 4;
+  for (let i = 1; i <= tentativas; i++) {
+    try {
+      const res = await fetch(`${cfg.wegest_url}/primavera-agent-result`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${cfg.chave_agente}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ job_id: jobId, ...r }),
+        signal: AbortSignal.timeout(TIMEOUT_WEGEST_MS),
+      });
+      if (res.ok) return;
+      const texto = await res.text().catch(() => '');
+      // 404/409: o WeGest já fechou o job doutra forma; insistir não muda nada.
+      if (res.status === 404 || res.status === 409) {
+        log(`AVISO: o WeGest não aceitou o resultado do job ${jobId} (HTTP ${res.status}): ${texto.slice(0, 200)}`);
+        return;
+      }
+      log(`Falha ao reportar o job ${jobId} (HTTP ${res.status}), tentativa ${i}/${tentativas}.`);
+    } catch (erro) {
+      const msg = erro instanceof Error ? erro.message : String(erro);
+      log(`Falha ao reportar o job ${jobId} (${msg}), tentativa ${i}/${tentativas}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000 * i));
   }
+  log(`AVISO: desisti de reportar o job ${jobId}. A fila vai dá-lo por ambíguo; confirmar no Primavera.`);
 }
 
 async function processarJob(cfg: ConfigAgente, job: JobRecebido): Promise<void> {
   log(`A processar job ${job.id} (${job.tipo})...`);
   try {
-    const resultado =
-      job.tipo === 'emit' ? await executarEmit(cfg, job.payload) : await executarHealth(cfg);
-    await reportarResultado(cfg, job.id, true, resultado);
+    let resultado: Record<string, unknown>;
+    if (job.tipo === 'emit') resultado = await executarEmit(cfg, job.payload);
+    else if (job.tipo === 'health') resultado = await executarHealth(cfg);
+    else throw new Error(`Tipo de job desconhecido: ${String(job.tipo)}. Este agente está desactualizado?`);
+    await reportarResultado(cfg, job.id, { success: true, resultado });
     log(`Job ${job.id} concluído com sucesso.`);
   } catch (erro) {
     const msg = erro instanceof Error ? erro.message : String(erro);
+    if (erro instanceof AmbiguoError) {
+      log(`Job ${job.id} com desfecho AMBÍGUO: ${msg}`);
+      await reportarResultado(cfg, job.id, { success: false, ambiguous: true, error: msg });
+      return;
+    }
     log(`Job ${job.id} falhou: ${msg}`);
-    await reportarResultado(cfg, job.id, false, undefined, msg);
+    await reportarResultado(cfg, job.id, { success: false, error: msg });
   }
 }
 

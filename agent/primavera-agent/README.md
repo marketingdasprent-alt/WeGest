@@ -56,13 +56,33 @@ formas simples:
   sessão iniciada): usar o [NSSM](https://nssm.cc/) para registar o
   executável como serviço.
 
+## Uma empresa, um agente
+
+A chave do agente identifica **uma** integração de faturação, ou seja, uma
+empresa emissora (no Primavera, uma `enterprise`). Com duas empresas na mesma
+organização correm dois agentes, cada um com a sua chave e o seu ficheiro de
+configuração. Um agente só recebe os pedidos da sua empresa.
+
+## Quando o resultado é "ambíguo"
+
+Se o pedido saiu para o Primavera e a resposta não chegou (rede caiu, o
+servidor respondeu com erro interno, ou sem forma reconhecível), o agente
+**não** diz "falhou": diz "ambíguo". O WeGest guarda esse estado e não volta
+a emitir sozinho, porque o documento pode já existir no Primavera. Alguém
+confirma lá e resolve à mão. O mesmo acontece se o agente ficar mais de
+2 minutos sem responder a um pedido que reclamou.
+
 ## O que este agente NÃO faz (ainda)
 
-Só sabe emitir **Faturas (FT)**. Fatura-Recibo, Nota de Crédito e Recibo
-ainda não estão confirmados contra a documentação da AS Connect — um pedido
-desses tipos falha com uma mensagem clara em vez de arriscar gerar o
-documento errado. PDF e anulação de documentos também não têm endpoint
-documentado — continuam a fazer-se directamente no Primavera, por agora.
+Só sabe emitir **Faturas (FT)**. A documentação da AS Connect de 18/09/2026
+já aceita `TipoDocumento` no pedido, mas os códigos de Fatura-Recibo e Nota
+de Crédito ainda não foram confirmados — um pedido desses tipos falha com uma
+mensagem clara em vez de arriscar gerar o documento errado. PDF e anulação de
+documentos continuam sem endpoint documentado e fazem-se directamente no
+Primavera.
+
+As credenciais do webservice nunca entram no repositório: ficam só no
+`primavera-agent.config.json` desta máquina (ignorado pelo git).
 
 ## Compilar num único executável (para distribuir sem instalar Deno)
 

@@ -357,6 +357,7 @@ jobs:
             bp_rejeitadas_fora_das_contas \
             repsol_chave_sem_valor \
             emails_externos_de_notificacao \
+            primavera_fila_por_integracao \
             fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────

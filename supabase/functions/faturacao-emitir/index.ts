@@ -324,7 +324,7 @@ async function getOrgConfig(
   const c = configDaLinha(row as LinhaIntegracao, providerFiltro);
   return {
     provider: c.provider,
-    cfg: { apiKey: c.apiKey, settings: c.settings, orgId },
+    cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
     orgId,
     integracaoId: c.integracaoId,
   };
@@ -417,7 +417,14 @@ serve(async (req) => {
         // testa a linha JÁ GRAVADA desse provider especificamente — pode não
         // ser a integração ativa (ex.: a testar o Primavera enquanto o
         // KeyInvoice continua em produção).
-        ({ provider, cfg } = await getOrgConfig(req, payload.org_id, payload.provider));
+        // Com mais de uma integração do mesmo provider (uma por empresa), a
+        // empresa diz qual se testa; sem ela o maybeSingle rebentava.
+        ({ provider, cfg } = await getOrgConfig(
+          req,
+          payload.org_id,
+          payload.provider,
+          payload.emissor_id ?? null
+        ));
       } else {
         ({ provider, cfg } = await getOrgConfig(req, payload.org_id));
       }

@@ -184,8 +184,10 @@ export function FaturacaoIntegracaoDialog({
       // esta integração pode estar a ser testada sem ainda ser a que emite
       // de facto (ex.: Primavera em teste enquanto o KeyInvoice continua em
       // produção).
+      // `emissor_id`: com uma integração por empresa, é a empresa que diz qual
+      // das linhas do provider se testa.
       const body = providerMeta?.chaveGeradaPeloWeGest
-        ? { action: 'health', provider }
+        ? { action: 'health', provider, emissor_id: emissorId }
         : { action: 'health', provider, apiKey: apiKey.trim(), settings: settingsAtuais() };
       const { data, error } = await supabase.functions.invoke('faturacao-emitir', { body });
       if (error) throw new Error(error.message);
