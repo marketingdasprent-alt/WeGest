@@ -101,6 +101,37 @@ async function assertArtigoExiste(endpoint: string, sid: string, idProduct: stri
   }
 }
 
+/** GrossTotal do documento acabado de emitir. Cada conta decide se o Price vem com IVA
+ *  incluído, e a resposta do insertDocument não traz totais. Best-effort: o documento
+ *  já existe, por isso uma falha aqui devolve null e nunca lança. */
+async function lerTotalEmitido(
+  endpoint: string,
+  sid: string,
+  docType: string,
+  docSeries: string,
+  docNum: string
+): Promise<number | null> {
+  if (!docType || !docNum) return null;
+  try {
+    const d = await call(
+      endpoint,
+      'getDocument',
+      { DocType: docType, DocNum: docNum, ...(docSeries ? { DocSeries: docSeries } : {}) },
+      { sid }
+    );
+    const total = Number(d?.Data?.GrossTotal);
+    if (ok(d) && d.Data?.GrossTotal != null && Number.isFinite(total)) return total;
+    console.error('[keyinvoice] getDocument sem GrossTotal:', d?.ErrorMessage ?? 'sem Data', {
+      docType,
+      docSeries,
+      docNum,
+    });
+  } catch (e) {
+    console.error('[keyinvoice] getDocument falhou:', (e as Error).message, { docType, docNum });
+  }
+  return null;
+}
+
 /** getTaxes -> mapa { taxa(%) : IdTax }. Tolerante a nomes de campos. */
 async function buildTaxMap(endpoint: string, sid: string): Promise<Record<number, string>> {
   const map: Record<number, string> = {};
@@ -277,12 +308,17 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       FullDocNumber: string;
     };
 
+    const doctype = String(DocType ?? (input.tipo === 'RC' ? '' : r.doctypes[input.tipo]));
+    const docnum = DocNum != null ? String(DocNum) : '';
+    const serie = DocSeries != null ? String(DocSeries) : '';
     return {
-      doctype: String(DocType ?? (input.tipo === 'RC' ? '' : r.doctypes[input.tipo])),
-      docnum: DocNum != null ? String(DocNum) : '',
-      serie: DocSeries != null ? String(DocSeries) : '',
-      numero: FullDocNumber ?? (DocNum != null ? String(DocNum) : ''),
+      doctype,
+      docnum,
+      serie,
+      numero: FullDocNumber ?? docnum,
       raw: res.Data,
+      total:
+        input.tipo === 'RC' ? null : await lerTotalEmitido(r.endpoint, sid, doctype, serie, docnum),
     };
   },
 
