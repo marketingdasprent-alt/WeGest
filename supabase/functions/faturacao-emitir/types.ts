@@ -87,6 +87,8 @@ export interface EmitDocResult {
   serie: string;
   numero: string; // nº legal apresentável (FullDocNumber)
   raw: unknown; // resposta crua do provider (auditoria)
+  /** Total com IVA do documento tal como o provider o emitiu; null se não se conseguiu ler. */
+  total?: number | null;
 }
 
 /** Contrato que cada provider de faturação implementa. */

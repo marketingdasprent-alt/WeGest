@@ -56,6 +56,7 @@ import {
   type LinhaIntegracao,
 } from '../_shared/faturacao/integracao.ts';
 import { linhaDeFalhaEmissao } from '../_shared/faturacao/falhas.ts';
+import { avisoTotalDivergente, totalComIva } from '../_shared/faturacao/totais.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -605,12 +606,17 @@ serve(async (req) => {
     // seguinte (gravar o espelho local, etc.) nunca pode ser 'known_failed'.
     docEmitido = true;
 
-    // Total calculado a partir dos itens enviados (provider-agnostic)
-    const total = payload.itens.reduce((s, it) => {
-      const base = (Number(it.quantidade) || 0) * (Number(it.preco_unitario) || 0);
-      const comDesc = base * (1 - (Number(it.desconto) || 0) / 100);
-      return s + comDesc * (1 + (Number(it.taxa_iva) || 0) / 100);
-    }, 0);
+    // Grava-se o total que o provider emitiu, quando o devolve: é esse o do documento fiscal.
+    const esperado = totalComIva(payload.itens);
+    const total = doc.total ?? esperado;
+    const avisoTotal = avisoTotalDivergente(esperado, doc.total, doc.numero || doc.docnum);
+    if (avisoTotal) {
+      console.error('[faturacao-emitir] total emitido diverge do pedido:', avisoTotal, {
+        contrato_id: payload.contrato_id ?? null,
+        cobranca_id: payload.cobranca_id ?? null,
+        integracao_id: integracaoId,
+      });
+    }
 
     const cliente = payload.cliente ?? ({} as Cliente);
 
@@ -647,14 +653,20 @@ serve(async (req) => {
     };
 
     if (dbErr) {
+      const avisoDb = `Documento emitido (${doc.numero || doc.docnum}) mas falhou gravar localmente: ${dbErr.message}`;
       return json({
         success: true,
-        warning: `Documento emitido (${doc.numero || doc.docnum}) mas falhou gravar localmente: ${dbErr.message}`,
+        warning: [avisoDb, avisoTotal].filter(Boolean).join(' '),
         provider: providerMeta,
       });
     }
 
-    return json({ success: true, invoice, provider: providerMeta });
+    return json({
+      success: true,
+      invoice,
+      provider: providerMeta,
+      ...(avisoTotal ? { warning: avisoTotal } : {}),
+    });
   } catch (e) {
     // known_failed = provado que nada foi criado (o provider respondeu e
     //   recusou, ou a falha ocorreu antes de sequer tentar criar) — seguro
