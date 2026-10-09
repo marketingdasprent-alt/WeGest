@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { viaturaPedida } from '@/utils/novoTicketAssistencia';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgId } from '@/contexts/TenantContext';
@@ -211,6 +212,17 @@ export default function AssistenciaNova() {
 
     setStep(2); // Vai para Multimédia
   };
+
+  // Vindo do botão de assistência na lista de viaturas, o carro já vem escolhido.
+  const [searchParams] = useSearchParams();
+  const viaturaDoEnderecoUsada = useRef(false);
+  useEffect(() => {
+    if (viaturaDoEnderecoUsada.current || viaturas.length === 0) return;
+    const pedida = viaturaPedida(searchParams, viaturas);
+    if (!pedida) return;
+    viaturaDoEnderecoUsada.current = true;
+    void handleSelectViatura(pedida);
+  }, [viaturas, searchParams]);
 
   const handleMultimediaComplete = (files: any[]) => {
     setMediaFiles(files);

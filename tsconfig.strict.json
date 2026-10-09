@@ -8,6 +8,8 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/utils/novoTicketAssistencia.ts",
+    "src/utils/novoTicketAssistencia.test.ts",
     "src/hooks/useEstadoPersistido.ts",
     "src/hooks/useEstadoPersistido.test.ts",
     "src/hooks/useFiltrosDaUrlPersistidos.ts",
