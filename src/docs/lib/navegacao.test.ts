@@ -6,6 +6,7 @@ import {
   caminhosSemPagina,
   navegacao,
   pagina,
+  recurso,
 } from './navegacao';
 import { operacoes } from './spec';
 
@@ -49,6 +50,19 @@ describe('navegação do docs', () => {
       expect(pagina(slug)?.grupo, slug).toBe('Recursos');
       expect(pagina(slug)?.emBreve, slug).toBeUndefined();
     }
+  });
+
+  it('a página TVDE documenta as candidaturas e já não as dá como "fase seguinte"', () => {
+    const tvde = recurso('recursos/tvde');
+    expect(tvde?.operacoes.map((o) => o.id)).toEqual([
+      'GET /tvde/modelos',
+      'GET /tvde/modelos/{id}',
+      'GET /tvde/disponibilidade',
+      'POST /tvde/candidaturas',
+      'GET /tvde/candidaturas/{id}',
+    ]);
+    expect(tvde?.introducao).not.toMatch(/fase seguinte/);
+    expect(tvde?.introducao).toMatch(/CAPTCHA/);
   });
 
   it('Anterior/Seguinte saltam o "em breve" e as ligações externas', () => {
