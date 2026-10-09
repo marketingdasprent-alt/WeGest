@@ -77,7 +77,8 @@ const DESCRICAO_CANDIDATURA =
   'pede-os depois. A mesma referencia_externa, com a mesma chave, nunca cria duas ' +
   'candidaturas: repetir o pedido devolve a que já existe (200). Se a pessoa já tem uma ' +
   'candidatura em curso nesta organização (mesmo NIF ou email), a resposta é 409 ' +
-  'CANDIDATURA_EXISTENTE, sem dizer qual. Limite de 50 candidaturas por dia por chave (429 ' +
+  'CANDIDATURA_EXISTENTE, sem dizer qual. Não mostre esta resposta tal e qual ao visitante: ' +
+  'use uma mensagem genérica, para o formulário não revelar quem já se candidatou. Limite de 50 candidaturas por dia por chave (429 ' +
   'LIMITE_EXCEDIDO com Retry-After). O formulário do site tem de ter CAPTCHA (Turnstile ou ' +
   'equivalente): sem ele qualquer robô esgota o limite. Não guarde os dados pessoais do ' +
   'formulário nos logs do site. Sem cache. Corpo JSON até 64 KB.';
