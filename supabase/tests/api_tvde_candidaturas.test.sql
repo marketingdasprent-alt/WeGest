@@ -8,7 +8,7 @@
 -- NIFs e IBAN de teste com checksum válido (nif_pt_valido / iban_valido).
 -- ============================================================
 begin;
-select plan(43);
+select plan(44);
 
 -- Bootstrap antes das organizações: consome a vaga do primeiro utilizador.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000e2d01ff', 'bootstrap@tvdecand.pt');
@@ -229,6 +229,10 @@ select throws_ok(
 
 -- Utilizador da A que vê motoristas_gestao mas não edita.
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000e2d0206","role":"authenticated"}', true);
+-- Controlo positivo: se a fixture do cargo falhasse em silêncio, as recusas abaixo
+-- passavam por falta de permissão nenhuma e não por faltar o editar.
+select ok(public.has_permission('00000000-0000-0000-0000-00000e2d0206'::uuid, 'motoristas_gestao'),
+  'o 206 vê motoristas_gestao (o cargo de leitura está montado)');
 select throws_ok(
   $$ select public.aprovar_candidatura_motorista((select c5 from cs)) $$,
   'P0001', 'Sem permissão para aprovar candidaturas', 'só ver motoristas_gestao não chega para aprovar');
