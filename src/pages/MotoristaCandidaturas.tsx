@@ -58,6 +58,11 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { DocumentPreviewPanel } from '@/components/motoristas/DocumentPreviewPanel';
+import {
+  CandidaturaSiteInfo,
+  SeloCandidaturaSite,
+} from '@/components/motoristas/CandidaturaSiteInfo';
+import { type CandidaturaSiteCampos, idFichaAprovada } from '@/utils/candidaturaSite';
 import { cn, matchesSearch } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
@@ -66,9 +71,10 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
-interface Candidatura {
+interface Candidatura extends CandidaturaSiteCampos {
   id: string;
-  user_id: string;
+  // Nulo nas candidaturas do site, que não têm conta.
+  user_id: string | null;
   nome: string;
   email: string;
   telefone: string | null;
@@ -195,11 +201,14 @@ const MotoristaCandidaturas: React.FC = () => {
     try {
       const { data, error } = await supabase
         .from('motorista_candidaturas')
-        .select('*')
+        .select(
+          '*, modelo_pretendido:viatura_modelos!motorista_candidaturas_modelo_pretendido_id_fkey(nome, marca:viatura_marcas(nome))'
+        )
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setCandidaturas((data || []) as Candidatura[]);
+      // Cast local: sai quando se regenerar o types.ts com as colunas da fase D2.
+      setCandidaturas((data || []) as unknown as Candidatura[]);
     } catch (error) {
       console.error('Erro ao carregar candidaturas:', error);
       toast({
@@ -275,12 +284,12 @@ const MotoristaCandidaturas: React.FC = () => {
       const resultado = data as { motorista_id?: string; accao?: string } | null;
       const associado = resultado?.accao === 'associado';
 
-      // Buscar o motorista para mostrar no modal de sucesso
-      const { data: motoristaData } = await supabase
-        .from('motoristas_ativos')
-        .select('*')
-        .eq('user_id', candidatura.user_id)
-        .single();
+      // Buscar o motorista para mostrar no modal de sucesso. Pelo id que a RPC devolve:
+      // a candidatura do site não tem user_id.
+      const motoristaId = idFichaAprovada(resultado);
+      const { data: motoristaData } = motoristaId
+        ? await supabase.from('motoristas_ativos').select('*').eq('id', motoristaId).maybeSingle()
+        : { data: null };
 
       toast({
         title: associado ? 'Candidatura associada' : 'Candidatura aprovada',
@@ -618,14 +627,19 @@ const MotoristaCandidaturas: React.FC = () => {
                       {candidatura.telefone || '-'}
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant={STATUS_LABELS[candidatura.status]?.variant || 'default'}
-                        className={
-                          candidatura.status === 'aprovado' ? 'bg-green-500 hover:bg-green-600' : ''
-                        }
-                      >
-                        {STATUS_LABELS[candidatura.status]?.label || candidatura.status}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge
+                          variant={STATUS_LABELS[candidatura.status]?.variant || 'default'}
+                          className={
+                            candidatura.status === 'aprovado'
+                              ? 'bg-green-500 hover:bg-green-600'
+                              : ''
+                          }
+                        >
+                          {STATUS_LABELS[candidatura.status]?.label || candidatura.status}
+                        </Badge>
+                        <SeloCandidaturaSite origem={candidatura.origem} />
+                      </div>
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       {candidatura.data_submissao
@@ -701,6 +715,13 @@ const MotoristaCandidaturas: React.FC = () => {
                 {/* Left Column - Data & Documents List */}
                 <ScrollArea className="h-full border-r">
                   <div className="p-6 space-y-6">
+                    {selectedCandidatura.origem === 'site' && (
+                      <>
+                        <CandidaturaSiteInfo candidatura={selectedCandidatura} />
+                        <Separator />
+                      </>
+                    )}
+
                     {/* Dados Pessoais */}
                     <div>
                       <h4 className="font-semibold mb-3 flex items-center gap-2">

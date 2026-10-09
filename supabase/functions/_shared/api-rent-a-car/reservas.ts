@@ -10,11 +10,11 @@ import { type CodigoErro, erro, ok } from './respostas.ts';
 
 const CORPO_MAXIMO = 65536;
 const CODIGO = /^\d{1,12}$/;
-const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,63}$/;
-const TELEFONE = /^\+?[0-9 ().-]{6,20}$/;
+export const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,63}$/;
+export const TELEFONE = /^\+?[0-9 ().-]{6,20}$/;
 const NIF = /^\d{9}$/;
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
-const REFERENCIA = /^[A-Za-z0-9._:-]{1,100}$/;
+export const REFERENCIA = /^[A-Za-z0-9._:-]{1,100}$/;
 // O Postgres rebenta (500) com o ano 0; nenhuma data de nascimento ou de carta é anterior.
 const DATA_MINIMA = '1900-01-01';
 
@@ -53,20 +53,20 @@ export interface CorpoReserva extends CorpoCotacao {
 type Validacao = { ok: true; valor: CorpoReserva } | { ok: false; mensagem: string };
 
 /** AAAA-MM-DD que existe no calendário (31-02 não passa), de 1900-01-01 em diante. */
-function lerData(v: unknown): string | null {
+export function lerData(v: unknown): string | null {
   if (typeof v !== 'string' || !DATA.test(v) || v < DATA_MINIMA) return null;
   const d = new Date(`${v}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v ? v : null;
 }
 
-function obrigatorio(v: unknown, max: number): string | null {
+export function obrigatorio(v: unknown, max: number): string | null {
   if (typeof v !== 'string') return null;
   const t = v.trim();
   return t.length >= 1 && t.length <= max ? t : null;
 }
 
 /** null quando vazio; undefined quando inválido. */
-function opcional(v: unknown, max: number): string | null | undefined {
+export function opcional(v: unknown, max: number): string | null | undefined {
   if (v == null || v === '') return null;
   if (typeof v !== 'string') return undefined;
   const t = v.trim();
@@ -74,7 +74,7 @@ function opcional(v: unknown, max: number): string | null | undefined {
   return t.length <= max ? t : undefined;
 }
 
-const objecto = (v: unknown): Record<string, unknown> | null =>
+export const objecto = (v: unknown): Record<string, unknown> | null =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 
 export function validarCorpoReserva(corpo: unknown): Validacao {
