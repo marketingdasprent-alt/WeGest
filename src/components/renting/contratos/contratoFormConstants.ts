@@ -28,3 +28,22 @@ export const MODALIDADE_OPTIONS = [
   { value: 'rent_a_car', label: 'Rent-a-car' },
   { value: 'tvde', label: 'TVDE' },
 ] as const;
+
+/**
+ * Contrato aberto: corta o clique nos controlos, não no bloco todo. O Select
+ * da Radix abre pelo seu próprio estado em JS e ignora o `disabled` nativo do
+ * fieldset, por isso precisa disto. O texto à volta (nome, NIF, telemóvel do
+ * condutor) continua selecionável para se poder copiar.
+ */
+export const CONTROLOS_SEM_CLIQUE = [
+  '[&_button]:pointer-events-none',
+  '[&_input]:pointer-events-none',
+  '[&_textarea]:pointer-events-none',
+  '[&_select]:pointer-events-none',
+  '[&_label]:pointer-events-none',
+  '[&_a]:pointer-events-none',
+  '[&_[role=combobox]]:pointer-events-none',
+  '[&_[role=checkbox]]:pointer-events-none',
+  '[&_[role=switch]]:pointer-events-none',
+  '[&_[role=radio]]:pointer-events-none',
+].join(' ');
