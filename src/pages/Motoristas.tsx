@@ -54,6 +54,7 @@ import { useToast } from '@/hooks/use-toast';
 import { MotoristaDetailsDrawer } from '@/components/motoristas/MotoristaDetailsDrawer';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePagination } from '@/hooks/usePagination';
+import { useFiltrosDaUrlPersistidos } from '@/hooks/useFiltrosDaUrlPersistidos';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { normalizeString } from '@/lib/utils';
 import { camposFichaEmFalta } from '@/lib/motoristaFichaCompleta';
@@ -74,6 +75,12 @@ import {
 import type { Motorista } from '@/types/motorista';
 export type { Motorista };
 
+// Pesquisa e filtros ficam na sessão; a ordenação fica guardada de vez.
+const PARAMETROS_GUARDADOS = {
+  filtros: ['search', 'status', 'cidade', 'gestor', 'viatura'],
+  ordenacao: ['sort', 'dir'],
+} as const;
+
 type SortColumn =
   | 'codigo'
   | 'nome'
@@ -90,6 +97,7 @@ export default function Motoristas() {
 
   // 1. O URL é o ÚNICO dono da verdade
   const [searchParams, setSearchParams] = useSearchParams();
+  useFiltrosDaUrlPersistidos('motoristas', PARAMETROS_GUARDADOS);
 
   const searchTerm = searchParams.get('search') || '';
   const statusFilter = searchParams.get('status') || 'todos';

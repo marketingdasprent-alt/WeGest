@@ -8,6 +8,12 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/hooks/useEstadoPersistido.ts",
+    "src/hooks/useEstadoPersistido.test.ts",
+    "src/hooks/useFiltrosDaUrlPersistidos.ts",
+    "src/hooks/useFiltrosDaUrlPersistidos.test.tsx",
+    "src/utils/selecaoDeTexto.ts",
+    "src/utils/selecaoDeTexto.test.ts",
     "src/utils/emailsExternosNotificacao.ts",
     "src/utils/emailsExternosNotificacao.test.ts",
     "src/hooks/useNotificacaoEmailsExternos.ts",

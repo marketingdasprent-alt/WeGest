@@ -64,6 +64,7 @@ import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 interface Candidatura {
   id: string;
@@ -133,8 +134,8 @@ const MotoristaCandidaturas: React.FC = () => {
   const podeGerirCandidaturas = canEdit(RECURSOS.MOTORISTAS_GESTAO);
   const [candidaturas, setCandidaturas] = useState<Candidatura[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('candidaturas.pesquisa', '');
+  const [statusFilter, setStatusFilter] = useEstadoPersistido('candidaturas.estado', 'all');
 
   // Distinguir 'não há nada' de 'os filtros não deixam ver nada': cada caso
   // pede uma acção diferente de quem está a olhar.
@@ -143,8 +144,14 @@ const MotoristaCandidaturas: React.FC = () => {
     setSearchTerm('');
     setStatusFilter('all');
   };
-  const [sortField, setSortField] = useState<string>('data');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useEstadoPersistido('candidaturas.ordem', 'data', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>(
+    'candidaturas.sentido',
+    'desc',
+    { armazenamento: 'local' }
+  );
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // Dialog states

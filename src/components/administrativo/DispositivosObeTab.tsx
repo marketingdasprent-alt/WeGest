@@ -63,6 +63,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Viatura {
@@ -213,10 +214,14 @@ export function DispositivosObeTab() {
     new Map()
   );
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useEstadoPersistido('obe.pesquisa', '');
   const [apenasAtivos, setApenasAtivos] = useState(false);
-  const [sortField, setSortField] = useState<string>('nr_equipamento');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [sortField, setSortField] = useEstadoPersistido('obe.ordem', 'nr_equipamento', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('obe.sentido', 'asc', {
+    armazenamento: 'local',
+  });
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   // CRUD Dialog
