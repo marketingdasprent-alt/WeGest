@@ -17,52 +17,64 @@ select plan(11);
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000fd000', 'Org TVDE Fechado', 'tvde-fechado');
 
+-- Autor dos contratos: a cascata cria eventos de calendário com criado_por
+-- obrigatório, e aqui não há auth.uid().
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000fda01', 'gestor@tvde-fechado.pt');
+
+insert into public.viatura_marcas (id, org_id, nome) values
+  ('00000000-0000-0000-0000-0000000fdaa1', '00000000-0000-0000-0000-0000000fd000', 'Toyota');
+insert into public.viatura_modelos (id, org_id, marca_id, nome) values
+  ('00000000-0000-0000-0000-0000000fdab1', '00000000-0000-0000-0000-0000000fd000',
+   '00000000-0000-0000-0000-0000000fdaa1', 'Corolla');
+
+insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id)
+select ('00000000-0000-0000-0000-0000000fde0' || n)::uuid, '00000000-0000-0000-0000-0000000fd000',
+       'TF-0' || n || '-TF', '00000000-0000-0000-0000-0000000fdaa1', '00000000-0000-0000-0000-0000000fdab1'
+  from generate_series(1, 6) as n;
+
 insert into public.clientes (id, org_id, nome) values
   ('00000000-0000-0000-0000-0000000fdc01', '00000000-0000-0000-0000-0000000fd000', 'Cliente TVDE Fechado');
 
-insert into public.viaturas (id, org_id, matricula, marca, modelo) values
-  ('00000000-0000-0000-0000-0000000fde01', '00000000-0000-0000-0000-0000000fd000', 'TF-01-TF', 'Toyota', 'Corolla'),
-  ('00000000-0000-0000-0000-0000000fde02', '00000000-0000-0000-0000-0000000fd000', 'TF-02-TF', 'Toyota', 'Corolla'),
-  ('00000000-0000-0000-0000-0000000fde03', '00000000-0000-0000-0000-0000000fd000', 'TF-03-TF', 'Toyota', 'Corolla'),
-  ('00000000-0000-0000-0000-0000000fde04', '00000000-0000-0000-0000-0000000fd000', 'TF-04-TF', 'Toyota', 'Corolla'),
-  ('00000000-0000-0000-0000-0000000fde05', '00000000-0000-0000-0000-0000000fd000', 'TF-05-TF', 'Toyota', 'Corolla'),
-  ('00000000-0000-0000-0000-0000000fde06', '00000000-0000-0000-0000-0000000fd000', 'TF-06-TF', 'Toyota', 'Corolla');
+-- Contratos de teste: (n, viatura, início, regime, data_fim).
+--   1 fechado só com o estado
+--   2 fechado pelo diálogo, com data
+--   3 fechado pelo formulário (estado "Fechado" + data_fim NULL)
+--   4 TVDE vivo: a regra nova não lhe toca
+--   5 agendado para daqui a dois dias
+--   9 rent-a-car: a regra é só de TVDE
+create temp table fixture on commit drop as
+select * from (values
+  (1, 1, timestamptz '2026-09-01 10:00+00', 'tvde',       null::timestamptz),
+  (2, 2, timestamptz '2026-09-01 10:00+00', 'tvde',       null::timestamptz),
+  (3, 3, timestamptz '2026-09-01 10:00+00', 'tvde',       null::timestamptz),
+  (4, 4, timestamptz '2026-09-01 10:00+00', 'tvde',       null::timestamptz),
+  (5, 6, now() + interval '2 days',         'tvde',       null::timestamptz),
+  (9, 5, timestamptz '2026-09-01 10:00+00', 'rent_a_car', timestamptz '2026-10-01 10:00+00')
+) as f(n, v, inicio, regime, fim);
+
+-- reserva_id é obrigatório; 'concluida' porque já virou contrato.
+insert into public.reservas (id, org_id, codigo, data_inicio, viatura_id, cliente_id, estado, regime)
+select ('00000000-0000-0000-0000-0000000fdf0' || n)::uuid, '00000000-0000-0000-0000-0000000fd000',
+       990800 + n, inicio, ('00000000-0000-0000-0000-0000000fde0' || v)::uuid,
+       '00000000-0000-0000-0000-0000000fdc01', 'concluida', regime::public.contrato_regime_enum
+  from fixture;
 
 insert into public.contratos_renting
-  (id, org_id, cliente_id, viatura_id, matricula, data_inicio,
+  (id, org_id, codigo, reserva_id, cliente_id, viatura_id, matricula, data_inicio, data_fim,
    estado_operacional, estado_financeiro, regime, taxa_iva,
-   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias)
-values
-  -- F1: fechado só com o estado.
-  ('00000000-0000-0000-0000-0000000fd001', '00000000-0000-0000-0000-0000000fd000',
-   '00000000-0000-0000-0000-0000000fdc01', '00000000-0000-0000-0000-0000000fde01', 'TF-01-TF',
-   '2026-09-01T10:00:00Z', 'em_curso', 'pendente', 'tvde', 23, true, 'intervalo_dias', 30),
-  -- F2: fechado pelo diálogo, com data.
-  ('00000000-0000-0000-0000-0000000fd002', '00000000-0000-0000-0000-0000000fd000',
-   '00000000-0000-0000-0000-0000000fdc01', '00000000-0000-0000-0000-0000000fde02', 'TF-02-TF',
-   '2026-09-01T10:00:00Z', 'em_curso', 'pendente', 'tvde', 23, true, 'intervalo_dias', 30),
-  -- F3: fechado pelo formulário (estado "Fechado" + data_fim NULL).
-  ('00000000-0000-0000-0000-0000000fd003', '00000000-0000-0000-0000-0000000fd000',
-   '00000000-0000-0000-0000-0000000fdc01', '00000000-0000-0000-0000-0000000fde03', 'TF-03-TF',
-   '2026-09-01T10:00:00Z', 'em_curso', 'pendente', 'tvde', 23, true, 'intervalo_dias', 30),
-  -- F5: agendado para daqui a dois dias.
-  ('00000000-0000-0000-0000-0000000fd005', '00000000-0000-0000-0000-0000000fd000',
-   '00000000-0000-0000-0000-0000000fdc01', '00000000-0000-0000-0000-0000000fde06', 'TF-06-TF',
-   now() + interval '2 days', 'agendado', 'pendente', 'tvde', 23, true, 'intervalo_dias', 30),
-  -- F4: TVDE vivo — a regra nova não lhe toca.
-  ('00000000-0000-0000-0000-0000000fd004', '00000000-0000-0000-0000-0000000fd000',
-   '00000000-0000-0000-0000-0000000fdc01', '00000000-0000-0000-0000-0000000fde04', 'TF-04-TF',
-   '2026-09-01T10:00:00Z', 'em_curso', 'pendente', 'tvde', 23, true, 'intervalo_dias', 30);
-
--- R: rent-a-car — a regra é só de TVDE.
-insert into public.contratos_renting
-  (id, org_id, cliente_id, viatura_id, matricula, data_inicio, data_fim,
-   estado_operacional, estado_financeiro, regime, taxa_iva, is_longa_duracao)
-values
-  ('00000000-0000-0000-0000-0000000fd009', '00000000-0000-0000-0000-0000000fd000',
-   '00000000-0000-0000-0000-0000000fdc01', '00000000-0000-0000-0000-0000000fde05', 'TF-05-TF',
-   '2026-09-01T10:00:00Z', '2026-10-01T10:00:00Z',
-   'em_curso', 'pendente', 'rent_a_car', 23, false);
+   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias, created_by)
+select ('00000000-0000-0000-0000-0000000fd00' || n)::uuid, '00000000-0000-0000-0000-0000000fd000',
+       990800 + n, ('00000000-0000-0000-0000-0000000fdf0' || n)::uuid,
+       '00000000-0000-0000-0000-0000000fdc01', ('00000000-0000-0000-0000-0000000fde0' || v)::uuid,
+       'TF-0' || v || '-TF', inicio, fim,
+       case when n = 5 then 'agendado' else 'em_curso' end::public.contrato_estado_operacional_enum,
+       'pendente', regime::public.contrato_regime_enum, 23,
+       regime = 'tvde',
+       case when regime = 'tvde' then 'intervalo_dias' end::public.contrato_renovacao_opcao_enum,
+       case when regime = 'tvde' then 30 end,
+       '00000000-0000-0000-0000-0000000fda01'
+  from fixture;
 
 -- ── Fechar ─────────────────────────────────────────────────
 
