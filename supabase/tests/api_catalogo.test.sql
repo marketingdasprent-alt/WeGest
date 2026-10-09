@@ -1,11 +1,11 @@
 -- ============================================================
 -- Catálogo da API externa — api_modelos_publicaveis, api_modelos, api_categorias…
 -- ============================================================
--- Regras: modelo aparece se tem caixa e lugares, preço/dia na tarifa do site e
+-- Regras: modelo aparece se tem preço/dia na tarifa do site e
 -- pelo menos uma viatura não-slot não vendida. Tipo vem de viatura_tipos.
 -- ============================================================
 begin;
-select plan(19);
+select plan(22);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c01ff', 'bootstrap@catalogo.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -75,6 +75,16 @@ select is(jsonb_array_length(public.api_categorias('00000000-0000-0000-0000-0000
 select is(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')->0->>'modelos', '1', 'categoria conta os modelos');
 select is(jsonb_array_length(public.api_localizacoes('00000000-0000-0000-0000-0000000c0a00')), 1, 'só estações activas');
 select is(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'tarifa'->'caucao'->>'sem_iva', '300.00', 'detalhe traz a caução');
+
+-- Caixa e lugares por preencher não tiram o modelo do catálogo: saem null.
+update public.viatura_modelos set caixa = null, lugares = null where id = '00000000-0000-0000-0000-0000000c0d01';
+select isnt(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01'), null,
+  'modelo sem caixa nem lugares continua publicável');
+select ok(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'caixa' = 'null'::jsonb,
+  'caixa por preencher sai null');
+select ok(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'lugares' = 'null'::jsonb,
+  'lugares por preencher sai null');
+update public.viatura_modelos set caixa = 'manual', lugares = 5 where id = '00000000-0000-0000-0000-0000000c0d01';
 
 -- org sem tarifa_site: lista vazia, nunca erro
 select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000c0b00')), 0, 'org sem tarifa_site dá lista vazia');
