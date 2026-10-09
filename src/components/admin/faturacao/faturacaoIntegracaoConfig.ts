@@ -23,6 +23,9 @@ export interface FaturacaoConfig {
   docseries?: PorTipo;
   default_product?: string;
   default_idtax?: string;
+  /** A conta lê o preço das linhas como IVA incluído (Dasp Rent Sul): o adapter
+   *  manda-o já com IVA. Só se grava quando ligado. */
+  precos_com_iva?: boolean;
 }
 
 /** Linha de config de faturação (plataforma='faturacao'). */
@@ -45,6 +48,7 @@ export interface FaturacaoFormFields {
   defaultIdTax: string;
   doctypes: CamposPorTipo;
   docseries: CamposPorTipo;
+  precosComIva?: boolean;
 }
 
 export const CAMPOS_POR_TIPO_VAZIOS: CamposPorTipo = { FT: '', FR: '', NC: '', RC: '' };
@@ -80,5 +84,6 @@ export function buildFaturacaoSettings(f: FaturacaoFormFields): FaturacaoConfig 
   if (docseries) s.docseries = docseries;
   if (f.defaultProduct.trim()) s.default_product = f.defaultProduct.trim();
   if (f.defaultIdTax.trim()) s.default_idtax = f.defaultIdTax.trim();
+  if (f.precosComIva) s.precos_com_iva = true;
   return s;
 }

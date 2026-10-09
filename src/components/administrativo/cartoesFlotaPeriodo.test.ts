@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   deslocarPeriodo,
   limitesRpc,
+  opcoesPeriodoCartoes,
   periodoIncluiHoje,
   periodoPorOmissao,
   rotuloPeriodo,
@@ -52,5 +53,23 @@ describe('rotuloPeriodo', () => {
     expect(rotuloPeriodo({ from: d('2026-08-01'), to: d('2026-08-31') })).toBe(
       '01/08 - 31/08/2026'
     );
+  });
+});
+
+describe('opcoesPeriodoCartoes', () => {
+  it('o período guardado volta com as mesmas datas', () => {
+    const periodo = {
+      from: new Date('2026-09-01T00:00:00Z'),
+      to: new Date('2026-09-30T23:59:59Z'),
+    };
+    const texto = opcoesPeriodoCartoes.serializar!(periodo);
+    const volta = opcoesPeriodoCartoes.desserializar!(texto);
+    expect(volta?.from.getTime()).toBe(periodo.from.getTime());
+    expect(volta?.to.getTime()).toBe(periodo.to.getTime());
+  });
+
+  it('texto estragado não serve', () => {
+    expect(opcoesPeriodoCartoes.desserializar!('{"from":"x","to":"y"}')).toBeUndefined();
+    expect(opcoesPeriodoCartoes.desserializar!('nao json')).toBeUndefined();
   });
 });

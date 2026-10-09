@@ -13,6 +13,7 @@ import {
   subWeeks,
 } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import type { OpcoesEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 const WEEK_STARTS_ON = 1;
 
@@ -71,3 +72,22 @@ export const limitesRpc = (p: PeriodoCartoes) => ({
 function startOfDayISO(d: Date): string {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
 }
+
+/** Para guardar o período escolhido: as datas vão em ISO e voltam como Date. */
+export const opcoesPeriodoCartoes: OpcoesEstadoPersistido<PeriodoCartoes> = {
+  serializar: (p) => JSON.stringify({ from: p.from.toISOString(), to: p.to.toISOString() }),
+  desserializar: (texto) => {
+    try {
+      const guardado: unknown = JSON.parse(texto);
+      if (typeof guardado !== 'object' || guardado === null) return undefined;
+      const { from, to } = guardado as { from?: unknown; to?: unknown };
+      const inicio = new Date(String(from));
+      const fim = new Date(String(to));
+      if (Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime())) return undefined;
+      return { from: inicio, to: fim };
+    } catch {
+      // Texto de uma versão antiga: fica o período por omissão.
+      return undefined;
+    }
+  },
+};

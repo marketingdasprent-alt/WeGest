@@ -33,6 +33,7 @@ import { pt } from 'date-fns/locale';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { useEstadoPersistido, useSemanaPersistida } from '@/hooks/useEstadoPersistido';
 
 // Semana: Segunda (1) a Domingo (0) — igual ao resumo
 const WEEK_STARTS_ON = 1;
@@ -76,13 +77,17 @@ export const BPDataTab: React.FC = () => {
   const [showImportDialog, setShowImportDialog] = useState(false);
 
   // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIntegracao, setSelectedIntegracao] = useState('all');
-  const [sortField, setSortField] = useState<string>('transaction_date');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('bp.pesquisa', '');
+  const [selectedIntegracao, setSelectedIntegracao] = useEstadoPersistido('bp.integracao', 'all');
+  const [sortField, setSortField] = useEstadoPersistido('bp.ordem', 'transaction_date', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('bp.sentido', 'desc', {
+    armazenamento: 'local',
+  });
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   // Estado: data dentro da semana selecionada (default: semana passada)
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+  const [selectedWeek, setSelectedWeek] = useSemanaPersistida('bp.semana');
 
   // Semana selecionada: Segunda a Domingo
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });

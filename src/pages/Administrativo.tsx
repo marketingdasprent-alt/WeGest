@@ -18,6 +18,7 @@ import { ContasResumoTab } from '@/components/administrativo/ContasResumoTab';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 interface Recibo {
   id: string;
@@ -49,8 +50,8 @@ export default function Administrativo() {
   const [loading, setLoading] = useState(true);
 
   // Filtros
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('financeiro.pesquisa', '');
+  const [selectedStatus, setSelectedStatus] = useEstadoPersistido('financeiro.estado', 'all');
 
   // Permissões granulares do módulo Administrativo (admins têm acesso a tudo).
   const { hasAccessToResource } = usePermissions();
@@ -58,6 +59,20 @@ export default function Administrativo() {
   const canRecibos = hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
   const canPlataformas = hasAccessToResource(RECURSOS.ADMINISTRATIVO_PLATAFORMAS);
   const defaultTab = canResumos ? 'resumos' : canRecibos ? 'recibos' : 'bolt';
+
+  // Voltar à página reabre o separador onde se estava, se ainda houver acesso a ele.
+  const separadoresPermitidos = [
+    ...(canResumos ? ['resumos'] : []),
+    ...(canRecibos ? ['recibos'] : []),
+    ...(canPlataformas ? ['bolt', 'uber', 'bp', 'repsol', 'edp', 'viaverde'] : []),
+  ];
+  const [separadorGuardado, setSeparador] = useEstadoPersistido(
+    'administrativo.separador',
+    defaultTab
+  );
+  const separador = separadoresPermitidos.includes(separadorGuardado)
+    ? separadorGuardado
+    : defaultTab;
 
   useEffect(() => {
     loadData();
@@ -138,7 +153,7 @@ export default function Administrativo() {
     'data-[state=active]:bg-transparent data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-2 pb-2 h-auto gap-2 text-xs';
 
   return (
-    <Tabs defaultValue={defaultTab} className="w-full">
+    <Tabs value={separador} onValueChange={setSeparador} className="w-full">
       <StickyPageHeader
         title="Administrativo"
         description="Gestão financeira e dados de plataformas"

@@ -33,6 +33,8 @@ interface Opcoes {
   reserva?: unknown;
   /** O que api_modelos devolve. */
   modelos?: unknown;
+  /** O que api_tvde_criar_candidatura devolve. */
+  candidatura?: unknown;
 }
 
 function dbFalso(o: Opcoes = {}) {
@@ -70,6 +72,9 @@ function dbFalso(o: Opcoes = {}) {
       if (name === 'api_tvde_modelos')
         return Promise.resolve({ data: [{ id: UUID }], error: null });
       if (name === 'api_cotacao') return Promise.resolve({ data: o.cotacao ?? null, error: null });
+      if (name === 'api_tvde_criar_candidatura') {
+        return Promise.resolve({ data: o.candidatura ?? null, error: null });
+      }
       if (name === 'api_criar_reserva') {
         return Promise.resolve({ data: o.reserva ?? null, error: null });
       }
@@ -515,4 +520,62 @@ Deno.test('GET /v1/modelos devolve a foto da viatura assinada e nunca o foto_pat
     { id: 'm2', imagem_url: null },
   ]);
   assertEquals(texto.includes('foto_path'), false);
+});
+
+Deno.test('POST /v1/tvde/candidaturas com a permissão chega à RPC (201) e é auditado', async () => {
+  const db = dbFalso({
+    chave: { ...linhaOk, permissoes: ['tvde:candidaturas:write'] },
+    candidatura: { id: UUID, estado: 'submetido', criada_em: 'x', decidida_em: null },
+  });
+  const req = new Request('https://x/api-rent-a-car/v1/tvde/candidaturas', {
+    method: 'POST',
+    headers: {
+      'x-api-key': CHAVE,
+      'cf-connecting-ip': '203.0.113.9',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      referencia_externa: 'site-cand-001',
+      nome: 'Rui Condutor',
+      email: 'rui@exemplo.pt',
+      telefone: '+351 912 345 678',
+      nif: '123456789',
+      morada: 'Rua das Flores, 10',
+      codigo_postal: '1000-100',
+      cidade: 'Lisboa',
+      documento: { tipo: 'cc', numero: '12345678', validade: '2035-01-01' },
+      carta_conducao: { numero: 'L-1', categorias: ['B'], validade: '2035-01-01' },
+      licenca_tvde: null,
+      em_formacao_tvde: true,
+      iban: 'PT50000201231234567890154',
+      consentimento: { versao: 'v1', aceite_em: '2026-10-09T10:00:00Z' },
+    }),
+  });
+  const r = await correr(req, db);
+  assertEquals(r.status, 201);
+  assertEquals((await r.json()).id, UUID);
+  assertEquals(
+    db.rpcs.map((c) => c.name),
+    [
+      'api_chave_por_hash',
+      'consume_edge_rate_limit',
+      'consume_edge_rate_limit',
+      'api_tvde_criar_candidatura',
+    ]
+  );
+  assertEquals(opsLimite(db), ['api-rent-a-car', 'api-rent-a-car-candidaturas']);
+  assertEquals(db.rpcs[3].args.p_org_id, 'org1');
+  assertEquals(db.rpcs[3].args.p_api_chave_id, 'k1');
+  assertEquals(db.pedidos[0].estado_http, 201);
+});
+
+Deno.test('GET /v1/tvde/candidaturas sem id → 404 sem chegar à base', async () => {
+  const db = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:candidaturas:read'] } });
+  const r = await correr(pedido('/v1/tvde/candidaturas'), db);
+  assertEquals(r.status, 404);
+  assertEquals((await r.json()).erro.codigo, 'NAO_ENCONTRADO');
+  assertEquals(
+    db.rpcs.map((c) => c.name),
+    ['api_chave_por_hash', 'consume_edge_rate_limit']
+  );
 });

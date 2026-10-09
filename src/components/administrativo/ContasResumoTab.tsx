@@ -23,9 +23,7 @@ import { TablePagination } from '@/components/ui/TablePagination';
 import { normalizeFirstLast, isCompanyName } from './motoristaNomeMatching';
 import { contarInativosEscondidos, inativoVisivelNoResumo } from '@/utils/motoristasInativosResumo';
 import { useContasResumoSemana } from '@/hooks/useContasResumoSemana';
-import { useAbastecimentosSuspeitos } from '@/hooks/useAbastecimentosSuspeitos';
 import { useCombustivelSemDono } from '@/hooks/useCombustivelSemDono';
-import { AbastecimentosSuspeitosAviso } from './AbastecimentosSuspeitosAviso';
 import { CombustivelSemDonoAviso } from './CombustivelSemDonoAviso';
 import {
   gerarRelatoriosIndividuaisPDF,
@@ -38,6 +36,7 @@ import { ContasResumoFiltros } from './ContasResumoFiltros';
 import { ContasResumoStats } from './ContasResumoStats';
 import { ContasResumoTabela } from './ContasResumoTabela';
 import { ContasResumoBulkBar } from './ContasResumoBulkBar';
+import { useEstadoPersistido, useSemanaPersistida } from '@/hooks/useEstadoPersistido';
 
 const WEEK_STARTS_ON = 1;
 
@@ -82,8 +81,8 @@ export function ContasResumoTab() {
   const canImportar = hasAccessToResource(RECURSOS.ADMINISTRATIVO_IMPORTAR);
   const showGorjeta = hasAccessToResource(RECURSOS.ADMINISTRATIVO_VER_GORJETA);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('resumos.pesquisa', '');
+  const [selectedWeek, setSelectedWeek] = useSemanaPersistida('resumos.semana');
   const [selectedMotorista, setSelectedMotorista] = useState<MotoristaResumo | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -126,12 +125,24 @@ export function ContasResumoTab() {
     | 'slot'
     | 'reparacoes'
     | 'gorjeta';
-  const [sortField, setSortField] = useState<SortField>('total_faturado');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useEstadoPersistido<SortField>(
+    'resumos.ordem',
+    'total_faturado',
+    { armazenamento: 'local' }
+  );
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('resumos.sentido', 'desc', {
+    armazenamento: 'local',
+  });
 
-  const [filterRecibo, setFilterRecibo] = useState<'todos' | 'verde' | 'nao_verde'>('todos');
-  const [filterSaldo, setFilterSaldo] = useState<'todos' | 'negativos' | 'positivos'>('todos');
-  const [filterGestor, setFilterGestor] = useState<string>('todos');
+  const [filterRecibo, setFilterRecibo] = useEstadoPersistido<'todos' | 'verde' | 'nao_verde'>(
+    'resumos.recibo',
+    'todos'
+  );
+  const [filterSaldo, setFilterSaldo] = useEstadoPersistido<'todos' | 'negativos' | 'positivos'>(
+    'resumos.saldo',
+    'todos'
+  );
+  const [filterGestor, setFilterGestor] = useEstadoPersistido('resumos.gestor', 'todos');
   // Inativos escondidos por omissão (pedido de 01/10); ligar para fechar o saldo de quem saiu.
   const [mostrarInativos, setMostrarInativos] = useState(false);
 
@@ -400,7 +411,6 @@ export function ContasResumoTab() {
   };
 
   // Antes de qualquer return: hooks depois dele mudam de número entre renders.
-  const { data: abastecimentos } = useAbastecimentosSuspeitos(weekStart, weekEnd);
   const { data: semDono } = useCombustivelSemDono(weekStart, weekEnd);
 
   if (loading && resumos.length === 0) {
@@ -463,11 +473,6 @@ export function ContasResumoTab() {
       />
 
       <CombustivelSemDonoAviso grupos={semDono ?? []} />
-
-      <AbastecimentosSuspeitosAviso
-        suspeitos={abastecimentos?.suspeitos ?? []}
-        nomes={abastecimentos?.nomes ?? {}}
-      />
 
       <div className="flex justify-end">
         <Popover open={fecharPopoverOpen} onOpenChange={setFecharPopoverOpen}>

@@ -315,7 +315,8 @@ jobs:
             api_reservas \
             evento_reserva_site_recebida \
             api_tvde_catalogo \
-            api_foto_da_viatura
+            api_foto_da_viatura \
+            api_tvde_candidaturas
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
@@ -352,6 +353,7 @@ jobs:
             atribuicao_segue_estado_do_contrato \
             tvde_parado_volta_a_cobrar \
             tvde_reaberto_a_mao_cobra \
+            tvde_fechado_guarda_data_fim \
             varios_grupos_por_pessoa \
             slot_so_contrato_de_prestacao \
             bp_rejeitadas_fora_das_contas \
