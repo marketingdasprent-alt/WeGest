@@ -205,7 +205,10 @@ select throws_ok(
   $$ select public.aprovar_candidatura_motorista((select c5 from cs)) $$,
   'P0001', 'Sem permissão para aprovar candidaturas', 'utilizador sem permissão não aprova');
 
+-- Volta a postgres e sem sessão: com os claims ainda definidos, auth.uid() continuava
+-- a ser o 203 e a validação de automation_rules exigia-lhe permissões na fixture.
 reset role;
+select set_config('request.jwt.claims', '', true);
 
 select ok(exists (select 1 from public.motoristas_ativos
                    where nif = '234567899' and org_id = '00000000-0000-0000-0000-00000e2d0a00' and user_id is null),
