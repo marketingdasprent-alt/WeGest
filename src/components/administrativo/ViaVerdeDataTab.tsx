@@ -29,6 +29,7 @@ import { cn, matchesSearch } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { useEstadoPersistido, useSemanaPersistida } from '@/hooks/useEstadoPersistido';
 
 const WEEK_STARTS_ON = 1;
 
@@ -66,11 +67,18 @@ export const ViaVerdeDataTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [transacoes, setTransacoes] = useState<Transacao[]>([]);
   const [integracoes, setIntegracoes] = useState<Integracao[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIntegracao, setSelectedIntegracao] = useState('all');
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
-  const [sortField, setSortField] = useState<string>('transaction_date');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('viaverde.pesquisa', '');
+  const [selectedIntegracao, setSelectedIntegracao] = useEstadoPersistido(
+    'viaverde.integracao',
+    'all'
+  );
+  const [selectedWeek, setSelectedWeek] = useSemanaPersistida('viaverde.semana');
+  const [sortField, setSortField] = useEstadoPersistido('viaverde.ordem', 'transaction_date', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('viaverde.sentido', 'desc', {
+    armazenamento: 'local',
+  });
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });

@@ -98,12 +98,24 @@ describe('ContratoFormSecoes — contrato aberto', () => {
     }
   });
 
-  // pointer-events-none é o que trava mesmo o Select da Radix, que decide se
-  // abre pelo seu próprio estado em JS e não pelo `disabled` nativo. Sem isto
-  // os campos ficavam cinzentos mas continuavam a abrir.
-  it('o bloqueio também corta o clique, não só o disabled nativo', () => {
+  // pointer-events-none nos controlos é o que trava mesmo o Select da Radix,
+  // que decide se abre pelo seu próprio estado em JS e não pelo `disabled`
+  // nativo. Sem isto os campos ficavam cinzentos mas continuavam a abrir.
+  it('o bloqueio também corta o clique nos controlos, não só o disabled nativo', () => {
     renderSecoes(true);
-    expect(fieldsetTravadoDe('sec-cliente')).toHaveClass('pointer-events-none');
+    const bloco = fieldsetTravadoDe('sec-cliente');
+    expect(bloco).toHaveClass('[&_button]:pointer-events-none');
+    expect(bloco).toHaveClass('[&_[role=combobox]]:pointer-events-none');
+    expect(bloco).toHaveClass('[&_input]:pointer-events-none');
+  });
+
+  // O bloco todo sem cliques (e com select-none) impedia copiar o nome, o NIF
+  // e o telemóvel dos condutores de um contrato aberto.
+  it('o texto do bloqueio continua selecionável para copiar', () => {
+    renderSecoes(true);
+    const bloco = fieldsetTravadoDe('sec-condutores');
+    expect(bloco).not.toHaveClass('pointer-events-none');
+    expect(bloco).not.toHaveClass('select-none');
   });
 
   it('sem contrato aberto não há bloqueio nenhum', () => {
