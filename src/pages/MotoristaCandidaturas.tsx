@@ -207,8 +207,7 @@ const MotoristaCandidaturas: React.FC = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      // Cast local: sai quando se regenerar o types.ts com as colunas da fase D2.
-      setCandidaturas((data || []) as unknown as Candidatura[]);
+      setCandidaturas((data || []) as Candidatura[]);
     } catch (error) {
       console.error('Erro ao carregar candidaturas:', error);
       toast({
