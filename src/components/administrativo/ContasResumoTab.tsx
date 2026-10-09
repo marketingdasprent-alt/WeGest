@@ -23,9 +23,7 @@ import { TablePagination } from '@/components/ui/TablePagination';
 import { normalizeFirstLast, isCompanyName } from './motoristaNomeMatching';
 import { contarInativosEscondidos, inativoVisivelNoResumo } from '@/utils/motoristasInativosResumo';
 import { useContasResumoSemana } from '@/hooks/useContasResumoSemana';
-import { useAbastecimentosSuspeitos } from '@/hooks/useAbastecimentosSuspeitos';
 import { useCombustivelSemDono } from '@/hooks/useCombustivelSemDono';
-import { AbastecimentosSuspeitosAviso } from './AbastecimentosSuspeitosAviso';
 import { CombustivelSemDonoAviso } from './CombustivelSemDonoAviso';
 import {
   gerarRelatoriosIndividuaisPDF,
@@ -413,7 +411,6 @@ export function ContasResumoTab() {
   };
 
   // Antes de qualquer return: hooks depois dele mudam de número entre renders.
-  const { data: abastecimentos } = useAbastecimentosSuspeitos(weekStart, weekEnd);
   const { data: semDono } = useCombustivelSemDono(weekStart, weekEnd);
 
   if (loading && resumos.length === 0) {
@@ -476,11 +473,6 @@ export function ContasResumoTab() {
       />
 
       <CombustivelSemDonoAviso grupos={semDono ?? []} />
-
-      <AbastecimentosSuspeitosAviso
-        suspeitos={abastecimentos?.suspeitos ?? []}
-        nomes={abastecimentos?.nomes ?? {}}
-      />
 
       <div className="flex justify-end">
         <Popover open={fecharPopoverOpen} onOpenChange={setFecharPopoverOpen}>

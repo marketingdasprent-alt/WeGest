@@ -12,7 +12,7 @@
 -- ============================================================
 
 begin;
-select plan(10);
+select plan(11);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000001c00ff', 'bootstrap@combustivel.pt');
@@ -142,6 +142,21 @@ select is(
   (select motorista_id from public.edp_transacoes where transaction_id = 'edp-5000000000099999-20260910100000'),
   null::uuid,
   'cartão sem titular fica sem dono (não é imputado a ninguém por engano)'
+);
+
+-- Quem paga é o dono do cartão nessa data, e só ele. A matrícula do ficheiro
+-- (digitada na bomba) e qualquer motorista que a linha traga não contam: a
+-- 01/10/2026 um "BM52OQ" em vez de "BM53OQ" apontou para o carro de outro.
+insert into public.repsol_transacoes
+  (org_id, integracao_id, transaction_id, transaction_date, amount, card_number, motorista_id, raw_data) values
+  ('00000000-0000-0000-0000-0000001c0000', '00000000-0000-0000-0000-0000001c0e01',
+   'cb-repsol-matricula-de-outro', '2026-10-01 19:19+00', 86.28, '9724998589690511',
+   '00000000-0000-0000-0000-0000001c0b02',
+   '{"MATRÍCULA/CONDUTOR TICKET": "BM52OQ", "CONDUTOR": "Motorista EDP"}'::jsonb);
+select is(
+  (select motorista_id from public.repsol_transacoes where transaction_id = 'cb-repsol-matricula-de-outro'),
+  '00000000-0000-0000-0000-0000001c0b01'::uuid,
+  'o cartão decide quem paga: a matrícula e o motorista que vêm na linha não contam'
 );
 
 select * from finish();
