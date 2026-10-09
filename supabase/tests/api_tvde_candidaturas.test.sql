@@ -8,7 +8,7 @@
 -- NIFs e IBAN de teste com checksum válido (nif_pt_valido / iban_valido).
 -- ============================================================
 begin;
-select plan(37);
+select plan(43);
 
 -- Bootstrap antes das organizações: consome a vaga do primeiro utilizador.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000e2d01ff', 'bootstrap@tvdecand.pt');
@@ -45,26 +45,39 @@ insert into public.api_chaves (id, org_id, nome, escopo, permissoes) values
   ('00000000-0000-0000-0000-00000e2d0902', '00000000-0000-0000-0000-00000e2d0b00', 'Site B', 'rent_a_car', '{tvde:candidaturas:write,tvde:candidaturas:read}');
 
 -- Utilizadores: 201 admin da A; 202 admin da B; 203 da A sem cargo nem admin;
--- 204 motorista com conta (portal); 205 motorista da A com ficha e conta.
+-- 204 motorista com conta (portal); 205 motorista da A com ficha e conta;
+-- 206 da A com um cargo que vê motoristas_gestao mas não edita.
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000e2d0201', 'admin-a@tvdecand.pt'),
   ('00000000-0000-0000-0000-00000e2d0202', 'admin-b@tvdecand.pt'),
   ('00000000-0000-0000-0000-00000e2d0203', 'semperm-a@tvdecand.pt'),
   ('00000000-0000-0000-0000-00000e2d0204', 'portal@tvdecand.pt'),
-  ('00000000-0000-0000-0000-00000e2d0205', 'comconta@tvdecand.pt');
+  ('00000000-0000-0000-0000-00000e2d0205', 'comconta@tvdecand.pt'),
+  ('00000000-0000-0000-0000-00000e2d0206', 'sover-a@tvdecand.pt');
 insert into public.user_org_ativa (user_id, org_id) values
   ('00000000-0000-0000-0000-00000e2d0201', '00000000-0000-0000-0000-00000e2d0a00'),
   ('00000000-0000-0000-0000-00000e2d0202', '00000000-0000-0000-0000-00000e2d0b00'),
-  ('00000000-0000-0000-0000-00000e2d0203', '00000000-0000-0000-0000-00000e2d0a00');
-insert into public.user_organizacoes (user_id, org_id, is_admin) values
-  ('00000000-0000-0000-0000-00000e2d0201', '00000000-0000-0000-0000-00000e2d0a00', true),
-  ('00000000-0000-0000-0000-00000e2d0202', '00000000-0000-0000-0000-00000e2d0b00', true),
-  ('00000000-0000-0000-0000-00000e2d0203', '00000000-0000-0000-0000-00000e2d0a00', false);
+  ('00000000-0000-0000-0000-00000e2d0203', '00000000-0000-0000-0000-00000e2d0a00'),
+  ('00000000-0000-0000-0000-00000e2d0206', '00000000-0000-0000-0000-00000e2d0a00');
+-- O catálogo de recursos pode vir vazio no CI.
+insert into public.recursos (nome, categoria) values ('motoristas_gestao', 'motoristas')
+  on conflict (nome) do nothing;
+insert into public.cargos (id, nome, org_id) values
+  ('00000000-0000-0000-0000-00000e2d0c71', 'So Ve Motoristas', '00000000-0000-0000-0000-00000e2d0a00');
+insert into public.cargo_permissoes (cargo_id, recurso_id, org_id, tem_acesso, pode_editar)
+select '00000000-0000-0000-0000-00000e2d0c71', r.id, '00000000-0000-0000-0000-00000e2d0a00', true, false
+  from public.recursos r where r.nome = 'motoristas_gestao';
+insert into public.user_organizacoes (user_id, org_id, is_admin, cargo_id) values
+  ('00000000-0000-0000-0000-00000e2d0201', '00000000-0000-0000-0000-00000e2d0a00', true, null),
+  ('00000000-0000-0000-0000-00000e2d0202', '00000000-0000-0000-0000-00000e2d0b00', true, null),
+  ('00000000-0000-0000-0000-00000e2d0203', '00000000-0000-0000-0000-00000e2d0a00', false, null),
+  ('00000000-0000-0000-0000-00000e2d0206', '00000000-0000-0000-0000-00000e2d0a00', false, '00000000-0000-0000-0000-00000e2d0c71');
 
--- Ficha da org A com conta, NIF 501234560 (Review Focus 1).
-insert into public.motoristas_ativos (id, org_id, nome, nif, user_id) values
+-- Ficha da org A com conta, NIF 501234560, IBAN X e email próprios, sem telefone
+-- (Review Focus 1 e a sobreposição pelo site).
+insert into public.motoristas_ativos (id, org_id, nome, nif, user_id, iban, email) values
   ('00000000-0000-0000-0000-00000e2d0c01', '00000000-0000-0000-0000-00000e2d0a00', 'Motorista Com Conta', '501234560',
-   '00000000-0000-0000-0000-00000e2d0205');
+   '00000000-0000-0000-0000-00000e2d0205', 'PT42003300000045678901234', 'comconta@tvdecand.pt');
 
 -- Pedido válido, ao formato de CorpoCandidatura (Task 3).
 create temp table ped as select jsonb_build_object(
@@ -140,9 +153,12 @@ select is(public.api_tvde_criar_candidatura('00000000-0000-0000-0000-00000e2d0a0
 select is(public.api_tvde_criar_candidatura('00000000-0000-0000-0000-00000e2d0a00', '00000000-0000-0000-0000-00000e2d0901',
             (select j || '{"referencia_externa": "site-0002", "nif": "212121219", "email": "RUI@Candidato.PT"}'::jsonb from ped))->'erro'->>'codigo',
   'CANDIDATURA_EXISTENTE', 'outra referência com o mesmo email em maiúsculas');
-select is(public.api_tvde_criar_candidatura('00000000-0000-0000-0000-00000e2d0b00', '00000000-0000-0000-0000-00000e2d0902',
-            (select j - 'modelo_pretendido_id' from ped))->>'estado',
-  'submetido', 'a mesma pessoa na org B é aceite (o duplicado é por org)');
+-- Org B com a mesma referencia_externa: candidatura nova, nunca a da A.
+create temp table rb as select public.api_tvde_criar_candidatura(
+  '00000000-0000-0000-0000-00000e2d0b00', '00000000-0000-0000-0000-00000e2d0902', (select j - 'modelo_pretendido_id' from ped)) as r;
+select is((select r->>'estado' from rb), 'submetido', 'a mesma pessoa na org B é aceite (o duplicado é por org)');
+select isnt((select r->>'id' from rb), (select r->>'id' from r1),
+  'a chave da org B, com a mesma referência, não devolve a candidatura da A');
 
 -- ── 5) validação ────────────────────────────────────────────────────────────
 select is(public.api_tvde_criar_candidatura('00000000-0000-0000-0000-00000e2d0a00', '00000000-0000-0000-0000-00000e2d0901',
@@ -198,12 +214,27 @@ select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000e2
 select throws_ok(
   $$ select public.aprovar_candidatura_motorista((select c5 from cs)) $$,
   'P0001', 'Candidatura não encontrada', 'utilizador de outra org não aprova');
+select throws_ok(
+  $$ select public.rejeitar_candidatura_motorista((select c5 from cs), 'teste') $$,
+  'P0001', 'Candidatura não encontrada ou não está pendente', 'admin de outra org não rejeita');
 
 -- Utilizador da A sem motoristas_gestao nem admin.
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000e2d0203","role":"authenticated"}', true);
 select throws_ok(
   $$ select public.aprovar_candidatura_motorista((select c5 from cs)) $$,
   'P0001', 'Sem permissão para aprovar candidaturas', 'utilizador sem permissão não aprova');
+select throws_ok(
+  $$ select public.rejeitar_candidatura_motorista((select c5 from cs), 'teste') $$,
+  'P0001', 'Sem permissão para rejeitar candidaturas', 'utilizador sem permissão não rejeita');
+
+-- Utilizador da A que vê motoristas_gestao mas não edita.
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000e2d0206","role":"authenticated"}', true);
+select throws_ok(
+  $$ select public.aprovar_candidatura_motorista((select c5 from cs)) $$,
+  'P0001', 'Sem permissão para aprovar candidaturas', 'só ver motoristas_gestao não chega para aprovar');
+select throws_ok(
+  $$ select public.rejeitar_candidatura_motorista((select c5 from cs), 'teste') $$,
+  'P0001', 'Sem permissão para rejeitar candidaturas', 'só ver motoristas_gestao não chega para rejeitar');
 
 -- Volta a postgres e sem sessão: com os claims ainda definidos, auth.uid() continuava
 -- a ser o 203 e a validação de automation_rules exigia-lhe permissões na fixture.
@@ -215,6 +246,9 @@ select ok(exists (select 1 from public.motoristas_ativos
   'a ficha criada fica na org da candidatura');
 select is((select user_id from public.motoristas_ativos where id = '00000000-0000-0000-0000-00000e2d0c01'),
   '00000000-0000-0000-0000-00000e2d0205'::uuid, 'a ficha associada mantém a conta');
+select ok((select iban = 'PT42003300000045678901234' and email = 'comconta@tvdecand.pt' and telefone = '+351912345678'
+             from public.motoristas_ativos where id = '00000000-0000-0000-0000-00000e2d0c01'),
+  'a candidatura do site não troca o IBAN nem o email da ficha; só preenche o telefone vazio');
 select is((select status from public.motorista_candidaturas where id = (select c5 from cs)), 'submetido',
   'depois das recusas a candidatura continua submetido');
 

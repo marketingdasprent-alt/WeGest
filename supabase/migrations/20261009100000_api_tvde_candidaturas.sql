@@ -140,6 +140,10 @@ begin
     select c.id into v_id from public.motorista_candidaturas c
      where c.org_id = p_org_id and c.api_chave_id = p_api_chave_id
        and c.referencia_externa = v_ref;
+    -- Se a violação veio de outro índice, não há candidatura a devolver: o erro segue.
+    if v_id is null then
+      raise;
+    end if;
     return public.api_tvde_candidatura_resumo(p_org_id, v_id) || '{"repetida": true}'::jsonb;
   end;
 
@@ -151,10 +155,16 @@ end $$;
 --   * a candidatura tem de ser da org activa de quem aprova; antes qualquer
 --     autenticado aprovava a de qualquer org, e a ficha nova caía na org de
 --     quem aprovava;
---   * a mesma verificação de permissão de rejeitar_candidatura_motorista;
+--   * só quem pode editar em motoristas_gestao aprova (a mesma regra de
+--     rejeitar_candidatura_motorista, redefinida abaixo);
+--   * a candidatura fica trancada (FOR UPDATE): um duplo clique ou dois
+--     gestores em paralelo não criam duas fichas;
 --   * aceita 'em_analise', que o ecrã já oferece;
 --   * uma candidatura do site (user_id nulo) não entra em conflito com a conta
 --     da ficha que encontra pelo NIF: associa-se e a conta fica;
+--   * uma candidatura do site só preenche os campos vazios da ficha existente:
+--     não tem conta nem prova de identidade, e o NIF não é segredo, por isso
+--     não pode trocar o IBAN nem os contactos de um motorista que já existe;
 --   * a ficha nova leva o org_id da candidatura.
 CREATE OR REPLACE FUNCTION public.aprovar_candidatura_motorista(p_candidatura_id uuid)
  RETURNS jsonb
@@ -171,14 +181,15 @@ DECLARE
 BEGIN
     SELECT * INTO v_candidatura
     FROM motorista_candidaturas
-    WHERE id = p_candidatura_id;
+    WHERE id = p_candidatura_id
+    FOR UPDATE;
 
     IF NOT FOUND OR v_candidatura.org_id IS DISTINCT FROM public.get_current_org_id() THEN
         RAISE EXCEPTION 'Candidatura não encontrada';
     END IF;
 
-    -- A mesma regra de rejeitar_candidatura_motorista: só quem gere motoristas aprova.
-    IF NOT (is_current_user_admin() OR has_permission(auth.uid(), 'motoristas_gestao')) THEN
+    -- A mesma regra de rejeitar_candidatura_motorista: só quem pode editar motoristas aprova.
+    IF NOT (is_current_user_admin() OR has_permission(auth.uid(), 'motoristas_gestao', 'editar')) THEN
         RAISE EXCEPTION 'Sem permissão para aprovar candidaturas';
     END IF;
 
@@ -216,6 +227,42 @@ BEGIN
               v_existente.nif, v_existente.nome;
         END IF;
 
+        IF v_candidatura.origem = 'site' THEN
+        -- Do site: a ficha manda e a candidatura só preenche o que está vazio
+        -- (COALESCE ao contrário). Sem conta nem identidade verificada, um
+        -- pedido com o NIF de outra pessoa não pode trocar-lhe o IBAN, o email
+        -- ou o telefone. Mudanças a sério fazem-se na ficha, à mão.
+        UPDATE motoristas_ativos SET
+            email       = COALESCE(email, v_candidatura.email),
+            telefone    = COALESCE(telefone, v_candidatura.telefone),
+            morada      = COALESCE(morada, v_candidatura.morada),
+            cidade      = COALESCE(cidade, v_candidatura.cidade),
+            codigo_postal = COALESCE(codigo_postal, v_candidatura.codigo_postal),
+            documento_tipo     = COALESCE(documento_tipo, v_candidatura.documento_tipo),
+            documento_numero   = COALESCE(documento_numero, v_candidatura.documento_numero),
+            documento_validade = COALESCE(documento_validade, v_candidatura.documento_validade),
+            carta_conducao   = COALESCE(carta_conducao, v_candidatura.carta_conducao),
+            carta_categorias = COALESCE(carta_categorias, v_candidatura.carta_categorias),
+            carta_validade   = COALESCE(carta_validade, v_candidatura.carta_validade),
+            licenca_tvde_numero   = COALESCE(licenca_tvde_numero, v_candidatura.licenca_tvde_numero),
+            licenca_tvde_validade = COALESCE(licenca_tvde_validade, v_candidatura.licenca_tvde_validade),
+            documento_ficheiro_url = COALESCE(documento_ficheiro_url, v_candidatura.documento_ficheiro_url),
+            documento_identificacao_verso_url =
+              COALESCE(documento_identificacao_verso_url, v_candidatura.documento_identificacao_verso_url),
+            carta_ficheiro_url       = COALESCE(carta_ficheiro_url, v_candidatura.carta_ficheiro_url),
+            carta_conducao_verso_url = COALESCE(carta_conducao_verso_url, v_candidatura.carta_conducao_verso_url),
+            licenca_tvde_ficheiro_url = COALESCE(licenca_tvde_ficheiro_url, v_candidatura.licenca_tvde_ficheiro_url),
+            registo_criminal_url      = COALESCE(registo_criminal_url, v_candidatura.registo_criminal_url),
+            comprovativo_morada_url   = COALESCE(comprovativo_morada_url, v_candidatura.comprovativo_morada_url),
+            iban                  = COALESCE(iban, v_candidatura.iban),
+            comprovativo_iban_url = COALESCE(comprovativo_iban_url, v_candidatura.comprovativo_iban_url),
+            observacoes = COALESCE(observacoes, v_candidatura.observacoes),
+            status_ativo = true,
+            desativado_em = NULL,
+            data_contratacao = COALESCE(data_contratacao, CURRENT_DATE),
+            updated_at = NOW()
+        WHERE id = v_existente.id;
+        ELSE
         UPDATE motoristas_ativos SET
             nome        = COALESCE(v_candidatura.nome, nome),
             email       = COALESCE(v_candidatura.email, email),
@@ -253,6 +300,7 @@ BEGIN
             user_id = COALESCE(v_candidatura.user_id, user_id),
             updated_at = NOW()
         WHERE id = v_existente.id;
+        END IF;
 
         v_motorista_id := v_existente.id;
         v_accao := 'associado';
@@ -301,11 +349,50 @@ END;
 $function$;
 
 COMMENT ON FUNCTION public.aprovar_candidatura_motorista(uuid) IS
-  'Aprova uma candidatura da org activa (admin ou motoristas_gestao; submetido ou em_analise). Procura ficha existente pelo NIF (normalizado, na mesma org) e associa-lhe a conta em vez de criar ficha nova; so cria quando nao existe, na org da candidatura. Devolve {motorista_id, accao: associado|criado}. Recusa quando a ficha encontrada ja tem outra conta e a candidatura tambem tem conta.';
+  'Aprova uma candidatura da org activa (admin ou motoristas_gestao com editar; submetido ou em_analise). Procura ficha existente pelo NIF (normalizado, na mesma org) e associa-lhe a conta em vez de criar ficha nova; so cria quando nao existe, na org da candidatura. Uma candidatura do site so preenche campos vazios da ficha existente. Devolve {motorista_id, accao: associado|criado}. Recusa quando a ficha encontrada ja tem outra conta e a candidatura tambem tem conta.';
 
 -- Grants iguais aos de 20260921140000: é o browser que aprova.
 revoke all on function public.aprovar_candidatura_motorista(uuid) from public, anon;
 grant execute on function public.aprovar_candidatura_motorista(uuid) to authenticated;
+
+-- ── 3b. Rejeitar ────────────────────────────────────────────────────────────
+-- A do baseline fazia UPDATE só por id: um gestor da org B rejeitava uma
+-- candidatura da A se soubesse o id, e uma do site rejeitada acaba anonimizada.
+-- Passa a exigir a org activa e a mesma permissão de aprovar. Mesma assinatura,
+-- mesmas mensagens.
+CREATE OR REPLACE FUNCTION public.rejeitar_candidatura_motorista(p_candidatura_id uuid, p_motivo text DEFAULT NULL::text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  -- Verificar se é admin ou tem permissão de editar
+  IF NOT (is_current_user_admin() OR has_permission(auth.uid(), 'motoristas_gestao', 'editar')) THEN
+    RAISE EXCEPTION 'Sem permissão para rejeitar candidaturas';
+  END IF;
+
+  -- Atualizar status da candidatura (só da org activa)
+  UPDATE motorista_candidaturas
+  SET
+    status = 'rejeitado',
+    data_decisao = now(),
+    decidido_por = auth.uid(),
+    motivo_rejeicao = p_motivo
+  WHERE id = p_candidatura_id
+    AND org_id = public.get_current_org_id()
+    AND status IN ('submetido', 'em_analise');
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Candidatura não encontrada ou não está pendente';
+  END IF;
+
+  RETURN true;
+END;
+$function$;
+
+revoke all on function public.rejeitar_candidatura_motorista(uuid, text) from public, anon;
+grant execute on function public.rejeitar_candidatura_motorista(uuid, text) to authenticated;
 
 -- ── 4. Anonimização (RGPD) ──────────────────────────────────────────────────
 -- Candidaturas do site rejeitadas há mais de 6 meses perdem os dados pessoais.
@@ -324,7 +411,10 @@ begin
       documento_tipo = null, documento_numero = null, documento_validade = null,
       carta_conducao = null, carta_categorias = null, carta_validade = null,
       licenca_tvde_numero = null, licenca_tvde_validade = null, iban = null,
-      observacoes = null, motivo_rejeicao = null, anonimizada_em = now()
+      observacoes = null, motivo_rejeicao = null, referencia_externa = null,
+      anonimizada_em = now()
+      -- Os *_url e outros_documentos ficam: limpá-los em SQL deixava o ficheiro
+      -- órfão no storage. Fica para uma edge que apague os objectos (backlog).
      where c.origem = 'site' and c.status = 'rejeitado' and c.anonimizada_em is null
        and coalesce(c.data_decisao, c.updated_at) < now() - interval '6 months'
     returning c.id)
