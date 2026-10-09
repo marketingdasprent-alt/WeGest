@@ -131,6 +131,7 @@ describe('Worker api.wegest.pt', () => {
       '/v1/modelos%2f..',
       '/v1/%2e%2e/auth',
       '/v1/modelos/abc/extra',
+      '/v1/tvde/modelos/abc/extra',
       `/v1/${'a'.repeat(65)}`,
       '/v1//modelos',
     ]) {
@@ -147,6 +148,9 @@ describe('Worker api.wegest.pt', () => {
       '/v1/openapi.json',
       '/v1/reservas/abc_1-2',
       '/v1/reservas/abc/',
+      '/v1/tvde/modelos',
+      '/v1/tvde/modelos/ca9ad30a-2da7-45c1-bdfc-5482c4fc3a0c',
+      '/v1/tvde/candidaturas/c1d3fd38-5c15-4a7a-a80e-c1f05d6384ae',
     ]) {
       const f = fetchQueResponde(new Response('{}'));
       await tratar(new Request(`https://api.wegest.pt${caminho}`), f);

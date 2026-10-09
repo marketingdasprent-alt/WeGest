@@ -37,9 +37,9 @@ const PASSAM = new Set([
   'access-control-request-headers',
 ]);
 
-// /v1 e no máximo dois segmentos (recurso e id), só com caracteres seguros:
-// nenhum % (ex.: ..%2f) chega à origem.
-const V1 = /^\/v1(?:\/[A-Za-z0-9._-]{1,64}){0,2}\/?$/;
+// /v1, o prefixo opcional tvde (como no router da edge) e no máximo dois segmentos
+// (recurso e id), só com caracteres seguros: nenhum % (ex.: ..%2f) chega à origem.
+const V1 = /^\/v1(?:\/tvde)?(?:\/[A-Za-z0-9._-]{1,64}){0,2}\/?$/;
 
 export const CORPO_MAXIMO = 65536;
 
