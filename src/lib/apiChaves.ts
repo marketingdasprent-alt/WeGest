@@ -10,6 +10,8 @@ export const PERMISSOES_POR_ESCOPO: Record<EscopoApi, readonly string[]> = {
     'reservas:read',
     'reservas:write',
     'tvde:catalogo:read',
+    'tvde:candidaturas:read',
+    'tvde:candidaturas:write',
   ],
   contabilidade: [
     'clientes:read',
@@ -30,6 +32,8 @@ const ROTULOS: Record<string, string> = {
   'reservas:read': 'Consultar reservas do site',
   'reservas:write': 'Criar e cancelar reservas',
   'tvde:catalogo:read': 'TVDE: catálogo e disponibilidade',
+  'tvde:candidaturas:read': 'TVDE: consultar candidaturas',
+  'tvde:candidaturas:write': 'TVDE: enviar candidaturas',
 };
 
 export const ROTULO_ESCOPO: Record<EscopoApi, string> = {

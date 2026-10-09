@@ -1,8 +1,10 @@
 // Tratamento de um pedido da API externa: router, openapi público, limite anónimo por
-// IP, chave, limite por chave, TVDE/catálogo/disponibilidade/reservas/health e auditoria.
+// IP, chave, limite por chave, candidaturas/TVDE/catálogo/disponibilidade/reservas/health
+// e auditoria.
 // Vive aqui, e não na edge function, para ser testável (o CI só corre testes Deno em _shared).
 import { consumeRateLimit, trustedRequestIp } from '../rate-limit/rateLimit.ts';
 import { autenticar, type ChaveRecusada, type DbRpc } from './auth.ts';
+import { servirCandidaturas } from './candidaturas.ts';
 import { servirCatalogo } from './catalogo.ts';
 import { servirDisponibilidade } from './disponibilidade.ts';
 import type { ArmazemFotos } from './fotos.ts';
@@ -149,6 +151,7 @@ async function tratar(req: Request, db: DbApi): Promise<Resultado> {
       // Mensagem fixa: não ecoar o que o cliente pediu. O TVDE vem primeiro para que
       // tvde/modelos nunca chegue ao catálogo de rent-a-car.
       resposta =
+        (await servirCandidaturas(rota, req, ctx, db)) ??
         (await servirTvde(rota, url, ctx, db)) ??
         (await servirCatalogo(rota, url, ctx, db)) ??
         (await servirDisponibilidade(rota, url, req, ctx, db)) ??
