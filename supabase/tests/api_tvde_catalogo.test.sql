@@ -93,7 +93,7 @@ select is(public.api_tarifa_site_tvde('00000000-0000-0000-0000-00000e1d0a00'), '
 -- 3) regressão do rent-a-car
 select is(public.api_modelos('00000000-0000-0000-0000-00000e1d0a00'), (select r from antes),
   'api_modelos de rent-a-car não muda com a tarifa TVDE do site');
-select is((select x->'preco_dia'->>'sem_iva' from jsonb_array_elements(public.api_modelos('00000000-0000-0000-0000-00000e1d0a00')) x
+select is((select x->'preco_dia'->>'com_iva' from jsonb_array_elements(public.api_modelos('00000000-0000-0000-0000-00000e1d0a00')) x
             where x->>'id' = '00000000-0000-0000-0000-00000e1d0d01'), '40.00',
   'o preço/dia do Corolla vem da tarifa renting, não da tvde');
 
