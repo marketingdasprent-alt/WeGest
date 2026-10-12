@@ -70,7 +70,10 @@ export function atributosDe(esquema: Esquema, profundidade = 0): Atributo[] {
       nulavel,
       obrigatorio: obrigatorios.has(nome),
       descricao: (bruto.description ?? p.description) as string | undefined,
-      valores: Array.isArray(p.enum) ? (p.enum as string[]) : undefined,
+      // O null do enum já aparece como nulável; na lista só os valores reais.
+      valores: Array.isArray(p.enum)
+        ? (p.enum as unknown[]).filter((v): v is string => v !== null)
+        : undefined,
       filhos,
     };
   });
