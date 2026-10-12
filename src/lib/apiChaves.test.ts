@@ -28,8 +28,11 @@ describe('validarPermissoes', () => {
       'reservas:read',
       'reservas:write',
       'tvde:catalogo:read',
+      'tvde:candidaturas:read',
+      'tvde:candidaturas:write',
     ]);
     expect(validarPermissoes('rent_a_car', ['tvde:catalogo:read'])).toBeNull();
+    expect(validarPermissoes('rent_a_car', ['tvde:candidaturas:write'])).toBeNull();
     expect(validarPermissoes('rent_a_car', ['tvde:xpto'])).toBe(
       'Permissão desconhecida: tvde:xpto.'
     );
@@ -40,6 +43,8 @@ describe('rotuloPermissao', () => {
   it('traduz para PT', () => {
     expect(rotuloPermissao('reservas:write')).toBe('Criar e cancelar reservas');
     expect(rotuloPermissao('tvde:catalogo:read')).toBe('TVDE: catálogo e disponibilidade');
+    expect(rotuloPermissao('tvde:candidaturas:read')).toBe('TVDE: consultar candidaturas');
+    expect(rotuloPermissao('tvde:candidaturas:write')).toBe('TVDE: enviar candidaturas');
     expect(ROTULO_ESCOPO.rent_a_car).toBe('Site (rent-a-car e TVDE)');
     expect(rotuloPermissao('x:y')).toBe('x:y');
   });

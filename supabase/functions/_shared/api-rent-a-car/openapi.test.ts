@@ -1,4 +1,5 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { ROTAS_CANDIDATURAS } from './candidaturas.ts';
 import { ROTAS_CATALOGO } from './catalogo.ts';
 import { ROTAS_DISPONIBILIDADE } from './disponibilidade.ts';
 import { OPENAPI, caminhosDocumentados } from './openapi.ts';
@@ -27,6 +28,9 @@ Deno.test(
     for (const r of ROTAS_TVDE) {
       esperados.add(`GET /${r.recurso}`);
       if (r.comId) esperados.add(`GET /${r.recurso}/{id}`);
+    }
+    for (const r of ROTAS_CANDIDATURAS) {
+      esperados.add(`${r.metodo} /tvde/candidaturas${r.comId ? '/{id}' : ''}`);
     }
     assertEquals([...doc].sort(), [...esperados].sort());
   }
@@ -187,5 +191,39 @@ Deno.test(
     }
     assertEquals('foto_path' in comp.schemas.Modelo.properties, false);
     assertEquals(comp.schemas.Categoria.example.imagem_url, null);
+  }
+);
+
+Deno.test(
+  'candidaturas TVDE: permissão do router, 201/200/409/429 no POST, GET só com o estado',
+  () => {
+    // deno-lint-ignore no-explicit-any
+    const paths = OPENAPI.paths as Record<string, Record<string, any>>;
+    // deno-lint-ignore no-explicit-any
+    const comp = OPENAPI.components as Record<string, any>;
+    for (const r of ROTAS_CANDIDATURAS) {
+      const op = paths[`/tvde/candidaturas${r.comId ? '/{id}' : ''}`][r.metodo.toLowerCase()];
+      assertEquals(op['x-permissao'], r.permissao);
+      assertEquals(op.tags, ['TVDE']);
+    }
+    const post = paths['/tvde/candidaturas'].post;
+    for (const codigo of ['201', '200', '400', '404', '409', '413', '429', '500', '503']) {
+      assert(post.responses[codigo], `POST sem ${codigo}`);
+    }
+    assertEquals(
+      post.responses['409'].content['application/json'].example.erro.codigo,
+      'CANDIDATURA_EXISTENTE'
+    );
+    for (const aviso of [/CAPTCHA/, /50 candidaturas por dia/, /logs/, /documentos/]) {
+      assert(aviso.test(post.description), `descrição do POST sem ${aviso}`);
+    }
+    // O GET não devolve dados pessoais: só id, estado e datas.
+    assertEquals(Object.keys(comp.schemas.CandidaturaTvde.properties), [
+      'id',
+      'estado',
+      'criada_em',
+      'decidida_em',
+    ]);
+    assertEquals(comp.schemas.CandidaturaTvdeNova.properties.licenca_tvde.type, ['object', 'null']);
   }
 );

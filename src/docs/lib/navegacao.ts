@@ -118,11 +118,15 @@ export const RECURSOS: Recurso[] = [
       { id: 'GET /tvde/modelos', ancora: 'listar' },
       { id: 'GET /tvde/modelos/{id}', ancora: 'obter' },
       { id: 'GET /tvde/disponibilidade', ancora: 'disponibilidade' },
+      { id: 'POST /tvde/candidaturas', ancora: 'candidatar' },
+      { id: 'GET /tvde/candidaturas/{id}', ancora: 'candidatura' },
     ],
     introducao:
-      'Carros para aluguer semanal a motoristas TVDE. As candidaturas chegam na fase seguinte. ' +
-      'O aluguer TVDE não tem fim: um carro só está disponível se estiver livre a partir do ' +
-      'início, sem nada marcado depois. Precisa da permissão tvde:catalogo:read.',
+      'Carros para aluguer semanal a motoristas TVDE e as candidaturas desses motoristas. O ' +
+      'aluguer TVDE não tem fim: um carro só está disponível se estiver livre a partir do ' +
+      'início, sem nada marcado depois. O catálogo precisa da permissão tvde:catalogo:read; ' +
+      'enviar candidaturas precisa de tvde:candidaturas:write e consultá-las de ' +
+      'tvde:candidaturas:read. O formulário de candidatura do site tem de ter CAPTCHA.',
   },
   {
     slug: 'recursos/health',

@@ -1,6 +1,6 @@
 // Especificação OpenAPI 3.1 da API externa de rent-a-car (Fase A: catálogo;
 // Fase B: disponibilidade e cotação; Fase C: reservas, em openapi.reservas.ts;
-// Fase D1: catálogo e disponibilidade TVDE, em openapi.tvde.ts).
+// Fase D1: catálogo e disponibilidade TVDE; fase D2: candidaturas TVDE; em openapi.tvde.ts).
 // Fonte única: o endpoint /v1/openapi.json e o site docs.wegest.pt saem daqui.
 // Os esquemas seguem exactamente as chaves devolvidas pelas funções SQL api_*.
 // Em 3.1 não existe `nullable`: um campo opcional é `type: [X, 'null']`.
@@ -371,7 +371,7 @@ export const OPENAPI: Record<string, unknown> = {
     version: '1.0.0',
     description:
       'Catálogo, disponibilidade, cotação e reservas de rent-a-car da organização, e o ' +
-      'catálogo de aluguer semanal TVDE (/tvde). ' +
+      'catálogo de aluguer semanal TVDE e as candidaturas de motoristas (/tvde). ' +
       'Chave no cabeçalho X-API-Key, só a partir do backend do site. Datas ISO 8601 com fuso. ' +
       'Dinheiro em euros com 2 casas, sempre sem e com IVA. ' +
       'Erros sempre no envelope { "erro": { "codigo", "mensagem" } }. ' +
@@ -662,7 +662,9 @@ export const OPENAPI: Record<string, unknown> = {
     ...caminhosReservas({ json, respostaErro, erros: ERROS_DISPONIBILIDADE }),
     ...caminhosTvde({
       json,
+      respostaErro,
       errosCatalogo: ERROS_CATALOGO,
+      errosPedido: ERROS_DISPONIBILIDADE,
       errosPeriodo: {
         '409': respostaErro(
           'Ainda não há preços TVDE para esta data (TARIFA_INDISPONIVEL)',

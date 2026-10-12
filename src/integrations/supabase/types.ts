@@ -7199,6 +7199,8 @@ export type Database = {
       }
       motorista_candidaturas: {
         Row: {
+          anonimizada_em: string | null
+          api_chave_id: string | null
           carta_categorias: string[] | null
           carta_conducao: string | null
           carta_conducao_verso_url: string | null
@@ -7208,8 +7210,11 @@ export type Database = {
           codigo_postal: string | null
           comprovativo_iban_url: string | null
           comprovativo_morada_url: string | null
+          consentimento_em: string | null
+          consentimento_versao: string | null
           created_at: string | null
           data_decisao: string | null
+          data_inicio_pretendida: string | null
           data_submissao: string | null
           decidido_por: string | null
           documento_ficheiro_url: string | null
@@ -7217,26 +7222,32 @@ export type Database = {
           documento_numero: string | null
           documento_tipo: string | null
           documento_validade: string | null
+          em_formacao_tvde: boolean
           email: string
           iban: string | null
           id: string
           licenca_tvde_ficheiro_url: string | null
           licenca_tvde_numero: string | null
           licenca_tvde_validade: string | null
+          modelo_pretendido_id: string | null
           morada: string | null
           motivo_rejeicao: string | null
           nif: string | null
           nome: string
           observacoes: string | null
           org_id: string | null
+          origem: string
           outros_documentos: Json | null
+          referencia_externa: string | null
           registo_criminal_url: string | null
           status: string | null
           telefone: string | null
           updated_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
+          anonimizada_em?: string | null
+          api_chave_id?: string | null
           carta_categorias?: string[] | null
           carta_conducao?: string | null
           carta_conducao_verso_url?: string | null
@@ -7246,8 +7257,11 @@ export type Database = {
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
           comprovativo_morada_url?: string | null
+          consentimento_em?: string | null
+          consentimento_versao?: string | null
           created_at?: string | null
           data_decisao?: string | null
+          data_inicio_pretendida?: string | null
           data_submissao?: string | null
           decidido_por?: string | null
           documento_ficheiro_url?: string | null
@@ -7255,26 +7269,32 @@ export type Database = {
           documento_numero?: string | null
           documento_tipo?: string | null
           documento_validade?: string | null
+          em_formacao_tvde?: boolean
           email: string
           iban?: string | null
           id?: string
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null
           licenca_tvde_validade?: string | null
+          modelo_pretendido_id?: string | null
           morada?: string | null
           motivo_rejeicao?: string | null
           nif?: string | null
           nome: string
           observacoes?: string | null
           org_id?: string | null
+          origem?: string
           outros_documentos?: Json | null
+          referencia_externa?: string | null
           registo_criminal_url?: string | null
           status?: string | null
           telefone?: string | null
           updated_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
+          anonimizada_em?: string | null
+          api_chave_id?: string | null
           carta_categorias?: string[] | null
           carta_conducao?: string | null
           carta_conducao_verso_url?: string | null
@@ -7284,8 +7304,11 @@ export type Database = {
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
           comprovativo_morada_url?: string | null
+          consentimento_em?: string | null
+          consentimento_versao?: string | null
           created_at?: string | null
           data_decisao?: string | null
+          data_inicio_pretendida?: string | null
           data_submissao?: string | null
           decidido_por?: string | null
           documento_ficheiro_url?: string | null
@@ -7293,26 +7316,44 @@ export type Database = {
           documento_numero?: string | null
           documento_tipo?: string | null
           documento_validade?: string | null
+          em_formacao_tvde?: boolean
           email?: string
           iban?: string | null
           id?: string
           licenca_tvde_ficheiro_url?: string | null
           licenca_tvde_numero?: string | null
           licenca_tvde_validade?: string | null
+          modelo_pretendido_id?: string | null
           morada?: string | null
           motivo_rejeicao?: string | null
           nif?: string | null
           nome?: string
           observacoes?: string | null
           org_id?: string | null
+          origem?: string
           outros_documentos?: Json | null
+          referencia_externa?: string | null
           registo_criminal_url?: string | null
           status?: string | null
           telefone?: string | null
           updated_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "motorista_candidaturas_api_chave_id_fkey"
+            columns: ["api_chave_id"]
+            isOneToOne: false
+            referencedRelation: "api_chaves"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_candidaturas_modelo_pretendido_id_fkey"
+            columns: ["modelo_pretendido_id"]
+            isOneToOne: false
+            referencedRelation: "viatura_modelos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "motorista_candidaturas_org_id_fkey"
             columns: ["org_id"]
@@ -10975,6 +11016,75 @@ export type Database = {
           station_name?: string | null
           transaction_date?: string | null
           transaction_id?: string | null
+          updated_at?: string | null
+          viatura_id?: string | null
+        }
+        Relationships: []
+      }
+      repsol_duplicados_removidos_20261006: {
+        Row: {
+          amount: number | null
+          card_number: string | null
+          cliente_id: string | null
+          created_at: string | null
+          devedor_cliente_id: string | null
+          fuel_type: string | null
+          id: string
+          integracao_id: string | null
+          mantido_id: string | null
+          motorista_id: string | null
+          org_id: string | null
+          quantity: number | null
+          raw_data: Json | null
+          removido_em: string
+          station_location: string | null
+          station_name: string | null
+          transaction_date: string
+          transaction_id: string
+          updated_at: string | null
+          viatura_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          card_number?: string | null
+          cliente_id?: string | null
+          created_at?: string | null
+          devedor_cliente_id?: string | null
+          fuel_type?: string | null
+          id?: string
+          integracao_id?: string | null
+          mantido_id?: string | null
+          motorista_id?: string | null
+          org_id?: string | null
+          quantity?: number | null
+          raw_data?: Json | null
+          removido_em?: string
+          station_location?: string | null
+          station_name?: string | null
+          transaction_date: string
+          transaction_id: string
+          updated_at?: string | null
+          viatura_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          card_number?: string | null
+          cliente_id?: string | null
+          created_at?: string | null
+          devedor_cliente_id?: string | null
+          fuel_type?: string | null
+          id?: string
+          integracao_id?: string | null
+          mantido_id?: string | null
+          motorista_id?: string | null
+          org_id?: string | null
+          quantity?: number | null
+          raw_data?: Json | null
+          removido_em?: string
+          station_location?: string | null
+          station_name?: string | null
+          transaction_date?: string
+          transaction_id?: string
           updated_at?: string | null
           viatura_id?: string | null
         }
@@ -15138,6 +15248,10 @@ export type Database = {
         Returns: Json
       }
       api_extras: { Args: { p_org_id: string }; Returns: Json }
+      api_foto_modelo: {
+        Args: { p_modelo_id: string; p_org_id: string }
+        Returns: string
+      }
       api_iva_rent_a_car: { Args: { p_org_id: string }; Returns: number }
       api_iva_tvde: { Args: { p_org_id: string }; Returns: number }
       api_localizacoes: { Args: { p_org_id: string }; Returns: Json }
@@ -15199,6 +15313,15 @@ export type Database = {
       }
       api_tarifa_site: { Args: { p_org_id: string }; Returns: string }
       api_tarifa_site_tvde: { Args: { p_org_id: string }; Returns: string }
+      api_tvde_anonimizar_candidaturas: { Args: never; Returns: number }
+      api_tvde_candidatura_resumo: {
+        Args: { p_id: string; p_org_id: string }
+        Returns: Json
+      }
+      api_tvde_criar_candidatura: {
+        Args: { p_api_chave_id: string; p_org_id: string; p_pedido: Json }
+        Returns: Json
+      }
       api_tvde_disponibilidade: {
         Args: { p_inicio: string; p_org_id: string }
         Returns: Json
@@ -15230,6 +15353,10 @@ export type Database = {
           portas: number
           preco_semana: number
         }[]
+      }
+      api_tvde_obter_candidatura: {
+        Args: { p_id: string; p_org_id: string }
+        Returns: Json
       }
       api_tvde_viaturas_elegiveis: {
         Args: { p_org_id: string }
@@ -15714,6 +15841,10 @@ export type Database = {
         Returns: undefined
       }
       email_pode_gerir: { Args: never; Returns: boolean }
+      emails_externos_subscritos: {
+        Args: { p_event_type: string; p_org_id: string }
+        Returns: string[]
+      }
       emit_candidaturas_paradas_events: { Args: never; Returns: undefined }
       emit_cobrancas_em_atraso_events: { Args: never; Returns: undefined }
       emit_contrato_renting_renovacao_events: {
@@ -16442,6 +16573,15 @@ export type Database = {
       reordenar_fotos_viatura: {
         Args: { p_ids: string[]; p_viatura_id: string }
         Returns: undefined
+      }
+      repsol_chave_sem_valor: { Args: { p_id: string }; Returns: string }
+      repsol_limpar_valor_na_chave: {
+        Args: never
+        Returns: {
+          apagadas: number
+          ficaram_semana_paga: number
+          reescritas: number
+        }[]
       }
       reserva_tem_conflito: {
         Args: {

@@ -2,8 +2,10 @@
 // exemplos a partir daqui, por isso cada operação, parâmetro e resposta tem de
 // trazer o que a documentação precisa.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { ROTAS_CANDIDATURAS, validarCorpoCandidatura } from './candidaturas.ts';
 import { ROTAS_CATALOGO } from './catalogo.ts';
 import { OPENAPI, PERMISSOES_ESPECIAIS } from './openapi.ts';
+import { EX_CANDIDATURA_TVDE_NOVA } from './openapi.tvde.ts';
 import { ROTAS_TVDE } from './tvde.ts';
 
 type Op = {
@@ -33,6 +35,21 @@ Deno.test('todas as operações têm x-permissao, e a do catálogo bate com o ro
     assertEquals(paths[`/${r.recurso}`].get['x-permissao'], r.permissao, r.recurso);
     if (r.comId) assertEquals(paths[`/${r.recurso}/{id}`].get['x-permissao'], r.permissao);
   }
+  for (const r of ROTAS_CANDIDATURAS) {
+    const op = paths[`/tvde/candidaturas${r.comId ? '/{id}' : ''}`][r.metodo.toLowerCase()];
+    assertEquals(op['x-permissao'], r.permissao, `${r.metodo} candidaturas`);
+  }
+});
+
+Deno.test('o exemplo do POST /tvde/candidaturas passa a validação da edge', () => {
+  // No dia do exemplo, pouco depois de o motorista aceitar o consentimento.
+  const hoje = new Date('2026-10-09T15:00:00Z');
+  const v = validarCorpoCandidatura(EX_CANDIDATURA_TVDE_NOVA, hoje);
+  assert(v.ok, v.ok ? '' : v.mensagem);
+  const corpo = paths['/tvde/candidaturas'].post as unknown as {
+    requestBody: { content: Record<string, { example: unknown }> };
+  };
+  assertEquals(corpo.requestBody.content['application/json'].example, EX_CANDIDATURA_TVDE_NOVA);
 });
 
 Deno.test('todos os parâmetros têm description e example', () => {
