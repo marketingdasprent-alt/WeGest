@@ -160,14 +160,19 @@ Deno.test('TVDE documentado: tag, permissão, só inicio obrigatório, IVA a 6% 
   for (const campo of ['preco_semana', 'caucao', 'franquia', 'km_adicional']) {
     const p = ex[campo];
     assertEquals(p.iva, 6, campo);
-    assertEquals(Math.round(p.sem_iva * 1.06 * 100) / 100, p.com_iva, campo);
+    // A tarifa TVDE já traz IVA: o sem_iva é o com_iva decomposto, não o contrário.
+    assertEquals(Math.round((p.com_iva / 1.06) * 100) / 100, p.sem_iva, campo);
+    assert(/já inclui IVA/.test(comp.schemas.ModeloTvde.properties[campo].description), campo);
   }
+  // O exemplo mostra a tarifa de 230 € tal e qual em com_iva, nunca 243,80 €.
+  assertEquals(ex.preco_semana, { sem_iva: 216.98, com_iva: 230, iva: 6 });
   assertEquals('tipo' in comp.schemas.ModeloTvde.properties, false);
   assertEquals('preco_dia' in comp.schemas.ModeloTvde.properties, false);
-  // TVDE publica modelos sem caixa/lugares preenchidos: o contrato tem de admitir null.
-  assertEquals(comp.schemas.ModeloTvde.properties.caixa.type, ['string', 'null']);
-  assertEquals(comp.schemas.ModeloTvde.properties.lugares.type, ['integer', 'null']);
-  assertEquals(comp.schemas.Modelo.properties.caixa.type, 'string');
+  // Rent-a-car e TVDE publicam modelos sem caixa/lugares preenchidos: o contrato admite null.
+  for (const nome of ['Modelo', 'ModeloTvde']) {
+    assertEquals(comp.schemas[nome].properties.caixa.type, ['string', 'null'], nome);
+    assertEquals(comp.schemas[nome].properties.lugares.type, ['integer', 'null'], nome);
+  }
   assert((OPENAPI.tags as { name: string }[]).some((t) => t.name === 'TVDE'));
   const health = paths['/health'].get.responses['200'].content['application/json'];
   assert(health.schema.properties.tarifa_site_tvde, 'health sem tarifa_site_tvde');
