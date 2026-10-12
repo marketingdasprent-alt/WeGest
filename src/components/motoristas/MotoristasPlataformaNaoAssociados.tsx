@@ -35,6 +35,10 @@ import {
 import { cn, matchesSearch } from '@/lib/utils';
 import { generateNaoAssociadosPDF } from '@/utils/generateNaoAssociadosPDF';
 import { useThemedLogo } from '@/hooks/useThemedLogo';
+import {
+  normalizarNome as normalize,
+  sugerirMotoristaPorNome,
+} from '@/utils/sugestaoMotoristaPlataforma';
 
 type Plataforma = 'uber' | 'bolt';
 
@@ -70,15 +74,6 @@ interface Props {
 
 const fmtEur = (v: number) =>
   new Intl.NumberFormat('pt-PT', { style: 'currency', currency: 'EUR' }).format(v || 0);
-
-const normalize = (s: string) =>
-  (s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9 ]/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ');
 
 export const MotoristasPlataformaNaoAssociados: React.FC<Props> = ({
   open,
@@ -412,21 +407,10 @@ const LinhaNaoAssociado: React.FC<{
 }> = ({ item, motoristas, associando, onAssociar, onCriar }) => {
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-  // Sugestão fuzzy: motorista CRM cujo 1º+último nome coincide
-  const sugestaoId = useMemo(() => {
-    const partes = normalize(item.nome)
-      .split(' ')
-      .filter((p) => p.length > 2);
-    if (partes.length < 1) return null;
-    const match = motoristas.find((m) => {
-      const mp = normalize(m.nome)
-        .split(' ')
-        .filter((p) => p.length > 2);
-      const comuns = partes.filter((p) => mp.includes(p));
-      return comuns.length >= 2;
-    });
-    return match?.id || null;
-  }, [item.nome, motoristas]);
+  const sugestaoId = useMemo(
+    () => sugerirMotoristaPorNome(item.nome, motoristas),
+    [item.nome, motoristas]
+  );
 
   const temUber = item.fontes.some((f) => f.plataforma === 'uber');
   const temBolt = item.fontes.some((f) => f.plataforma === 'bolt');

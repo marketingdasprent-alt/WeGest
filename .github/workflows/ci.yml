@@ -333,7 +333,8 @@ jobs:
             uma_parcela_por_semana \
             combustivel_chega_ao_motorista \
             reimportar_substitui_a_semana \
-            id_de_plataforma_fica_na_ultima_ficha
+            id_de_plataforma_fica_na_ultima_ficha \
+            associar_plataforma_conta_de_outro
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
