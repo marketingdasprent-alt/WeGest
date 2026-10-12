@@ -7,6 +7,7 @@ import { pt } from 'date-fns/locale';
 import { CalendarClock, ShieldAlert, Wallet, UserPlus, FileText } from 'lucide-react';
 import type { CategoriaAlerta, CorAlerta } from '@/components/dashboard/AlertaCategoriaRow';
 import type { ContasAReceber } from '@/hooks/useContasAReceber';
+import { associacaoViaturaAtiva } from '@/utils/associacaoViatura';
 import { formatCurrency } from './atividade';
 
 export interface EntradasAlertasFrota {
@@ -123,6 +124,32 @@ export function construirAlertasFrota({
   // contrato a renovar daqui a 50 dias acima de faturas críticas.
   // `sort` é estável, por isso dentro do mesmo nível a ordem por tipo mantém-se.
   return categorias.sort((a, b) => (a.cor === b.cor ? 0 : a.cor === 'destructive' ? -1 : 1));
+}
+
+/**
+ * Extintores a expirar, só das viaturas que contam para a frota. Uma inativa
+ * (incl. slot sem motorista) ou vendida não gera alerta, igual ao cron.
+ */
+export function extintoresAPrazoOperacionais(
+  extintores: any[] | null | undefined,
+  estadoPorViatura: Map<string, string>
+) {
+  return (extintores || [])
+    .filter((v) => {
+      const estado = estadoPorViatura.get(v.id);
+      return estado !== 'inativo' && estado !== 'vendida';
+    })
+    .map((v) => {
+      const motoristaAtivo = (v.motorista_viaturas as any[])?.find((mv) =>
+        associacaoViaturaAtiva(mv)
+      );
+      return {
+        id: v.id,
+        extintor_validade: v.extintor_validade,
+        matricula: v.matricula,
+        motorista_nome: motoristaAtivo?.motoristas_ativos?.nome || 'Livre',
+      };
+    });
 }
 
 /**
