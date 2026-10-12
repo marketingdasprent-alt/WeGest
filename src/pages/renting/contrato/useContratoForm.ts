@@ -48,6 +48,7 @@ import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
 import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
+import { motivoTvdeSemPreco } from '@/utils/precoContratoTvde';
 
 import type {
   CoberturaFormItem,
@@ -946,6 +947,21 @@ export function useContratoForm(): UseContratoFormReturn {
 
   // ── onSubmit ──────────────────────────────────────────────────
   const onSubmit = (values: ContratoFormValues) => {
+    const viaturaEscolhida = viaturas.find((v) => v.id === values.viatura_id);
+    const semPreco = motivoTvdeSemPreco({
+      regime: values.regime,
+      valorTotalManual: values.valor_total_manual,
+      tarifaId: values.tarifa_id,
+      modeloId: viaturaEscolhida?.modelo_id,
+      precoSemanaModelo: precosModeloTvde.find(
+        (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaEscolhida?.modelo_id
+      )?.preco_semana,
+    });
+    if (semPreco) {
+      toast({ title: 'Contrato TVDE sem preço', description: semPreco, variant: 'destructive' });
+      return;
+    }
+
     if (values.regime !== 'slot' && values.tarifa_id) {
       const via = viaturas.find((v) => v.id === values.viatura_id);
       if (via?.modelo_id) {
