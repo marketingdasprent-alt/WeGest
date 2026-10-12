@@ -34,6 +34,12 @@ interface ResumoContratoProps {
    * `null` significa "volta ao cálculo pela tarifa".
    */
   onValorTotalManualChange?: (valor: number | null) => void;
+  /**
+   * Sem valor acordado, o aluguer que se grava (calcularBaseAluguerRenting:
+   * tarifa e modelo). Sem isto o total fazia tarifa_diaria × dias, que numa
+   * TVDE dá 0 € enquanto o quadro da tarifa mostra o preço semanal.
+   */
+  baseAluguerTarifa?: number | null;
   /** Torna o preço editável no cartão. Por omissão o cartão é só-leitura. */
   editavel?: boolean;
 }
@@ -58,6 +64,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   ivaSnapshot,
   onValorTotalManualChange,
   editavel = false,
+  baseAluguerTarifa,
 }) => {
   const calculo = useMemo(() => {
     if (isFacturado && totalSnapshot != null) {
@@ -96,7 +103,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     const baseAluguer =
       valorTotalManual != null && valorTotalManual > 0
         ? valorTotalManual
-        : (tarifaDiaria ?? 0) * dias;
+        : (baseAluguerTarifa ?? (tarifaDiaria ?? 0) * dias);
     const custoCoberturas = coberturasPrecoDia * dias;
     const custoExtras = extras.reduce((soma, e) => soma + calcExtraTotal(e, dias), 0);
     const subtotalBruto = baseAluguer + custoCoberturas + custoExtras;
@@ -140,6 +147,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     dataFim,
     tarifaDiaria,
     valorTotalManual,
+    baseAluguerTarifa,
     regime,
     descontoPercentagem,
     taxaIva,

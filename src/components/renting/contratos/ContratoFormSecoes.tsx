@@ -13,7 +13,7 @@ import {
   useRentingTarifaPrecosModelo,
   calcularFaturacaoRenting,
   descricaoFaturarAoCliente,
-  resolverValorTotalManualAoMudarTarifa,
+  valorAoMudarTarifa,
 } from '@/hooks/useRentingGruposTarifas';
 import { diferencaDias } from '@/utils/reserva-formatters';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -249,7 +249,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       novoId && modeloIdSel
         ? (precosModelo.find((p) => p.tarifa_id === novoId && p.modelo_id === modeloIdSel) ?? null)
         : null;
-    const novoValor = resolverValorTotalManualAoMudarTarifa(
+    const novoValor = valorAoMudarTarifa(
       regime,
       isLongaDuracao,
       dias,
@@ -258,7 +258,9 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       !isTvde ? (linhaNova?.preco_dia ?? null) : null,
       !isTvde ? (linhaNova?.preco_mes ?? null) : null
     );
-    if (novoValor != null) form.setValue('valor_total_manual', novoValor, { shouldDirty: true });
+    if (novoValor !== undefined) {
+      form.setValue('valor_total_manual', novoValor, { shouldDirty: true });
+    }
   };
 
   return (

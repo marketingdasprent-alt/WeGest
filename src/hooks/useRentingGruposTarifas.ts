@@ -211,3 +211,37 @@ export function resolverValorTotalManualAoMudarTarifa(
   );
   return fat?.valor ?? null;
 }
+
+/**
+ * O que fazer ao valor acordado quando se escolhe outra tarifa. `undefined`
+ * deixa-o como está (a tarifa nova não tem preço para o modelo); um número ou
+ * `null` substitui-o. `null` quando há preço mas ainda não há dias
+ * (rent-a-car sem data de fim): o valor passa a seguir a tarifa nova, em vez de
+ * ficar o da antiga enquanto o quadro da tarifa já mostra o preço novo.
+ */
+export function valorAoMudarTarifa(
+  regime: string,
+  isLongaDuracao: boolean,
+  dias: number | null,
+  tarifaNova: Pick<RentingTarifaMin, 'preco_dia' | 'preco_semana' | 'preco_mes'> | null,
+  precoModeloSemana: number | null,
+  precoModeloDia: number | null,
+  precoModeloMes: number | null
+): number | null | undefined {
+  if (regime === 'slot' || !tarifaNova) return undefined;
+  const valor = resolverValorTotalManualAoMudarTarifa(
+    regime,
+    isLongaDuracao,
+    dias,
+    tarifaNova,
+    precoModeloSemana,
+    precoModeloDia,
+    precoModeloMes
+  );
+  if (valor != null) return valor;
+  const temPreco =
+    regime === 'tvde'
+      ? precoModeloSemana != null
+      : (precoModeloDia ?? precoModeloMes ?? tarifaNova.preco_dia ?? tarifaNova.preco_mes) != null;
+  return temPreco ? null : undefined;
+}

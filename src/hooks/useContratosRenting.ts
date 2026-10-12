@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { semCodigo } from '@/types/codigoPorOrg';
+import { motivoTvdeSemPreco } from '@/utils/precoContratoTvde';
 import type { TablesUpdate } from '@/integrations/supabase/types';
 import type {
   ContratoRenting,
@@ -1040,6 +1041,37 @@ export function useCriarVersaoContrato() {
   });
 }
 
+async function motivoContratoSemPreco(contratoId: string): Promise<string | null> {
+  const { data: c, error } = await supabase
+    .from('contratos_renting')
+    .select('regime, valor_total_manual, tarifa_id, viaturas(modelo_id)')
+    .eq('id', contratoId)
+    .single();
+  if (error) throw new Error(error.message);
+  if (c.regime !== 'tvde') return null;
+
+  const modeloId = (c.viaturas as { modelo_id: string | null } | null)?.modelo_id ?? null;
+  let precoSemanaModelo: number | null = null;
+  if (c.tarifa_id && modeloId) {
+    const { data: linha, error: errPreco } = await supabase
+      .from('renting_tarifa_precos_modelo')
+      .select('preco_semana')
+      .eq('tarifa_id', c.tarifa_id)
+      .eq('modelo_id', modeloId)
+      .maybeSingle();
+    if (errPreco) throw new Error(errPreco.message);
+    precoSemanaModelo = linha?.preco_semana ?? null;
+  }
+
+  return motivoTvdeSemPreco({
+    regime: c.regime,
+    valorTotalManual: c.valor_total_manual,
+    tarifaId: c.tarifa_id,
+    modeloId,
+    precoSemanaModelo,
+  });
+}
+
 /** Renova um contrato rent-a-car de longa duração (RPC renovar_contrato_renting):
  *  fecha o mês actual e cria o mês seguinte com código novo. Devolve o id do
  *  novo contrato; feedback tratado no diálogo de confirmação. */
@@ -1052,6 +1084,11 @@ export function useRenovarContrato() {
     { contratoId: string; kmInicio?: number | null; kmFim?: number | null }
   >({
     mutationFn: async ({ contratoId, kmInicio, kmFim }): Promise<string> => {
+      // Renovar copia o contrato: um TVDE sem preço passava para a versão nova
+      // e continuava a 0 € no fecho (#504, #535, #794).
+      const semPreco = await motivoContratoSemPreco(contratoId);
+      if (semPreco) throw new Error(semPreco);
+
       // A RPC ainda não consta dos tipos gerados — cast controlado.
       const { data, error } = await (
         supabase.rpc as unknown as (

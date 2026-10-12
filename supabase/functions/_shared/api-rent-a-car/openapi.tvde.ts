@@ -5,9 +5,10 @@ import { EX_FOTO_VIATURA } from './openapi.exemplos.ts';
 type Esquema = Record<string, unknown>;
 
 // IVA do TVDE (org_definicoes.iva_tvde), 6% por omissão; não é o de rent-a-car.
-const precoTvde = (semIva: number) => ({
-  sem_iva: semIva,
-  com_iva: Math.round(semIva * 1.06 * 100) / 100,
+// A tarifa TVDE já traz IVA: o valor dela é o com_iva e o sem_iva decompõe-se.
+const precoTvde = (comIva: number) => ({
+  sem_iva: Math.round((comIva / 1.06) * 100) / 100,
+  com_iva: comIva,
   iva: 6,
 });
 
@@ -114,18 +115,23 @@ export function esquemasTvde(base: { Modelo: Esquema; Preco: Esquema }): Record<
   const ModeloTvde: Esquema = {
     type: 'object',
     description:
-      'Modelo elegível para TVDE com preço na tarifa TVDE do site. IVA do TVDE. caixa e ' +
+      'Modelo elegível para TVDE com preço na tarifa TVDE do site. Os valores da tarifa TVDE ' +
+      'já incluem o IVA do TVDE: são o com_iva, e o sem_iva é a decomposição. caixa e ' +
       'lugares vêm null enquanto não estiverem preenchidos no WeGest.',
     properties: {
       ...comuns,
-      preco_semana: preco('Preço por semana na tarifa TVDE do site.'),
-      caucao: precoOuNulo('Caução do modelo.'),
-      franquia: precoOuNulo('Franquia do modelo.'),
+      preco_semana: preco(
+        'Preço por semana na tarifa TVDE do site; o valor da tarifa já inclui IVA (com_iva).'
+      ),
+      caucao: precoOuNulo('Caução do modelo; o valor da tarifa já inclui IVA (com_iva).'),
+      franquia: precoOuNulo('Franquia do modelo; o valor da tarifa já inclui IVA (com_iva).'),
       km_incluidos: {
         type: ['integer', 'null'],
         description: 'Quilómetros incluídos por mês; null = ilimitados.',
       },
-      km_adicional: precoOuNulo('Preço por quilómetro a mais.'),
+      km_adicional: precoOuNulo(
+        'Preço por quilómetro a mais; o valor da tarifa já inclui IVA (com_iva).'
+      ),
       frota: { type: 'integer', description: 'Viaturas deste modelo que podem fazer TVDE.' },
     },
     example: EX_MODELO_TVDE,
@@ -324,7 +330,9 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
         summary: 'Modelos para aluguer semanal TVDE',
         description:
           'Modelos com viaturas que podem fazer TVDE e preço por semana na tarifa TVDE do site. ' +
-          'Dinheiro com o IVA do TVDE (6% por omissão), não o de rent-a-car.',
+          'Dinheiro com o IVA do TVDE (6% por omissão), não o de rent-a-car. Como no ' +
+          'rent-a-car, os valores da tarifa TVDE já incluem IVA: são o com_iva, e o sem_iva ' +
+          'é a decomposição.',
         tags: ['TVDE'],
         'x-permissao': LER_TVDE,
         responses: {

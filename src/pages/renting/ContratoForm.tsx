@@ -109,6 +109,7 @@ const ContratoForm = () => {
     dataFim,
     tarifaDiaria,
     valorTotalManual,
+    baseAluguerTarifa,
     descontoPercentagem,
     regime,
     isLongaDuracao,
@@ -505,6 +506,7 @@ const ContratoForm = () => {
             dataFim={dataFim}
             tarifaDiaria={tarifaDiaria}
             valorTotalManual={valorTotalManual}
+            baseAluguerTarifa={baseAluguerTarifa}
             descontoPercentagem={descontoPercentagem}
             taxaIva={taxaIva}
             regime={regime}

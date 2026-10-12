@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { associacaoViaturaAtiva } from '@/utils/associacaoViatura';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRange as DayPickerRange } from 'react-day-picker';
@@ -44,7 +43,11 @@ import {
   normalizarMatricula,
   type EventoAtividade,
 } from './atividade';
-import { construirAlertasFrota, classificarContratos } from './alertas';
+import {
+  construirAlertasFrota,
+  classificarContratos,
+  extintoresAPrazoOperacionais,
+} from './alertas';
 import { fetchViaturasFrota, fetchAlertasFrota } from '@/hooks/dashboardFrotaQueries';
 import { deriveViaturaEstado, ESTADOS_EM_USO } from '@/lib/viaturas';
 import { useContasAReceber } from '@/hooks/useContasAReceber';
@@ -167,14 +170,18 @@ export function DashboardFrota() {
       // vez — o donut usa-a completa (incl. inativas), o resto do dashboard
       // exclui as inativas (não contam para a frota operacional; incluí-las
       // no denominador da Ocupação dava percentagens sem sentido).
-      const estadosFrotaCompleta = (viaturas ?? [])
-        .filter((v) => !v.is_vendida)
-        .map((v) =>
+      const estadoPorViatura = new Map(
+        (viaturas ?? []).map((v) => [
+          v.id,
           deriveViaturaEstado(
             { status: v.status, is_slot: v.is_slot, is_vendida: v.is_vendida },
             ocupacao.get(v.id)
-          )
-        );
+          ),
+        ])
+      );
+      const estadosFrotaCompleta = (viaturas ?? [])
+        .filter((v) => !v.is_vendida)
+        .map((v) => estadoPorViatura.get(v.id)!);
 
       setFrotaDonut({
         disponiveis: estadosFrotaCompleta.filter((e) => e === 'disponivel').length,
@@ -207,19 +214,7 @@ export function DashboardFrota() {
       const { extintoresData, contratosAtivos, contratosErr, pendentes, eventosMesData } =
         await fetchAlertasFrota(extStrStr, range.from.toISOString(), range.to.toISOString());
 
-      // ── Extintores ────────────────────────────────────────────────────
-      const extintoresComMotorista = (extintoresData || []).map((v) => {
-        const motoristaAtivo = (v.motorista_viaturas as any[])?.find((mv) =>
-          associacaoViaturaAtiva(mv)
-        );
-        return {
-          id: v.id,
-          extintor_validade: v.extintor_validade,
-          matricula: v.matricula,
-          motorista_nome: motoristaAtivo?.motoristas_ativos?.nome || 'Livre',
-        };
-      });
-      setExtintoresAPrazo(extintoresComMotorista);
+      setExtintoresAPrazo(extintoresAPrazoOperacionais(extintoresData, estadoPorViatura));
 
       // ── Contratos a renovar/expirados — tabela contratos ───────────────
       // Renovação = data_inicio + duracao_meses meses; alerta 60 dias antes.

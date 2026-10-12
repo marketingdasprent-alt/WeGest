@@ -334,7 +334,8 @@ jobs:
             uma_parcela_por_semana \
             combustivel_chega_ao_motorista \
             reimportar_substitui_a_semana \
-            id_de_plataforma_fica_na_ultima_ficha
+            id_de_plataforma_fica_na_ultima_ficha \
+            associar_plataforma_conta_de_outro
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
@@ -354,6 +355,7 @@ jobs:
             tvde_parado_volta_a_cobrar \
             tvde_reaberto_a_mao_cobra \
             tvde_fechado_guarda_data_fim \
+            tvde_total_pelo_preco_do_modelo \
             varios_grupos_por_pessoa \
             slot_so_contrato_de_prestacao \
             bp_rejeitadas_fora_das_contas \

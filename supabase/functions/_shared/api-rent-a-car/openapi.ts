@@ -42,11 +42,13 @@ const uuid = (description?: string): Esquema => ({ type: 'string', format: 'uuid
 
 const Preco: Esquema = {
   type: 'object',
-  description: 'Euros com 2 casas; iva em percentagem.',
+  description:
+    'Euros com 2 casas; iva em percentagem. Os preços no WeGest já incluem IVA: com_iva é o ' +
+    'valor da tarifa e sem_iva a decomposição, com_iva / (1 + iva / 100).',
   required: ['sem_iva', 'com_iva', 'iva'],
   properties: {
-    sem_iva: { type: 'number', description: 'Valor sem IVA.' },
-    com_iva: { type: 'number', description: 'Valor com IVA.' },
+    sem_iva: { type: 'number', description: 'Valor sem IVA, decomposto de com_iva.' },
+    com_iva: { type: 'number', description: 'Valor com IVA: o preço da tarifa, tal como está.' },
     iva: { type: 'number', description: 'Taxa de IVA em percentagem.' },
   },
   example: EX_PRECO,
@@ -299,7 +301,12 @@ const Cotacao: Esquema = {
     periodo: { $ref: '#/components/schemas/Periodo' },
     modelo: { type: 'object', properties: { id: uuid(), marca: texto(), modelo: texto() } },
     linhas: { type: 'array', items: { $ref: '#/components/schemas/LinhaCotacao' } },
-    subtotal: { ...Preco, description: 'Soma das linhas.' },
+    subtotal: {
+      ...Preco,
+      description:
+        'Soma das linhas: com_iva é a soma exacta; sem_iva decompõe-se do total e pode ' +
+        'diferir 1 cêntimo da soma das linhas.',
+    },
     franquia: precoOuNulo('Franquia da cobertura escolhida ou, sem cobertura, a do modelo.'),
     caucao: precoOuNulo('Caução do modelo.'),
     km_incluidos: inteiroOuNulo('Quilómetros incluídos; null = ilimitados.'),
@@ -377,7 +384,8 @@ export const OPENAPI: Record<string, unknown> = {
       'Catálogo, disponibilidade, cotação e reservas de rent-a-car da organização, e o ' +
       'catálogo de aluguer semanal TVDE e as candidaturas de motoristas (/tvde). ' +
       'Chave no cabeçalho X-API-Key, só a partir do backend do site. Datas ISO 8601 com fuso. ' +
-      'Dinheiro em euros com 2 casas, sempre sem e com IVA. ' +
+      'Dinheiro em euros com 2 casas, sempre sem e com IVA; o preço da tarifa já inclui IVA ' +
+      '(é o com_iva) e nunca se soma IVA por cima. ' +
       'Erros sempre no envelope { "erro": { "codigo", "mensagem" } }. ' +
       'A ip_whitelist de uma chave só é fiável em chamadas directas a ' +
       'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1 (servidor "directo"); ' +

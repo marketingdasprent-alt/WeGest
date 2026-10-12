@@ -48,6 +48,7 @@ import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
 import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
+import { motivoTvdeSemPreco } from '@/utils/precoContratoTvde';
 
 import type {
   CoberturaFormItem,
@@ -164,6 +165,7 @@ export interface UseContratoFormReturn {
   dataFim: string;
   tarifaDiaria: number | null;
   valorTotalManual: number | null;
+  baseAluguerTarifa: number | null;
   descontoPercentagem: number | null;
   regime: string;
   tarifaIdWatch: string | null;
@@ -781,6 +783,44 @@ export function useContratoForm(): UseContratoFormReturn {
     if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
   };
 
+  // ── Aluguer pela tarifa ───────────────────────────────────────
+  // O que se grava quando não há valor acordado (o mesmo cálculo do submit).
+  // O cartão lateral mostra-o; antes fazia tarifa_diaria × dias.
+  const viaturaIdWatch = form.watch('viatura_id');
+  const baseAluguerTarifa = useMemo(() => {
+    const modeloId = viaturas.find((v) => v.id === viaturaIdWatch)?.modelo_id ?? null;
+    const linha =
+      tarifaIdWatch && modeloId
+        ? (precosModeloTvde.find(
+            (p) => p.tarifa_id === tarifaIdWatch && p.modelo_id === modeloId
+          ) ?? null)
+        : null;
+    const tvde = regime === 'tvde';
+    const ms =
+      dataInicio && dataFim ? new Date(dataFim).getTime() - new Date(dataInicio).getTime() : NaN;
+    const dias = Number.isFinite(ms) && ms > 0 ? Math.ceil(ms / 86400000) : null;
+    return calcularBaseAluguerRenting({
+      regime,
+      isLongaDuracao: !!isLongaDuracao,
+      dias,
+      tarifa: tarifas.find((t) => t.id === tarifaIdWatch) ?? null,
+      valorTotalManual: null,
+      precoModeloSemana: tvde ? (linha?.preco_semana ?? null) : null,
+      precoModeloDia: !tvde ? (linha?.preco_dia ?? null) : null,
+      precoModeloMes: !tvde ? (linha?.preco_mes ?? null) : null,
+    });
+  }, [
+    viaturas,
+    viaturaIdWatch,
+    tarifaIdWatch,
+    precosModeloTvde,
+    tarifas,
+    regime,
+    isLongaDuracao,
+    dataInicio,
+    dataFim,
+  ]);
+
   // ── Coberturas preço/dia ──────────────────────────────────────
   const coberturasPrecoDia = useMemo(
     () => (coberturasForm ?? []).reduce((soma, c) => soma + (c.preco_dia ?? 0), 0),
@@ -907,6 +947,21 @@ export function useContratoForm(): UseContratoFormReturn {
 
   // ── onSubmit ──────────────────────────────────────────────────
   const onSubmit = (values: ContratoFormValues) => {
+    const viaturaEscolhida = viaturas.find((v) => v.id === values.viatura_id);
+    const semPreco = motivoTvdeSemPreco({
+      regime: values.regime,
+      valorTotalManual: values.valor_total_manual,
+      tarifaId: values.tarifa_id,
+      modeloId: viaturaEscolhida?.modelo_id,
+      precoSemanaModelo: precosModeloTvde.find(
+        (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaEscolhida?.modelo_id
+      )?.preco_semana,
+    });
+    if (semPreco) {
+      toast({ title: 'Contrato TVDE sem preço', description: semPreco, variant: 'destructive' });
+      return;
+    }
+
     if (values.regime !== 'slot' && values.tarifa_id) {
       const via = viaturas.find((v) => v.id === values.viatura_id);
       if (via?.modelo_id) {
@@ -1216,6 +1271,7 @@ export function useContratoForm(): UseContratoFormReturn {
     dataFim,
     tarifaDiaria,
     valorTotalManual,
+    baseAluguerTarifa,
     descontoPercentagem,
     regime,
     tarifaIdWatch,
