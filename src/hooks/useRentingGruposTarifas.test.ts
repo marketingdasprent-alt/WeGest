@@ -4,6 +4,7 @@ import {
   calcularFaturacaoRenting,
   descricaoFaturarAoCliente,
   resolverValorTotalManualAoMudarTarifa,
+  valorAoMudarTarifa,
 } from './useRentingGruposTarifas';
 
 describe('calcularBaseAluguerRenting', () => {
@@ -377,5 +378,32 @@ describe('descricaoFaturarAoCliente', () => {
     expect(descricaoFaturarAoCliente(semanalTvde, 1400, false)).toBe(
       'Semanal · Valor acordado no contrato'
     );
+  });
+});
+
+describe('valorAoMudarTarifa', () => {
+  const tarifa = { preco_dia: 40, preco_semana: 250, preco_mes: 900 };
+
+  it('TVDE com preço do modelo: o valor passa a ser o preço semanal novo', () => {
+    expect(valorAoMudarTarifa('tvde', true, null, tarifa, 275, null, null)).toBe(275);
+  });
+
+  // O quadro da tarifa mostrava o preço/dia novo e o total ficava o da tarifa
+  // antiga, porque sem dias não havia total para escrever.
+  it('rent-a-car sem data de fim: o valor deixa de ser o da tarifa antiga', () => {
+    expect(valorAoMudarTarifa('rent_a_car', false, null, tarifa, null, 45, null)).toBeNull();
+  });
+
+  it('rent-a-car com dias: dias × preço/dia novo', () => {
+    expect(valorAoMudarTarifa('rent_a_car', false, 10, tarifa, null, 45, null)).toBe(450);
+  });
+
+  it('tarifa sem preço para o modelo: o valor acordado fica', () => {
+    expect(valorAoMudarTarifa('tvde', true, null, tarifa, null, null, null)).toBeUndefined();
+  });
+
+  it('slot e tarifa limpa: não mexe', () => {
+    expect(valorAoMudarTarifa('slot', false, 7, tarifa, 275, null, null)).toBeUndefined();
+    expect(valorAoMudarTarifa('tvde', true, null, null, 275, null, null)).toBeUndefined();
   });
 });
