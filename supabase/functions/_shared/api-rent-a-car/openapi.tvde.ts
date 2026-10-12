@@ -120,8 +120,6 @@ export function esquemasTvde(base: { Modelo: Esquema; Preco: Esquema }): Record<
       'lugares vêm null enquanto não estiverem preenchidos no WeGest.',
     properties: {
       ...comuns,
-      caixa: { type: ['string', 'null'], enum: ['manual', 'automatica', null] },
-      lugares: { type: ['integer', 'null'] },
       preco_semana: preco(
         'Preço por semana na tarifa TVDE do site; o valor da tarifa já inclui IVA (com_iva).'
       ),
