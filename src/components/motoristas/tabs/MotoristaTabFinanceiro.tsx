@@ -40,6 +40,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
   const [movimentoFaturaMap, setMovimentoFaturaMap] = useState<Map<string, string>>(new Map());
   const [recorrencias, setRecorrencias] = useState<RecorrenciaFinanceira[]>([]);
   const [saldoPendente, setSaldoPendente] = useState<number | null>(null);
+  const [idsJaNoResumo, setIdsJaNoResumo] = useState<ReadonlySet<string>>(new Set());
   const { canEdit } = useCanEditFinanceiro();
   const [sortField, setSortField] = useState<string>('data_movimento');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
@@ -61,6 +62,16 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
       });
       if (error) throw error;
       setSaldoPendente(Number(data) || 0);
+
+      // Os cartões têm de excluir o mesmo que o saldo (já no líquido da semana).
+      const { data: noResumo, error: erroNoResumo } = await (
+        supabase.rpc as unknown as (
+          fn: string,
+          args: Record<string, unknown>
+        ) => Promise<{ data: { movimento_id: string }[] | null; error: Error | null }>
+      )('movimentos_ja_no_resumo', { p_motorista_ids: [motoristaId] });
+      if (erroNoResumo) throw erroNoResumo;
+      setIdsJaNoResumo(new Set((noResumo ?? []).map((r) => r.movimento_id)));
     } catch (error) {
       console.error('Erro ao carregar saldo pendente:', error);
     }
@@ -145,7 +156,7 @@ export function MotoristaFinanceiroContent({ motoristaId }: { motoristaId: strin
     }
   };
 
-  const calcularResumo = () => calcularResumoMovimentos(movimentos);
+  const calcularResumo = () => calcularResumoMovimentos(movimentos, idsJaNoResumo);
 
   const resumo = calcularResumo();
   const legendaSaldo = legendaSaldoMotorista(saldoPendente ?? 0);

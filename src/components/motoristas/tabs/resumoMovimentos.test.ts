@@ -91,4 +91,20 @@ describe('calcularResumoMovimentos', () => {
       acumuladoDebitos: 0,
     });
   });
+
+  // Pedro Souto, semana de 05/10: o acerto de 53,57 € já está no líquido de
+  // 985,37 €. Contado outra vez, o saldo dava 1 038,94 €.
+  it('o que o líquido da semana já soma não conta outra vez', () => {
+    const resumo = calcularResumoMovimentos(
+      [
+        { id: 'liquido', tipo: 'credito', valor: 985.37, status: 'pendente' },
+        { id: 'acerto', tipo: 'credito', valor: 53.57, status: 'pendente' },
+      ],
+      new Set(['acerto'])
+    );
+
+    expect(resumo.creditos).toBe(985.37);
+    // Histórico continua a mostrar tudo.
+    expect(resumo.acumuladoCreditos).toBeCloseTo(1038.94);
+  });
 });

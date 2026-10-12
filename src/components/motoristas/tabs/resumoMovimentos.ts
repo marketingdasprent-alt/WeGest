@@ -9,6 +9,7 @@
  * dívida aparecia com 725 € a vermelho. Cancelados não entram em nenhum dos quatro.
  */
 export interface MovimentoParaResumo {
+  id?: string;
   tipo: string;
   valor: number | string;
   status: string;
@@ -25,8 +26,14 @@ export interface ResumoMovimentos {
   acumuladoDebitos: number;
 }
 
+/**
+ * `jaNoResumo`: ids que o líquido semanal gravado já soma (RPC
+ * `movimentos_ja_no_resumo`). Continuam pendentes na lista, mas contá-los
+ * aqui era contá-los duas vezes, como fazia o saldo até 2026-10-12.
+ */
 export function calcularResumoMovimentos(
-  movimentos: readonly MovimentoParaResumo[]
+  movimentos: readonly MovimentoParaResumo[],
+  jaNoResumo: ReadonlySet<string> = new Set()
 ): ResumoMovimentos {
   const resumo: ResumoMovimentos = {
     creditos: 0,
@@ -43,7 +50,8 @@ export function calcularResumoMovimentos(
     const valor = Number(movimento.valor);
     if (!Number.isFinite(valor)) continue;
 
-    const pendente = movimento.status === 'pendente';
+    const pendente =
+      movimento.status === 'pendente' && !(movimento.id && jaNoResumo.has(movimento.id));
 
     if (movimento.tipo === 'credito') {
       resumo.acumuladoCreditos += valor;
