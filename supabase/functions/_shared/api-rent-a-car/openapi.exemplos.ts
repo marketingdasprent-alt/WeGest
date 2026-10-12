@@ -1,11 +1,11 @@
 // Exemplos da especificação OpenAPI (e, por ela, do site docs.wegest.pt).
 // Dados plausíveis de uma organização de rent-a-car em Leiria, nunca dados reais
 // de clientes. Ids inventados; dinheiro sempre { sem_iva, com_iva, iva } com
-// IVA a 23% e 2 casas.
+// IVA a 23% e 2 casas. Os preços do WeGest já trazem IVA: o valor é o com_iva.
 
-const preco = (semIva: number) => ({
-  sem_iva: semIva,
-  com_iva: Math.round(semIva * 1.23 * 100) / 100,
+const preco = (comIva: number) => ({
+  sem_iva: Math.round((comIva / 1.23) * 100) / 100,
+  com_iva: comIva,
   iva: 23,
 });
 
@@ -154,7 +154,8 @@ export const EX_LINHA_COTACAO = {
   total: preco(105),
 };
 
-// Aluguer 105 + cobertura 3 × 12 = 36 + cadeira 2 × 5 × 3 dias = 30 + limpeza 20 = 191,00.
+// Aluguer 105 + cobertura 3 × 12 = 36 + cadeira 2 × 5 × 3 dias = 30 + limpeza 20 = 191,00 com IVA.
+// O sem_iva do subtotal decompõe-se do total (155,28), não da soma das linhas (155,29).
 export const EX_COTACAO = {
   periodo: EX_PERIODO,
   modelo: { id: EX_MODELO.id, marca: EX_MODELO.marca, modelo: EX_MODELO.modelo },
