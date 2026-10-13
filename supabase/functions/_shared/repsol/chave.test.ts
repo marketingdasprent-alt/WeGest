@@ -1,5 +1,5 @@
 import { assertEquals, assertNotEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
-import { temHora, transactionKey } from './chave.ts';
+import { abastecimentoJaGravado, temHora, transactionKey } from './chave.ts';
 
 // Dois conjuntos, de dois casos reais distintos, sobre a mesma `chave.ts`:
 // o duplicado de Beja (04/09, exports de 45 e de 8 colunas) e o do Parchal
@@ -156,4 +156,40 @@ Deno.test('valor e litros ausentes não rebentam a chave', () => {
     transactionKey({ ...COMPRA, amount: null, qty: null }),
     'repsol-9724998589692509-20260906150200-'
   );
+});
+
+// ── Já gravada: a mesma compra que entrou com outra chave ──────────────────
+// Setembro de 2026: 398 compras a dobrar. O ficheiro semanal gravou-as com a
+// chave antiga (com o valor) e o ficheiro de fatura de 06/10 trouxe-as outra
+// vez, com o valor revisto e, nos carregamentos eléctricos, sem hora.
+const GRAVADA = {
+  transaction_id: 'repsol-9724998589692699-20260914044700-25.00-26.62',
+  card_number: '9724998589692699',
+  transaction_date: '2026-09-14T04:47:00+00:00',
+  quantity: '26.62',
+  amount: '25',
+};
+
+Deno.test('a fatura com o valor revisto é a mesma compra que a chave antiga', () => {
+  const nova = { card: '9724998589692699', txDate: '2026-09-14T04:47:00Z', qty: 26.62, amount: 25.4 };
+  assertEquals(abastecimentoJaGravado(nova, [GRAVADA])?.transaction_id, GRAVADA.transaction_id);
+});
+
+Deno.test('o carregamento sem hora casa com o do mesmo dia que tinha hora', () => {
+  const comHora = { ...GRAVADA, transaction_date: '2026-09-13T13:28:00+00:00', quantity: '21.38', amount: '12.45' };
+  const semHora = { card: '9724998589692699', txDate: '2026-09-13T00:00:00Z', qty: 21.38, amount: 12.45 };
+  assertEquals(abastecimentoJaGravado(semHora, [comHora])?.transaction_id, comHora.transaction_id);
+});
+
+Deno.test('dois abastecimentos sem hora no mesmo dia não se juntam', () => {
+  const semHora = { ...GRAVADA, transaction_date: '2026-03-17T00:00:00+00:00' };
+  const outra = { card: '9724998589692699', txDate: '2026-03-17T00:00:00Z', qty: 26.62, amount: 25 };
+  assertEquals(abastecimentoJaGravado(outra, [semHora]), null);
+});
+
+Deno.test('outros litros, outro minuto com hora ou devolução: não é a mesma compra', () => {
+  const base = { card: '9724998589692699', txDate: '2026-09-14T04:47:00Z', qty: 26.62, amount: 25 };
+  assertEquals(abastecimentoJaGravado({ ...base, qty: 30 }, [GRAVADA]), null);
+  assertEquals(abastecimentoJaGravado({ ...base, txDate: '2026-09-14T09:10:00Z' }, [GRAVADA]), null);
+  assertEquals(abastecimentoJaGravado({ ...base, amount: -25 }, [GRAVADA]), null);
 });
