@@ -8,6 +8,9 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/lib/observacoesFatura.ts",
+    "src/lib/observacoesFatura.test.ts",
+    "src/components/faturacao/ObservacoesFaturaField.tsx",
     "src/utils/formularioEmbed.ts",
     "src/utils/formularioEmbed.test.ts",
     "src/hooks/useTemaClaroForcado.ts",
