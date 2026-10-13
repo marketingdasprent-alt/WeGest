@@ -57,6 +57,7 @@ import {
   type EmailIntegracaoRow,
 } from './EditarIntegracaoEmailDialog';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
+import { outraAtivaDoMesmoFornecedor } from '@/lib/integracoesFaturacao';
 import { ImportRobotCsvDialog } from './ImportRobotCsvDialog';
 import { ViaVerdeContaDialog } from './via-verde/ViaVerdeContaDialog';
 import { ImportUberCsvDialog } from '../administrativo/ImportUberCsvDialog';
@@ -1049,17 +1050,13 @@ export const IntegracoesTab: React.FC = () => {
         onOpenChange={setFaturacaoDialogOpen}
         provider={faturacaoProvider}
         row={faturacaoRow}
-        // Outra integração activa DA MESMA EMPRESA. Só isso é conflito:
-        // activar a de uma empresa não desliga a das outras. Serve para avisar
-        // que guardar vai substituir a que essa empresa já tinha.
-        existeOutraIntegracaoAtiva={(rawIntegracoes as any[]).some(
-          (i) =>
-            i.plataforma === 'faturacao' &&
-            i.ativo &&
-            i.id !== faturacaoRow?.id &&
-            i.emissor_id &&
-            i.emissor_id === faturacaoRow?.emissor_id
-        )}
+        // Só outra activa do MESMO fornecedor na mesma empresa é conflito: KeyInvoice e
+        // Primavera podem estar os dois activos e o utilizador escolhe ao emitir.
+        existeOutraIntegracaoAtiva={outraAtivaDoMesmoFornecedor(rawIntegracoes as never[], {
+          id: faturacaoRow?.id,
+          emissor_id: faturacaoRow?.emissor_id,
+          provider: faturacaoProvider,
+        })}
         onSuccess={fetchAll}
       />
 
