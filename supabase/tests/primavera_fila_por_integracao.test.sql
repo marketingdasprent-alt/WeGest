@@ -3,7 +3,7 @@
 -- ============================================================
 -- Corre com:  supabase db start  &&  supabase test db
 --
--- Ver a migração 20261008100000. Provas:
+-- Ver a migração 20261013120000. Provas:
 --   (1) o claim de uma integração só devolve os jobs dela; os da outra ficam;
 --   (2) um emit reclamado há mais de 2 minutos passa a ambiguo e não volta à
 --       fila; um health na mesma situação volta e é reclamado de novo;

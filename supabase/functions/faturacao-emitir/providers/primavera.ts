@@ -8,7 +8,7 @@
 // agente da empresa A nunca vê os pedidos da empresa B. E um pedido de emissão
 // nunca corre duas vezes: ao desistir de esperar, cancela-se o pedido se ainda
 // ninguém o reclamou; se já foi reclamado, o desfecho é ambíguo e fica para
-// reconciliar à mão (ver _shared/primavera/jobs.ts e a migração 20261008100000).
+// reconciliar à mão (ver _shared/primavera/jobs.ts e a migração 20261013120000).
 //
 // As credenciais do AS Connect nunca ficam nesta BD — `cfg.apiKey` é só a
 // chave do agente. A documentação de 18/09/2026 já traz `TipoDocumento` no

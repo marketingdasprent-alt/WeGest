@@ -8,7 +8,7 @@
 //
 // A chave identifica UMA integração (uma empresa emissora). O agente só
 // reclama os jobs dessa integração: com duas empresas na mesma organização,
-// cada agente emite só na sua (ver migração 20261008100000).
+// cada agente emite só na sua (ver migração 20261013120000).
 //
 // Devolve só o payload de NEGÓCIO de cada job (tipo, cliente, itens) — nunca
 // nenhuma credencial do AS Connect, que o agente já tem na sua própria

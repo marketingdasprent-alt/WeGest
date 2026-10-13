@@ -67,7 +67,7 @@ configurar e correr o agente em `agent/primavera-agent/README.md`.
 
 A fila é por INTEGRAÇÃO (`primavera_jobs.integracao_id`), não por organização: com duas
 empresas emissoras na mesma organização, cada agente tem a sua chave e só reclama os
-pedidos da sua empresa (migração 20261008100000).
+pedidos da sua empresa (migração 20261013120000).
 
 Timeouts de espera em `providers/primavera.ts` (`HEALTH_TIMEOUT_MS`, `EMIT_TIMEOUT_MS`).
 Ao expirar, o provider cancela o pedido se ainda estiver `pending` (UPDATE atómico: nenhum
