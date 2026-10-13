@@ -2,6 +2,19 @@
 // Sem APIs do Deno para poder ser testado em Vitest; o `fetch` é injectado.
 
 import { precoParaProvider } from '../../supabase/functions/_shared/faturacao/totais.ts';
+import {
+  type DocumentoEmitido,
+  lerRespostaInserir,
+} from '../../supabase/functions/_shared/primavera/resposta.ts';
+
+// A fila dá um job reclamado por ambíguo aos 2 minutos: os passos antes do documento
+// (token, cliente) somam no máximo 4 × 12 s e o inserir 60 s, para caber nesse prazo.
+const TIMEOUT_PEDIDO_MS = 12_000;
+const TIMEOUT_INSERIR_MS = 60_000;
+
+/** O pedido saiu para o Primavera e não se sabe se o documento foi criado.
+ *  Nunca se reporta como falha: a fila reemitiria. */
+export class AmbiguoError extends Error {}
 
 export type TipoWegest = 'FT' | 'FR' | 'NC' | 'RC';
 
@@ -74,13 +87,7 @@ export interface PayloadEmit {
   referencia_externa?: string | null;
 }
 
-export interface ResultadoEmit {
-  doctype: string;
-  docnum: string;
-  serie: string;
-  numero: string;
-  raw: unknown;
-}
+export type ResultadoEmit = DocumentoEmitido;
 
 type FetchFn = typeof fetch;
 
@@ -199,6 +206,7 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
       method: metodo,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(corpo),
+      signal: AbortSignal.timeout(TIMEOUT_PEDIDO_MS),
     });
     const texto = await res.text();
     if (!res.ok) throw new Error(`${caminho} falhou (HTTP ${res.status}): ${texto.slice(0, 300)}`);
@@ -215,6 +223,7 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, enterprise }),
+      signal: AbortSignal.timeout(TIMEOUT_PEDIDO_MS),
     });
     const texto = await res.text();
     if (!res.ok) throw new Error(`gettoken falhou (HTTP ${res.status}): ${texto.slice(0, 200)}`);
@@ -333,37 +342,40 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
       .filter((v): v is string => typeof v === 'string' && !!v.trim())
       .join(' | ');
 
-    const d = (await pedido('POST', '/documentos/vendas/inserir', {
-      Documento: {
-        TipoDocumento: tipoDocumento,
-        CondPag: cfg.condicao_pagamento,
-        Entidade: entidade,
-        DataDoc: dataDocLisboa(agora),
-        ...(payload.referencia_externa ? { Referencia: payload.referencia_externa } : {}),
-        ...(observacoes ? { Observacoes: observacoes } : {}),
-        Linhas: linhas,
-      },
-    })) as {
-      TipoDocGerado?: string;
-      SerieDocGerado?: string;
-      NumeroDocGerado?: string | number;
-      Documento?: string;
-      Estado?: { Mensagem?: string };
-    };
-    if (!estadoEhSucesso(d?.Estado?.Mensagem)) {
-      throw new Error(`Primavera recusou: ${d?.Estado?.Mensagem ?? 'sem Estado'}`);
+    if (!token) token = await obterToken();
+    // Daqui em diante o pedido pode ter chegado: corte de rede, timeout, 5xx ou resposta
+    // sem forma são ambíguos (o documento pode existir), nunca falha.
+    let status: number;
+    let texto: string;
+    try {
+      const res = await fetchFn(`${cfg.primavera.endpoint}/documentos/vendas/inserir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          Documento: {
+            TipoDocumento: tipoDocumento,
+            CondPag: cfg.condicao_pagamento,
+            Entidade: entidade,
+            DataDoc: dataDocLisboa(agora),
+            ...(payload.referencia_externa ? { Referencia: payload.referencia_externa } : {}),
+            ...(observacoes ? { Observacoes: observacoes } : {}),
+            Linhas: linhas,
+          },
+        }),
+        signal: AbortSignal.timeout(TIMEOUT_INSERIR_MS),
+      });
+      status = res.status;
+      texto = await res.text();
+    } catch (erro) {
+      const msg = erro instanceof Error ? erro.message : String(erro);
+      throw new AmbiguoError(
+        `inserir documento: a ligação caiu depois de o pedido sair (${msg}). O documento pode ter sido criado.`
+      );
     }
-    if (!d.NumeroDocGerado) throw new Error('Resposta sem NumeroDocGerado.');
-
-    const doctype = d.TipoDocGerado || tipoDocumento;
-    const serie = String(d.SerieDocGerado ?? '');
-    return {
-      doctype,
-      docnum: String(d.NumeroDocGerado),
-      serie,
-      numero: d.Documento || `${doctype} ${serie}/${d.NumeroDocGerado}`,
-      raw: d,
-    };
+    const leitura = lerRespostaInserir(status, texto, tipoDocumento);
+    if (leitura.tipo === 'recusado') throw new Error(leitura.mensagem);
+    if (leitura.tipo === 'ambiguo') throw new AmbiguoError(leitura.mensagem);
+    return leitura.documento;
   }
 
   /** Token + uma leitura à BD: prova que o AS Connect chega à empresa, não só que autentica. */

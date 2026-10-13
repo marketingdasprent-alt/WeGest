@@ -6,7 +6,64 @@ import {
   findField,
   findNumericField,
 } from '../_shared/repsol/campos.ts';
-import { temHora, transactionKey } from '../_shared/repsol/chave.ts';
+import {
+  abastecimentoJaGravado,
+  temHora,
+  transactionKey,
+  type AbastecimentoGravado,
+} from '../_shared/repsol/chave.ts';
+
+interface LinhaRepsol {
+  integracao_id: string;
+  org_id: string;
+  transaction_id: string;
+  transaction_date: string;
+  card_number: string | null;
+  amount: number | null;
+  quantity: number | null;
+  fuel_type: string | null;
+  station_name: string | null;
+  viatura_id: null;
+  raw_data: Record<string, unknown>;
+}
+
+const DIA_MS = 24 * 60 * 60 * 1000;
+
+/** Linhas já gravadas destes cartões, no período do ficheiro (± 1 dia), por cartão. */
+async function lerGravados(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  integracaoId: string,
+  linhas: readonly LinhaRepsol[]
+): Promise<Map<string, AbastecimentoGravado[]>> {
+  const porCartao = new Map<string, AbastecimentoGravado[]>();
+  const cartoes = [...new Set(linhas.map((l) => l.card_number).filter((c): c is string => !!c))];
+  if (cartoes.length === 0) return porCartao;
+  const tempos = linhas.map((l) => new Date(l.transaction_date).getTime());
+  const de = new Date(Math.min(...tempos) - DIA_MS).toISOString();
+  const ate = new Date(Math.max(...tempos) + DIA_MS).toISOString();
+
+  // Página a página: o PostgREST corta em 1000 linhas.
+  for (let inicio = 0; ; inicio += 1000) {
+    const { data, error } = await supabase
+      .from('repsol_transacoes')
+      .select('transaction_id, card_number, transaction_date, quantity, amount')
+      .eq('integracao_id', integracaoId)
+      .in('card_number', cartoes)
+      .gte('transaction_date', de)
+      .lte('transaction_date', ate)
+      .order('id')
+      .range(inicio, inicio + 999);
+    if (error) throw error;
+    for (const g of (data ?? []) as AbastecimentoGravado[]) {
+      const lista = porCartao.get(g.card_number ?? '') ?? [];
+      lista.push(g);
+      porCartao.set(g.card_number ?? '', lista);
+    }
+    if (!data || data.length < 1000) break;
+  }
+  return porCartao;
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -276,6 +333,7 @@ Deno.serve(async (req) => {
       skipped = 0,
       dedupedInPayload = 0;
     const upsertMap = new Map();
+    const preparadas: LinhaRepsol[] = [];
 
     for (const row of rows) {
       const cardNumber = findField(row, [
@@ -359,9 +417,7 @@ Deno.serve(async (req) => {
       // (tg_resolver_motorista_cartao). O nome e a matrícula do ficheiro não
       // decidem nada: a matrícula é digitada na bomba e já imputou a pessoa errada.
 
-      // Usar Map para pre-deduplicar as transações gémeas do pacote.
-      if (upsertMap.has(txId)) dedupedInPayload++;
-      upsertMap.set(txId, {
+      preparadas.push({
         integracao_id,
         org_id: orgId,
         transaction_id: txId,
@@ -374,6 +430,31 @@ Deno.serve(async (req) => {
         viatura_id: null,
         raw_data: row,
       });
+    }
+
+    // A mesma compra já gravada (chave antiga, ou o outro ficheiro sem hora)
+    // é actualizada em vez de duplicada. Ver abastecimentoJaGravado.
+    const gravados = await lerGravados(supabase, integracao_id, preparadas);
+    for (const linha of preparadas) {
+      const existente = abastecimentoJaGravado(
+        {
+          card: linha.card_number ?? '',
+          txDate: linha.transaction_date,
+          qty: linha.quantity,
+          amount: linha.amount,
+        },
+        gravados.get(linha.card_number ?? '') ?? []
+      );
+      if (existente) {
+        linha.transaction_id = existente.transaction_id;
+        // O ficheiro de fatura vem sem hora: não apagar a hora que já lá estava.
+        if (linha.transaction_date.includes('T00:00')) {
+          linha.transaction_date = existente.transaction_date;
+        }
+      }
+      // Usar Map para pre-deduplicar as transações gémeas do pacote.
+      if (upsertMap.has(linha.transaction_id)) dedupedInPayload++;
+      upsertMap.set(linha.transaction_id, linha);
     }
 
     const upsertBatch = Array.from(upsertMap.values());

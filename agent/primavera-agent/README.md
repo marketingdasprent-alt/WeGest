@@ -99,6 +99,22 @@ Para não parar quando a sessão fecha ou o servidor reinicia:
 - **Serviço do Windows** (mais robusto): registar o executável com o
   [NSSM](https://nssm.cc/).
 
+## Uma empresa, um agente
+
+A chave do agente identifica **uma** integração de faturação, ou seja, uma
+empresa emissora (no Primavera, uma `enterprise`). Com duas empresas na mesma
+organização correm dois agentes, cada um com a sua chave e o seu ficheiro de
+configuração. Um agente só recebe os pedidos da sua empresa.
+
+## Quando o resultado é "ambíguo"
+
+Se o pedido saiu para o Primavera e a resposta não chegou (rede caiu, o
+servidor respondeu com erro interno, ou sem forma reconhecível), o agente
+**não** diz "falhou": diz "ambíguo". O WeGest guarda esse estado e não volta
+a emitir sozinho, porque o documento pode já existir no Primavera. Alguém
+confirma lá e resolve à mão. O mesmo acontece se o agente ficar mais de
+2 minutos sem responder a um pedido que reclamou.
+
 ## O que este agente NÃO faz (ainda)
 
 Só emite **Faturas**. Fatura-Recibo, Nota de Crédito e Recibo não têm códigos

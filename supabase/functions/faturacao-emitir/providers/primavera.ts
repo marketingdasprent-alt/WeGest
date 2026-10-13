@@ -3,9 +3,17 @@
 // não chega lá directamente. Por isso o pedido vai para uma fila
 // (`primavera_jobs`) e um agente local (ver `agent/primavera-agent/`) reclama-o,
 // fala com o AS Connect localmente, e reporta o resultado.
+//
+// A fila é por INTEGRAÇÃO (uma por empresa emissora), não por organização: o
+// agente da empresa A nunca vê os pedidos da empresa B. E um pedido de emissão
+// nunca corre duas vezes: ao desistir de esperar, cancela-se o pedido se ainda
+// ninguém o reclamou; se já foi reclamado, o desfecho é ambíguo e fica para
+// reconciliar à mão (ver _shared/primavera/jobs.ts e a migração 20261013120000).
+//
 // As credenciais do AS Connect nunca ficam nesta BD — `cfg.apiKey` é só a
-// chave do agente. Só FT está confirmado com a documentação recebida; PDF e
-// anulação não têm endpoint documentado (ver project_primavera-integration.md).
+// chave do agente. A documentação de 18/09/2026 já traz `TipoDocumento` no
+// pedido, mas o agente ainda só emite FT; PDF e anulação continuam sem
+// endpoint (ver project_primavera-integration.md).
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import type {
   EmitDocResult,
@@ -16,6 +24,7 @@ import type {
   VoidReceiptInput,
 } from '../types.ts';
 import { EmissaoAmbiguaError } from '../types.ts';
+import { desfechoDoJob, type JobLido } from '../../_shared/primavera/jobs.ts';
 
 const env = (k: string) => Deno.env.get(k);
 
@@ -27,97 +36,114 @@ function adminClient() {
   return createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
 }
 
-interface JobRow {
-  id: string;
-  status: 'pending' | 'claimed' | 'done' | 'failed';
-  resultado: unknown;
-  error_message: string | null;
-}
-
-/** Põe um pedido na fila desta organização. Sem org resolvida (ex.: "Testar
- *  ligação" antes de guardar credenciais) não há fila possível — falha cedo. */
+/** Põe um pedido na fila desta integração. Sem integração resolvida (ex.:
+ *  "Testar ligação" antes de guardar a chave) não há fila possível — falha cedo.
+ *  `expires_at`: se nenhum agente o reclamar até lá, a fila fecha-o como falha
+ *  sem o executar; nunca se emite um documento de que o WeGest já desistiu. */
 async function enfileirar(
   cfg: ProviderConfig,
   tipo: 'emit' | 'health',
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  timeoutMs: number
 ): Promise<string> {
-  if (!cfg.orgId) {
+  if (!cfg.orgId || !cfg.integracaoId) {
     throw new Error(
-      'Primavera (agente local): grave a chave do agente primeiro. Sem uma organização ' +
-        'resolvida não há fila onde pôr o pedido — testar credenciais soltas não é possível ' +
+      'Primavera (agente local): grave a chave do agente primeiro. Sem uma integração ' +
+        'gravada não há fila onde pôr o pedido — testar credenciais soltas não é possível ' +
         'neste modelo, porque o teste depende do agente já estar a correr do lado da empresa.'
     );
   }
   const supabase = adminClient();
   const { data, error } = await supabase
     .from('primavera_jobs')
-    .insert({ org_id: cfg.orgId, tipo, payload })
+    .insert({
+      org_id: cfg.orgId,
+      integracao_id: cfg.integracaoId,
+      tipo,
+      payload,
+      expires_at: new Date(Date.now() + timeoutMs).toISOString(),
+    })
     .select('id')
     .single();
   if (error) throw new Error(`Primavera: falha ao enfileirar pedido — ${error.message}`);
   return data.id as string;
 }
 
-/** Espera o agente reclamar e concluir o job. Ao expirar: 'pending' é falha
- *  conhecida (seguro reagendar); 'claimed' é ambíguo (nunca reemitir sem
- *  confirmar manualmente); 'done'/'failed' é o resultado real do agente. */
-async function esperarResultado(jobId: string, timeoutMs: number): Promise<JobRow> {
+async function lerJob(jobId: string): Promise<JobLido | null> {
   const supabase = adminClient();
+  const { data, error } = await supabase
+    .from('primavera_jobs')
+    .select('status, resultado, error_message')
+    .eq('id', jobId)
+    .maybeSingle();
+  if (error) throw new Error(`Primavera: falha ao ler o estado do pedido — ${error.message}`);
+  return (data as JobLido | null) ?? null;
+}
+
+/** Cancela o pedido se ainda ninguém o reclamou. Atómico: se o agente o
+ *  reclamar entretanto, o UPDATE não apanha nada e o desfecho é ambíguo. */
+async function cancelarSePendente(jobId: string): Promise<boolean> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from('primavera_jobs')
+    .update({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      error_message: 'O WeGest desistiu de esperar antes de o agente reclamar o pedido. Nada foi emitido.',
+    })
+    .eq('id', jobId)
+    .eq('status', 'pending')
+    .select('id');
+  if (error) throw new Error(`Primavera: falha ao cancelar o pedido — ${error.message}`);
+  return (data?.length ?? 0) > 0;
+}
+
+/** Espera o agente reclamar e concluir o job. Devolve o resultado de um job
+ *  'done'; lança Error numa falha conhecida (seguro reagendar) e
+ *  EmissaoAmbiguaError quando não se sabe se o documento foi criado. */
+async function esperarResultado(
+  jobId: string,
+  timeoutMs: number
+): Promise<Record<string, unknown>> {
   const inicio = Date.now();
   while (Date.now() - inicio < timeoutMs) {
-    const { data, error } = await supabase
-      .from('primavera_jobs')
-      .select('id, status, resultado, error_message')
-      .eq('id', jobId)
-      .maybeSingle();
-    if (error) throw new Error(`Primavera: falha ao ler o estado do pedido — ${error.message}`);
-    if (data && (data.status === 'done' || data.status === 'failed')) {
-      return data as JobRow;
-    }
+    const d = desfechoDoJob(await lerJob(jobId));
+    if (d.tipo === 'ok') return d.resultado;
+    if (d.tipo === 'falha') throw new Error(d.mensagem);
+    if (d.tipo === 'ambiguo') throw new EmissaoAmbiguaError(d.mensagem);
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
 
-  // Esgotou o tempo — vai ver o estado final para classificar o timeout.
-  const { data } = await supabase
-    .from('primavera_jobs')
-    .select('id, status, resultado, error_message')
-    .eq('id', jobId)
-    .maybeSingle();
-
-  if (!data || data.status === 'pending') {
-    throw new Error(
-      'Primavera (agente local): nenhum agente respondeu a tempo. Verifique se o agente está ' +
-        'a correr na rede da empresa (ver instruções em agent/primavera-agent/).'
-    );
-  }
-  // 'claimed': o agente reclamou mas não reportou a tempo — desfecho desconhecido.
-  throw new EmissaoAmbiguaError(
-    'Primavera (agente local): o agente reclamou o pedido mas não confirmou o resultado a ' +
-      'tempo — impossível confirmar se o documento foi criado. Não reemitir sem verificar ' +
-      'directamente no Primavera primeiro.'
-  );
+  const cancelouPendente = await cancelarSePendente(jobId);
+  const d = desfechoDoJob(await lerJob(jobId), { desistiu: true, cancelouPendente });
+  if (d.tipo === 'ok') return d.resultado;
+  if (d.tipo === 'falha') throw new Error(d.mensagem);
+  throw new EmissaoAmbiguaError(d.tipo === 'ambiguo' ? d.mensagem : 'Primavera: desfecho desconhecido.');
 }
 
 export const primaveraProvider: FaturacaoProvider = {
   async health(cfg: ProviderConfig): Promise<void> {
-    const jobId = await enfileirar(cfg, 'health', {});
-    const job = await esperarResultado(jobId, HEALTH_TIMEOUT_MS);
-    if (job.status === 'failed') {
-      throw new Error(job.error_message || 'Primavera: o agente reportou falha na ligação.');
+    const jobId = await enfileirar(cfg, 'health', {}, HEALTH_TIMEOUT_MS);
+    try {
+      await esperarResultado(jobId, HEALTH_TIMEOUT_MS);
+    } catch (e) {
+      // Num teste de ligação não há documento em jogo: ambíguo é só "não respondeu".
+      throw new Error((e as Error).message);
     }
   },
 
   hasDoctype(tipo: EmitInput['tipo'], _cfg: ProviderConfig): boolean {
-    // Só FT está confirmado (ver topo do ficheiro); bloquear RC impede o
-    // preflight de criar acordos de parcelamento contra Primavera.
+    // Só FT está ligado no agente; bloquear RC impede o preflight de criar
+    // acordos de parcelamento contra Primavera.
     return tipo === 'FT';
   },
 
   async emit(input: EmitInput, cfg: ProviderConfig): Promise<EmitDocResult> {
     if (input.tipo !== 'FT') {
       throw new Error(
-        `Primavera (AS Connect): emissão de ${input.tipo} ainda não suportada — falta confirmar ` +
-          `com o AS Connect o código do documento e as regras de ${input.tipo} antes de o activar.`
+        `Primavera (AS Connect): emissão de ${input.tipo} ainda não está ligada no agente. ` +
+          'A documentação de 18/09/2026 já aceita TipoDocumento; falta confirmar os códigos ' +
+          `com a AS Connect antes de activar ${input.tipo}.`
       );
     }
     const cliente = input.cliente ?? {};
@@ -128,20 +154,20 @@ export const primaveraProvider: FaturacaoProvider = {
       );
     }
 
-    const jobId = await enfileirar(cfg, 'emit', {
-      tipo: input.tipo,
-      cliente,
-      itens: input.itens,
-      observacoes: input.observacoes ?? null,
-      referencia_externa: input.referencia_externa ?? null,
-    });
-    const job = await esperarResultado(jobId, EMIT_TIMEOUT_MS);
+    const jobId = await enfileirar(
+      cfg,
+      'emit',
+      {
+        tipo: input.tipo,
+        cliente,
+        itens: input.itens,
+        observacoes: input.observacoes ?? null,
+        referencia_externa: input.referencia_externa ?? null,
+      },
+      EMIT_TIMEOUT_MS
+    );
+    const r = (await esperarResultado(jobId, EMIT_TIMEOUT_MS)) as Partial<EmitDocResult>;
 
-    if (job.status === 'failed') {
-      throw new Error(job.error_message || 'Primavera: o agente reportou falha ao emitir.');
-    }
-
-    const r = (job.resultado ?? {}) as Partial<EmitDocResult>;
     if (!r.docnum) {
       throw new EmissaoAmbiguaError(
         'Primavera: o agente reportou sucesso mas sem número de documento — impossível ' +

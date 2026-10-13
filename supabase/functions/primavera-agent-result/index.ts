@@ -4,6 +4,13 @@
 // (localmente, dentro da rede da empresa). Fecha a linha em primavera_jobs
 // com o resultado — é isto que providers/primavera.ts está à espera de ver
 // ao fazer poll do estado do job que ele próprio enfileirou.
+//
+// Três desfechos: success (done), falha (failed) e ambiguous (ambiguo): o
+// agente enviou o pedido ao Primavera e não sabe se o documento foi criado
+// (rede caiu, 5xx, resposta sem forma). Ambíguo nunca volta à fila.
+//
+// Só fecha jobs ainda 'claimed': um resultado tardio, de um job que a fila
+// já deu por ambíguo ou expirado, não reescreve esse estado.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
 const corsHeaders = {
@@ -20,6 +27,7 @@ const json = (corpo: unknown, status = 200) =>
 interface Corpo {
   job_id?: string;
   success?: boolean;
+  ambiguous?: boolean;
   resultado?: unknown;
   error?: string;
 }
@@ -46,7 +54,7 @@ Deno.serve(async (req) => {
     // SEM filtro por `ativo` — ver o mesmo comentário em primavera-agent-poll.
     const { data: configs, error: erroConfig } = await supabase
       .from('plataformas_configuracao')
-      .select('org_id')
+      .select('id')
       .eq('plataforma', 'faturacao')
       .eq('client_secret', chave)
       .filter('config->>provider', 'eq', 'primavera');
@@ -55,31 +63,44 @@ Deno.serve(async (req) => {
     if (!configs || configs.length !== 1) {
       return json({ success: false, error: 'Chave de agente não reconhecida.' }, 401);
     }
-    const orgId = configs[0].org_id as string;
+    const integracaoId = configs[0].id as string;
 
-    // A org do job tem de bater com a da chave — um agente nunca fecha um job
-    // que não seja seu, mesmo que soubesse o id (defesa em profundidade;
-    // job_id é um UUID aleatório, praticamente impossível de adivinhar).
+    // A integração do job tem de bater com a da chave — um agente nunca fecha
+    // um job que não seja seu, mesmo que soubesse o id (defesa em
+    // profundidade; job_id é um UUID aleatório, praticamente impossível de
+    // adivinhar).
     const { data: job, error: erroJob } = await supabase
       .from('primavera_jobs')
-      .select('id, org_id, status')
+      .select('id, integracao_id, status')
       .eq('id', corpo.job_id)
       .maybeSingle();
     if (erroJob) return json({ success: false, error: erroJob.message }, 500);
-    if (!job || job.org_id !== orgId) {
-      return json({ success: false, error: 'Job não encontrado para esta organização.' }, 404);
+    if (!job || job.integracao_id !== integracaoId) {
+      return json({ success: false, error: 'Job não encontrado para esta integração.' }, 404);
+    }
+    if (job.status !== 'claimed') {
+      return json(
+        { success: false, error: `O job já está "${job.status}"; o resultado tardio foi ignorado.` },
+        409
+      );
     }
 
-    const { error: erroUpdate } = await supabase
+    const status = corpo.ambiguous ? 'ambiguo' : corpo.success ? 'done' : 'failed';
+    const { data: fechados, error: erroUpdate } = await supabase
       .from('primavera_jobs')
       .update({
-        status: corpo.success ? 'done' : 'failed',
+        status,
         resultado: corpo.resultado ?? null,
-        error_message: corpo.success ? null : (corpo.error ?? 'Erro desconhecido no agente.'),
+        error_message: status === 'done' ? null : (corpo.error ?? 'Erro desconhecido no agente.'),
         completed_at: new Date().toISOString(),
       })
-      .eq('id', corpo.job_id);
+      .eq('id', corpo.job_id)
+      .eq('status', 'claimed')
+      .select('id');
     if (erroUpdate) return json({ success: false, error: erroUpdate.message }, 500);
+    if (!fechados || fechados.length === 0) {
+      return json({ success: false, error: 'O job deixou de estar reclamado entretanto.' }, 409);
+    }
 
     return json({ success: true });
   } catch (erro) {

@@ -6,6 +6,10 @@
 // plataformas_configuracao.client_secret) — nunca por sessão de utilizador,
 // o agente não tem uma.
 //
+// A chave identifica UMA integração (uma empresa emissora). O agente só
+// reclama os jobs dessa integração: com duas empresas na mesma organização,
+// cada agente emite só na sua (ver migração 20261013120000).
+//
 // Devolve só o payload de NEGÓCIO de cada job (tipo, cliente, itens) — nunca
 // nenhuma credencial do AS Connect, que o agente já tem na sua própria
 // configuração local.
@@ -53,7 +57,7 @@ Deno.serve(async (req) => {
     // sério, não uma camada de segurança adicional.
     const { data: configs, error: erroConfig } = await supabase
       .from('plataformas_configuracao')
-      .select('org_id')
+      .select('id')
       .eq('plataforma', 'faturacao')
       .eq('client_secret', chave)
       .filter('config->>provider', 'eq', 'primavera');
@@ -62,10 +66,10 @@ Deno.serve(async (req) => {
     if (!configs || configs.length !== 1) {
       return json({ success: false, error: 'Chave de agente não reconhecida.' }, 401);
     }
-    const orgId = configs[0].org_id as string;
+    const integracaoId = configs[0].id as string;
 
-    const { data: jobs, error: erroClaim } = await supabase.rpc('primavera_jobs_claim', {
-      p_org_id: orgId,
+    const { data: jobs, error: erroClaim } = await supabase.rpc('primavera_jobs_claim_integracao', {
+      p_integracao_id: integracaoId,
       p_max: MAX_POR_POLL,
     });
     if (erroClaim) return json({ success: false, error: erroClaim.message }, 500);
@@ -75,9 +79,7 @@ Deno.serve(async (req) => {
     supabase
       .from('plataformas_configuracao')
       .update({ ultimo_sync: new Date().toISOString() })
-      .eq('org_id', orgId)
-      .eq('plataforma', 'faturacao')
-      .filter('config->>provider', 'eq', 'primavera')
+      .eq('id', integracaoId)
       .then(() => {});
 
     const lista = (jobs ?? []) as Array<{ id: string; tipo: string; payload: unknown }>;

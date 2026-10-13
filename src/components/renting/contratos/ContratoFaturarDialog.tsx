@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,6 +34,8 @@ import type { ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import { semCodigo } from '@/types/codigoPorOrg';
 import { resolverDestinatario, type DestinatarioEntidade } from './destinatarioFatura';
+import { ObservacoesFaturaField } from '@/components/faturacao/ObservacoesFaturaField';
+import { observacoesIniciais, observacoesParaEmitir } from '@/lib/observacoesFatura';
 
 export interface FaturaItem {
   descricao: string;
@@ -97,6 +99,15 @@ export function ContratoFaturarDialog({
   const [dataDoc, setDataDoc] = useState<string>(hoje());
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
   const [submitting, setSubmitting] = useState(false);
+  // Observações impressas no documento: a matrícula e as notas externas do
+  // contrato já lá estão ao abrir; quem fatura acrescenta o resto.
+  const [observacoes, setObservacoes] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    setObservacoes(
+      observacoesIniciais({ matricula: contrato.matricula, notasExternas: contrato.observacoes })
+    );
+  }, [open, contrato.id, contrato.matricula, contrato.observacoes]);
 
   const { destinatario, papel, contratoCondutorId, precisaFichaCliente } = resolverDestinatario(
     entidade,
@@ -290,6 +301,7 @@ export function ContratoFaturarDialog({
               contrato_id: contrato.id,
               cobranca_id: cobrancaId,
               referencia_externa: `Contrato #${String(contrato.codigo).padStart(4, '0')}`,
+              observacoes: observacoesParaEmitir(observacoes),
             },
             cobrancaId,
             contratoId: contrato.id,
@@ -463,6 +475,12 @@ export function ContratoFaturarDialog({
               />
             </div>
           </div>
+
+          <ObservacoesFaturaField
+            value={observacoes}
+            onChange={setObservacoes}
+            disabled={submitting}
+          />
 
           {/* Artigos */}
           <div className="rounded-md border">

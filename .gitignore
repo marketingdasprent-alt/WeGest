@@ -38,6 +38,11 @@ credentials.json
 service-account.json
 secrets*.json
 secrets*.yml
+
+# Agente Primavera: a configuração tem as credenciais do AS Connect e o
+# executável compilado tem 79 MB. Só o exemplo entra.
+agent/primavera-agent/primavera-agent.config.json
+agent/primavera-agent/*.exe
 secrets*.yaml
 
 # Supabase CLI — ficheiros temporários/estado local

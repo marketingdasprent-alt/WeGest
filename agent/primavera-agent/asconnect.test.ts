@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AmbiguoError,
   CLIENTES_POR_OMISSAO,
   type ConfigAsConnect,
   construirLinhas,
@@ -206,6 +207,48 @@ describe('emitir', () => {
     await expect(criarClienteAsConnect(cfgBase, fn).emitir(payload)).rejects.toThrow(
       'Primavera recusou: Artigo ALUGUER inexistente'
     );
+  });
+});
+
+describe('emitir: desfecho ambíguo', () => {
+  const ANTES = {
+    '/auth/gettoken': ['tok'],
+    '/erp/query/tabledata': [{ Resultado: [{ Cliente: 'C1' }], ...SUCESSO }],
+  };
+
+  /** Como fetchFalso, mas o inserir responde com o que a função devolver. */
+  function comInserir(inserir: () => Promise<Response>) {
+    const { fn: base } = fetchFalso(ANTES);
+    return (async (url: string, init?: RequestInit) =>
+      url.endsWith('/documentos/vendas/inserir') ? inserir() : base(url, init)) as typeof fetch;
+  }
+
+  it.each([
+    ['corte de rede depois de o pedido sair', () => Promise.reject(new TypeError('network'))],
+    ['HTTP 500', async () => new Response('erro interno', { status: 500 })],
+    ['resposta sem forma', async () => new Response('<html>', { status: 200 })],
+    [
+      'Sucesso sem NumeroDocGerado',
+      async () => new Response(JSON.stringify(SUCESSO), { status: 200 }),
+    ],
+  ])('%s → AmbiguoError (o documento pode existir)', async (_nome, inserir) => {
+    await expect(
+      criarClienteAsConnect(cfgBase, comInserir(inserir)).emitir(payload)
+    ).rejects.toBeInstanceOf(AmbiguoError);
+  });
+
+  it('recusa explícita e falhas antes do inserir não são ambíguas', async () => {
+    const recusa = criarClienteAsConnect(
+      cfgBase,
+      comInserir(async () => new Response(JSON.stringify({ Estado: { Mensagem: 'NIF inválido' } })))
+    ).emitir(payload);
+    await expect(recusa).rejects.toThrow('Primavera recusou: NIF inválido');
+    await expect(recusa).rejects.not.toBeInstanceOf(AmbiguoError);
+
+    const semToken = (async () => new Response('negado', { status: 401 })) as typeof fetch;
+    await expect(
+      criarClienteAsConnect(cfgBase, semToken).emitir(payload)
+    ).rejects.not.toBeInstanceOf(AmbiguoError);
   });
 });
 

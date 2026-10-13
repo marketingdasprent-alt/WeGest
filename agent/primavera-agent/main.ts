@@ -28,7 +28,10 @@ import {
   criarClienteAsConnect,
   type PayloadEmit,
   TIPOS_DOCUMENTO_POR_OMISSAO,
+  AmbiguoError,
 } from './asconnect.ts';
+
+const TIMEOUT_WEGEST_MS = 30_000;
 
 interface ConfigAgente extends ConfigAsConnect {
   /** URL base das edge functions do WeGest. */
@@ -97,6 +100,7 @@ async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
       Authorization: `Bearer ${cfg.chave_agente}`,
       'Content-Type': 'application/json',
     },
+    signal: AbortSignal.timeout(TIMEOUT_WEGEST_MS),
   });
   const corpo = await res.json().catch(() => null);
   if (!res.ok || !corpo?.success) {
@@ -105,27 +109,47 @@ async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
   return (corpo.jobs ?? []) as JobRecebido[];
 }
 
-async function reportarResultado(
-  cfg: ConfigAgente,
-  jobId: string,
-  sucesso: boolean,
-  resultado?: unknown,
-  erro?: string
-): Promise<void> {
-  const res = await fetch(`${cfg.wegest_url}/primavera-agent-result`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cfg.chave_agente}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ job_id: jobId, success: sucesso, resultado, error: erro }),
-  });
-  if (!res.ok) {
-    const texto = await res.text().catch(() => '');
-    log(
-      `AVISO: falha ao reportar o resultado do job ${jobId} (HTTP ${res.status}): ${texto.slice(0, 200)}`
-    );
+interface Resultado {
+  success: boolean;
+  ambiguous?: boolean;
+  resultado?: unknown;
+  error?: string;
+}
+
+/** Entrega o resultado ao WeGest. Insiste: um resultado perdido deixava o job
+ *  reclamado até a fila o dar por ambíguo, com o documento já emitido. */
+async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado): Promise<void> {
+  const tentativas = 4;
+  for (let i = 1; i <= tentativas; i++) {
+    try {
+      const res = await fetch(`${cfg.wegest_url}/primavera-agent-result`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${cfg.chave_agente}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ job_id: jobId, ...r }),
+        signal: AbortSignal.timeout(TIMEOUT_WEGEST_MS),
+      });
+      if (res.ok) return;
+      const texto = await res.text().catch(() => '');
+      // 404/409: o WeGest já fechou o job doutra forma; insistir não muda nada.
+      if (res.status === 404 || res.status === 409) {
+        log(
+          `AVISO: o WeGest não aceitou o resultado do job ${jobId} (HTTP ${res.status}): ${texto.slice(0, 200)}`
+        );
+        return;
+      }
+      log(`Falha ao reportar o job ${jobId} (HTTP ${res.status}), tentativa ${i}/${tentativas}.`);
+    } catch (erro) {
+      const msg = erro instanceof Error ? erro.message : String(erro);
+      log(`Falha ao reportar o job ${jobId} (${msg}), tentativa ${i}/${tentativas}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000 * i));
   }
+  log(
+    `AVISO: desisti de reportar o job ${jobId}. A fila vai dá-lo por ambíguo; confirmar no Primavera.`
+  );
 }
 
 async function processarJob(cfg: ConfigAgente, job: JobRecebido): Promise<void> {
@@ -133,16 +157,25 @@ async function processarJob(cfg: ConfigAgente, job: JobRecebido): Promise<void> 
   // Um cliente por job: o token é pedido de novo, nunca fica a expirar entre jobs.
   const asconnect = criarClienteAsConnect(cfg);
   try {
-    const resultado =
-      job.tipo === 'emit'
-        ? await asconnect.emitir(job.payload as PayloadEmit)
-        : await asconnect.testar();
-    await reportarResultado(cfg, job.id, true, resultado);
+    let resultado: unknown;
+    if (job.tipo === 'emit') resultado = await asconnect.emitir(job.payload as PayloadEmit);
+    else if (job.tipo === 'health') resultado = await asconnect.testar();
+    else {
+      throw new Error(
+        `Tipo de job desconhecido: ${String(job.tipo)}. Este agente está desactualizado?`
+      );
+    }
+    await reportarResultado(cfg, job.id, { success: true, resultado });
     log(`Job ${job.id} concluído com sucesso.`);
   } catch (erro) {
     const msg = erro instanceof Error ? erro.message : String(erro);
+    if (erro instanceof AmbiguoError) {
+      log(`Job ${job.id} com desfecho AMBÍGUO: ${msg}`);
+      await reportarResultado(cfg, job.id, { success: false, ambiguous: true, error: msg });
+      return;
+    }
     log(`Job ${job.id} falhou: ${msg}`);
-    await reportarResultado(cfg, job.id, false, undefined, msg);
+    await reportarResultado(cfg, job.id, { success: false, error: msg });
   }
 }
 
