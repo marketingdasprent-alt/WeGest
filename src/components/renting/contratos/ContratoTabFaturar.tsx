@@ -49,6 +49,7 @@ import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import { observacoesIniciais } from '@/lib/observacoesFatura';
 import { DocumentoPreviewDialog } from '@/components/faturacao/acordo/DocumentoPreviewDialog';
 import { estadoCobrancaDisplay } from '@/lib/estadoCobranca';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
@@ -508,6 +509,13 @@ export function ContratoTabFaturar({ contrato }: Props) {
           contrato_id: contrato.id,
           cobranca_id: c.id,
           referencia_externa: codigoLabel,
+          // Emissão directa da cobrança, sem diálogo: a matrícula e as notas
+          // externas do contrato vão na mesma para o documento.
+          observacoes:
+            observacoesIniciais({
+              matricula: contrato.matricula,
+              notasExternas: contrato.observacoes,
+            }) || undefined,
         },
         cobrancaId: c.id,
         contratoId: contrato.id,
@@ -1074,6 +1082,8 @@ export function ContratoTabFaturar({ contrato }: Props) {
           id: contrato.id,
           orgId: contrato.org_id,
           codigoLabel: `Contrato #${String(contrato.codigo).padStart(4, '0')}`,
+          matricula: contrato.matricula,
+          notasExternas: contrato.observacoes,
         }}
         destinatario={clienteEntidade}
         motoristaEntidade={motoristaEntidade}

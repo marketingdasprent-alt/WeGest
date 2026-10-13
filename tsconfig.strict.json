@@ -8,6 +8,9 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/lib/observacoesFatura.ts",
+    "src/lib/observacoesFatura.test.ts",
+    "src/components/faturacao/ObservacoesFaturaField.tsx",
     "src/utils/novoTicketAssistencia.ts",
     "src/utils/novoTicketAssistencia.test.ts",
     "src/hooks/useEstadoPersistido.ts",
