@@ -24,6 +24,7 @@ import { paletaDaMarca } from '@/lib/corDaMarca';
 import { modoEmbedAtivo } from '@/utils/formularioEmbed';
 import { useTemaClaroForcado } from '@/hooks/useTemaClaroForcado';
 import { useAlturaParaPaginaMae } from '@/hooks/useAlturaParaPaginaMae';
+import { useFundoTransparente } from '@/hooks/useFundoTransparente';
 
 /** Marca de recurso: uma organização sem logótipo carregado mostra a WeGest. */
 const LOGO_WEGEST = '/Logo.png';
@@ -59,6 +60,7 @@ const FormularioPublico = () => {
   const [searchParams] = useSearchParams();
   const embed = modoEmbedAtivo(searchParams);
   useTemaClaroForcado();
+  useFundoTransparente(embed);
   const raizRef = useAlturaParaPaginaMae(embed, !loading && !!formulario);
 
   const fieldsPerStep = 3; // Quantos campos por etapa
