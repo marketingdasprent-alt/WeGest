@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Edit, Trash2, Tag, Calendar, Link, Copy } from 'lucide-react';
+import { Edit, Trash2, Tag, Calendar, Link, Copy, Code } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { codigoDeIncorporacao } from '@/utils/formularioEmbed';
 import { DeleteFormularioDialog } from './DeleteFormularioDialog';
 
 interface Formulario {
@@ -67,6 +68,15 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
     });
   };
 
+  /** Para o site da organização: iframe sem cabeçalho e com altura automática. */
+  const copyCodigoDeIncorporacao = () => {
+    navigator.clipboard.writeText(codigoDeIncorporacao(window.location.origin, formulario.id));
+    toast({
+      title: 'Código copiado!',
+      description: 'Cole-o na página do site onde o formulário deve aparecer.',
+    });
+  };
+
   const handleDeleteClick = () => {
     setShowDeleteDialog(true);
   };
@@ -122,14 +132,28 @@ export const FormularioCard: React.FC<FormularioCardProps> = ({
                 <Link className="h-4 w-4 text-primary" />
                 <span className="text-sm">Link de Divulgação</span>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={copyFormLink}
-                className="border-primary/30 text-primary hover:bg-primary/10"
-              >
-                <Copy className="h-3 w-3" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copyFormLink}
+                  className="border-primary/30 text-primary hover:bg-primary/10"
+                  title="Copiar link"
+                  aria-label="Copiar link"
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copyCodigoDeIncorporacao}
+                  className="border-primary/30 text-primary hover:bg-primary/10"
+                  title="Copiar código para incorporar no site"
+                  aria-label="Copiar código para incorporar no site"
+                >
+                  <Code className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground mt-1 truncate">
               /formulario/{formulario.id}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -38,6 +38,8 @@ import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { FATURA_ARTIGO_TIPOS } from '@/lib/faturaArtigoTipos';
 import type { ItemFatura } from '@/types/faturacao';
 import { semCodigo } from '@/types/codigoPorOrg';
+import { ObservacoesFaturaField } from '@/components/faturacao/ObservacoesFaturaField';
+import { observacoesIniciais, observacoesParaEmitir } from '@/lib/observacoesFatura';
 
 const IVA_PADRAO = 23;
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
@@ -55,12 +57,17 @@ export type NovaFaturaAlvo =
       id: string;
       orgId: string;
       codigoLabel: string;
+      matricula?: string | null;
+      /** Observações externas do contrato: entram nas observações da fatura. */
+      notasExternas?: string | null;
     }
   | {
       tipo: 'reserva';
       id: string;
       orgId: string;
       codigoLabel: string;
+      matricula?: string | null;
+      notasExternas?: string | null;
     };
 
 export interface NovaFaturaDestinatario {
@@ -120,6 +127,15 @@ export function NovaFaturaDialog({
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
   const [linhas, setLinhas] = useState<LinhaArtigo[]>([novaLinha()]);
   const [submitting, setSubmitting] = useState(false);
+  // Observações impressas no documento: matrícula e notas externas ao abrir;
+  // quem fatura acrescenta o resto.
+  const [observacoes, setObservacoes] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    setObservacoes(
+      observacoesIniciais({ matricula: alvo.matricula, notasExternas: alvo.notasExternas })
+    );
+  }, [open, alvo.id, alvo.matricula, alvo.notasExternas]);
   const [parcelamentoAlvo, setParcelamentoAlvo] = useState<ParcelamentoFaturaAlvo | null>(null);
 
   function patchLinha(key: string, patch: Partial<LinhaArtigo>) {
@@ -303,6 +319,7 @@ export function NovaFaturaDialog({
             contrato_id: alvo.tipo === 'contrato' ? alvo.id : undefined,
             cobranca_id: cobrancaId,
             referencia_externa: alvo.codigoLabel,
+            observacoes: observacoesParaEmitir(observacoes),
           },
           cobrancaId,
           contratoId: alvo.id, // só p/ chave de invalidação
@@ -435,6 +452,12 @@ export function NovaFaturaDialog({
                 </div>
               </div>
             </div>
+
+            <ObservacoesFaturaField
+              value={observacoes}
+              onChange={setObservacoes}
+              disabled={submitting}
+            />
 
             {motoristaEntidade && (
               <div className="space-y-1.5">
