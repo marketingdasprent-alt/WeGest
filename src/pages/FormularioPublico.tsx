@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight,
@@ -21,6 +21,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { initPixel, trackLeadOnce } from '@/lib/pixel';
 import { paletaDaMarca } from '@/lib/corDaMarca';
+import { modoEmbedAtivo } from '@/utils/formularioEmbed';
+import { useTemaClaroForcado } from '@/hooks/useTemaClaroForcado';
+import { useAlturaParaPaginaMae } from '@/hooks/useAlturaParaPaginaMae';
 
 /** Marca de recurso: uma organização sem logótipo carregado mostra a WeGest. */
 const LOGO_WEGEST = '/Logo.png';
@@ -50,6 +53,13 @@ const FormularioPublico = () => {
     | { nome?: string; logo_url?: string | null; cor_primaria?: string | null }
     | undefined;
   const marca = paletaDaMarca(organizacao?.cor_primaria);
+
+  // `?embed=1`: só o formulário, sem cabeçalho nem rodapé, para viver num
+  // iframe no site da organização; a altura segue para a página mãe.
+  const [searchParams] = useSearchParams();
+  const embed = modoEmbedAtivo(searchParams);
+  useTemaClaroForcado();
+  const raizRef = useAlturaParaPaginaMae(embed, !loading && !!formulario);
 
   const fieldsPerStep = 3; // Quantos campos por etapa
   const totalSteps = formulario?.campos ? Math.ceil(formulario.campos.length / fieldsPerStep) : 1;
@@ -474,36 +484,49 @@ const FormularioPublico = () => {
   return (
     // `variaveisCss` redefine `--primary` neste ramo: o indicador de etapas e
     // tudo o que use `bg-primary` seguem a cor da organização sem saberem dela.
-    <div className="min-h-screen bg-background" style={marca.variaveisCss}>
+    <div
+      ref={raizRef}
+      className={embed ? 'bg-transparent' : 'min-h-screen bg-background'}
+      style={marca.variaveisCss}
+    >
       <motion.section
-        className="relative py-20 px-4 text-center overflow-hidden min-h-screen flex items-center"
+        className={
+          embed
+            ? 'relative px-2 py-2 text-center'
+            : 'relative py-16 px-4 text-center overflow-hidden min-h-screen flex items-center'
+        }
         initial="initial"
         animate="animate"
       >
-        <div
-          className="absolute inset-0"
-          style={{ background: `linear-gradient(90deg, ${marca.corSuave}, transparent)` }}
-        />
+        {!embed && (
+          <div
+            className="absolute inset-0"
+            style={{ background: `linear-gradient(90deg, ${marca.corSuave}, transparent)` }}
+          />
+        )}
         <div className="relative z-10 max-w-6xl mx-auto">
           {/* Logótipo de quem criou o formulário. Sem logótipo carregado, cai
               na marca WeGest — nunca na marca de outra organização, que era o
               que acontecia (o logótipo da Distância Arrojada estava fixo aqui
-              para toda a gente). A cor segue a mesma regra, em corDaMarca.ts. */}
-          <motion.div className="mb-4" variants={fadeInUp}>
-            <img
-              src={organizacao?.logo_url || LOGO_WEGEST}
-              alt={
-                organizacao?.logo_url ? `Logótipo de ${organizacao.nome ?? ''}`.trim() : 'WeGest'
-              }
-              className="h-60 mx-auto object-contain"
-            />
-          </motion.div>
+              para toda a gente). A cor segue a mesma regra, em corDaMarca.ts.
+              Em embed o site já tem a sua própria marca à volta. */}
+          {!embed && (
+            <motion.div className="mb-6" variants={fadeInUp}>
+              <img
+                src={organizacao?.logo_url || LOGO_WEGEST}
+                alt={
+                  organizacao?.logo_url ? `Logótipo de ${organizacao.nome ?? ''}`.trim() : 'WeGest'
+                }
+                className="h-24 md:h-32 mx-auto object-contain"
+              />
+            </motion.div>
+          )}
 
           {/* O nome do formulário é interno ("TVDE Geral") — serve para quem
               o gere o distinguir dos outros, não para quem o vai preencher.
               Quem chega aqui já sabe ao que vem: fica o logótipo, a descrição
               e o formulário. */}
-          {formulario.descricao && (
+          {!embed && formulario.descricao && (
             <motion.p
               className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed"
               variants={fadeInUp}
@@ -513,8 +536,14 @@ const FormularioPublico = () => {
           )}
 
           {/* Form Modal ou Success Message */}
+          {/* Em embed o iframe cresce com o conteúdo: sem altura máxima nem
+              scroll interno, senão havia scroll dentro de scroll. */}
           <motion.div
-            className="bg-card border rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto"
+            className={
+              embed
+                ? 'bg-card border rounded-2xl p-6 max-w-md w-full mx-auto'
+                : 'bg-card border rounded-3xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto mx-auto'
+            }
             style={{ borderColor: marca.corDeContorno }}
             variants={fadeInUp}
           >
@@ -609,12 +638,14 @@ const FormularioPublico = () => {
       {/* Rodapé com o nome de quem angaria o lead, e o ano corrente. Estava
           fixo em "© 2024 DasPrent": todas as organizações mostravam a marca
           de outra empresa a quem preenchia o formulário delas. */}
-      <footer className="py-8 px-4 text-center">
-        <p className="text-muted-foreground text-sm">
-          © {new Date().getFullYear()} {organizacao?.nome ?? 'WeGest'}. Todos os direitos
-          reservados.
-        </p>
-      </footer>
+      {!embed && (
+        <footer className="py-8 px-4 text-center">
+          <p className="text-muted-foreground text-sm">
+            © {new Date().getFullYear()} {organizacao?.nome ?? 'WeGest'}. Todos os direitos
+            reservados.
+          </p>
+        </footer>
+      )}
     </div>
   );
 };
