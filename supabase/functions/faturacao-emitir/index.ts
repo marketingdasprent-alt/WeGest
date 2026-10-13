@@ -52,9 +52,18 @@ import type { Cliente, EmitInput, FaturacaoProvider, Item, ProviderConfig } from
 import { EmissaoAmbiguaError } from './types.ts';
 import {
   configDaLinha,
+  eVariasLinhas,
+  mensagemVariasIntegracoes,
   origemDaConsulta,
+  originalPorNumeroValido,
   type LinhaIntegracao,
 } from '../_shared/faturacao/integracao.ts';
+import {
+  escolherIntegracao,
+  montarOpcoes,
+  type IntegracaoDaEmpresa,
+  type TipoDoc,
+} from '../_shared/faturacao/escolha.ts';
 import { linhaDeFalhaEmissao } from '../_shared/faturacao/falhas.ts';
 import { avisoTotalDivergente, totalComIva } from '../_shared/faturacao/totais.ts';
 
@@ -85,7 +94,7 @@ const PROVIDERS: Record<string, FaturacaoProvider> = {
 const DEFAULT_PROVIDER = 'keyinvoice';
 
 interface Body {
-  action?: 'emit' | 'health' | 'pdf' | 'preflight' | 'void_receipt';
+  action?: 'emit' | 'health' | 'pdf' | 'preflight' | 'void_receipt' | 'opcoes';
   // emit
   tipo?: 'FT' | 'FR' | 'NC' | 'RC';
   cliente?: Cliente;
@@ -95,6 +104,10 @@ interface Body {
   /** Empresa emissora (clientes.is_emissora). Opcional: o servidor resolve-a a
    *  partir do contrato/cobrança quando não vier. É ela que escolhe a chave. */
   emissor_id?: string;
+  /** Integração escolhida pelo utilizador (FT/FR). NC/RC seguem a da fatura original. */
+  integracao_id?: string;
+  /** Só para `opcoes`: o ecrã da reserva ainda não tem cobrança quando abre. */
+  reserva_id?: string;
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string;
@@ -178,6 +191,15 @@ async function resolverEmissorId(
     if (data?.emissor_id) return data.emissor_id as string;
   }
 
+  if (payload.reserva_id) {
+    const { data } = await db
+      .from('reservas')
+      .select('emissor_id')
+      .eq('id', payload.reserva_id)
+      .maybeSingle();
+    if (data?.emissor_id) return data.emissor_id as string;
+  }
+
   if (payload.cobranca_id) {
     const { data: cob } = await db
       .from('contrato_cobrancas')
@@ -229,6 +251,47 @@ async function resolverEmissorId(
  *  ligado. Não é falha técnica, é uma coisa que alguém tem de ir configurar. */
 class EmpresaSemFaturacaoError extends Error {}
 
+/** Linha de faturação por id, sempre limitada à org de quem pede. */
+async function linhaDaOrgPorId(orgId: string, id: string): Promise<LinhaIntegracao | null> {
+  const { data } = await serviceClient()
+    .from('plataformas_configuracao')
+    .select('id, client_secret, config')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .eq('plataforma', 'faturacao')
+    .maybeSingle();
+  return (data as LinhaIntegracao | null) ?? null;
+}
+
+/** Nome da empresa, só se for da org de quem pede: o nome de outra org nunca sai numa mensagem. */
+async function nomeDaEmpresa(orgId: string, emissorId: string): Promise<string | null> {
+  const { data } = await serviceClient()
+    .from('clientes')
+    .select('nome')
+    .eq('id', emissorId)
+    .eq('org_id', orgId)
+    .maybeSingle();
+  return (data?.nome as string | null) ?? null;
+}
+
+/** Erro de empresa sem faturação (ou sem empresa determinada, se emissorId for null). */
+async function erroEmpresaSemFaturacao(
+  orgId: string,
+  emissorId: string | null
+): Promise<EmpresaSemFaturacaoError> {
+  if (!emissorId) {
+    return new EmpresaSemFaturacaoError(
+      'Não foi possível determinar a empresa emissora deste documento. ' +
+        'Verifique a empresa no contrato ou na reserva antes de faturar.'
+    );
+  }
+  const nome = await nomeDaEmpresa(orgId, emissorId);
+  return new EmpresaSemFaturacaoError(
+    `${nome ?? 'Esta empresa'} não tem software de faturação configurado. ` +
+      'Ligue-lhe uma integração em Definições → Integrações antes de emitir documentos em nome dela.'
+  );
+}
+
 async function resolverOrgId(req: Request, orgIdExplicito?: string): Promise<string | null> {
   const isServiceRole = isServiceRoleRequest(req);
   // Worker interno a emitir em nome de uma org concreta.
@@ -242,21 +305,8 @@ async function resolverOrgId(req: Request, orgIdExplicito?: string): Promise<str
   }
 }
 
-/**
- * Resolve { provider, cfg } da EMPRESA que vai emitir. Sem org ou sem empresa
- * com integração → sem chave, e a emissão falha cedo e claro.
- *
- * Sem `providerFiltro`: lê a integração de faturação ATIVA DA EMPRESA — há uma
- * por empresa (índice uq_faturacao_ativa_por_emissor, migração
- * 20260917150000_faturacao_por_empresa_emissora.sql). Uma empresa sem
- * integração não pode ser faturada: emitir pela conta de outra empresa poria
- * o NIF errado num documento fiscal.
- *
- * Com `providerFiltro`: lê a linha desse provider especificamente, ativa ou
- * não — usado pelo teste de ligação ("Testar ligação" no diálogo), para
- * testar a integração que se está a CONFIGURAR (ex.: Primavera ainda não
- * promovida a ativa) sem depender de qual delas está em produção agora.
- */
+/** { provider, cfg } da integração ativa da empresa que emite (nunca a de outra: NIF errado),
+ *  ou, com `providerFiltro`, a linha desse fornecedor ativa ou não, para o teste de ligação. */
 async function getOrgConfig(
   req: Request,
   orgIdExplicito?: string,
@@ -291,27 +341,20 @@ async function getOrgConfig(
     if (emissorId) query = query.eq('emissor_id', emissorId);
   } else {
     // Emitir a sério: a chave TEM de ser a da empresa do documento.
-    if (!emissorId) {
-      throw new EmpresaSemFaturacaoError(
-        'Não foi possível determinar a empresa emissora deste documento. ' +
-          'Verifique a empresa no contrato ou na reserva antes de faturar.'
-      );
-    }
+    if (!emissorId) throw await erroEmpresaSemFaturacao(orgId, null);
     query = query.eq('ativo', true).eq('emissor_id', emissorId);
   }
-  const { data: row } = await query.maybeSingle();
-
-  if (!providerFiltro && !row) {
-    const { data: empresa } = await service
-      .from('clientes')
-      .select('nome')
-      .eq('id', emissorId!)
-      .maybeSingle();
-    throw new EmpresaSemFaturacaoError(
-      `${empresa?.nome ?? 'Esta empresa'} não tem software de faturação configurado. ` +
-        'Ligue-lhe uma integração em Definições → Integrações antes de emitir documentos em nome dela.'
-    );
+  const { data: row, error } = await query.maybeSingle();
+  if (error) {
+    // Com KeyInvoice e Primavera ativos há duas linhas: dizê-lo, não "sem software".
+    if (eVariasLinhas(error)) {
+      const nome = emissorId ? await nomeDaEmpresa(orgId, emissorId) : null;
+      throw new EscolhaFornecedorError(mensagemVariasIntegracoes(nome, providerFiltro));
+    }
+    throw new Error(`Falha a ler a integração de faturação: ${error.message}`);
   }
+
+  if (!providerFiltro && !row) throw await erroEmpresaSemFaturacao(orgId, emissorId!);
 
   if (!row) {
     // Teste de ligação de um provider sem linha gravada: sem chave, falha no adapter.
@@ -363,26 +406,158 @@ async function getConfigDoDocumento(
   const origem = origemDaConsulta(fatura);
   if (origem.tipo === 'integracao_da_fatura') {
     // Activa ou não: uma integração desligada continua a ser onde o documento está.
-    const { data: row } = await db
-      .from('plataformas_configuracao')
-      .select('id, client_secret, config')
-      .eq('id', origem.integracaoId)
-      .eq('org_id', orgId!)
-      .eq('plataforma', 'faturacao')
-      .maybeSingle();
+    const row = await linhaDaOrgPorId(orgId!, origem.integracaoId);
     if (!row) {
       throw new EmpresaSemFaturacaoError(
         'A integração de faturação que emitiu este documento já não existe. ' +
           'Sem a chave dessa conta não é possível consultar o documento.'
       );
     }
-    const c = configDaLinha(row as LinhaIntegracao);
+    const c = configDaLinha(row);
     return { provider: c.provider, cfg: { apiKey: c.apiKey, settings: c.settings, orgId } };
   }
 
   const emissorId = await resolverEmissorId(payload, hint);
   const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
   return { provider, cfg };
+}
+
+/** Erro do utilizador ao escolher (empresa errada, inativa, tipo não suportado). Nada foi emitido. */
+class EscolhaFornecedorError extends Error {}
+
+interface LinhaDaEmpresa extends LinhaIntegracao {
+  ativo: boolean;
+}
+
+/** Integrações de faturação desta empresa, sempre filtradas pela org de quem pede. */
+async function integracoesDaEmpresa(orgId: string, emissorId: string): Promise<LinhaDaEmpresa[]> {
+  const { data, error } = await serviceClient()
+    .from('plataformas_configuracao')
+    .select('id, client_secret, config, ativo')
+    .eq('plataforma', 'faturacao')
+    .eq('org_id', orgId)
+    .eq('emissor_id', emissorId);
+  if (error) throw new Error(`Falha a ler as integrações de faturação: ${error.message}`);
+  return (data ?? []) as LinhaDaEmpresa[];
+}
+
+function paraEscolha(linhas: LinhaDaEmpresa[]): IntegracaoDaEmpresa[] {
+  return linhas.map((l) => ({ id: l.id, provider: configDaLinha(l).provider, ativo: !!l.ativo }));
+}
+
+/** Integração da fatura mais recente do mesmo contrato ou reserva, para a pré-seleção. */
+async function ultimaIntegracaoUsada(orgId: string, payload: Body): Promise<string | null> {
+  const db = serviceClient();
+  let contratoId = payload.contrato_id ?? null;
+  let reservaId = payload.reserva_id ?? null;
+  if (!contratoId && !reservaId && payload.cobranca_id) {
+    const { data: cob } = await db
+      .from('contrato_cobrancas')
+      .select('contrato_id, reserva_id')
+      .eq('id', payload.cobranca_id)
+      .maybeSingle();
+    contratoId = (cob?.contrato_id as string | null) ?? null;
+    reservaId = (cob?.reserva_id as string | null) ?? null;
+  }
+  let q = db
+    .from('invoices')
+    .select('integracao_id')
+    .eq('org_id', orgId)
+    .in('tipo', ['FT', 'FR'])
+    .not('integracao_id', 'is', null);
+  if (contratoId) {
+    q = q.eq('contrato_id', contratoId);
+  } else if (reservaId) {
+    const { data: cobs } = await db
+      .from('contrato_cobrancas')
+      .select('id')
+      .eq('reserva_id', reservaId);
+    const ids = (cobs ?? []).map((c) => c.id as string);
+    if (!ids.length) return null;
+    q = q.in('cobranca_id', ids);
+  } else {
+    return null;
+  }
+  const { data } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
+  return (data?.integracao_id as string | null) ?? null;
+}
+
+/**
+ * Config para EMITIR. FT/FR: a integração escolhida (ou a única ativa). NC/RC: sempre a da
+ * fatura original, mesmo inativa — o documento só pode ser corrigido ou liquidado onde existe.
+ */
+async function configParaEmitir(
+  req: Request,
+  payload: Body,
+  emissorId: string | null
+): Promise<{ provider: string; cfg: ProviderConfig; orgId: string; integracaoId: string }> {
+  const orgId = await resolverOrgId(req, payload.org_id);
+  if (!orgId) throw new EmpresaSemFaturacaoError('Não foi possível determinar a organização.');
+  const db = serviceClient();
+
+  if (payload.tipo === 'NC' || payload.tipo === 'RC') {
+    // Do mais específico para o geral: duas empresas da org podem repetir o mesmo número.
+    const porNumero = () =>
+      db
+        .from('invoices')
+        .select('integracao_id')
+        .eq('org_id', orgId)
+        .eq('numero', payload.documento_referencia ?? '')
+        .in('tipo', ['FT', 'FR'])
+        .not('integracao_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1);
+    let original: { integracao_id: string | null } | null = null;
+    if (payload.cobranca_id) {
+      ({ data: original } = await porNumero().eq('cobranca_id', payload.cobranca_id).maybeSingle());
+    }
+    if (!original?.integracao_id && payload.contrato_id) {
+      ({ data: original } = await porNumero().eq('contrato_id', payload.contrato_id).maybeSingle());
+    }
+    if (!original?.integracao_id) {
+      ({ data: original } = await porNumero().maybeSingle());
+      if (original?.integracao_id) {
+        const daEmpresa = emissorId ? await integracoesDaEmpresa(orgId, emissorId) : [];
+        if (!originalPorNumeroValido(original.integracao_id, daEmpresa)) original = null;
+      }
+    }
+    if (original?.integracao_id) {
+      const row = await linhaDaOrgPorId(orgId, original.integracao_id);
+      if (!row) {
+        throw new EmpresaSemFaturacaoError(
+          'A integração de faturação que emitiu o documento original já não existe.'
+        );
+      }
+      const c = configDaLinha(row);
+      return {
+        provider: c.provider,
+        cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
+        orgId,
+        integracaoId: c.integracaoId,
+      };
+    }
+    // Sem original identificável: escolhe-se como numa fatura (comportamento anterior).
+  }
+
+  if (!emissorId) throw await erroEmpresaSemFaturacao(orgId, null);
+  const linhas = await integracoesDaEmpresa(orgId, emissorId);
+  const escolha = escolherIntegracao(
+    paraEscolha(linhas.filter((l) => l.ativo)),
+    payload.tipo as TipoDoc,
+    payload.integracao_id
+  );
+  if (!escolha.ok) {
+    if (escolha.codigo === 'sem_integracao') throw await erroEmpresaSemFaturacao(orgId, emissorId);
+    throw new EscolhaFornecedorError(escolha.erro);
+  }
+  const row = linhas.find((l) => l.id === escolha.integracaoId)!;
+  const c = configDaLinha(row);
+  return {
+    provider: c.provider,
+    cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
+    orgId,
+    integracaoId: c.integracaoId,
+  };
 }
 
 function pickAdapter(provider: string): FaturacaoProvider {
@@ -414,6 +589,15 @@ serve(async (req) => {
           apiKey: payload.apiKey ?? null,
           settings: { provider, ...(payload.settings ?? {}) },
         };
+      } else if (payload.integracao_id) {
+        // Testa a integração concreta do diálogo: com várias do mesmo fornecedor na org,
+        // filtrar só pelo fornecedor deixava de identificar uma linha.
+        const orgId = await resolverOrgId(req, payload.org_id);
+        const row = await linhaDaOrgPorId(orgId ?? '', payload.integracao_id);
+        if (!row) throw new Error('Integração não encontrada nesta organização.');
+        const c = configDaLinha(row);
+        provider = c.provider;
+        cfg = { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId };
       } else if (payload.provider) {
         // testa a linha JÁ GRAVADA desse provider especificamente — pode não
         // ser a integração ativa (ex.: a testar o Primavera enquanto o
@@ -434,6 +618,26 @@ serve(async (req) => {
     } catch (e) {
       console.error('[faturacao-emitir] health falhou:', (e as Error).message);
       return json({ ok: false, error: (e as Error).message });
+    }
+  }
+
+  // ── opcoes (fornecedores possíveis para um documento novo) ──
+  // Nunca devolve chaves nem settings: só o que o seletor do ecrã precisa.
+  if (payload.action === 'opcoes') {
+    try {
+      const tipo = (payload.tipo ?? 'FT') as TipoDoc;
+      const orgId = await resolverOrgId(req, payload.org_id);
+      if (!orgId)
+        return json({ success: false, error: 'Não foi possível determinar a organização.' });
+      const emissorId = await resolverEmissorId(payload);
+      // Sem emissor_id na resposta: vem do contrato/reserva sem filtro de org.
+      if (!emissorId) return json({ success: true, opcoes: montarOpcoes([], tipo, null) });
+      const linhas = await integracoesDaEmpresa(orgId, emissorId);
+      const ultima = await ultimaIntegracaoUsada(orgId, payload);
+      return json({ success: true, opcoes: montarOpcoes(paraEscolha(linhas), tipo, ultima) });
+    } catch (e) {
+      console.error('[faturacao-emitir] opcoes falhou:', (e as Error).message);
+      return json({ success: false, error: (e as Error).message });
     }
   }
 
@@ -549,12 +753,7 @@ serve(async (req) => {
   try {
     const emissorId = await resolverEmissorId(payload);
     contexto.emissorId = emissorId;
-    const { provider, cfg, orgId, integracaoId } = await getOrgConfig(
-      req,
-      payload.org_id,
-      undefined,
-      emissorId
-    );
+    const { provider, cfg, orgId, integracaoId } = await configParaEmitir(req, payload, emissorId);
     contexto.provider = provider;
     contexto.integracaoId = integracaoId;
     const adapter = pickAdapter(provider);
