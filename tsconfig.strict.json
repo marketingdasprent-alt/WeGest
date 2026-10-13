@@ -8,6 +8,8 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/hooks/useFundoTransparente.ts",
+    "src/hooks/useFundoTransparente.test.ts",
     "src/lib/observacoesFatura.ts",
     "src/lib/observacoesFatura.test.ts",
     "src/components/faturacao/ObservacoesFaturaField.tsx",
