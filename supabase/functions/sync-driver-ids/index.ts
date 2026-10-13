@@ -1,5 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
 import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
+import { criarMatcherMotoristas } from "../_shared/bolt-import-csv/parse.ts";
+import { fichaDaContaPorContacto } from "../_shared/bolt/fichaDaConta.ts";
 
 // Reparação de mapeamentos motorista ↔ Bolt. Ferramenta operacional interna,
 // sempre limitada a uma org (fuzzy match entre tenants era um risco real —
@@ -15,16 +17,6 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-
-function normalizeStr(str: string): string {
-  if (!str) return '';
-  return str
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ");
-}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -68,66 +60,38 @@ Deno.serve(async (req) => {
     let totalMapped = 0;
     const updates = [];
 
-    for (const m of motoristas ?? []) {
-      if (m.bolt_id) continue; // Já tem ID
+    // Só pelo telefone ou email da conta. A comparação por partes do nome
+    // ligou "Fabio Silva", "João Santos", "Jorge Silva" e "José Silva" às
+    // fichas erradas (2026-10-12): a Bolt de um ia para as contas de outro.
+    const matcher = criarMatcherMotoristas(motoristas ?? []);
+    const comBoltId = new Set((motoristas ?? []).filter((m) => m.bolt_id).map((m) => m.id));
+    const contasVistas = new Set<string>();
 
-      const mNorm = normalizeStr(m.nome);
-      const mPhone = m.telefone ? m.telefone.replace(/\D/g, '').slice(-9) : null;
-      const mEmail = m.email?.toLowerCase().trim();
+    for (const r of resumos ?? []) {
+      if (r.motorista_id || contasVistas.has(r.identificador_motorista)) continue;
+      contasVistas.add(r.identificador_motorista);
 
-      // Procurar nos resumos
-      const match = (resumos ?? []).find(r => {
-        const rNorm = normalizeStr(r.motorista_nome || '');
-        const rPhone = r.telefone ? r.telefone.replace(/\D/g, '').slice(-9) : null;
-        const rEmail = r.email?.toLowerCase().trim();
+      const fichaId = fichaDaContaPorContacto({ telefone: r.telefone, email: r.email }, matcher);
+      if (!fichaId || comBoltId.has(fichaId)) continue;
+      comBoltId.add(fichaId);
 
-        // Match por Nome Exato
-        if (rNorm === mNorm) return true;
-
-        // Match por Telefone
-        if (mPhone && rPhone && mPhone === rPhone) return true;
-
-        // Match por Email
-        if (mEmail && rEmail && mEmail === rEmail) return true;
-
-        // Fuzzy Match (Partes do nome)
-        const mParts = mNorm.split(' ').filter(p => p.length > 2);
-        const rParts = rNorm.split(' ').filter(p => p.length > 2);
-
-        if (mParts.length >= 2 && rParts.length >= 2) {
-          // Se todas as partes do nome da Bolt estão no nome do sistema
-          if (rParts.every(p => mNorm.includes(p))) return true;
-          // Se todas as partes do nome do sistema estão no nome da Bolt
-          if (mParts.every(p => rNorm.includes(p))) return true;
-        }
-
-        return false;
-      });
-
-      if (match) {
-        console.log(`Match encontrado: ${m.nome} -> ${match.identificador_motorista}`);
-        updates.push(
-          supabase
-            .from("motoristas_ativos")
-            .update({ bolt_id: match.identificador_motorista })
-            .eq("id", m.id)
-            .eq("org_id", orgId)
-        );
-
-        // Também atualizar o resumo se ele não tiver motorista_id
-        if (!match.motorista_id) {
-            updates.push(
-                supabase
-                    .from("bolt_resumos_semanais")
-                    .update({ motorista_id: m.id })
-                    .eq("org_id", orgId)
-                    .eq("identificador_motorista", match.identificador_motorista)
-                    .eq("motorista_nome", match.motorista_nome)
-            );
-        }
-
-        totalMapped++;
-      }
+      console.log(`Ligada pelo contacto: ${r.motorista_nome} -> ${fichaId}`);
+      updates.push(
+        supabase
+          .from("motoristas_ativos")
+          .update({ bolt_id: r.identificador_motorista })
+          .eq("id", fichaId)
+          .eq("org_id", orgId)
+      );
+      updates.push(
+        supabase
+          .from("bolt_resumos_semanais")
+          .update({ motorista_id: fichaId })
+          .eq("org_id", orgId)
+          .eq("identificador_motorista", r.identificador_motorista)
+          .is("motorista_id", null)
+      );
+      totalMapped++;
     }
 
     // Executar atualizações em lotes
