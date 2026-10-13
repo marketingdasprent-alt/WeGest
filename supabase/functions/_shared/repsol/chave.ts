@@ -62,3 +62,55 @@ export function transactionKey(args: {
 export function temHora(timeStr: string, txDate: string): boolean {
   return /\d/.test(timeStr || '') || !/T00:00/.test(txDate);
 }
+
+export interface AbastecimentoGravado {
+  transaction_id: string;
+  card_number: string | null;
+  transaction_date: string;
+  quantity: number | string | null;
+  amount: number | string | null;
+}
+
+const minuto = (data: string) => new Date(data).toISOString().slice(0, 16);
+const semHora = (data: string) => minuto(data).endsWith('T00:00');
+
+/**
+ * A linha já gravada que é esta mesma abastecida, para o upsert a actualizar em
+ * vez de criar outra. A chave sozinha não chega: as linhas gravadas antes de
+ * 2026-10-06 têm a chave antiga (com o valor), e o ficheiro de fatura vem sem
+ * hora. Assim entraram 398 compras a dobrar em setembro (13 955 EUR).
+ *
+ * Mesma compra = mesmo cartão, mesmos litros, mesmo sinal e mesmo minuto; ou
+ * o mesmo dia quando só um dos lados vem sem hora. Dois lados sem hora ficam
+ * com a chave (que aí inclui o posto): dois abastecimentos no mesmo dia são
+ * possíveis.
+ */
+export function abastecimentoJaGravado(
+  nova: { card: string; txDate: string; qty: number | null; amount: number | null },
+  gravados: readonly AbastecimentoGravado[]
+): AbastecimentoGravado | null {
+  if (!nova.card || nova.qty == null || nova.qty === 0) return null;
+  const litros = nova.qty.toFixed(2);
+  const devolucao = (nova.amount ?? 0) < 0;
+  const candidatos = gravados.filter(
+    (g) =>
+      g.card_number === nova.card &&
+      Number(g.quantity ?? 0).toFixed(2) === litros &&
+      Number(g.amount ?? 0) < 0 === devolucao
+  );
+
+  const instante = minuto(nova.txDate);
+  // 00:00 é "sem hora", não um minuto: dois assim no mesmo dia não se juntam.
+  const mesmoMinuto = semHora(nova.txDate)
+    ? undefined
+    : candidatos.find((g) => minuto(g.transaction_date) === instante);
+  if (mesmoMinuto) return mesmoMinuto;
+
+  return (
+    candidatos.find(
+      (g) =>
+        semHora(g.transaction_date) !== semHora(nova.txDate) &&
+        minuto(g.transaction_date).slice(0, 10) === instante.slice(0, 10)
+    ) ?? null
+  );
+}
