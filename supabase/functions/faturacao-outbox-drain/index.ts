@@ -13,7 +13,10 @@ const env = (k: string) => Deno.env.get(k);
 const MAX_POR_ORG = 2;
 const MAX_POR_CICLO = 10;
 
-const TIMEOUT_EMITIR_MS = 30_000;
+// Acima dos 45 s que o provider Primavera espera pelo agente (EMIT_TIMEOUT_MS
+// em providers/primavera.ts): com 30 s, toda a emissão Primavera morria aqui
+// antes de o provider responder e ficava suspensa sem razão.
+const TIMEOUT_EMITIR_MS = 60_000;
 
 interface Linha {
   id: string;

@@ -3,10 +3,10 @@
   "chave_agente": "cole aqui a chave gerada em Admin -> Faturação -> Integração -> Primavera",
 
   "primavera": {
-    "endpoint": "http://localhost:7071",
-    "username": "DasprentWS",
-    "password": "DasprentWS",
-    "enterprise": "CLONEDASPRENT"
+    "endpoint": "http://192.168.1.3:8090",
+    "username": "utilizador do webservice, dado pela AS Connect",
+    "password": "password do webservice, dada pela AS Connect",
+    "enterprise": "DASPWSTEST"
   },
 
   "iva_codes": {

@@ -13,9 +13,10 @@ config.provider` — nenhum interfere com o outro:
   cada empresa cliente vive atrás de VPN interna, inacessível a partir de uma edge
   function na nuvem. Um AGENTE local, a correr dentro da rede da empresa
   (`agent/primavera-agent/`), faz a ponte — ver a secção "Arquitectura: agente local"
-  abaixo. A documentação recebida do AS Connect (2026-07-30) também não mostra como
-  escolher o tipo de documento nem endpoints de PDF/anulação — `pdf()`/`voidReceipt()`
-  falham sempre, de propósito, até isso ficar confirmado. Ver os comentários no topo do
+  abaixo. A documentação do AS Connect de 2026-09-18 já aceita `TipoDocumento` no
+  pedido e traz endpoints de cliente e de consulta de tabelas, mas o agente ainda só
+  emite FT; PDF e anulação continuam sem endpoint — `pdf()`/`voidReceipt()` falham
+  sempre, de propósito, até isso ficar confirmado. Ver os comentários no topo do
   ficheiro para a lista exacta do que está por confirmar (ver também a memória do
   projecto, `project_primavera-integration.md`).
 
@@ -64,11 +65,19 @@ O agente liga-se sempre **para fora** (nunca precisa de porta aberta nem VPN esp
 atravessa qualquer firewall corporativo tal como um browser). Instruções completas para
 configurar e correr o agente em `agent/primavera-agent/README.md`.
 
-Timeouts de espera em `providers/primavera.ts` (`HEALTH_TIMEOUT_MS`, `EMIT_TIMEOUT_MS`):
-se o job ainda estiver `pending` ao expirar, nenhum agente chegou a tocar-lhe (falha
-CONHECIDA, seguro reagendar); se estiver `claimed`, o agente reclamou-o mas não reportou a
-tempo (AMBÍGUO — `EmissaoAmbiguaError`, nunca reemitir sem confirmar directamente no
-Primavera).
+A fila é por INTEGRAÇÃO (`primavera_jobs.integracao_id`), não por organização: com duas
+empresas emissoras na mesma organização, cada agente tem a sua chave e só reclama os
+pedidos da sua empresa (migração 20261013120000).
+
+Timeouts de espera em `providers/primavera.ts` (`HEALTH_TIMEOUT_MS`, `EMIT_TIMEOUT_MS`).
+Ao expirar, o provider cancela o pedido se ainda estiver `pending` (UPDATE atómico: nenhum
+agente lhe tocou, falha CONHECIDA, seguro reagendar). Se já estiver `claimed`, ou se o
+cancelamento não apanhar nada, o desfecho é AMBÍGUO (`EmissaoAmbiguaError`, nunca reemitir
+sem confirmar directamente no Primavera). A fila também nunca repõe um `emit` reclamado há
+mais de 2 minutos: passa a `ambiguo`. Um `pending` com `expires_at` ultrapassado fecha como
+`failed` ao ser reclamado, sem correr. O agente reporta `ambiguous: true` quando o pedido
+saiu para o Primavera e a resposta não chegou (rede, 5xx, resposta sem forma), e
+`primavera-agent-result` só fecha jobs ainda `claimed`.
 
 ## Chave da API — sem fallback global
 
