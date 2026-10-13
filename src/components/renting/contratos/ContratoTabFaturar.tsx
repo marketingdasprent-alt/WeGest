@@ -51,6 +51,7 @@ import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFatu
 import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
 import { observacoesIniciais } from '@/lib/observacoesFatura';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { DocumentoPreviewDialog } from '@/components/faturacao/acordo/DocumentoPreviewDialog';
 import { estadoCobrancaDisplay } from '@/lib/estadoCobranca';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
@@ -540,7 +541,12 @@ export function ContratoTabFaturar({ contrato }: Props) {
       refetchInvoices();
     } catch (e: any) {
       console.error('Erro a reemitir documento fiscal:', e);
-      toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+      // 'unknown': o documento pode existir; o texto genérico de falha convidava a reemitir.
+      if (e?.classe === 'unknown') {
+        toast.error(mensagemFalhaEmissao(e), { duration: DURACAO_AVISO_FALHA_MS });
+      } else {
+        toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+      }
     } finally {
       setReemitindoId(null);
     }

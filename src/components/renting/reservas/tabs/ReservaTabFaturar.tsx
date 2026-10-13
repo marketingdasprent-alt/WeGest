@@ -37,6 +37,7 @@ import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import {
@@ -441,7 +442,12 @@ export function ReservaTabFaturar({ reserva }: Props) {
       refetchAll();
     } catch (e: any) {
       console.error('Erro a reemitir documento fiscal:', e);
-      toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+      // 'unknown': o documento pode existir; o texto genérico de falha convidava a reemitir.
+      if (e?.classe === 'unknown') {
+        toast.error(mensagemFalhaEmissao(e, 'reserva'), { duration: DURACAO_AVISO_FALHA_MS });
+      } else {
+        toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+      }
     } finally {
       setReemitindoId(null);
     }

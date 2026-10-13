@@ -50,6 +50,17 @@ describe('emissão com fornecedor escolhido', () => {
     }
   );
 
+  // Um resultado incerto mostrado como "falha" convidava a reemitir e duplicar o documento.
+  it.each(ACOES_DE_LINHA.slice(0, 2))(
+    '%s mostra o aviso de resultado incerto quando a classe é unknown',
+    (f) => {
+      const src = ler(f);
+      const corpo = src.slice(src.indexOf('async function reemitirFatura('));
+      const captura = corpo.slice(corpo.indexOf('} catch ('), corpo.indexOf('} finally {'));
+      expect(captura).toMatch(/classe === 'unknown'[\s\S]*mensagemFalhaEmissao\(e/);
+    }
+  );
+
   it.each([...COM_DIALOGO, ...ACOES_DE_LINHA])(
     '%s envia integracao_id em cada emitirMut.mutateAsync',
     (f) => {
