@@ -123,7 +123,10 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         skipWaiting: false,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,ico,svg,woff2}'],
+        // O index.html tem de estar no precache: é a resposta de recurso das
+        // navegações (navigateFallback) e sem ele o SW rebenta ao arrancar com
+        // "non-precached-url: index.html" e não chega a instalar.
+        globPatterns: ['index.html', '**/*.{js,css,ico,svg,woff2}'],
         // O site da documentação da API (com o Scalar, ~1 MB gzip) só serve
         // docs.wegest.pt e /docs/*: não vai para o precache de todos os utilizadores.
         // O CSS do Scalar (~260 KB) sai com o nome do chunk que o importa, fora
