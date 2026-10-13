@@ -9,9 +9,13 @@ import {
   estadoEhSucesso,
   extrairToken,
   ehEmpresaDeTeste,
+  MENSAGEM_SEM_TEMPO_INSERIR,
   payloadFaturaTeste,
   pessoaSingular,
   variantesNif,
+  criadoEmLocal,
+  podeComecar,
+  timeoutDoInserir,
 } from './asconnect.ts';
 
 const cfgBase: ConfigAsConnect = {
@@ -249,6 +253,118 @@ describe('emitir: desfecho ambíguo', () => {
     await expect(
       criarClienteAsConnect(cfgBase, semToken).emitir(payload)
     ).rejects.not.toBeInstanceOf(AmbiguoError);
+  });
+});
+
+describe('prazo do WeGest', () => {
+  it('a idade do pedido mede-se com os relógios do servidor, não com o desta máquina', () => {
+    // Máquina 10 min adiantada: o servidor diz que o pedido tem 5 s.
+    const local = Date.parse('2026-10-13T10:10:00Z');
+    expect(criadoEmLocal('2026-10-13T10:00:00.000Z', '2026-10-13T10:00:05.000Z', local)).toBe(
+      local - 5_000
+    );
+    // Sem a hora do servidor, usa-se o created_at tal como vem.
+    expect(criadoEmLocal('2026-10-13T10:00:00.000Z', undefined, local)).toBe(
+      Date.parse('2026-10-13T10:00:00Z')
+    );
+    expect(criadoEmLocal(undefined, '2026-10-13T10:00:05.000Z', local)).toBeUndefined();
+    expect(criadoEmLocal('lixo', undefined, local)).toBeUndefined();
+  });
+
+  it('não começa um pedido com mais de 30 s', () => {
+    expect(podeComecar(0, 30_000)).toBe(true);
+    expect(podeComecar(0, 30_001)).toBe(false);
+    expect(podeComecar(undefined, 999_999)).toBe(true);
+  });
+
+  it('o inserir acaba até 43 s depois da criação; com menos de 8 s não se envia', () => {
+    expect(timeoutDoInserir(0, 10_000)).toBe(33_000);
+    expect(timeoutDoInserir(0, 35_000)).toBe(8_000);
+    expect(timeoutDoInserir(0, 35_001)).toBeNull();
+    expect(timeoutDoInserir(undefined, 0)).toBe(60_000);
+  });
+
+  it('sem tempo para o inserir, falha sem o enviar (não é ambíguo)', async () => {
+    const { fn, chamadas } = fetchFalso({
+      '/auth/gettoken': ['tok'],
+      '/erp/query/tabledata': [{ Resultado: [{ Cliente: 'C1' }], ...SUCESSO }],
+    });
+    const r = criarClienteAsConnect(cfgBase, fn).emitir(payload, new Date(), {
+      criadoEm: 0,
+      relogio: () => 36_000,
+    });
+    await expect(r).rejects.toThrow(MENSAGEM_SEM_TEMPO_INSERIR);
+    await expect(r).rejects.not.toBeInstanceOf(AmbiguoError);
+    expect(chamadas.map((c) => c.url)).not.toContain('/documentos/vendas/inserir');
+  });
+
+  it('com tempo, envia o inserir com um limite que acaba dentro do prazo', async () => {
+    const sinais: AbortSignal[] = [];
+    const { fn: base, chamadas } = fetchFalso({
+      '/auth/gettoken': ['tok'],
+      '/erp/query/tabledata': [{ Resultado: [{ Cliente: 'C1' }], ...SUCESSO }],
+      '/documentos/vendas/inserir': [DOC_OK],
+    });
+    const fn = (async (url: string, init?: RequestInit) => {
+      if (init?.signal) sinais.push(init.signal);
+      return base(url, init);
+    }) as typeof fetch;
+    const r = await criarClienteAsConnect(cfgBase, fn).emitir(payload, new Date(), {
+      criadoEm: 0,
+      relogio: () => 20_000,
+    });
+    expect(r.numero).toBe('FA 2026/68');
+    expect(chamadas.at(-1)!.url).toBe('/documentos/vendas/inserir');
+    expect(sinais.at(-1)!.aborted).toBe(false);
+  });
+});
+
+describe('garantirCliente: CondPag do cliente existente', () => {
+  it.each([null, '', '  '])(
+    'CondPag %j: grava-a antes do documento (cliente meio criado por um timeout)',
+    async (condPag) => {
+      const { fn, chamadas } = fetchFalso({
+        '/auth/gettoken': ['tok'],
+        '/erp/query/tabledata': [
+          { Resultado: [{ Cliente: '234567890', CondPag: condPag }], ...SUCESSO },
+        ],
+        '/ficha/cliente/atualizar': [{ Atualizado: true, ...SUCESSO }],
+        '/documentos/vendas/inserir': [DOC_OK],
+      });
+      await criarClienteAsConnect(cfgBase, fn).emitir(payload);
+      expect(chamadas.map((c) => c.url)).toEqual([
+        '/auth/gettoken',
+        '/erp/query/tabledata',
+        '/ficha/cliente/atualizar',
+        '/documentos/vendas/inserir',
+      ]);
+      expect(chamadas[1].corpo.Query.Columns).toEqual(['Cliente', 'CondPag']);
+      expect(chamadas[2].corpo).toEqual({ Cliente: { Codigo: '234567890', CondPag: '1' } });
+    }
+  );
+
+  it('com CondPag preenchida, ou sem a coluna na resposta, não mexe no cliente', async () => {
+    for (const linha of [{ Cliente: 'C1', CondPag: '2' }, { Cliente: 'C1' }]) {
+      const { fn, chamadas } = fetchFalso({
+        '/auth/gettoken': ['tok'],
+        '/erp/query/tabledata': [{ Resultado: [linha], ...SUCESSO }],
+        '/documentos/vendas/inserir': [DOC_OK],
+      });
+      await criarClienteAsConnect(cfgBase, fn).emitir(payload);
+      expect(chamadas.map((c) => c.url)).not.toContain('/ficha/cliente/atualizar');
+    }
+  });
+
+  it('se a reparação é recusada, falha antes do documento', async () => {
+    const { fn, chamadas } = fetchFalso({
+      '/auth/gettoken': ['tok'],
+      '/erp/query/tabledata': [{ Resultado: [{ Cliente: 'C1', CondPag: null }], ...SUCESSO }],
+      '/ficha/cliente/atualizar': [{ Estado: { Mensagem: 'Erro' } }],
+    });
+    await expect(criarClienteAsConnect(cfgBase, fn).emitir(payload)).rejects.toThrow(
+      /C1 sem condição de pagamento/
+    );
+    expect(chamadas.map((c) => c.url)).not.toContain('/documentos/vendas/inserir');
   });
 });
 

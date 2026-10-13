@@ -29,11 +29,14 @@ import {
   type PayloadEmit,
   TIPOS_DOCUMENTO_POR_OMISSAO,
   AmbiguoError,
+  criadoEmLocal,
+  MENSAGEM_NAO_EXECUTADO,
+  podeComecar,
 } from './asconnect.ts';
 
 const TIMEOUT_WEGEST_MS = 30_000;
 
-interface ConfigAgente extends ConfigAsConnect {
+export interface ConfigAgente extends ConfigAsConnect {
   /** URL base das edge functions do WeGest. */
   wegest_url: string;
   /** Chave do agente (gerada em Admin → Faturação → Integração → Primavera). */
@@ -42,14 +45,20 @@ interface ConfigAgente extends ConfigAsConnect {
   poll_interval_segundos?: number;
 }
 
-interface JobRecebido {
+export interface JobRecebido {
   id: string;
   tipo: 'emit' | 'health';
   payload: Record<string, unknown>;
+  /** Ver criadoEmLocal; ausente com um WeGest que ainda não manda created_at. */
+  criadoEm?: number;
 }
 
 function log(msg: string) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
+}
+
+function aviso(msg: string) {
+  console.warn(`[${new Date().toISOString()}] AVISO: ${msg}`);
 }
 
 export async function carregarConfig(
@@ -94,6 +103,7 @@ export async function carregarConfig(
 // ── Ligação ao WeGest ──
 
 async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
+  const enviadoEm = Date.now();
   const res = await fetch(`${cfg.wegest_url}/primavera-agent-poll`, {
     method: 'POST',
     headers: {
@@ -106,19 +116,36 @@ async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
   if (!res.ok || !corpo?.success) {
     throw new Error(`poll falhou: ${corpo?.error || `HTTP ${res.status}`}`);
   }
-  return (corpo.jobs ?? []) as JobRecebido[];
+  const jobs = (corpo.jobs ?? []) as Array<JobRecebido & { created_at?: unknown }>;
+  return jobs.map(({ created_at, ...j }) => ({
+    ...j,
+    criadoEm: criadoEmLocal(created_at, corpo.agora, enviadoEm),
+  }));
 }
 
-interface Resultado {
+export interface Resultado {
   success: boolean;
   ambiguous?: boolean;
   resultado?: unknown;
   error?: string;
 }
 
+/** O que identifica o desfecho num aviso: se o WeGest não o registar, o número do documento
+ *  só fica no Primavera e neste log. */
+export function resumoDoResultado(r: Resultado): string {
+  const doc = r.resultado as { numero?: unknown; docnum?: unknown } | null | undefined;
+  const numero = doc?.numero ?? doc?.docnum;
+  if (numero) return `documento ${String(numero)}`;
+  return JSON.stringify(r.resultado ?? r.error ?? null).slice(0, 300);
+}
+
 /** Entrega o resultado ao WeGest. Insiste: um resultado perdido deixava o job
  *  reclamado até a fila o dar por ambíguo, com o documento já emitido. */
-async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado): Promise<void> {
+export async function reportarResultado(
+  cfg: ConfigAgente,
+  jobId: string,
+  r: Resultado
+): Promise<void> {
   const tentativas = 4;
   for (let i = 1; i <= tentativas; i++) {
     try {
@@ -135,8 +162,9 @@ async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado)
       const texto = await res.text().catch(() => '');
       // 404/409: o WeGest já fechou o job doutra forma; insistir não muda nada.
       if (res.status === 404 || res.status === 409) {
-        log(
-          `AVISO: o WeGest não aceitou o resultado do job ${jobId} (HTTP ${res.status}): ${texto.slice(0, 200)}`
+        aviso(
+          `o WeGest não aceitou o resultado do job ${jobId} (HTTP ${res.status}): ` +
+            `${texto.slice(0, 200)} — ${resumoDoResultado(r)}`
         );
         return;
       }
@@ -147,19 +175,33 @@ async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado)
     }
     await new Promise((resolve) => setTimeout(resolve, 2000 * i));
   }
-  log(
-    `AVISO: desisti de reportar o job ${jobId}. A fila vai dá-lo por ambíguo; confirmar no Primavera.`
+  aviso(
+    `desisti de reportar o job ${jobId} — ${resumoDoResultado(r)}. ` +
+      'A fila vai dá-lo por ambíguo; confirmar no Primavera.'
   );
 }
 
-async function processarJob(cfg: ConfigAgente, job: JobRecebido): Promise<void> {
+export async function processarJob(
+  cfg: ConfigAgente,
+  job: JobRecebido,
+  fetchPrimavera: typeof fetch = fetch
+): Promise<void> {
   log(`A processar job ${job.id} (${job.tipo})...`);
+  // Nada foi enviado ao Primavera: falhar é seguro e evita um documento que ninguém espera.
+  if (!podeComecar(job.criadoEm, Date.now())) {
+    log(`Job ${job.id} não executado: chegou depois de o WeGest deixar de esperar.`);
+    await reportarResultado(cfg, job.id, { success: false, error: MENSAGEM_NAO_EXECUTADO });
+    return;
+  }
   // Um cliente por job: o token é pedido de novo, nunca fica a expirar entre jobs.
-  const asconnect = criarClienteAsConnect(cfg);
+  const asconnect = criarClienteAsConnect(cfg, fetchPrimavera);
   try {
     let resultado: unknown;
-    if (job.tipo === 'emit') resultado = await asconnect.emitir(job.payload as PayloadEmit);
-    else if (job.tipo === 'health') resultado = await asconnect.testar();
+    if (job.tipo === 'emit') {
+      resultado = await asconnect.emitir(job.payload as PayloadEmit, new Date(), {
+        criadoEm: job.criadoEm,
+      });
+    } else if (job.tipo === 'health') resultado = await asconnect.testar();
     else {
       throw new Error(
         `Tipo de job desconhecido: ${String(job.tipo)}. Este agente está desactualizado?`

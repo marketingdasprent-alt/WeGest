@@ -82,10 +82,23 @@ Deno.serve(async (req) => {
       .eq('id', integracaoId)
       .then(() => {});
 
-    const lista = (jobs ?? []) as Array<{ id: string; tipo: string; payload: unknown }>;
+    const lista = (jobs ?? []) as Array<{
+      id: string;
+      tipo: string;
+      payload: unknown;
+      created_at: string;
+    }>;
+    // created_at + a hora daqui deixam o agente medir quanto o emissor ainda espera,
+    // mesmo com o relógio da máquina dele errado.
     return json({
       success: true,
-      jobs: lista.map((j) => ({ id: j.id, tipo: j.tipo, payload: j.payload })),
+      agora: new Date().toISOString(),
+      jobs: lista.map((j) => ({
+        id: j.id,
+        tipo: j.tipo,
+        payload: j.payload,
+        created_at: j.created_at,
+      })),
     });
   } catch (erro) {
     const msg = erro instanceof Error ? erro.message : String(erro);

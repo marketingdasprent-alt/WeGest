@@ -7,10 +7,18 @@ import {
   lerRespostaInserir,
 } from '../../supabase/functions/_shared/primavera/resposta.ts';
 
-// A fila dá um job reclamado por ambíguo aos 2 minutos: os passos antes do documento
-// (token, cliente) somam no máximo 4 × 12 s e o inserir 60 s, para caber nesse prazo.
 const TIMEOUT_PEDIDO_MS = 12_000;
 const TIMEOUT_INSERIR_MS = 60_000;
+
+// O WeGest espera 45 s desde que cria o pedido (EMIT_TIMEOUT_MS do provider) e depois diz
+// ao utilizador "incerto". Os prazos contam dessa criação para o inserir acabar antes disso.
+export const PRAZO_COMECAR_MS = 30_000;
+export const PRAZO_INSERIR_MS = 43_000;
+export const MINIMO_INSERIR_MS = 8_000;
+export const MENSAGEM_NAO_EXECUTADO = 'Não executado: o WeGest já tinha deixado de esperar.';
+export const MENSAGEM_SEM_TEMPO_INSERIR =
+  'Não executado: já não havia tempo para o Primavera responder antes de o WeGest deixar de ' +
+  'esperar. O documento não foi enviado.';
 
 /** O pedido saiu para o Primavera e não se sabe se o documento foi criado.
  *  Nunca se reporta como falha: a fila reemitiria. */
@@ -157,6 +165,38 @@ export function campoSemMaiusculas(
   return chave === undefined ? undefined : linha[chave];
 }
 
+/** Instante, no relógio desta máquina, em que o WeGest criou o pedido. Com a hora do
+ *  servidor mede-se a idade só com relógios do servidor: o desta máquina pode estar errado. */
+export function criadoEmLocal(
+  createdAt: unknown,
+  servidorAgora: unknown,
+  pollEnviadoEm: number
+): number | undefined {
+  const criado = typeof createdAt === 'string' ? Date.parse(createdAt) : NaN;
+  if (Number.isNaN(criado)) return undefined;
+  const agoraServidor = typeof servidorAgora === 'string' ? Date.parse(servidorAgora) : NaN;
+  if (Number.isNaN(agoraServidor)) return criado;
+  // A hora do envio do poll, e não a da resposta, erra para o lado de desistir mais cedo.
+  return pollEnviadoEm - Math.max(0, agoraServidor - criado);
+}
+
+export function podeComecar(criadoEm: number | undefined, agora: number): boolean {
+  return criadoEm === undefined || agora - criadoEm <= PRAZO_COMECAR_MS;
+}
+
+/** Timeout do inserir para acabar até PRAZO_INSERIR_MS; null quando já não vale a pena enviar. */
+export function timeoutDoInserir(criadoEm: number | undefined, agora: number): number | null {
+  if (criadoEm === undefined) return TIMEOUT_INSERIR_MS;
+  const restante = criadoEm + PRAZO_INSERIR_MS - agora;
+  return restante < MINIMO_INSERIR_MS ? null : Math.min(TIMEOUT_INSERIR_MS, restante);
+}
+
+export interface PrazoEmit {
+  /** Ver criadoEmLocal; sem ele (ex.: --fatura-teste) não há prazo. */
+  criadoEm?: number;
+  relogio?: () => number;
+}
+
 export function resolverCodIva(cfg: ConfigAsConnect, taxaIva: number): string {
   const code = cfg.iva_codes[String(taxaIva)];
   if (!code) {
@@ -274,7 +314,7 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     const { tabela, campo_codigo, campo_nif } = cfg.clientes;
     // Equal + OR em vez do operador In: o formato de In para texto no PDF é ambíguo.
     const linhas = await consultar(tabela, {
-      colunas: [campo_codigo],
+      colunas: [campo_codigo, 'CondPag'],
       filtros: variantesNif(nif, pais).map((v) => ({
         field: campo_nif,
         operator: 'Equal',
@@ -285,7 +325,14 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     });
     const existente = campoSemMaiusculas(linhas[0], campo_codigo);
     if (existente !== undefined && existente !== null && String(existente).trim()) {
-      return String(existente).trim();
+      const codigo = String(existente).trim();
+      // Um timeout no inserir do cliente pode tê-lo deixado criado sem CondPag. Só se repara
+      // com a coluna presente e vazia: sem ela não se sabe e não se mexe num cliente real.
+      const condPag = campoSemMaiusculas(linhas[0], 'CondPag');
+      if (condPag === null || (typeof condPag === 'string' && !condPag.trim())) {
+        await gravarCondPag(codigo);
+      }
+      return codigo;
     }
 
     const singular = pessoaSingular(nif, pais);
@@ -310,20 +357,28 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
       );
     }
     const codigo = String(d.CodCliente || nif);
-    // O inserir ignora CondPag (confirmado no DASPWSTEST a 2026-10-13) e sem ela a fatura é
-    // recusada; o atualizar aceita-a.
+    await gravarCondPag(codigo);
+    return codigo;
+  }
+
+  // O inserir do cliente ignora CondPag (confirmado no DASPWSTEST a 2026-10-13) e sem ela a
+  // fatura é recusada; o atualizar aceita-a.
+  async function gravarCondPag(codigo: string): Promise<void> {
     const a = (await pedido('PUT', '/ficha/cliente/atualizar', {
       Cliente: { Codigo: codigo, CondPag: cfg.condicao_pagamento },
     })) as { Estado?: { Mensagem?: string } };
     if (!estadoEhSucesso(a?.Estado?.Mensagem)) {
       throw new Error(
-        `Cliente ${codigo} criado, mas sem condição de pagamento: ${a?.Estado?.Mensagem ?? 'sem Estado'}`
+        `Cliente ${codigo} sem condição de pagamento: ${a?.Estado?.Mensagem ?? 'sem Estado'}`
       );
     }
-    return codigo;
   }
 
-  async function emitir(payload: PayloadEmit, agora: Date = new Date()): Promise<ResultadoEmit> {
+  async function emitir(
+    payload: PayloadEmit,
+    agora: Date = new Date(),
+    prazo: PrazoEmit = {}
+  ): Promise<ResultadoEmit> {
     const tipo = payload.tipo ?? 'FT';
     const tipoDocumento = cfg.tipos_documento[tipo];
     if (!tipoDocumento) {
@@ -343,6 +398,8 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
       .join(' | ');
 
     if (!token) token = await obterToken();
+    const timeoutInserir = timeoutDoInserir(prazo.criadoEm, (prazo.relogio ?? Date.now)());
+    if (timeoutInserir === null) throw new Error(MENSAGEM_SEM_TEMPO_INSERIR);
     // Daqui em diante o pedido pode ter chegado: corte de rede, timeout, 5xx ou resposta
     // sem forma são ambíguos (o documento pode existir), nunca falha.
     let status: number;
@@ -362,7 +419,7 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
             Linhas: linhas,
           },
         }),
-        signal: AbortSignal.timeout(TIMEOUT_INSERIR_MS),
+        signal: AbortSignal.timeout(timeoutInserir),
       });
       status = res.status;
       texto = await res.text();

@@ -115,6 +115,14 @@ a emitir sozinho, porque o documento pode já existir no Primavera. Alguém
 confirma lá e resolve à mão. O mesmo acontece se o agente ficar mais de
 2 minutos sem responder a um pedido que reclamou.
 
+## "Não executado: o WeGest já tinha deixado de esperar"
+
+O WeGest espera 45 s por cada fatura, contados desde que cria o pedido. Um
+pedido que chegue ao agente com mais de 30 s não é executado, e o envio do
+documento ao Primavera tem de acabar até aos 43 s (com menos de 8 s de margem
+nem se envia). Nestes casos nada foi enviado ao Primavera: é seguro emitir de
+novo no WeGest (se ele o recusar, marcar o alerta como resolvido em Automação).
+
 ## O que este agente NÃO faz (ainda)
 
 Só emite **Faturas**. Fatura-Recibo, Nota de Crédito e Recibo não têm códigos
