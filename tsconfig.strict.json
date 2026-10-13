@@ -8,6 +8,11 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/utils/formularioEmbed.ts",
+    "src/utils/formularioEmbed.test.ts",
+    "src/hooks/useTemaClaroForcado.ts",
+    "src/hooks/useTemaClaroForcado.test.ts",
+    "src/hooks/useAlturaParaPaginaMae.ts",
     "src/utils/novoTicketAssistencia.ts",
     "src/utils/novoTicketAssistencia.test.ts",
     "src/hooks/useEstadoPersistido.ts",
