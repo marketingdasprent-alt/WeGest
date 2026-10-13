@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label';
 import { formatDate } from '@/utils/formatters';
 import { useProlongarContrato } from '@/hooks/useContratosRenting';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { useEscolhaFornecedor } from '@/hooks/useOpcoesFaturacao';
+import { SeletorFornecedorFaturacao } from '@/components/faturacao/SeletorFornecedorFaturacao';
 import { carregarCobrancaParaEmitir, baixarDocumentoPdf } from '@/lib/faturacao';
 import { calcularProlongamento, semIva, comIva } from '@/lib/prolongamentoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
@@ -48,6 +50,9 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
   // faturação tem de ser refeita antes de se cobrar seja o que for.
   const jaFaturado =
     contrato.estado_financeiro === 'facturado' || contrato.estado_financeiro === 'pago';
+
+  // Sem fatura nada se emite, por isso não se pede fornecedor.
+  const escolha = useEscolhaFornecedor('FT', { contrato_id: contrato.id }, open && jaFaturado);
 
   useEffect(() => {
     if (!open) return;
@@ -148,6 +153,7 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
             ],
             contrato_id: contrato.id,
             cobranca_id: cobrancaId,
+            integracao_id: escolha.integracaoId ?? undefined,
             referencia_externa: `Contrato ${codigoLabel} — prolongamento`,
           },
           cobrancaId,
@@ -319,11 +325,22 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
           )}
         </div>
 
+        {jaFaturado && (
+          <SeletorFornecedorFaturacao
+            {...escolha}
+            onChange={escolha.setIntegracaoId}
+            disabled={ocupado}
+          />
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={ocupado}>
             Cancelar
           </Button>
-          <Button onClick={handleProlongar} disabled={ocupado || !podeConfirmar}>
+          <Button
+            onClick={handleProlongar}
+            disabled={ocupado || !podeConfirmar || escolha.bloqueiaConfirmar}
+          >
             {ocupado ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (

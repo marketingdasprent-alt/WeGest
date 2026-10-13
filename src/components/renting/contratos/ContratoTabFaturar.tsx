@@ -48,6 +48,7 @@ import { useContratoTaxas, calcTaxaValor } from '@/hooks/useContratoTaxas';
 import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
 import { observacoesIniciais } from '@/lib/observacoesFatura';
 import { DocumentoPreviewDialog } from '@/components/faturacao/acordo/DocumentoPreviewDialog';
@@ -300,6 +301,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
 
   const { data: invoices = [], refetch: refetchInvoices } = useInvoicesByContrato(contrato.id);
   const emitirMut = useEmitirEEscreverFatura();
+  const pedirFornecedor = usePedirFornecedor();
 
   // Documentos (NC/RC) ligados às cobranças do contrato — o RC pode não ter
   // contrato_id preenchido, por isso procuramos também por cobranca_id.
@@ -474,7 +476,24 @@ export function ContratoTabFaturar({ contrato }: Props) {
   async function reemitirFatura(c: CobrancaRow) {
     setReemitindoId(c.id);
     try {
-      // Reconfirmar p/ não duplicar o documento fiscal (idempotência).
+      const isFR = /^fa[c]?tura-recibo/i.test((c.descricao ?? '').trim());
+      const escolhido = await pedirFornecedor.pedir(isFR ? 'FR' : 'FT', { cobranca_id: c.id });
+      if (escolhido === 'cancelado') return;
+      const { data: cli } = await supabase
+        .from('clientes')
+        .select('nome, nif, email, morada, codigo_postal, localidade')
+        .eq('id', c.destinatario_id)
+        .single();
+      const codigoLabel = `Contrato #${String(contrato.codigo).padStart(4, '0')}`;
+      const itens: ItemFatura[] = [
+        {
+          descricao: `Aluguer — ${codigoLabel}`,
+          quantidade: 1,
+          preco_unitario: c.valor_sem_iva ?? 0,
+          taxa_iva: c.taxa_iva ?? 0,
+        },
+      ];
+      // Reconfirmar p/ não duplicar só depois do diálogo: aberto, outro pode ter emitido.
       const { data: fresh, error: fErr } = await supabase
         .from('contrato_cobrancas')
         .select('documento_externo_ref')
@@ -486,21 +505,6 @@ export function ContratoTabFaturar({ contrato }: Props) {
         refetchCobrancas();
         return;
       }
-      const { data: cli } = await supabase
-        .from('clientes')
-        .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', c.destinatario_id)
-        .single();
-      const isFR = /^fa[c]?tura-recibo/i.test((c.descricao ?? '').trim());
-      const codigoLabel = `Contrato #${String(contrato.codigo).padStart(4, '0')}`;
-      const itens: ItemFatura[] = [
-        {
-          descricao: `Aluguer — ${codigoLabel}`,
-          quantidade: 1,
-          preco_unitario: c.valor_sem_iva ?? 0,
-          taxa_iva: c.taxa_iva ?? 0,
-        },
-      ];
       const res = await emitirMut.mutateAsync({
         payload: {
           tipo: isFR ? 'FR' : 'FT',
@@ -508,6 +512,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
           itens,
           contrato_id: contrato.id,
           cobranca_id: c.id,
+          integracao_id: escolhido.integracaoId ?? undefined,
           referencia_externa: codigoLabel,
           // Emissão directa da cobrança, sem diálogo: a matrícula e as notas
           // externas do contrato vão na mesma para o documento.
@@ -1238,6 +1243,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {pedirFornecedor.dialogo}
     </div>
   );
 }

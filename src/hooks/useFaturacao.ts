@@ -54,6 +54,10 @@ export function useEmitirEEscreverFatura() {
       qc.invalidateQueries({ queryKey: ['invoices-by-contrato', contratoId] });
       qc.invalidateQueries({ queryKey: ['renting'] });
     },
+    // Também na falha: uma recusa pode mudar a disponibilidade e a "última usada".
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['faturacao-opcoes'] });
+    },
   });
 }
 
