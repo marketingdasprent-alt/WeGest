@@ -116,9 +116,8 @@ export const primaveraProvider: FaturacaoProvider = {
   async emit(input: EmitInput, cfg: ProviderConfig): Promise<EmitDocResult> {
     if (input.tipo !== 'FT') {
       throw new Error(
-        `Primavera (AS Connect): emissão de ${input.tipo} ainda não suportada — a documentação ` +
-          'recebida não mostra como escolher o tipo de documento em /documentos/vendas/inserir. ' +
-          `Confirmar com o AS Connect antes de activar ${input.tipo}.`
+        `Primavera (AS Connect): emissão de ${input.tipo} ainda não suportada — falta confirmar ` +
+          `com o AS Connect o código do documento e as regras de ${input.tipo} antes de o activar.`
       );
     }
     const cliente = input.cliente ?? {};

@@ -76,3 +76,6 @@ security-audit/
 
 # Dump one-off AnyRent (dados de clientes, NIFs) - nunca commitar
 anyrent-export/
+
+# Configuração local do agente Primavera (tem as credenciais do AS Connect)
+agent/primavera-agent/primavera-agent.config.json

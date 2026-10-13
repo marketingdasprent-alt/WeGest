@@ -3,17 +3,31 @@
   "chave_agente": "cole aqui a chave gerada em Admin -> Faturação -> Integração -> Primavera",
 
   "primavera": {
-    "endpoint": "http://localhost:7071",
-    "username": "DasprentWS",
-    "password": "DasprentWS",
-    "enterprise": "CLONEDASPRENT"
+    "endpoint": "http://localhost:8090",
+    "username": "utilizador do AS Connect",
+    "password": "password do AS Connect",
+    "enterprise": "DASPWSTEST"
   },
+
+  "tipos_documento": {
+    "FT": "FA"
+  },
+
+  "artigo_por_omissao": "AL",
+  "precos_com_iva": false,
+  "condicao_pagamento": "1",
 
   "iva_codes": {
     "0": "",
-    "6": "",
-    "13": "",
-    "23": ""
+    "6": "06",
+    "13": "13",
+    "23": "23"
+  },
+
+  "clientes": {
+    "tabela": "Clientes",
+    "campo_codigo": "Cliente",
+    "campo_nif": "NumContrib"
   },
 
   "poll_interval_segundos": 5
