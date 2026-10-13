@@ -1,4 +1,5 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { ROTAS_CANDIDATURAS } from './candidaturas.ts';
 import { ROTAS_CATALOGO } from './catalogo.ts';
 import { ROTAS_DISPONIBILIDADE } from './disponibilidade.ts';
 import { OPENAPI, caminhosDocumentados } from './openapi.ts';
@@ -27,6 +28,9 @@ Deno.test(
     for (const r of ROTAS_TVDE) {
       esperados.add(`GET /${r.recurso}`);
       if (r.comId) esperados.add(`GET /${r.recurso}/{id}`);
+    }
+    for (const r of ROTAS_CANDIDATURAS) {
+      esperados.add(`${r.metodo} /tvde/candidaturas${r.comId ? '/{id}' : ''}`);
     }
     assertEquals([...doc].sort(), [...esperados].sort());
   }
@@ -156,14 +160,19 @@ Deno.test('TVDE documentado: tag, permissão, só inicio obrigatório, IVA a 6% 
   for (const campo of ['preco_semana', 'caucao', 'franquia', 'km_adicional']) {
     const p = ex[campo];
     assertEquals(p.iva, 6, campo);
-    assertEquals(Math.round(p.sem_iva * 1.06 * 100) / 100, p.com_iva, campo);
+    // A tarifa TVDE já traz IVA: o sem_iva é o com_iva decomposto, não o contrário.
+    assertEquals(Math.round((p.com_iva / 1.06) * 100) / 100, p.sem_iva, campo);
+    assert(/já inclui IVA/.test(comp.schemas.ModeloTvde.properties[campo].description), campo);
   }
+  // O exemplo mostra a tarifa de 230 € tal e qual em com_iva, nunca 243,80 €.
+  assertEquals(ex.preco_semana, { sem_iva: 216.98, com_iva: 230, iva: 6 });
   assertEquals('tipo' in comp.schemas.ModeloTvde.properties, false);
   assertEquals('preco_dia' in comp.schemas.ModeloTvde.properties, false);
-  // TVDE publica modelos sem caixa/lugares preenchidos: o contrato tem de admitir null.
-  assertEquals(comp.schemas.ModeloTvde.properties.caixa.type, ['string', 'null']);
-  assertEquals(comp.schemas.ModeloTvde.properties.lugares.type, ['integer', 'null']);
-  assertEquals(comp.schemas.Modelo.properties.caixa.type, 'string');
+  // Rent-a-car e TVDE publicam modelos sem caixa/lugares preenchidos: o contrato admite null.
+  for (const nome of ['Modelo', 'ModeloTvde']) {
+    assertEquals(comp.schemas[nome].properties.caixa.type, ['string', 'null'], nome);
+    assertEquals(comp.schemas[nome].properties.lugares.type, ['integer', 'null'], nome);
+  }
   assert((OPENAPI.tags as { name: string }[]).some((t) => t.name === 'TVDE'));
   const health = paths['/health'].get.responses['200'].content['application/json'];
   assert(health.schema.properties.tarifa_site_tvde, 'health sem tarifa_site_tvde');
@@ -187,5 +196,39 @@ Deno.test(
     }
     assertEquals('foto_path' in comp.schemas.Modelo.properties, false);
     assertEquals(comp.schemas.Categoria.example.imagem_url, null);
+  }
+);
+
+Deno.test(
+  'candidaturas TVDE: permissão do router, 201/200/409/429 no POST, GET só com o estado',
+  () => {
+    // deno-lint-ignore no-explicit-any
+    const paths = OPENAPI.paths as Record<string, Record<string, any>>;
+    // deno-lint-ignore no-explicit-any
+    const comp = OPENAPI.components as Record<string, any>;
+    for (const r of ROTAS_CANDIDATURAS) {
+      const op = paths[`/tvde/candidaturas${r.comId ? '/{id}' : ''}`][r.metodo.toLowerCase()];
+      assertEquals(op['x-permissao'], r.permissao);
+      assertEquals(op.tags, ['TVDE']);
+    }
+    const post = paths['/tvde/candidaturas'].post;
+    for (const codigo of ['201', '200', '400', '404', '409', '413', '429', '500', '503']) {
+      assert(post.responses[codigo], `POST sem ${codigo}`);
+    }
+    assertEquals(
+      post.responses['409'].content['application/json'].example.erro.codigo,
+      'CANDIDATURA_EXISTENTE'
+    );
+    for (const aviso of [/CAPTCHA/, /50 candidaturas por dia/, /logs/, /documentos/]) {
+      assert(aviso.test(post.description), `descrição do POST sem ${aviso}`);
+    }
+    // O GET não devolve dados pessoais: só id, estado e datas.
+    assertEquals(Object.keys(comp.schemas.CandidaturaTvde.properties), [
+      'id',
+      'estado',
+      'criada_em',
+      'decidida_em',
+    ]);
+    assertEquals(comp.schemas.CandidaturaTvdeNova.properties.licenca_tvde.type, ['object', 'null']);
   }
 );

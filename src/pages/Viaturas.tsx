@@ -30,6 +30,7 @@ import { FrotaAtencaoAviso } from '@/components/viaturas/FrotaAtencaoAviso';
 import { ViaturasTabela } from '@/components/viaturas/lista/ViaturasTabela';
 import { ViaturasCartoesMobile } from '@/components/viaturas/lista/ViaturasCartoesMobile';
 import { acoesDaViatura } from '@/components/viaturas/lista/acoesViatura';
+import { rotaNovoTicketDaViatura } from '@/utils/novoTicketAssistencia';
 import { useSituacaoViaturas } from '@/hooks/useSituacaoViaturas';
 import { proximaValidade, resumoAtencao } from '@/utils/documentosViatura';
 import {
@@ -374,6 +375,7 @@ export default function Viaturas() {
   const podeReservar = hasAccessToResource(RECURSOS.RENTING_RESERVAS);
   const podeVerMotorista = hasAccessToResource(RECURSOS.MOTORISTAS_GESTAO);
   const podeVerContrato = hasAccessToResource(RECURSOS.RENTING_CONTRATOS);
+  const podeAbrirTicket = hasAccessToResource(RECURSOS.ASSISTENCIA_TICKETS);
   const acoesDe = (v: Viatura) => {
     const ocupante = situacoes?.get(v.id)?.ocupante;
     return acoesDaViatura({
@@ -385,6 +387,7 @@ export default function Viaturas() {
         reservar: podeReservar,
         verMotorista: podeVerMotorista,
         verContrato: podeVerContrato,
+        abrirTicket: podeAbrirTicket,
       },
       on: {
         abrir: () => handleViewPage(v),
@@ -394,6 +397,7 @@ export default function Viaturas() {
           if (ocupante?.tipo === 'motorista') navigate(`/motoristas/${ocupante.id}`);
           else if (ocupante?.contratoId) navigate(`/renting/contratos/${ocupante.contratoId}`);
         },
+        abrirTicket: () => navigate(rotaNovoTicketDaViatura(v.id)),
       },
     });
   };

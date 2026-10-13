@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarCheck, Download, Plus, Search } from 'lucide-react';
 import { format } from 'date-fns';
@@ -39,6 +39,7 @@ import {
 
 import { ESTADO_LABELS, type Reserva } from '@/types/reserva';
 import { matchesSearch } from '@/lib/utils';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 const FILTROS_INICIAIS: ReservasFiltrosState = {
   estacao: 'todas',
@@ -78,10 +79,19 @@ const RentingReservas = () => {
   const { data: clientes = [] } = useClientes();
   const { data: motoristas = [] } = useMotoristas();
 
-  const [search, setSearch] = useState('');
-  const [filtros, setFiltros] = useState<ReservasFiltrosState>(FILTROS_INICIAIS);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('codigo');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [search, setSearch] = useEstadoPersistido('renting-reservas.pesquisa', '');
+  const [filtros, setFiltros] = useEstadoPersistido<ReservasFiltrosState>(
+    'renting-reservas.filtros',
+    FILTROS_INICIAIS
+  );
+  const [sortColumn, setSortColumn] = useEstadoPersistido<SortColumn>(
+    'renting-reservas.ordem',
+    'codigo',
+    { armazenamento: 'local' }
+  );
+  const [sortDir, setSortDir] = useEstadoPersistido<SortDir>('renting-reservas.sentido', 'desc', {
+    armazenamento: 'local',
+  });
 
   const estacaoNomeById = useMemo(() => {
     const m = new Map<string, string>();

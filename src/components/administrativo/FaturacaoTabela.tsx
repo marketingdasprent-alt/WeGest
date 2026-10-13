@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -6,6 +6,7 @@ import { formatCurrency, formatDateTime } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
 import { DOC_TIPO_LABEL, DOC_TIPO_CLASS, type FaturacaoRow } from './faturacao';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 interface FaturacaoTabelaProps {
   rows: FaturacaoRow[];
@@ -22,8 +23,12 @@ export function FaturacaoTabela({
   pageSize = 50,
   onRowClick,
 }: FaturacaoTabelaProps) {
-  const [sortField, setSortField] = useState<string>('createdAt');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useEstadoPersistido('faturacao.ordem', 'createdAt', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('faturacao.sentido', 'desc', {
+    armazenamento: 'local',
+  });
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const sortedRows = useMemo(() => {

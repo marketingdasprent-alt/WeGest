@@ -13,6 +13,17 @@ interface Alteracao {
 /** Lista cronológica, mais recente primeiro. A versão é a do OpenAPI (info.version). */
 const ALTERACOES: Alteracao[] = [
   {
+    data: '2026-10-09',
+    versao: '1.0.0',
+    tipo: 'Novo',
+    texto:
+      'Candidaturas TVDE (fase D2): POST /tvde/candidaturas grava a candidatura de um motorista, ' +
+      'que entra como submetido para a equipa aprovar, e GET /tvde/candidaturas/{id} devolve só ' +
+      'o estado. A mesma referencia_externa nunca cria duas. Permissões novas ' +
+      'tvde:candidaturas:write e tvde:candidaturas:read, limite de 50 candidaturas por dia por ' +
+      'chave e código novo CANDIDATURA_EXISTENTE (409).',
+  },
+  {
     data: '2026-10-06',
     versao: '1.0.0',
     tipo: 'Correcção',

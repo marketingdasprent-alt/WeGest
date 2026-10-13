@@ -45,6 +45,7 @@ import {
 } from '@/hooks/useDividasMotorista';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { useEstadoPersistido, opcoesDataOuNada } from '@/hooks/useEstadoPersistido';
 
 const ESTADO_LABEL: Record<EstadoDivida, string> = {
   por_cobrar: 'Por cobrar',
@@ -58,11 +59,14 @@ const ESTADO_CLASS: Record<EstadoDivida, string> = {
 
 export function DividasTab() {
   const navigate = useNavigate();
-  const [pesquisa, setPesquisa] = useState('');
+  const [pesquisa, setPesquisa] = useEstadoPersistido('dividas.pesquisa', '');
   // "Todas" por omissão de propósito: marcar uma dívida como paga move-a de
   // lista, e com o filtro em "Por cobrar" a linha sumia à frente de quem
   // acabara de clicar — parecia apagada.
-  const [estado, setEstado] = useState<'por_cobrar' | 'paga' | 'todas'>('todas');
+  const [estado, setEstado] = useEstadoPersistido<'por_cobrar' | 'paga' | 'todas'>(
+    'dividas.estado',
+    'todas'
+  );
   // Mesmo recurso que já gere a sidebar/rota/RLS desta funcionalidade
   // (financeiro_recibos) — antes gate admin-only, agora alinhado.
   const { hasAccessToResource } = usePermissions();
@@ -72,7 +76,11 @@ export function DividasTab() {
   // alguém carregar a semana em Contas), por isso abre-se na última que tem —
   // caso contrário a lista aparecia vazia e parecia não haver dívidas.
   const { data: ultimaSemana } = useUltimaSemanaComLiquido();
-  const [semanaEscolhida, setSemanaEscolhida] = useState<Date | null>(null);
+  const [semanaEscolhida, setSemanaEscolhida] = useEstadoPersistido<Date | null>(
+    'dividas.semana',
+    null,
+    opcoesDataOuNada
+  );
   const semanaBase = semanaEscolhida ?? (ultimaSemana ? parseISO(ultimaSemana.inicio) : null);
   const semanaInicio = semanaBase ? startOfWeek(semanaBase, { weekStartsOn: 1 }) : null;
   const semanaFim = semanaBase ? endOfWeek(semanaBase, { weekStartsOn: 1 }) : null;

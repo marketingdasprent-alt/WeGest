@@ -1,11 +1,11 @@
 -- ============================================================
 -- Catálogo da API externa — api_modelos_publicaveis, api_modelos, api_categorias…
 -- ============================================================
--- Regras: modelo aparece se tem caixa e lugares, preço/dia na tarifa do site e
+-- Regras: modelo aparece se tem preço/dia na tarifa do site e
 -- pelo menos uma viatura não-slot não vendida. Tipo vem de viatura_tipos.
 -- ============================================================
 begin;
-select plan(19);
+select plan(30);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000c01ff', 'bootstrap@catalogo.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -54,6 +54,9 @@ insert into public.renting_coberturas (id, org_id, nome, preco_dia, franquia_val
 -- preço
 select is(public.api_preco_json(35.00, 23), '{"sem_iva": 35.00, "com_iva": 43.05, "iva": 23}'::jsonb, 'preço sem e com IVA');
 select is(public.api_preco_json(null, 23), null, 'sem valor dá null');
+-- Os preços do WeGest já trazem IVA: o valor é o com_iva e o sem_iva decompõe-se.
+select is(public.api_preco_json_iva_incluido(35.00, 23), '{"sem_iva": 28.46, "com_iva": 35.00, "iva": 23}'::jsonb,
+  'preço com IVA incluído: 35 € dão 28,46 € sem IVA, nunca 43,05 € com IVA');
 -- 23::numeric: is(anyelement, anyelement) exige o mesmo tipo dos dois lados.
 select is(public.api_iva_rent_a_car('00000000-0000-0000-0000-0000000c0a00'), 23::numeric, 'IVA da org');
 
@@ -69,12 +72,29 @@ select is((select count(*)::int from public.api_modelos('00000000-0000-0000-0000
 
 -- jsonb dos endpoints
 select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')), 1, 'api_modelos devolve 1');
-select is(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'com_iva', '43.05', 'preço com IVA no cartão');
+select is(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'com_iva', '35.00', 'preço com IVA no cartão é o da tarifa');
+select is(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'sem_iva', '28.46', 'preço sem IVA no cartão é o da tarifa decomposto');
 select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000c0a00', null, 'comercial')), 0, 'filtro por tipo comercial dá 0');
 select is(jsonb_array_length(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')), 1, 'só categorias com modelos publicáveis');
 select is(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')->0->>'modelos', '1', 'categoria conta os modelos');
+select is(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia_desde'->>'com_iva', '35.00', 'preço desde da categoria é o da tarifa');
 select is(jsonb_array_length(public.api_localizacoes('00000000-0000-0000-0000-0000000c0a00')), 1, 'só estações activas');
-select is(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'tarifa'->'caucao'->>'sem_iva', '300.00', 'detalhe traz a caução');
+select is(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'tarifa'->'caucao'->>'com_iva', '300.00', 'detalhe traz a caução da tarifa como com_iva');
+select is(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'tarifa'->'caucao'->>'sem_iva', '243.90', 'caução sem IVA decomposta');
+select is(public.api_coberturas('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'com_iva', '12.00', 'cobertura: preço/dia da tabela é o com_iva');
+select is(public.api_coberturas('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'sem_iva', '9.76', 'cobertura: sem IVA decomposto');
+select is(public.api_extras('00000000-0000-0000-0000-0000000c0a00')->0->'preco'->>'com_iva', '5.00', 'extra: preço da tabela é o com_iva');
+select is(public.api_extras('00000000-0000-0000-0000-0000000c0a00')->0->'preco'->>'sem_iva', '4.07', 'extra: sem IVA decomposto');
+
+-- Caixa e lugares por preencher não tiram o modelo do catálogo: saem null.
+update public.viatura_modelos set caixa = null, lugares = null where id = '00000000-0000-0000-0000-0000000c0d01';
+select isnt(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01'), null,
+  'modelo sem caixa nem lugares continua publicável');
+select ok(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'caixa' = 'null'::jsonb,
+  'caixa por preencher sai null');
+select ok(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'lugares' = 'null'::jsonb,
+  'lugares por preencher sai null');
+update public.viatura_modelos set caixa = 'manual', lugares = 5 where id = '00000000-0000-0000-0000-0000000c0d01';
 
 -- org sem tarifa_site: lista vazia, nunca erro
 select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000c0b00')), 0, 'org sem tarifa_site dá lista vazia');

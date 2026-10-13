@@ -1,13 +1,13 @@
 -- ============================================================
 -- Catálogo e disponibilidade TVDE da API do site (Fase D1)
 -- ============================================================
--- Tarifa do site por tipo (renting/tvde), cartões TVDE com IVA TVDE,
+-- Tarifa do site por tipo (renting/tvde), cartões TVDE com o IVA TVDE já incluído na tarifa,
 -- disponibilidade aberta (inicio até 'infinity') só com viaturas de tipo
 -- elegível. Fixture ao padrão de api_disponibilidade.test.sql.
 -- Datas relativas a now(): nunca dependem do dia da semana.
 -- ============================================================
 begin;
-select plan(73);
+select plan(86);
 
 -- Bootstrap antes das organizações: consome a vaga do primeiro utilizador.
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-00000e1d01ff', 'bootstrap@tvdecat.pt');
@@ -93,7 +93,7 @@ select is(public.api_tarifa_site_tvde('00000000-0000-0000-0000-00000e1d0a00'), '
 -- 3) regressão do rent-a-car
 select is(public.api_modelos('00000000-0000-0000-0000-00000e1d0a00'), (select r from antes),
   'api_modelos de rent-a-car não muda com a tarifa TVDE do site');
-select is((select x->'preco_dia'->>'sem_iva' from jsonb_array_elements(public.api_modelos('00000000-0000-0000-0000-00000e1d0a00')) x
+select is((select x->'preco_dia'->>'com_iva' from jsonb_array_elements(public.api_modelos('00000000-0000-0000-0000-00000e1d0a00')) x
             where x->>'id' = '00000000-0000-0000-0000-00000e1d0d01'), '40.00',
   'o preço/dia do Corolla vem da tarifa renting, não da tvde');
 
@@ -102,12 +102,17 @@ create temp table m as select public.api_tvde_modelos('00000000-0000-0000-0000-0
 grant select on m to public;
 select is((select jsonb_array_length(r) from m), 1, 'api_tvde_modelos só traz o Corolla');
 select is((select r->0->>'id' from m), '00000000-0000-0000-0000-00000e1d0d01', 'o modelo é o Corolla');
-select is((select r->0->'preco_semana'->>'sem_iva' from m), '250.00', 'preço/semana sem IVA');
-select is((select r->0->'preco_semana'->>'com_iva' from m), '265.00', 'preço/semana com IVA TVDE a 6%');
-select is((select r->0->'caucao'->>'com_iva' from m), '530.00', 'caução com IVA TVDE');
-select is((select r->0->'franquia'->>'sem_iva' from m), '1000.00', 'franquia sem IVA');
+-- A tarifa TVDE já traz IVA: o valor da tarifa é o com_iva e o sem_iva decompõe-se.
+select is((select r->0->'preco_semana'->>'com_iva' from m), '250.00', 'preço/semana com IVA é o valor da tarifa');
+select is((select r->0->'preco_semana'->>'sem_iva' from m), '235.85', 'preço/semana sem IVA decomposto a 6% (250 / 1,06)');
+select is((select (r->0->'preco_semana'->>'iva')::numeric from m), 6::numeric,'preço/semana leva o IVA TVDE da org');
+select is((select r->0->'caucao'->>'com_iva' from m), '500.00', 'caução com IVA é o valor da tarifa');
+select is((select r->0->'caucao'->>'sem_iva' from m), '471.70', 'caução sem IVA decomposta');
+select is((select r->0->'franquia'->>'com_iva' from m), '1000.00', 'franquia com IVA é o valor da tarifa');
+select is((select r->0->'franquia'->>'sem_iva' from m), '943.40', 'franquia sem IVA decomposta');
 select is((select r->0->>'km_incluidos' from m), '6000', 'km incluídos vêm de km_mensal');
-select is((select r->0->'km_adicional'->>'sem_iva' from m), '0.10', 'km adicional sem IVA');
+select is((select r->0->'km_adicional'->>'com_iva' from m), '0.10', 'km adicional com IVA é o valor da tarifa');
+select is((select r->0->'km_adicional'->>'sem_iva' from m), '0.09', 'km adicional sem IVA decomposto');
 select is((select r->0->>'frota' from m), '3', 'frota conta só as viaturas elegíveis (e06 comercial fora)');
 select ok(not exists (select 1 from m, jsonb_array_elements(m.r) x where x->>'id' = '00000000-0000-0000-0000-00000e1d0d02'),
   'modelo comercial nunca aparece, mesmo com preço na tarifa TVDE');
@@ -119,6 +124,18 @@ select is(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0a00', '000000
   'api_tvde_modelo de um modelo comercial é null');
 select is(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0a00', '00000000-0000-0000-0000-00000e1d0d03'), null,
   'api_tvde_modelo de um modelo sem preço/semana é null');
+
+-- api_preco_json_iva_incluido: o valor é o com_iva (caso real da Década, IVA 23%).
+select is(public.api_preco_json_iva_incluido(275, 23), '{"sem_iva": 223.58, "com_iva": 275.00, "iva": 23}'::jsonb,
+  '275 € com IVA a 23% dá 223,58 € sem IVA, nunca 338,25 € com IVA');
+select is(public.api_preco_json_iva_incluido(3690, 23)->>'sem_iva', '3000.00', 'franquia de 3690 € decompõe-se em 3000 € sem IVA');
+select is(public.api_preco_json_iva_incluido(null, 23), null, 'sem valor dá null');
+select is(public.api_preco_json_iva_incluido(100, null), '{"sem_iva": 100.00, "com_iva": 100.00, "iva": 0}'::jsonb,
+  'IVA nulo conta como 0: sem e com IVA iguais');
+select ok(
+  (select proconfig from pg_proc where oid = 'public.api_preco_json_iva_incluido(numeric,numeric)'::regprocedure)
+    @> array['search_path=""'],
+  'api_preco_json_iva_incluido tem search_path fixo e vazio');
 
 -- Caixa e lugares por preencher não tiram o modelo do catálogo: saem null.
 update public.viatura_modelos set caixa = null, lugares = null where id = '00000000-0000-0000-0000-00000e1d0d01';
@@ -203,6 +220,8 @@ select is(public.api_tarifa_site('00000000-0000-0000-0000-00000e1d0b00'), null, 
 select is(jsonb_array_length(public.api_tvde_modelos('00000000-0000-0000-0000-00000e1d0b00')), 1, 'org B vê só um modelo');
 select is(public.api_tvde_modelos('00000000-0000-0000-0000-00000e1d0b00')->0->>'id', '00000000-0000-0000-0000-00000e1d0db1',
   'e é o seu Corolla, não o da org A');
+select ok(public.api_tvde_modelos('00000000-0000-0000-0000-00000e1d0b00')->0->'caucao' = 'null'::jsonb,
+  'caução sem valor na tarifa sai null');
 select is(public.api_tvde_modelo('00000000-0000-0000-0000-00000e1d0b00', '00000000-0000-0000-0000-00000e1d0d01'), null,
   'org B não obtém o cartão do modelo da org A');
 select is((select array_agg(viatura_id) from public.api_tvde_viaturas_elegiveis('00000000-0000-0000-0000-00000e1d0b00')),
@@ -219,6 +238,7 @@ create temp table fns as select unnest(array[
   'public.api_tarifa_site(uuid)',
   'public.api_tarifa_site_tvde(uuid)',
   'public.api_iva_tvde(uuid)',
+  'public.api_preco_json_iva_incluido(numeric,numeric)',
   'public.api_tvde_viaturas_elegiveis(uuid)',
   'public.api_tvde_modelos_publicaveis(uuid)',
   'public.api_tvde_modelos(uuid)',

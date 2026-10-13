@@ -61,7 +61,7 @@ Deno.test('GET /tvde/modelos chama api_tvde_modelos com cache PRIVADA de 5 minut
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
   assertEquals(r?.headers.get('vary'), 'Origin, X-API-Key, Authorization');
-  assertEquals(await r?.json(), [{ id: UUID, imagem_url: null }]);
+  assertEquals(await r?.json(), [{ id: UUID }]);
 });
 
 Deno.test('GET /tvde/modelos sem dados devolve lista vazia', async () => {
@@ -83,7 +83,7 @@ Deno.test('GET /tvde/modelos/{id} chama api_tvde_modelo; null → 404', async ()
   );
   assertEquals(r?.status, 200);
   assertEquals(r?.headers.get('cache-control'), 'private, max-age=300');
-  assertEquals(await r?.json(), { id: UUID, imagem_url: null });
+  assertEquals(await r?.json(), { id: UUID });
 
   const naoPublicavel = await servirTvde(
     rota('tvde/modelos', UUID),

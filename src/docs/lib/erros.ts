@@ -82,9 +82,17 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
     fazer: 'Consulte a reserva; depois de confirmada, o cancelamento é feito com a equipa.',
   },
   {
+    codigo: 'CANDIDATURA_EXISTENTE',
+    estados: ['409'],
+    quando:
+      'A pessoa já tem uma candidatura TVDE em curso nesta organização, com o mesmo NIF ou email.',
+    fazer: 'Diga ao motorista que a candidatura já foi recebida e que a equipa entra em contacto.',
+  },
+  {
     codigo: 'LIMITE_EXCEDIDO',
     estados: ['429'],
-    quando: 'Passou o limite de pedidos por minuto.',
+    quando:
+      'Passou o limite de pedidos por minuto, ou o de 50 candidaturas TVDE por dia por chave.',
     fazer: 'Espere os segundos do cabeçalho Retry-After e use a cache do catálogo.',
   },
   {

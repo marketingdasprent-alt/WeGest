@@ -1,4 +1,4 @@
-import { CalendarPlus, Eye, FileText, Trash2, UserRound } from 'lucide-react';
+import { CalendarPlus, Eye, FileText, Trash2, UserRound, Wrench } from 'lucide-react';
 
 import type { AcaoLinha } from '@/components/ui/acoes-linha';
 import type { OcupanteViatura } from '@/utils/ocupantesViaturas';
@@ -7,12 +7,19 @@ interface AcoesDaViaturaParams {
   matricula: string;
   estado: string;
   ocupante?: OcupanteViatura;
-  pode: { eliminar: boolean; reservar: boolean; verMotorista: boolean; verContrato: boolean };
+  pode: {
+    eliminar: boolean;
+    reservar: boolean;
+    verMotorista: boolean;
+    verContrato: boolean;
+    abrirTicket: boolean;
+  };
   on: {
     abrir: () => void;
     eliminar: () => void;
     reservar: () => void;
     verOcupante: () => void;
+    abrirTicket: () => void;
   };
 }
 
@@ -43,6 +50,12 @@ export function acoesDaViatura({
         : `Ver contrato de ${matricula}`,
       onClick: on.verOcupante,
       oculta: !ocupante || (verMotorista ? !pode.verMotorista : !pode.verContrato),
+    },
+    {
+      icone: Wrench,
+      rotulo: `Abrir ticket de assistência para ${matricula}`,
+      onClick: on.abrirTicket,
+      oculta: !pode.abrirTicket,
     },
     { icone: Eye, rotulo: `Abrir viatura ${matricula}`, onClick: on.abrir },
     {

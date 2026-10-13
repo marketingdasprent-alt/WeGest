@@ -13,6 +13,7 @@ import type {
   VoidReceiptInput,
 } from '../types.ts';
 import { EmissaoAmbiguaError } from '../types.ts';
+import { precoParaProvider } from '../../_shared/faturacao/totais.ts';
 
 const env = (k: string) => Deno.env.get(k);
 
@@ -48,6 +49,7 @@ function resolve(cfg: ProviderConfig) {
     docseries: (s.docseries ?? {}) as Record<string, unknown>,
     defaultProduct: String(s.default_product || env('KI_DEFAULT_PRODUCT') || ''),
     defaultIdTax: String(s.default_idtax || env('KI_DEFAULT_IDTAX') || ''),
+    precosComIva: s.precos_com_iva === true,
   };
 }
 
@@ -99,6 +101,37 @@ async function assertArtigoExiste(endpoint: string, sid: string, idProduct: stri
         'Crie-o no painel do KeyInvoice, em Artigos, antes de emitir.'
     );
   }
+}
+
+/** GrossTotal do documento acabado de emitir. Cada conta decide se o Price vem com IVA
+ *  incluído, e a resposta do insertDocument não traz totais. Best-effort: o documento
+ *  já existe, por isso uma falha aqui devolve null e nunca lança. */
+async function lerTotalEmitido(
+  endpoint: string,
+  sid: string,
+  docType: string,
+  docSeries: string,
+  docNum: string
+): Promise<number | null> {
+  if (!docType || !docNum) return null;
+  try {
+    const d = await call(
+      endpoint,
+      'getDocument',
+      { DocType: docType, DocNum: docNum, ...(docSeries ? { DocSeries: docSeries } : {}) },
+      { sid }
+    );
+    const total = Number(d?.Data?.GrossTotal);
+    if (ok(d) && d.Data?.GrossTotal != null && Number.isFinite(total)) return total;
+    console.error('[keyinvoice] getDocument sem GrossTotal:', d?.ErrorMessage ?? 'sem Data', {
+      docType,
+      docSeries,
+      docNum,
+    });
+  } catch (e) {
+    console.error('[keyinvoice] getDocument falhou:', (e as Error).message, { docType, docNum });
+  }
+  return null;
 }
 
 /** getTaxes -> mapa { taxa(%) : IdTax }. Tolerante a nomes de campos. */
@@ -225,7 +258,7 @@ export const keyInvoiceProvider: FaturacaoProvider = {
           IdProduct: String(idProduct),
           ProductName: it.descricao,
           Qty: String(Number(it.quantidade) || 1),
-          Price: String(Number(it.preco_unitario) || 0),
+          Price: String(precoParaProvider(it.preco_unitario, it.taxa_iva, r.precosComIva)),
           ...(idTax ? { IdTax: String(idTax) } : {}),
           ...(it.desconto ? { Discount: String(Number(it.desconto)) } : {}),
         };
@@ -277,12 +310,17 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       FullDocNumber: string;
     };
 
+    const doctype = String(DocType ?? (input.tipo === 'RC' ? '' : r.doctypes[input.tipo]));
+    const docnum = DocNum != null ? String(DocNum) : '';
+    const serie = DocSeries != null ? String(DocSeries) : '';
     return {
-      doctype: String(DocType ?? (input.tipo === 'RC' ? '' : r.doctypes[input.tipo])),
-      docnum: DocNum != null ? String(DocNum) : '',
-      serie: DocSeries != null ? String(DocSeries) : '',
-      numero: FullDocNumber ?? (DocNum != null ? String(DocNum) : ''),
+      doctype,
+      docnum,
+      serie,
+      numero: FullDocNumber ?? docnum,
       raw: res.Data,
+      total:
+        input.tipo === 'RC' ? null : await lerTotalEmitido(r.endpoint, sid, doctype, serie, docnum),
     };
   },
 

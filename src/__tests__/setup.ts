@@ -43,6 +43,14 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
 
 afterEach(() => {
   cleanup();
+  // Filtros e ordenação guardados (useEstadoPersistido) não passam de um teste para o seguinte.
+  if (typeof window !== 'undefined') {
+    for (const armazenamento of [window.localStorage, window.sessionStorage]) {
+      for (const chave of Object.keys(armazenamento)) {
+        if (chave.startsWith('wegest:estado:')) armazenamento.removeItem(chave);
+      }
+    }
+  }
   vi.clearAllMocks();
   gsap.ticker.sleep();
   pendingRafTimeouts.forEach((id) => clearTimeout(id));

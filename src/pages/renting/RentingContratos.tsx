@@ -49,6 +49,7 @@ import {
   type ContratoRenting,
 } from '@/types/contratoRenting';
 import { matchesSearch } from '@/lib/utils';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 const FILTROS_INICIAIS: ContratosFiltrosState = {
   estacao: 'todas',
@@ -87,10 +88,19 @@ const RentingContratos = () => {
   );
   const { data: condutoresPrincipais = [] } = useContratoCondutoresPrincipais();
 
-  const [search, setSearch] = useState('');
-  const [filtros, setFiltros] = useState<ContratosFiltrosState>(FILTROS_INICIAIS);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('codigo');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [search, setSearch] = useEstadoPersistido('renting-contratos.pesquisa', '');
+  const [filtros, setFiltros] = useEstadoPersistido<ContratosFiltrosState>(
+    'renting-contratos.filtros',
+    FILTROS_INICIAIS
+  );
+  const [sortColumn, setSortColumn] = useEstadoPersistido<SortColumn>(
+    'renting-contratos.ordem',
+    'codigo',
+    { armazenamento: 'local' }
+  );
+  const [sortDir, setSortDir] = useEstadoPersistido<SortDir>('renting-contratos.sentido', 'desc', {
+    armazenamento: 'local',
+  });
   const [selectorOpen, setSelectorOpen] = useState(false);
 
   const estacaoNomeById = useMemo(() => {

@@ -29,6 +29,13 @@ describe('buildFaturacaoSettings', () => {
     expect(buildFaturacaoSettings(base)).not.toHaveProperty('docseries');
   });
 
+  it('grava precos_com_iva só quando ligado', () => {
+    expect(buildFaturacaoSettings({ ...base, precosComIva: true }).precos_com_iva).toBe(true);
+    expect(buildFaturacaoSettings({ ...base, precosComIva: false })).not.toHaveProperty(
+      'precos_com_iva'
+    );
+  });
+
   it('campos vazios não apagam predefinições partilháveis', () => {
     const s = buildFaturacaoSettings({ ...base, doctypes: { ...CAMPOS_POR_TIPO_VAZIOS } });
     expect(s).toEqual({ provider: 'keyinvoice' });

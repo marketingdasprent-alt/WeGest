@@ -35,6 +35,7 @@ export type CodigoErro =
   | 'CONFIG_EM_FALTA'
   | 'LIMITE_EXCEDIDO'
   | 'ESTADO_INVALIDO'
+  | 'CANDIDATURA_EXISTENTE'
   | 'ERRO_INTERNO';
 
 /** A origem do pedido, se estiver na allowlist; senão null (nenhum Allow-Origin). */
@@ -99,14 +100,17 @@ export function erro(
  * O helper partilhado de rate limit responde `{ success, error }`; esta API fala
  * sempre `{ erro }`. Traduz a decisão e mantém o Retry-After visível ao browser.
  */
-export function respostaLimite(decisao: RateLimitDecision): Response | null {
+export function respostaLimite(
+  decisao: RateLimitDecision,
+  mensagem = 'Limite de pedidos por minuto excedido.'
+): Response | null {
   if (decisao.allowed) return null;
   const cabecalhos = {
     'Retry-After': String(decisao.retryAfter),
     'Access-Control-Expose-Headers': 'Retry-After',
   };
   return decisao.status === 429
-    ? erro('LIMITE_EXCEDIDO', 'Limite de pedidos por minuto excedido.', 429, undefined, cabecalhos)
+    ? erro('LIMITE_EXCEDIDO', mensagem, 429, undefined, cabecalhos)
     : erro(
         'ERRO_INTERNO',
         'Serviço temporariamente indisponível. Tente mais tarde.',

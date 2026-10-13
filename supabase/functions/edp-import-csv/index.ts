@@ -103,10 +103,6 @@ function parseNumber(val: string): number | null {
   return isNaN(n) ? null : n;
 }
 
-function normalizeName(name: string): string {
-  return (name || '').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -152,29 +148,6 @@ Deno.serve(async (req) => {
     const orgId = intConfig.org_id;
 
     const rows = parseCsv(combustivel_csv);
-    const { data: motoristas } = await supabase
-      .from('motoristas_ativos')
-      .select('id, nome, cartao_edp')
-      .eq('org_id', orgId);
-
-    const cardMap = new Map();
-    const nameMap = new Map();
-
-    for (const m of motoristas || []) {
-      const normalName = normalizeName(m.nome);
-      if (normalName) nameMap.set(normalName, m.id);
-      if (m.cartao_edp) {
-        const parts = m.cartao_edp
-          .split('/')
-          .map((part: string) => sanitizeCard(part.trim()))
-          .filter((part: string) => part.length >= 3);
-        for (const p of parts) {
-          cardMap.set(p, m.id);
-          if (p.length >= 4) cardMap.set(p.slice(-4), m.id);
-        }
-      }
-    }
-
     let imported = 0, matched = 0, skipped = 0;
     const upsertMap = new Map<string, Record<string, unknown>>();
 
@@ -186,7 +159,6 @@ Deno.serve(async (req) => {
       const qtyStr = findField(row, ['energia', 'kwh', 'litros', 'cantidad', 'quantidade', 'volume']);
       // Posto: preferir morada/localização ao id do carregador
       const station = findField(row, ['morada', 'localizacao', 'estacion', 'posto', 'station', 'carregador']);
-      const driverName = findField(row, ['conductor', 'motorista', 'driver', 'utilizador', 'nome cartao']);
 
       const txDate = parseEdpDate(dateStr);
       if (!txDate) { skipped++; continue; }
@@ -196,10 +168,6 @@ Deno.serve(async (req) => {
       const txId = `edp-${sanitizeCard(cardNumber)}-${txDate.replace(/\D/g, '')}`;
 
       const sanitized = sanitizeCard(cardNumber);
-      let motoristaId = sanitized ? cardMap.get(sanitized) : null;
-      if (!motoristaId && sanitized.length >= 4) motoristaId = cardMap.get(sanitized.slice(-4));
-      if (!motoristaId && driverName) motoristaId = nameMap.get(normalizeName(driverName));
-
       // O gatilho resolver_motorista decide o titular pelo card_number; sem ele
       // todos os carregamentos de Setembro de 2026 ficaram sem motorista.
       upsertMap.set(txId, {
@@ -211,7 +179,6 @@ Deno.serve(async (req) => {
         quantity: qty,
         fuel_type: 'Elétrico',
         station_name: station || null,
-        motorista_id: motoristaId,
         raw_data: row,
         org_id: orgId,
       });

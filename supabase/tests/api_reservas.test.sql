@@ -75,7 +75,7 @@ create temp table p as select
   ((date_trunc('day', now() at time zone 'Europe/Lisbon') + interval '13 days 10 hours') at time zone 'Europe/Lisbon') as fim;
 grant select on p to public;
 
--- Clio (d0d01): duas livres no período (e01, e06). Cotação de referência = 234,93 com IVA.
+-- Clio (d0d01): duas livres no período (e01, e06). Cotação de referência = 191,00 com IVA (já na tarifa).
 
 insert into public.clientes (id, org_id, nome, tipo_cliente, is_emissora) values
   ('00000000-0000-0000-0000-0000000d0910', '00000000-0000-0000-0000-0000000d0a00', 'Emissora RAC', 'empresa', true);
@@ -98,7 +98,7 @@ create temp table q as select jsonb_build_object(
   'cliente', jsonb_build_object('nome', 'Carla Nova', 'email', 'carla@novo.pt', 'telefone', '+351912345678',
                                 'data_nascimento', '1990-05-01', 'pais', 'Portugal'),
   'carta_conducao', jsonb_build_object('numero', 'L-123', 'validade', '2030-01-01', 'pais', 'Portugal'),
-  'total_esperado', 234.93,
+  'total_esperado', 191.00,
   'referencia_externa', 'site-001',
   'mensagem', 'Chego no voo TP123') as pedido;
 grant select on q to public;
@@ -140,13 +140,13 @@ create temp view r1 as select * from public.reservas where id = ((select r from 
 grant select on r1 to public;
 
 select is((select r->>'estado' from res where nome = 'r1'), 'pendente', 'entra como pendente');
-select is((select r->'total'->>'com_iva' from res where nome = 'r1'), '234.93', 'total com IVA = cotação');
+select is((select r->'total'->>'com_iva' from res where nome = 'r1'), '191.00', 'total com IVA = cotação');
 select ok((select viatura_id is null and modelo_id = '00000000-0000-0000-0000-0000000d0d01' and origem = 'site'
             and api_chave_id = '00000000-0000-0000-0000-0000000d0901' and regime = 'rent_a_car'
             and emissor_id = '00000000-0000-0000-0000-0000000d0910' and grupo_id = '00000000-0000-0000-0000-0000000d0101'
            from r1), 'sem viatura, com modelo, origem site, chave, emissora e grupo');
 select ok((select valor_total = 105.00 and valor_total_manual = 105.00 from r1),
-  'valor_total é só o aluguer sem IVA, congelado em valor_total_manual');
+  'valor_total é o aluguer da tarifa (já com IVA), congelado em valor_total_manual');
 select ok((select cobertura_nome = 'Premium' and cobertura_preco_dia = 12 and franquia_valor = 0 from r1),
   'cobertura congelada e franquia da cobertura');
 select is((select sum(total) from public.reserva_extras where reserva_id = (select id from r1)), 50.00::numeric,
@@ -195,7 +195,7 @@ create temp table pa as select public.api_criar_reserva('00000000-0000-0000-0000
   (select pedido || '{"referencia_externa":"site-002","total_esperado":200}'::jsonb from q)) as r;
 grant select on pa to public;
 select is((select r->'erro'->>'codigo' from pa), 'PRECO_ALTERADO', 'total_esperado diferente → PRECO_ALTERADO');
-select is((select r->'erro'->'detalhes'->'subtotal'->>'com_iva' from pa), '234.93', 'traz a cotação nova em detalhes');
+select is((select r->'erro'->'detalhes'->'subtotal'->>'com_iva' from pa), '191.00', 'traz a cotação nova em detalhes');
 select is((select count(*)::int from public.reservas where referencia_externa = 'site-002'), 0, 'nada gravado');
 
 -- Cliente existente por NIF: não é alterado

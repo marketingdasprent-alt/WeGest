@@ -4,11 +4,9 @@ import {
   stripAcc,
   parseNumber,
   findField,
-  findFieldAny,
   findNumericField,
 } from '../_shared/repsol/campos.ts';
 import { temHora, transactionKey } from '../_shared/repsol/chave.ts';
-import { chaveMatricula, parseMatricula } from '../_shared/repsol/matricula.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -216,14 +214,6 @@ function parseCsv(text: string): Record<string, string>[] {
   return rows;
 }
 
-function normalizeName(name: string): string {
-  return (name || '')
-    .toLowerCase()
-    .trim()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ');
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -281,40 +271,6 @@ Deno.serve(async (req) => {
     } else if (combustivel_csv) {
       rows = parseCsv(combustivel_csv);
     }
-    const { data: motoristas } = await supabase
-      .from('motoristas_ativos')
-      .select('id, nome, cartao_repsol')
-      .eq('org_id', orgId);
-    const { data: viaturas } = await supabase
-      .from('viaturas')
-      .select('id, matricula')
-      .eq('org_id', orgId);
-
-    const cardMap = new Map();
-    const nameMap = new Map();
-    const matriculaMap = new Map();
-
-    for (const m of motoristas || []) {
-      const normalName = normalizeName(m.nome);
-      if (normalName) nameMap.set(normalName, m.id);
-      if (m.cartao_repsol) {
-        const parts = m.cartao_repsol
-          .split('/')
-          .map((part: string) => sanitizeCard(part.trim()))
-          .filter((part: string) => part.length >= 3);
-        for (const p of parts) {
-          cardMap.set(p, m.id);
-          if (p.length >= 4) cardMap.set(p.slice(-4), m.id);
-        }
-      }
-    }
-
-    for (const v of viaturas || []) {
-      // chaveMatricula dos dois lados: a frota guarda "BI-93-IV" e o export
-      // escreve "BI93IV". Sem normalizar os hífens, nunca casavam.
-      if (v.matricula) matriculaMap.set(chaveMatricula(v.matricula), v.id);
-    }
-
     let imported = 0,
       matched = 0,
       skipped = 0,
@@ -380,10 +336,6 @@ Deno.serve(async (req) => {
         'product',
       ]);
       const station = findField(row, ['nom_estab', 'estab', 'estacion', 'posto', 'station']);
-      const driverName = findField(row, ['conductor', 'motorista', 'driver', 'nombre']);
-      // findFieldAny e não findField: a coluna `MATRÍCULA` vem sempre vazia
-      // neste export e a matrícula real está em `MATRÍCULA/CONDUTOR TICKET`.
-      const matriculaRaw = findFieldAny(row, ['matricula', 'viatura', 'vehicle']);
 
       const txDate = parseRepsolDate(dateStr, timeStr);
       if (!txDate) {
@@ -403,15 +355,9 @@ Deno.serve(async (req) => {
         station,
         hasTime: temHora(timeStr, txDate),
       });
-      let motoristaId = sanitized ? cardMap.get(sanitized) : null;
-      if (!motoristaId && sanitized.length >= 4) motoristaId = cardMap.get(sanitized.slice(-4));
-      if (!motoristaId && driverName) motoristaId = nameMap.get(normalizeName(driverName));
-
-      // parseMatricula filtra o lixo digitado na bomba ("0", "1", "-", "P"):
-      // sem ele, um "1" casaria com qualquer matrícula que o contivesse e o
-      // consumo ia parar à viatura errada.
-      const matriculaNorm = parseMatricula(matriculaRaw);
-      const viaturaId = matriculaNorm ? matriculaMap.get(matriculaNorm) : null;
+      // Quem paga decide-o a base pelo cartão e por quem o tinha nessa data
+      // (tg_resolver_motorista_cartao). O nome e a matrícula do ficheiro não
+      // decidem nada: a matrícula é digitada na bomba e já imputou a pessoa errada.
 
       // Usar Map para pre-deduplicar as transações gémeas do pacote.
       if (upsertMap.has(txId)) dedupedInPayload++;
@@ -425,8 +371,7 @@ Deno.serve(async (req) => {
         quantity: qty,
         fuel_type: product || null,
         station_name: station || null,
-        motorista_id: motoristaId,
-        viatura_id: viaturaId || null,
+        viatura_id: null,
         raw_data: row,
       });
     }

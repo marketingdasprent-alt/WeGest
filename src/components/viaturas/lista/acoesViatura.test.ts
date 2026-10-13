@@ -2,8 +2,20 @@ import { describe, it, expect, vi } from 'vitest';
 
 import { acoesDaViatura } from './acoesViatura';
 
-const TUDO = { eliminar: true, reservar: true, verMotorista: true, verContrato: true };
-const on = () => ({ abrir: vi.fn(), eliminar: vi.fn(), reservar: vi.fn(), verOcupante: vi.fn() });
+const TUDO = {
+  eliminar: true,
+  reservar: true,
+  verMotorista: true,
+  verContrato: true,
+  abrirTicket: true,
+};
+const on = () => ({
+  abrir: vi.fn(),
+  eliminar: vi.fn(),
+  reservar: vi.fn(),
+  verOcupante: vi.fn(),
+  abrirTicket: vi.fn(),
+});
 const visiveis = (acoes: ReturnType<typeof acoesDaViatura>) =>
   acoes.filter((a) => !a.oculta).map((a) => a.rotulo);
 
@@ -17,6 +29,7 @@ describe('acoesDaViatura', () => {
     });
     expect(visiveis(acoes)).toEqual([
       'Nova reserva para AA-00-BB',
+      'Abrir ticket de assistência para AA-00-BB',
       'Abrir viatura AA-00-BB',
       'Eliminar viatura AA-00-BB',
     ]);
@@ -49,9 +62,27 @@ describe('acoesDaViatura', () => {
     const acoes = acoesDaViatura({
       matricula: 'AA-00-BB',
       estado: 'disponivel',
-      pode: { eliminar: false, reservar: false, verMotorista: false, verContrato: false },
+      pode: {
+        eliminar: false,
+        reservar: false,
+        verMotorista: false,
+        verContrato: false,
+        abrirTicket: false,
+      },
       on: on(),
     });
     expect(visiveis(acoes)).toEqual(['Abrir viatura AA-00-BB']);
+  });
+
+  it('o botão de assistência abre o novo ticket desta viatura', () => {
+    const handlers = on();
+    const acoes = acoesDaViatura({
+      matricula: '00-62-VF',
+      estado: 'disponivel',
+      pode: TUDO,
+      on: handlers,
+    });
+    acoes.find((a) => a.rotulo === 'Abrir ticket de assistência para 00-62-VF')?.onClick();
+    expect(handlers.abrirTicket).toHaveBeenCalledTimes(1);
   });
 });

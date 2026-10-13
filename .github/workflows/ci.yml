@@ -315,7 +315,8 @@ jobs:
             api_reservas \
             evento_reserva_site_recebida \
             api_tvde_catalogo \
-            api_foto_da_viatura
+            api_foto_da_viatura \
+            api_tvde_candidaturas
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
@@ -333,7 +334,9 @@ jobs:
             uma_parcela_por_semana \
             combustivel_chega_ao_motorista \
             reimportar_substitui_a_semana \
-            id_de_plataforma_fica_na_ultima_ficha
+            id_de_plataforma_fica_na_ultima_ficha \
+            associar_plataforma_conta_de_outro \
+            saldo_pendente_igual_ao_resumo
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
@@ -352,6 +355,8 @@ jobs:
             atribuicao_segue_estado_do_contrato \
             tvde_parado_volta_a_cobrar \
             tvde_reaberto_a_mao_cobra \
+            tvde_fechado_guarda_data_fim \
+            tvde_total_pelo_preco_do_modelo \
             varios_grupos_por_pessoa \
             slot_so_contrato_de_prestacao \
             bp_rejeitadas_fora_das_contas \

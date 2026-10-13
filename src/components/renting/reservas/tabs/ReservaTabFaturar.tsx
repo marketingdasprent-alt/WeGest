@@ -734,6 +734,8 @@ export function ReservaTabFaturar({ reserva }: Props) {
             id: reserva.id,
             orgId: reserva.org_id,
             codigoLabel: `Reserva #${reserva.codigo}`,
+            matricula: reserva.matricula,
+            notasExternas: reserva.observacoes,
           }}
           destinatario={{ id: reserva.cliente_id, nome: reserva.cliente_nome ?? 'Cliente' }}
           emitente={emitente}

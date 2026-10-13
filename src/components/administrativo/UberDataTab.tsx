@@ -36,6 +36,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { useEstadoPersistido, useSemanaPersistida } from '@/hooks/useEstadoPersistido';
 
 interface Integracao {
   id: string;
@@ -125,7 +126,7 @@ export const UberDataTab: React.FC = () => {
   const loadRequestIdRef = useRef<number>(0);
 
   // Estado: data dentro da semana selecionada (default: semana passada)
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+  const [selectedWeek, setSelectedWeek] = useSemanaPersistida('uber.semana');
 
   // Semana selecionada: Segunda a Domingo
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });
@@ -142,11 +143,15 @@ export const UberDataTab: React.FC = () => {
     return isCurrentWeek ? `${label} (Semana Actual)` : label;
   };
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIntegracao, setSelectedIntegracao] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [sortField, setSortField] = useState<string>('occurred_at');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('uber.pesquisa', '');
+  const [selectedIntegracao, setSelectedIntegracao] = useEstadoPersistido('uber.integracao', 'all');
+  const [selectedStatus, setSelectedStatus] = useEstadoPersistido('uber.estado', 'all');
+  const [sortField, setSortField] = useEstadoPersistido('uber.ordem', 'occurred_at', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('uber.sentido', 'desc', {
+    armazenamento: 'local',
+  });
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const statusOptions = [

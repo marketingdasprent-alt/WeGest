@@ -31,6 +31,7 @@ import { parseSheet, readWorkbook } from './cartoesFlotaImport';
 import { normalizarNumeroCartao } from './cartoesFlotaNumero';
 import {
   limitesRpc,
+  opcoesPeriodoCartoes,
   periodoPorOmissao,
   rotuloPeriodo,
   type PeriodoCartoes,
@@ -46,6 +47,7 @@ import { CartoesImportDialog } from './CartoesImportDialog';
 import { CartaoHistoricoSheet } from './CartaoHistoricoSheet';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 export function CartoesFlotaTab() {
   const { toast } = useToast();
@@ -60,12 +62,23 @@ export function CartoesFlotaTab() {
   const devolverCartao = useDevolverCartaoDoMotorista();
   const eliminarCartao = useEliminarCartaoFrota();
   const importarCartoes = useImportarCartoesFrota();
-  const [search, setSearch] = useState('');
-  const [tipoFilter, setTipoFilter] = useState<'todos' | 'bp' | 'repsol' | 'edp'>('todos');
-  const [sortField, setSortField] = useState<string>('numero');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-  const [statusSel, setStatusSel] = useState<string>('ativos');
-  const [periodo, setPeriodo] = useState<PeriodoCartoes>(periodoPorOmissao);
+  const [search, setSearch] = useEstadoPersistido('cartoes.pesquisa', '');
+  const [tipoFilter, setTipoFilter] = useEstadoPersistido<'todos' | 'bp' | 'repsol' | 'edp'>(
+    'cartoes.tipo',
+    'todos'
+  );
+  const [sortField, setSortField] = useEstadoPersistido('cartoes.ordem', 'numero', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('cartoes.sentido', 'asc', {
+    armazenamento: 'local',
+  });
+  const [statusSel, setStatusSel] = useEstadoPersistido('cartoes.estado', 'ativos');
+  const [periodo, setPeriodo] = useEstadoPersistido<PeriodoCartoes>(
+    'cartoes.periodo',
+    periodoPorOmissao,
+    opcoesPeriodoCartoes
+  );
   const [consumoMap, setConsumoMap] = useState<Record<string, { total: number; litros: number }>>(
     {}
   );

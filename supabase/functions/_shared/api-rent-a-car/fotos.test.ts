@@ -70,12 +70,19 @@ Deno.test('modelo sem foto sai com imagem_url null e sem foto_path', async () =>
   assertEquals(chamadas[0].caminhos, ['v1/fotos/a']);
 });
 
-Deno.test('a foto de marketing nunca passa: imagem_url vem só da viatura', async () => {
+Deno.test('cartão sem foto_path fica como está e não vai ao storage', async () => {
   const { db, chamadas } = armazem(assinaTudo);
-  const cartao: Cartao = { id: 'm1', imagem_url: 'https://marketing/clio.webp' };
+  const cartao: Cartao = { id: 'm1', imagem_url: 'https://outra/imagem.webp' };
+  await preencherFotos(cartao, db);
+  assertEquals(cartao, { id: 'm1', imagem_url: 'https://outra/imagem.webp' });
+  assertEquals(chamadas.length, 0);
+});
+
+Deno.test('foto_path presente substitui sempre imagem_url, mesmo a null', async () => {
+  const { db } = armazem(assinaTudo);
+  const cartao: Cartao = { id: 'm1', imagem_url: 'https://marketing/clio.webp', foto_path: null };
   await preencherFotos(cartao, db);
   assertEquals(cartao, { id: 'm1', imagem_url: null });
-  assertEquals(chamadas.length, 0, 'sem caminhos não vai ao storage');
 });
 
 Deno.test('aceita um só cartão (detalhe do modelo)', async () => {

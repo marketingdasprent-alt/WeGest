@@ -20,15 +20,6 @@ import { supabase } from '@/integrations/supabase/client';
 // Os avisos têm testes próprios. Os mocks usam um hook a sério: um aviso
 // chamado depois do "return" de carregamento dava "Rendered more hooks" no
 // ecrã (2026-10-01) e um mock sem hooks escondia-o.
-vi.mock('@/hooks/useAbastecimentosSuspeitos', async () => {
-  const { useState } = await import('react');
-  return {
-    useAbastecimentosSuspeitos: () => {
-      useState(0);
-      return { data: undefined };
-    },
-  };
-});
 vi.mock('@/hooks/useCombustivelSemDono', async () => {
   const { useState } = await import('react');
   return {

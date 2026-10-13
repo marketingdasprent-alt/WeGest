@@ -60,13 +60,14 @@ import {
 
 import type { Contrato } from '@/types/contrato';
 import { matchesSearch } from '@/lib/utils';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 export default function Contratos() {
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [empresaFilter, setEmpresaFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('contratos-tvde.pesquisa', '');
+  const [empresaFilter, setEmpresaFilter] = useEstadoPersistido('contratos-tvde.empresa', 'all');
+  const [statusFilter, setStatusFilter] = useEstadoPersistido('contratos-tvde.estado', 'all');
   const [showSubstituidos, setShowSubstituidos] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('grouped');
   const [selectedContrato, setSelectedContrato] = useState<Contrato | null>(null);
@@ -77,8 +78,14 @@ export default function Contratos() {
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
-  const [sortField, setSortField] = useState<string>('data_inicio');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useEstadoPersistido('contratos-tvde.ordem', 'data_inicio', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>(
+    'contratos-tvde.sentido',
+    'desc',
+    { armazenamento: 'local' }
+  );
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   useEffect(() => {

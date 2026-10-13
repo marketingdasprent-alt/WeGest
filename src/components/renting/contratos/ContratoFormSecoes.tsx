@@ -13,7 +13,7 @@ import {
   useRentingTarifaPrecosModelo,
   calcularFaturacaoRenting,
   descricaoFaturarAoCliente,
-  resolverValorTotalManualAoMudarTarifa,
+  valorAoMudarTarifa,
 } from '@/hooks/useRentingGruposTarifas';
 import { diferencaDias } from '@/utils/reserva-formatters';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 import { SectionHeader } from '@/components/renting/reservas/SectionHeader';
 import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
@@ -39,6 +40,7 @@ import { TrocaViaturaInfo } from './TrocaViaturaInfo';
 import { SectionInfoAdicional } from './SectionInfoAdicional';
 import { SectionRegime } from './SectionRegime';
 import { SectionViatura } from './SectionViatura';
+import { CONTROLOS_SEM_CLIQUE } from './contratoFormConstants';
 
 /** Link "Pedir alteração de X" sob o campo travado — trava enquanto já há um pedido pendente desse tipo. */
 const BotaoPedirAlteracao: React.FC<{
@@ -118,14 +120,12 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   travado,
   proximaRenovacaoEm,
 }) => {
-  // pointer-events-none é o reforço do `disabled`: o Select da Radix decide
-  // se abre pelo seu próprio estado em JS, não pelo atributo nativo. min-w-0
-  // desfaz o min-width:min-content que o fieldset traz de fábrica e que
-  // partia os grids lá dentro. O cinzento vem dos próprios campos
+  // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
+  // que partia os grids lá dentro. O cinzento vem dos próprios campos
   // (disabled:opacity-*) — não se escurece o bloco todo, que apagava labels
   // e cartões no tema escuro.
   const blocoTravadoClass = travado
-    ? 'min-w-0 border-0 p-0 m-0 space-y-6 pointer-events-none select-none'
+    ? cn('min-w-0 border-0 p-0 m-0 space-y-6', CONTROLOS_SEM_CLIQUE)
     : 'min-w-0 border-0 p-0 m-0 space-y-6';
 
   const viaturaId = form.watch('viatura_id');
@@ -249,7 +249,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       novoId && modeloIdSel
         ? (precosModelo.find((p) => p.tarifa_id === novoId && p.modelo_id === modeloIdSel) ?? null)
         : null;
-    const novoValor = resolverValorTotalManualAoMudarTarifa(
+    const novoValor = valorAoMudarTarifa(
       regime,
       isLongaDuracao,
       dias,
@@ -258,7 +258,9 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       !isTvde ? (linhaNova?.preco_dia ?? null) : null,
       !isTvde ? (linhaNova?.preco_mes ?? null) : null
     );
-    if (novoValor != null) form.setValue('valor_total_manual', novoValor, { shouldDirty: true });
+    if (novoValor !== undefined) {
+      form.setValue('valor_total_manual', novoValor, { shouldDirty: true });
+    }
   };
 
   return (

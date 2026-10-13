@@ -44,6 +44,7 @@ import { FaturacaoToolbarSection } from './faturacao/sections/FaturacaoToolbarSe
 import { FaturacaoListaSection } from './faturacao/sections/FaturacaoListaSection';
 import { FaturacaoDialogsSection } from './faturacao/sections/FaturacaoDialogsSection';
 import { FaturacaoAlertasSection } from './faturacao/sections/FaturacaoAlertasSection';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 const PAGE_SIZE = 50,
   WEEK_STARTS_ON = 1,
@@ -75,8 +76,8 @@ export function FaturacaoContent() {
     return m;
   }, [estacoes]);
 
-  const [estacaoId, setEstacaoId] = useState<string>(TODAS);
-  const [metodo, setMetodo] = useState<string>(TODOS);
+  const [estacaoId, setEstacaoId] = useEstadoPersistido<string>('faturacao.estacao', TODAS);
+  const [metodo, setMetodo] = useEstadoPersistido<string>('faturacao.metodo', TODOS);
   const [selectedWeek, setSelectedWeek] = useState<Date>(
     () => lerSemanaGuardada() ?? subWeeks(new Date(), 1)
   );

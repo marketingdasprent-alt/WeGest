@@ -37,6 +37,7 @@ import { ImportRobotCsvDialog } from '@/components/admin/ImportRobotCsvDialog';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
+import { useEstadoPersistido, useSemanaPersistida } from '@/hooks/useEstadoPersistido';
 
 // Semana: Segunda (1) a Domingo (0) — igual ao resumo
 const WEEK_STARTS_ON = 1;
@@ -88,13 +89,17 @@ export const BoltDataTab: React.FC = () => {
   const [lastImport, setLastImport] = useState<{ date: string; count: number } | null>(null);
 
   // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedIntegracao, setSelectedIntegracao] = useState('all');
-  const [sortField, setSortField] = useState<string>('periodo_inicio');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [searchTerm, setSearchTerm] = useEstadoPersistido('bolt.pesquisa', '');
+  const [selectedIntegracao, setSelectedIntegracao] = useEstadoPersistido('bolt.integracao', 'all');
+  const [sortField, setSortField] = useEstadoPersistido('bolt.ordem', 'periodo_inicio', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('bolt.sentido', 'desc', {
+    armazenamento: 'local',
+  });
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
   // Estado: data dentro da semana selecionada (default: semana passada)
-  const [selectedWeek, setSelectedWeek] = useState<Date>(subWeeks(new Date(), 1));
+  const [selectedWeek, setSelectedWeek] = useSemanaPersistida('bolt.semana');
 
   // Semana selecionada: Segunda a Domingo
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: WEEK_STARTS_ON });

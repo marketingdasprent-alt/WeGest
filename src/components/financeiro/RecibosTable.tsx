@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 
 interface Recibo {
   id: string;
@@ -75,8 +76,12 @@ export function RecibosTable({ recibos, onReciboUpdated }: RecibosTableProps) {
   const [rejeitarRecibo, setRejeitarRecibo] = useState<Recibo | null>(null);
   const [motivoRecusa, setMotivoRecusa] = useState('');
 
-  const [sortField, setSortField] = useState<string>('created_at');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useEstadoPersistido('financeiro.ordem', 'created_at', {
+    armazenamento: 'local',
+  });
+  const [sortDir, setSortDir] = useEstadoPersistido<'asc' | 'desc'>('financeiro.sentido', 'desc', {
+    armazenamento: 'local',
+  });
   const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
 
   const sortedRecibos = useMemo(() => {

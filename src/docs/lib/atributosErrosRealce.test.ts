@@ -12,6 +12,7 @@ describe('atributos do esquema', () => {
     expect(por.lugares.tipo).toBe('inteiro');
     expect(por.portas.nulavel).toBe(true);
     expect(por.caixa.valores).toEqual(['manual', 'automatica']);
+    expect(por.caixa.nulavel).toBe(true);
     expect(por.categoria.tipo).toBe('objecto');
     expect(por.categoria.nulavel).toBe(true);
     expect(por.categoria.filhos.map((f) => f.nome)).toEqual(['id', 'nome']);

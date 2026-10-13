@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useEventosPendentesRenting } from '@/hooks/useEventosPendentesRenting';
 import { estadoRenovacaoContrato } from '@/lib/renovacaoContrato';
+import { haTextoSelecionado } from '@/utils/selecaoDeTexto';
 import type { ContratoRenting } from '@/types/contratoRenting';
 import { EstadoOperacionalBadge } from './EstadoOperacionalBadge';
 import { EstadoFinanceiroBadge } from './EstadoFinanceiroBadge';
@@ -187,7 +188,11 @@ export const ContratosTabela: React.FC<ContratosTabelaProps> = ({
               <TableRow
                 key={c.id}
                 className="border-border hover:bg-muted/30 cursor-pointer"
-                onClick={() => onRowClick(c)}
+                // Arrastar para copiar o condutor acaba num clique: esse não abre o contrato.
+                onClick={() => {
+                  if (haTextoSelecionado()) return;
+                  onRowClick(c);
+                }}
               >
                 <TableCell className="font-medium text-foreground">
                   <div className="flex items-center gap-1.5">
