@@ -65,6 +65,10 @@ import {
   type TipoDoc,
 } from '../_shared/faturacao/escolha.ts';
 import { linhaDeFalhaEmissao } from '../_shared/faturacao/falhas.ts';
+import {
+  recusaPorEmissaoIncerta,
+  verificarEmissaoIncerta,
+} from '../_shared/faturacao/reemissao.ts';
 import { avisoTotalDivergente, totalComIva } from '../_shared/faturacao/totais.ts';
 
 const corsHeaders = {
@@ -161,6 +165,29 @@ async function registarFalhaEmissao(linha: ReturnType<typeof linhaDeFalhaEmissao
   } catch (e) {
     console.error('[faturacao-emitir] falha não registada em failed_jobs:', (e as Error).message);
   }
+}
+
+/** Recusa (mensagem) se uma emissão anterior desta cobrança, na org do chamador, ficou
+ *  'unknown' e ninguém a resolveu: o documento pode existir, até noutro fornecedor. */
+async function recusaPorFalhaIncerta(req: Request, payload: Body): Promise<string | null> {
+  const orgId = await resolverOrgId(req, payload.org_id);
+  if (!orgId) return null; // sem org, configParaEmitir já recusa
+  const { data, error } = await serviceClient()
+    .from('failed_jobs')
+    .select('payload')
+    .eq('org_id', orgId)
+    .eq('source_table', 'contrato_cobrancas')
+    .eq('source_id', payload.cobranca_id ?? '')
+    .like('job_type', 'faturacao.emitir.%')
+    .eq('resolved', false)
+    .eq('payload->>classe', 'unknown')
+    .order('created_at', { ascending: false })
+    .limit(5);
+  // Sem esta leitura não se sabe se há documento incerto: não emitir é o lado seguro.
+  if (error) {
+    return `Não foi possível confirmar se há uma emissão anterior por resolver (${error.message}). Tente de novo.`;
+  }
+  return recusaPorEmissaoIncerta(data ?? []);
 }
 
 /**
@@ -746,6 +773,12 @@ serve(async (req) => {
     });
   }
 
+  // Recusa sem registo em failed_jobs: nada foi tentado, e o alerta original já lá está.
+  if (verificarEmissaoIncerta(payload.tipo, payload.cobranca_id)) {
+    const recusa = await recusaPorFalhaIncerta(req, payload);
+    if (recusa) return json({ success: false, error: recusa, classe: 'known_failed' });
+  }
+
   let docEmitido = false;
   // O que já se sabia quando a emissão falhou — vai para o registo da falha.
   const contexto: { provider?: string; integracaoId?: string | null; emissorId?: string | null } =
@@ -892,15 +925,18 @@ serve(async (req) => {
       provider: contexto.provider ?? null,
       emissor_id: contexto.emissorId ?? null,
     });
-    await registarFalhaEmissao(
-      linhaDeFalhaEmissao({
-        orgId: await resolverOrgId(req, payload.org_id),
-        pedido: payload,
-        erro,
-        classe,
-        ...contexto,
-      })
-    );
+    // Escolha inválida do utilizador não é falha do fornecedor: não alerta os admins.
+    if (!(e instanceof EscolhaFornecedorError)) {
+      await registarFalhaEmissao(
+        linhaDeFalhaEmissao({
+          orgId: await resolverOrgId(req, payload.org_id),
+          pedido: payload,
+          erro,
+          classe,
+          ...contexto,
+        })
+      );
+    }
     return json({ success: false, error: erro, classe });
   }
 });
