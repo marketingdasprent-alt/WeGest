@@ -26,6 +26,14 @@ describe('mensagemFalhaEmissao', () => {
     expect(mensagemFalhaEmissao({ message: '' })).toContain('Motivo: motivo desconhecido.');
   });
 
+  it('motivo que já acaba em pontuação não sai com dois pontos seguidos', () => {
+    const msg = mensagemFalhaEmissao(new Error('Nada foi emitido.'));
+    expect(msg).toContain('Motivo: Nada foi emitido. Reemita-o');
+    expect(msg).not.toContain('..');
+    expect(mensagemFalhaEmissao(new Error('Recusado!  '))).toContain('Motivo: Recusado. ');
+    expect(mensagemFalhaEmissao(new Error('...'))).toContain('Motivo: motivo desconhecido.');
+  });
+
   it('numa reserva o registo local chama-se reserva', () => {
     expect(mensagemFalhaEmissao(new Error('x'), 'reserva')).toMatch(/^Reserva faturada/);
   });
