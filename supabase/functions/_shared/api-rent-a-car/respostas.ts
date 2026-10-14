@@ -11,7 +11,7 @@ const ORIGENS_PERMITIDAS: ReadonlySet<string> = new Set([
 
 /** Cabeçalhos CORS fixos. O Allow-Origin é posto por comCors, conforme o Origin do pedido. */
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
-  'Access-Control-Allow-Headers': 'x-api-key, authorization, content-type',
+  'Access-Control-Allow-Headers': 'x-api-key, authorization, content-type, x-motorista-token',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   // O Allow-Origin varia com o Origin do pedido, também no preflight (OPTIONS).
   Vary: 'Origin',
@@ -36,6 +36,8 @@ export type CodigoErro =
   | 'LIMITE_EXCEDIDO'
   | 'ESTADO_INVALIDO'
   | 'CANDIDATURA_EXISTENTE'
+  | 'SESSAO_INVALIDA'
+  | 'CONTA_INVALIDA'
   | 'ERRO_INTERNO';
 
 /** A origem do pedido, se estiver na allowlist; senão null (nenhum Allow-Origin). */

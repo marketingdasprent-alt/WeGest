@@ -89,6 +89,20 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
     fazer: 'Diga ao motorista que a candidatura já foi recebida e que a equipa entra em contacto.',
   },
   {
+    codigo: 'SESSAO_INVALIDA',
+    estados: ['401'],
+    quando:
+      'O cabeçalho X-Motorista-Token não é uma sessão válida do motorista no WeGest (inválido ' +
+      'ou expirado).',
+    fazer: 'Renove a sessão do motorista (ou peça-lhe para voltar a entrar) e repita o pedido.',
+  },
+  {
+    codigo: 'CONTA_INVALIDA',
+    estados: ['403'],
+    quando: 'A conta do X-Motorista-Token não é motorista da organização da chave de API.',
+    fazer: 'Envie a candidatura sem o X-Motorista-Token, ou com a conta certa.',
+  },
+  {
     codigo: 'LIMITE_EXCEDIDO',
     estados: ['429'],
     quando:

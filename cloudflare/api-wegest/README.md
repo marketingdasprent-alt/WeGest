@@ -3,8 +3,9 @@
 A API externa de rent-a-car passa a viver em `https://api.wegest.pt/v1`. Este Worker recebe
 `https://api.wegest.pt/v1/*` e faz fetch a
 `https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1/*`, com o mesmo
-método, query e corpo. Só seguem os cabeçalhos `X-API-Key`, `Authorization`, `Content-Type`,
-`Accept`, `Accept-Encoding`, `Origin`, `User-Agent` e os de preflight CORS. Devolve a resposta
+método, query e corpo. Só seguem os cabeçalhos `X-API-Key`, `Authorization`,
+`X-Motorista-Token`, `Content-Type`, `Accept`, `Accept-Encoding`, `Origin`, `User-Agent` e os
+de preflight CORS. Devolve a resposta
 tal qual, menos o `Set-Cookie`, e não guarda nada em cache.
 
 **Porquê:** pelo rewrite da Vercel (`wegest.pt/api/rent-a-car`), a firewall da Vercel desafia

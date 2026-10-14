@@ -52,6 +52,7 @@ Deno.test(
     const c = comCors(comOrigem('https://evil.example'), ok({}));
     assertEquals(c.headers.get('access-control-allow-origin'), null);
     assertEquals(CORS_HEADERS['Access-Control-Allow-Headers'].includes('x-api-key'), true);
+    assertEquals(CORS_HEADERS['Access-Control-Allow-Headers'].includes('x-motorista-token'), true);
     assertEquals('Access-Control-Allow-Origin' in CORS_HEADERS, false);
   }
 );

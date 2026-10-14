@@ -35,15 +35,29 @@ interface Opcoes {
   modelos?: unknown;
   /** O que api_tvde_criar_candidatura devolve. */
   candidatura?: unknown;
+  /** Id da conta que o GoTrue devolve para o X-Motorista-Token; omisso = sessão inválida. */
+  motorista?: string;
 }
 
 function dbFalso(o: Opcoes = {}) {
   const pedidos: Record<string, unknown>[] = [];
   const rpcs: { name: string; args: Record<string, unknown> }[] = [];
   const usados = new Map<string, number>();
+  const tokens: string[] = [];
   return {
     pedidos,
     rpcs,
+    tokens,
+    auth: {
+      getUser(jwt: string) {
+        tokens.push(jwt);
+        return Promise.resolve(
+          o.motorista
+            ? { data: { user: { id: o.motorista } }, error: null }
+            : { data: { user: null }, error: { message: 'invalid JWT', status: 403 } }
+        );
+      },
+    },
     rpc(name: string, args: Record<string, unknown>) {
       rpcs.push({ name, args });
       if (name === 'api_chave_por_hash') {
@@ -522,17 +536,14 @@ Deno.test('GET /v1/modelos devolve a foto da viatura assinada e nunca o foto_pat
   assertEquals(texto.includes('foto_path'), false);
 });
 
-Deno.test('POST /v1/tvde/candidaturas com a permissão chega à RPC (201) e é auditado', async () => {
-  const db = dbFalso({
-    chave: { ...linhaOk, permissoes: ['tvde:candidaturas:write'] },
-    candidatura: { id: UUID, estado: 'submetido', criada_em: 'x', decidida_em: null },
-  });
-  const req = new Request('https://x/api-rent-a-car/v1/tvde/candidaturas', {
+const pedidoCandidatura = (headers: Record<string, string> = {}) =>
+  new Request('https://x/api-rent-a-car/v1/tvde/candidaturas', {
     method: 'POST',
     headers: {
       'x-api-key': CHAVE,
       'cf-connecting-ip': '203.0.113.9',
       'content-type': 'application/json',
+      ...headers,
     },
     body: JSON.stringify({
       referencia_externa: 'site-cand-001',
@@ -551,7 +562,13 @@ Deno.test('POST /v1/tvde/candidaturas com a permissão chega à RPC (201) e é a
       consentimento: { versao: 'v1', aceite_em: '2026-10-09T10:00:00Z' },
     }),
   });
-  const r = await correr(req, db);
+
+Deno.test('POST /v1/tvde/candidaturas com a permissão chega à RPC (201) e é auditado', async () => {
+  const db = dbFalso({
+    chave: { ...linhaOk, permissoes: ['tvde:candidaturas:write'] },
+    candidatura: { id: UUID, estado: 'submetido', criada_em: 'x', decidida_em: null },
+  });
+  const r = await correr(pedidoCandidatura(), db);
   assertEquals(r.status, 201);
   assertEquals((await r.json()).id, UUID);
   assertEquals(
@@ -566,8 +583,37 @@ Deno.test('POST /v1/tvde/candidaturas com a permissão chega à RPC (201) e é a
   assertEquals(opsLimite(db), ['api-rent-a-car', 'api-rent-a-car-candidaturas']);
   assertEquals(db.rpcs[3].args.p_org_id, 'org1');
   assertEquals(db.rpcs[3].args.p_api_chave_id, 'k1');
+  assertEquals(db.rpcs[3].args.p_user_id, null);
+  assertEquals(db.tokens, []);
   assertEquals(db.pedidos[0].estado_http, 201);
 });
+
+Deno.test(
+  'POST /v1/tvde/candidaturas com X-Motorista-Token liga a conta; token fora da auditoria',
+  async () => {
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.assinatura';
+    const db = dbFalso({
+      chave: { ...linhaOk, permissoes: ['tvde:candidaturas:write'] },
+      candidatura: { id: UUID, estado: 'submetido', criada_em: 'x', decidida_em: null },
+      motorista: 'u1',
+    });
+    const r = await correr(pedidoCandidatura({ 'x-motorista-token': token }), db);
+    assertEquals(r.status, 201);
+    assertEquals(db.tokens, [token]);
+    assertEquals(db.rpcs[3].args.p_user_id, 'u1');
+    assertEquals(JSON.stringify(db.pedidos).includes(token), false);
+
+    const invalido = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:candidaturas:write'] } });
+    const recusa = await correr(pedidoCandidatura({ 'x-motorista-token': token }), invalido);
+    assertEquals(recusa.status, 401);
+    assertEquals((await recusa.json()).erro.codigo, 'SESSAO_INVALIDA');
+    assertEquals(invalido.pedidos[0].estado_http, 401);
+    assertEquals(
+      invalido.rpcs.some((c) => c.name === 'api_tvde_criar_candidatura'),
+      false
+    );
+  }
+);
 
 Deno.test('GET /v1/tvde/candidaturas sem id → 404 sem chegar à base', async () => {
   const db = dbFalso({ chave: { ...linhaOk, permissoes: ['tvde:candidaturas:read'] } });

@@ -84,6 +84,24 @@ describe('Worker api.wegest.pt', () => {
     expect(h.get('host')).toBeNull();
   });
 
+  it('passa o X-Motorista-Token da candidatura TVDE tal qual', async () => {
+    const f = fetchQueResponde(new Response('{}', { status: 201 }));
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.assinatura';
+    await tratar(
+      new Request('https://api.wegest.pt/v1/tvde/candidaturas', {
+        method: 'POST',
+        headers: {
+          'x-api-key': 'wg_ra_abc',
+          'X-Motorista-Token': token,
+          'content-type': 'application/json',
+        },
+        body: '{}',
+      }),
+      f
+    );
+    expect(f.mock.calls[0][0].headers.get('x-motorista-token')).toBe(token);
+  });
+
   it('não guarda em cache no Worker', async () => {
     const f = fetchQueResponde(new Response('{}'));
     await tratar(new Request('https://api.wegest.pt/v1/modelos'), f);

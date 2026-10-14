@@ -28,6 +28,8 @@ const APRESENTACAO = {
 const PASSAM = new Set([
   'x-api-key',
   'authorization',
+  // Sessão do motorista no POST /tvde/candidaturas; a edge valida-a no GoTrue.
+  'x-motorista-token',
   'content-type',
   'accept',
   'accept-encoding',

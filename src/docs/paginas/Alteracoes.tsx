@@ -13,6 +13,16 @@ interface Alteracao {
 /** Lista cronológica, mais recente primeiro. A versão é a do OpenAPI (info.version). */
 const ALTERACOES: Alteracao[] = [
   {
+    data: '2026-10-14',
+    versao: '1.0.0',
+    tipo: 'Novo',
+    texto:
+      'Candidaturas TVDE com conta: o POST /tvde/candidaturas aceita o cabeçalho opcional ' +
+      'X-Motorista-Token (access_token da sessão do motorista no WeGest) e liga a candidatura ' +
+      'à conta. A resposta do POST e do GET traz com_conta. Códigos novos SESSAO_INVALIDA ' +
+      '(401) e CONTA_INVALIDA (403). Sem o cabeçalho, nada muda.',
+  },
+  {
     data: '2026-10-09',
     versao: '1.0.0',
     tipo: 'Novo',
