@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CLIENTES_POR_OMISSAO, MENSAGEM_NAO_EXECUTADO, MENSAGEM_PDF_TARDE } from './asconnect.ts';
-import { type ConfigAgente, processarJob, reportarResultado, resumoDoResultado } from './main.ts';
+import { CLIENTES_POR_OMISSAO, MENSAGEM_NAO_EXECUTADO } from './asconnect.ts';
+import {
+  avisoDesistiDeReportar,
+  type ConfigAgente,
+  type JobRecebido,
+  ordenarJobs,
+  processarJob,
+  reportarResultado,
+  resumoDoResultado,
+} from './main.ts';
 
 const cfg: ConfigAgente = {
   wegest_url: 'https://wegest.test/functions/v1',
@@ -116,17 +124,17 @@ describe('processarJob: pdf', () => {
     ]);
   });
 
-  it('com mais de 25 s não pede o PDF e reporta falha simples, nunca ambígua', async () => {
+  it('com mais de 30 s não pede o PDF e reporta falha simples, nunca ambígua', async () => {
     const relatorios = wegestFalso();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const { fn, caminhos } = primaveraFalso(() => new Response('{}'));
     await processarJob(
       cfg,
-      { id: 'p2', tipo: 'pdf', payload: payloadPdf, criadoEm: Date.now() - 26_000 },
+      { id: 'p2', tipo: 'pdf', payload: payloadPdf, criadoEm: Date.now() - 31_000 },
       fn
     );
     expect(caminhos).toEqual([]);
-    expect(relatorios).toEqual([{ job_id: 'p2', success: false, error: MENSAGEM_PDF_TARDE }]);
+    expect(relatorios).toEqual([{ job_id: 'p2', success: false, error: MENSAGEM_NAO_EXECUTADO }]);
   });
 
   it('um 5xx do Primavera é falha simples: imprimir não cria documento', async () => {
@@ -161,5 +169,31 @@ describe('processarJob: pdf', () => {
     expect(
       resumoDoResultado({ success: true, resultado: { base64: 'x'.repeat(5000), extensao: 'PDF' } })
     ).toBe('PDF (5000 caracteres em base64)');
+  });
+});
+describe('ordem dentro de um lote', () => {
+  const job = (id: string, tipo: JobRecebido['tipo']): JobRecebido => ({ id, tipo, payload: {} });
+
+  it('os emit passam à frente dos pdf e dos health, mantendo a ordem entre iguais', () => {
+    const lote = [job('p1', 'pdf'), job('e1', 'emit'), job('h1', 'health'), job('e2', 'emit')];
+    expect(ordenarJobs(lote).map((j) => j.id)).toEqual(['e1', 'e2', 'p1', 'h1']);
+    expect(lote.map((j) => j.id)).toEqual(['p1', 'e1', 'h1', 'e2']);
+  });
+});
+
+describe('aviso quando o resultado não chega ao WeGest', () => {
+  it('num emit manda confirmar no Primavera; num pdf ou health não fala em ambíguo', () => {
+    const r = { success: true, resultado: { docnum: '68' } };
+    expect(avisoDesistiDeReportar('j1', r, 'emit')).toContain('ambíguo');
+    expect(avisoDesistiDeReportar('j1', r)).toContain('ambíguo');
+    for (const tipo of ['pdf', 'health'] as const) {
+      const aviso = avisoDesistiDeReportar(
+        'j1',
+        { success: true, resultado: { base64: 'x' } },
+        tipo
+      );
+      expect(aviso).not.toContain('ambíguo');
+      expect(aviso).toContain('nada a confirmar no Primavera');
+    }
   });
 });

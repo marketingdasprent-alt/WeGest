@@ -72,7 +72,8 @@ pedidos da sua empresa (migração 20261013120000).
 
 Timeouts de espera em `providers/primavera.ts` (`HEALTH_TIMEOUT_MS`, `EMIT_TIMEOUT_MS`,
 `PDF_TIMEOUT_MS`). Imprimir não cria documento: no `pdf()` qualquer falha, ambígua ou não,
-é só "tente novamente", e o ficheiro sai da fila depois de entregue.
+é só "tente novamente", e o ficheiro sai da fila depois de entregue. Ao desistir de um pdf,
+o provider fecha-o como `failed` mesmo já reclamado, e um resultado tardio do agente leva 409.
 Ao expirar, o provider cancela o pedido se ainda estiver `pending` (UPDATE atómico: nenhum
 agente lhe tocou, falha CONHECIDA, seguro reagendar). Se já estiver `claimed`, ou se o
 cancelamento não apanhar nada, o desfecho é AMBÍGUO (`EmissaoAmbiguaError`, nunca reemitir
@@ -108,7 +109,9 @@ supabase secrets set KEYINVOICE_ENDPOINT=<endpoint alternativo, se aplicável>
 - **emit** (default) — `{ tipo, cliente, itens[], contrato_id?, cobranca_id?, observacoes?, referencia_externa?, documento_referencia? }`
 - **health** — confirma que a chave autentica. Aceita credenciais de teste no body
   (`{ provider, apiKey, settings? }`) para testar **antes** de gravar na app.
-- **pdf** — `{ provider_doctype, provider_docnum, serie?, signed? }` → `{ base64 }`.
+- **pdf** — `{ invoice_id, provider_doctype?, provider_docnum?, serie?, signed? }` → `{ base64 }`.
+  Com `invoice_id` o documento é o dessa fatura (da org de quem pede); sem ele, procura-se pelo
+  número, que pode repetir-se entre empresas da mesma organização.
 
 ## Função legada `keyinvoice-emitir` — DESATIVADA
 

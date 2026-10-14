@@ -36,8 +36,8 @@ const env = (k: string) => Deno.env.get(k);
 const POLL_INTERVAL_MS = 1000;
 const HEALTH_TIMEOUT_MS = 20_000;
 const EMIT_TIMEOUT_MS = 45_000;
-// O agente não começa um pdf com mais de 25 s e acaba-o até aos 28 s (ver main.ts do agente).
-const PDF_TIMEOUT_MS = 30_000;
+// O agente não começa um pdf com mais de 30 s e acaba-o até aos 38 s (ver asconnect.ts do agente).
+const PDF_TIMEOUT_MS = 40_000;
 
 function adminClient() {
   return createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
@@ -146,6 +146,29 @@ async function largarPdfDaFila(jobId: string, resultado: Record<string, unknown>
   }
 }
 
+/** Fecha um pdf de que o WeGest desistiu, mesmo já reclamado: imprimir não tem efeito fiscal,
+ *  e assim um resultado tardio é recusado (409) em vez de deixar o ficheiro na fila. */
+async function desistirDoPdf(jobId: string): Promise<void> {
+  try {
+    const { error } = await adminClient()
+      .from('primavera_jobs')
+      .update({
+        status: 'failed',
+        completed_at: new Date().toISOString(),
+        error_message: 'O WeGest deixou de esperar pelo PDF.',
+      })
+      .eq('id', jobId)
+      .in('status', ['pending', 'claimed']);
+    if (error) throw error;
+  } catch (e) {
+    console.warn(
+      '[primavera] não consegui fechar o pedido de PDF:',
+      jobId,
+      (e as Error)?.message ?? e
+    );
+  }
+}
+
 export const primaveraProvider: FaturacaoProvider = {
   async health(cfg: ProviderConfig): Promise<void> {
     const jobId = await enfileirar(cfg, 'health', {}, HEALTH_TIMEOUT_MS);
@@ -210,8 +233,9 @@ export const primaveraProvider: FaturacaoProvider = {
 
   async pdf(input: PdfInput, cfg: ProviderConfig): Promise<string> {
     // Imprimir não cria documento: qualquer falha, até "ambígua", é só "tente de novo".
+    let jobId: string | undefined;
     try {
-      const jobId = await enfileirar(
+      jobId = await enfileirar(
         cfg,
         'pdf',
         { tipo_documento: input.doctype, serie: input.serie ?? '', numero: input.docnum },
@@ -221,6 +245,7 @@ export const primaveraProvider: FaturacaoProvider = {
       await largarPdfDaFila(jobId, resultado);
       return lerResultadoPdf(resultado).base64;
     } catch (e) {
+      if (jobId) await desistirDoPdf(jobId);
       throw new Error(
         mensagemFalhaPdf({
           ambiguo: e instanceof EmissaoAmbiguaError,

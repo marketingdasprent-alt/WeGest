@@ -524,10 +524,10 @@ describe('imprimir (PDF de um documento já emitido)', () => {
     ).toEqual({ base64: 'eA==', extensao: 'PDF' });
   });
 
-  it('prazo: não começa com mais de 25 s e acaba até aos 28 s', () => {
-    expect(timeoutDoImprimir(0, 5_000)).toBe(23_000);
-    expect(timeoutDoImprimir(0, 25_000)).toBe(3_000);
-    expect(timeoutDoImprimir(0, 25_001)).toBeNull();
-    expect(timeoutDoImprimir(undefined, 999_999)).toBe(28_000);
+  it('prazo: não começa com mais de 30 s e acaba até aos 38 s', () => {
+    expect(timeoutDoImprimir(0, 5_000)).toBe(33_000);
+    expect(timeoutDoImprimir(0, 30_000)).toBe(8_000);
+    expect(timeoutDoImprimir(0, 30_001)).toBeNull();
+    expect(timeoutDoImprimir(undefined, 999_999)).toBe(38_000);
   });
 });

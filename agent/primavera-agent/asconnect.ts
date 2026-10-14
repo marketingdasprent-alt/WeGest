@@ -20,10 +20,10 @@ export const MENSAGEM_SEM_TEMPO_INSERIR =
   'Não executado: já não havia tempo para o Primavera responder antes de o WeGest deixar de ' +
   'esperar. O documento não foi enviado.';
 
-// O WeGest espera 30 s por um PDF (PDF_TIMEOUT_MS do provider); o imprimir pode passar dos 12 s
+// O WeGest espera 40 s por um PDF (PDF_TIMEOUT_MS do provider); o imprimir pode passar dos 12 s
 // dos outros pedidos, por isso tem prazo próprio, contado também da criação do pedido.
-export const PRAZO_COMECAR_PDF_MS = 25_000;
-export const PRAZO_PDF_MS = 28_000;
+export const PRAZO_COMECAR_PDF_MS = 30_000;
+export const PRAZO_PDF_MS = 38_000;
 export const MENSAGEM_PDF_TARDE =
   'Não executado: o pedido de PDF chegou tarde e o WeGest já não ia esperar pelo ficheiro.';
 
