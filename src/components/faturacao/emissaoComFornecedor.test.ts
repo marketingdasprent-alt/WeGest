@@ -72,3 +72,30 @@ describe('emissão com fornecedor escolhido', () => {
     }
   );
 });
+
+// O PDF do Primavera passa pelo agente local e pode levar dezenas de segundos: esperar por ele
+// prendia a mensagem de sucesso (e o diálogo) depois de o documento já estar emitido.
+const REFRESCA_ANTES_DO_PDF: Record<string, string> = {
+  'src/components/renting/contratos/ContratoTabFaturar.tsx': 'refetchInvoices();',
+  'src/components/renting/reservas/tabs/ReservaTabFaturar.tsx': 'refetchAll();',
+  'src/components/administrativo/SlotMensalidadeCard.tsx': 'invalidate();',
+};
+
+describe('PDF depois da emissão', () => {
+  it.each([...COM_DIALOGO, ...ACOES_DE_LINHA])(
+    '%s mostra o sucesso primeiro e descarrega o PDF sem esperar',
+    (f) => {
+      const src = ler(f);
+      expect(src).not.toMatch(/await baixarDocumentoPdf\(res\.invoice\)/);
+      const corpo = src.slice(src.indexOf('emitirMut.mutateAsync('));
+      const sucesso = corpo.indexOf('toast.success(');
+      const pdf = corpo.indexOf('baixarPdfEmSegundoPlano(res.invoice');
+      expect(sucesso).toBeGreaterThan(0);
+      expect(pdf).toBeGreaterThan(sucesso);
+      expect(corpo.slice(pdf - 10, pdf)).not.toContain('await');
+      const refresca = REFRESCA_ANTES_DO_PDF[f];
+      if (refresca) expect(corpo.indexOf(refresca)).toBeGreaterThan(sucesso);
+      if (refresca) expect(pdf).toBeGreaterThan(corpo.indexOf(refresca));
+    }
+  );
+});

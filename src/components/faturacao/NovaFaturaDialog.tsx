@@ -26,7 +26,7 @@ import { resolverDestinatario } from '@/components/renting/contratos/destinatari
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
-import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { baixarPdfEmSegundoPlano, clienteRowToFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import {
   ParcelamentoDialog,
@@ -332,11 +332,6 @@ export function NovaFaturaDialog({
           cobrancaId,
           contratoId: alvo.id, // só p/ chave de invalidação
         });
-        if (res.invoice) {
-          try {
-            await baixarDocumentoPdf(res.invoice);
-          } catch {}
-        }
         toast.success(
           `Documento fiscal emitido no ${escolha.providerLabel ?? providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`,
           // Só ofereça parcelamento para contratos com saldo ainda por liquidar.
@@ -361,6 +356,8 @@ export function NovaFaturaDialog({
             : undefined
         );
         if (res.warning) toast.warning(res.warning);
+        // Depois do sucesso e sem esperar: o PDF do Primavera pode levar dezenas de segundos.
+        baixarPdfEmSegundoPlano(res.invoice, (m) => toast.warning(m));
       } catch (kiErr: any) {
         console.error('Falha a emitir o documento fiscal da nova fatura:', kiErr);
         // Sem documento nenhum: emitir uma factura é acto de software

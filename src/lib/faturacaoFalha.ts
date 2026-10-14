@@ -12,7 +12,11 @@ export const DURACAO_AVISO_FALHA_MS = 15_000;
  */
 export function mensagemFalhaEmissao(erro: unknown, registo: RegistoLocal = 'fatura'): string {
   const inicio = registo === 'reserva' ? 'Reserva faturada' : 'Fatura registada';
-  const motivo = errorMessage(erro, 'motivo desconhecido');
+  // O motivo costuma já acabar em ponto; sem isto saía "emitido.." no ecrã.
+  const motivo =
+    errorMessage(erro, 'motivo desconhecido')
+      .trim()
+      .replace(/[\s.!?;:…]+$/, '') || 'motivo desconhecido';
   // 'unknown': o fornecedor pode ter emitido (ex.: o agente Primavera apanhou o pedido
   // e não respondeu); mandar reemitir aqui duplicava o documento fiscal.
   if (classeDoErro(erro) === 'unknown') {

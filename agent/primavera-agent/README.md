@@ -125,8 +125,9 @@ novo no WeGest (se ele o recusar, marcar o alerta como resolvido em Automação)
 
 ## O que este agente NÃO faz (ainda)
 
-Só emite **Faturas**. Fatura-Recibo, Nota de Crédito e Recibo não têm códigos
-nem regras confirmados; linhas com desconto, consumidor final, PDF e anulação
+Só emite **Faturas** (e devolve o PDF de um documento já emitido, pelo
+`/documentos/vendas/imprimir`). Fatura-Recibo, Nota de Crédito e Recibo não têm códigos
+nem regras confirmados; linhas com desconto, consumidor final e anulação
 também não estão documentados pela AS Connect — falham com uma mensagem clara
 em vez de arriscar um documento errado.
 

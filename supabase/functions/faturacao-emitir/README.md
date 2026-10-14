@@ -15,7 +15,8 @@ config.provider` — nenhum interfere com o outro:
   (`agent/primavera-agent/`), faz a ponte — ver a secção "Arquitectura: agente local"
   abaixo. A documentação do AS Connect de 2026-09-18 já aceita `TipoDocumento` no
   pedido e traz endpoints de cliente e de consulta de tabelas, mas o agente ainda só
-  emite FT; PDF e anulação continuam sem endpoint — `pdf()`/`voidReceipt()` falham
+  emite FT. O PDF vem de `/documentos/vendas/imprimir` pelo mesmo agente (job `pdf`,
+  migração 20261014170000); a anulação continua sem endpoint — `voidReceipt()` falha
   sempre, de propósito, até isso ficar confirmado. Ver os comentários no topo do
   ficheiro para a lista exacta do que está por confirmar (ver também a memória do
   projecto, `project_primavera-integration.md`).
@@ -51,7 +52,7 @@ exponha o seu servidor à internet não escala (é fricção de rede que a maior
 resolver, multiplicada por cada empresa nova). Em vez disso:
 
 ```
-emit()/health() em providers/primavera.ts
+emit()/health()/pdf() em providers/primavera.ts
     -> INSERT em primavera_jobs (status=pending)
     -> espera (poll curto, com timeout) até o job ficar done/failed
 
@@ -69,7 +70,10 @@ A fila é por INTEGRAÇÃO (`primavera_jobs.integracao_id`), não por organizaç
 empresas emissoras na mesma organização, cada agente tem a sua chave e só reclama os
 pedidos da sua empresa (migração 20261013120000).
 
-Timeouts de espera em `providers/primavera.ts` (`HEALTH_TIMEOUT_MS`, `EMIT_TIMEOUT_MS`).
+Timeouts de espera em `providers/primavera.ts` (`HEALTH_TIMEOUT_MS`, `EMIT_TIMEOUT_MS`,
+`PDF_TIMEOUT_MS`). Imprimir não cria documento: no `pdf()` qualquer falha, ambígua ou não,
+é só "tente novamente", e o ficheiro sai da fila depois de entregue. Ao desistir de um pdf,
+o provider fecha-o como `failed` mesmo já reclamado, e um resultado tardio do agente leva 409.
 Ao expirar, o provider cancela o pedido se ainda estiver `pending` (UPDATE atómico: nenhum
 agente lhe tocou, falha CONHECIDA, seguro reagendar). Se já estiver `claimed`, ou se o
 cancelamento não apanhar nada, o desfecho é AMBÍGUO (`EmissaoAmbiguaError`, nunca reemitir
@@ -105,7 +109,9 @@ supabase secrets set KEYINVOICE_ENDPOINT=<endpoint alternativo, se aplicável>
 - **emit** (default) — `{ tipo, cliente, itens[], contrato_id?, cobranca_id?, observacoes?, referencia_externa?, documento_referencia? }`
 - **health** — confirma que a chave autentica. Aceita credenciais de teste no body
   (`{ provider, apiKey, settings? }`) para testar **antes** de gravar na app.
-- **pdf** — `{ provider_doctype, provider_docnum, serie?, signed? }` → `{ base64 }`.
+- **pdf** — `{ invoice_id, provider_doctype?, provider_docnum?, serie?, signed? }` → `{ base64 }`.
+  Com `invoice_id` o documento é o dessa fatura (da org de quem pede); sem ele, procura-se pelo
+  número, que pode repetir-se entre empresas da mesma organização.
 
 ## Função legada `keyinvoice-emitir` — DESATIVADA
 

@@ -31,7 +31,10 @@ import {
   AmbiguoError,
   criadoEmLocal,
   MENSAGEM_NAO_EXECUTADO,
+  MENSAGEM_PDF_TARDE,
+  type PdfImpresso,
   podeComecar,
+  timeoutDoImprimir,
 } from './asconnect.ts';
 
 const TIMEOUT_WEGEST_MS = 30_000;
@@ -47,7 +50,7 @@ export interface ConfigAgente extends ConfigAsConnect {
 
 export interface JobRecebido {
   id: string;
-  tipo: 'emit' | 'health';
+  tipo: 'emit' | 'health' | 'pdf';
   payload: Record<string, unknown>;
   /** Ver criadoEmLocal; ausente com um WeGest que ainda não manda created_at. */
   criadoEm?: number;
@@ -133,18 +136,43 @@ export interface Resultado {
 /** O que identifica o desfecho num aviso: se o WeGest não o registar, o número do documento
  *  só fica no Primavera e neste log. */
 export function resumoDoResultado(r: Resultado): string {
-  const doc = r.resultado as { numero?: unknown; docnum?: unknown } | null | undefined;
+  const doc = r.resultado as
+    | { numero?: unknown; docnum?: unknown; base64?: unknown }
+    | null
+    | undefined;
   const numero = doc?.numero ?? doc?.docnum;
   if (numero) return `documento ${String(numero)}`;
+  if (typeof doc?.base64 === 'string') return `PDF (${doc.base64.length} caracteres em base64)`;
   return JSON.stringify(r.resultado ?? r.error ?? null).slice(0, 300);
 }
 
 /** Entrega o resultado ao WeGest. Insiste: um resultado perdido deixava o job
  *  reclamado até a fila o dar por ambíguo, com o documento já emitido. */
+/** Aviso quando o resultado não chega ao WeGest. Só um emit pode ficar ambíguo; os outros
+ *  voltam à fila ou fecham sozinhos, e não há nada a confirmar no Primavera. */
+export function avisoDesistiDeReportar(
+  jobId: string,
+  r: Resultado,
+  tipo?: JobRecebido['tipo']
+): string {
+  const consequencia =
+    tipo && tipo !== 'emit'
+      ? 'O pedido volta à fila ou fecha sozinho; não há nada a confirmar no Primavera.'
+      : 'A fila vai dá-lo por ambíguo; confirmar no Primavera.';
+  return `desisti de reportar o job ${jobId} — ${resumoDoResultado(r)}. ${consequencia}`;
+}
+
+/** Ordem dentro de um lote: os emit primeiro. Um PDF à frente comia o prazo do emit e
+ *  deixava-o ambíguo ou por executar. */
+export function ordenarJobs(jobs: JobRecebido[]): JobRecebido[] {
+  return [...jobs].sort((a, b) => Number(b.tipo === 'emit') - Number(a.tipo === 'emit'));
+}
+
 export async function reportarResultado(
   cfg: ConfigAgente,
   jobId: string,
-  r: Resultado
+  r: Resultado,
+  tipo?: JobRecebido['tipo']
 ): Promise<void> {
   const tentativas = 4;
   for (let i = 1; i <= tentativas; i++) {
@@ -175,10 +203,21 @@ export async function reportarResultado(
     }
     await new Promise((resolve) => setTimeout(resolve, 2000 * i));
   }
-  aviso(
-    `desisti de reportar o job ${jobId} — ${resumoDoResultado(r)}. ` +
-      'A fila vai dá-lo por ambíguo; confirmar no Primavera.'
-  );
+  aviso(avisoDesistiDeReportar(jobId, r, tipo));
+}
+
+/** Um pdf que chega tarde não se pede: o WeGest já não ia esperar pelo ficheiro. */
+async function imprimirJob(
+  asconnect: ReturnType<typeof criarClienteAsConnect>,
+  job: JobRecebido
+): Promise<PdfImpresso> {
+  const timeout = timeoutDoImprimir(job.criadoEm, Date.now());
+  if (timeout === null) throw new Error(MENSAGEM_PDF_TARDE);
+  const p = job.payload as { tipo_documento?: unknown; serie?: unknown; numero?: unknown };
+  const tipo = String(p.tipo_documento ?? '').trim();
+  const numero = String(p.numero ?? '').trim();
+  if (!tipo || !numero) throw new Error('Pedido de PDF sem tipo de documento ou número.');
+  return asconnect.imprimir(tipo, String(p.serie ?? '').trim(), numero, timeout);
 }
 
 export async function processarJob(
@@ -190,7 +229,12 @@ export async function processarJob(
   // Nada foi enviado ao Primavera: falhar é seguro e evita um documento que ninguém espera.
   if (!podeComecar(job.criadoEm, Date.now())) {
     log(`Job ${job.id} não executado: chegou depois de o WeGest deixar de esperar.`);
-    await reportarResultado(cfg, job.id, { success: false, error: MENSAGEM_NAO_EXECUTADO });
+    await reportarResultado(
+      cfg,
+      job.id,
+      { success: false, error: MENSAGEM_NAO_EXECUTADO },
+      job.tipo
+    );
     return;
   }
   // Um cliente por job: o token é pedido de novo, nunca fica a expirar entre jobs.
@@ -202,22 +246,28 @@ export async function processarJob(
         criadoEm: job.criadoEm,
       });
     } else if (job.tipo === 'health') resultado = await asconnect.testar();
+    else if (job.tipo === 'pdf') resultado = await imprimirJob(asconnect, job);
     else {
       throw new Error(
         `Tipo de job desconhecido: ${String(job.tipo)}. Este agente está desactualizado?`
       );
     }
-    await reportarResultado(cfg, job.id, { success: true, resultado });
+    await reportarResultado(cfg, job.id, { success: true, resultado }, job.tipo);
     log(`Job ${job.id} concluído com sucesso.`);
   } catch (erro) {
     const msg = erro instanceof Error ? erro.message : String(erro);
     if (erro instanceof AmbiguoError) {
       log(`Job ${job.id} com desfecho AMBÍGUO: ${msg}`);
-      await reportarResultado(cfg, job.id, { success: false, ambiguous: true, error: msg });
+      await reportarResultado(
+        cfg,
+        job.id,
+        { success: false, ambiguous: true, error: msg },
+        job.tipo
+      );
       return;
     }
     log(`Job ${job.id} falhou: ${msg}`);
-    await reportarResultado(cfg, job.id, { success: false, error: msg });
+    await reportarResultado(cfg, job.id, { success: false, error: msg }, job.tipo);
   }
 }
 
@@ -231,7 +281,7 @@ async function correrAgente(cfg: ConfigAgente) {
   while (true) {
     try {
       const jobs = await poll(cfg);
-      for (const job of jobs) {
+      for (const job of ordenarJobs(jobs)) {
         await processarJob(cfg, job);
       }
       if (jobs.length === 0) {

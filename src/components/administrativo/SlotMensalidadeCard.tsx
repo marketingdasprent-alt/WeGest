@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { useSlotCobrancasMensais, type SlotCobranca } from '@/hooks/useSlotCobrancasMensais';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
-import { clienteRowToFatura, baixarDocumentoPdf } from '@/lib/faturacao';
+import { clienteRowToFatura, baixarPdfEmSegundoPlano } from '@/lib/faturacao';
 import type { ItemFatura } from '@/types/faturacao';
 
 const ESTADO_CLASS: Record<string, string> = {
@@ -105,16 +105,11 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
         cobrancaId: c.id,
         contratoId: c.reserva_id ?? c.id,
       });
-      if (res.invoice) {
-        try {
-          await baixarDocumentoPdf(res.invoice);
-        } catch {
-          /* best-effort */
-        }
-      }
       toast.success(`Fatura emitida${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`);
       if (res.warning) toast.warning(res.warning);
       invalidate();
+      // Depois do sucesso e sem esperar: o PDF do Primavera pode levar dezenas de segundos.
+      baixarPdfEmSegundoPlano(res.invoice, (m) => toast.warning(m));
     } catch (e: any) {
       toast.error(`Falha a emitir fatura: ${e?.message ?? 'tente novamente'}`);
     } finally {

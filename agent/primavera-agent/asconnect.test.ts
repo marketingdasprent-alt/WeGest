@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   AmbiguoError,
   CLIENTES_POR_OMISSAO,
@@ -16,6 +16,8 @@ import {
   criadoEmLocal,
   podeComecar,
   timeoutDoInserir,
+  timeoutDoImprimir,
+  lerRespostaImprimir,
 } from './asconnect.ts';
 
 const cfgBase: ConfigAsConnect = {
@@ -420,5 +422,112 @@ describe('fatura de teste', () => {
     expect(construirLinhas(cfgBase, p.itens ?? [])).toMatchObject([
       { Artigo: 'ALUGUER', CodIva: '01', PrecoUnit: 10 },
     ]);
+  });
+});
+
+describe('imprimir (PDF de um documento já emitido)', () => {
+  // A forma da resposta real de 14/10/2026 (DocGerado encurtado).
+  const IMPRESSO = {
+    TipoDocGerado: 'FA',
+    SerieDocGerado: '2026',
+    NumeroDocGerado: '50',
+    IdDocGerado: 'abc',
+    Documento: 'FA 2026/50',
+    DocGerado: 'JVBERi0xLjQK',
+    ExtensaoDocGerado: 'PDF',
+    ...SUCESSO,
+  };
+
+  it('pede FA/2026/50 com DevolvePDF e devolve o base64 e a extensão', async () => {
+    const { fn, chamadas } = fetchFalso({
+      '/auth/gettoken': ['tok'],
+      '/documentos/vendas/imprimir': [IMPRESSO],
+    });
+    const r = await criarClienteAsConnect(cfgBase, fn).imprimir('FA', '2026', '50', 20_000);
+    expect(r).toEqual({ base64: 'JVBERi0xLjQK', extensao: 'PDF' });
+    expect(chamadas.map((c) => c.url)).toEqual(['/auth/gettoken', '/documentos/vendas/imprimir']);
+    expect(chamadas[1].corpo).toEqual({
+      Documento: { TipoDocumento: 'FA', Serie: '2026', NumeroDoc: '50' },
+      Impressao: { DevolvePDF: true },
+    });
+  });
+
+  it('o timeout indicado manda no pedido, não os 12 s dos outros', async () => {
+    const timeouts = vi.spyOn(AbortSignal, 'timeout');
+    const { fn } = fetchFalso({
+      '/auth/gettoken': ['tok'],
+      '/documentos/vendas/imprimir': [IMPRESSO],
+    });
+    try {
+      // Relógio parado: o token leva os 12 s habituais, o imprimir os 20 s todos.
+      await criarClienteAsConnect(cfgBase, fn).imprimir('FA', '2026', '50', 20_000, () => 0);
+      expect(timeouts.mock.calls.map((c) => c[0])).toEqual([12_000, 20_000]);
+    } finally {
+      timeouts.mockRestore();
+    }
+  });
+
+  it('sem tempo depois do token, não pede o PDF', async () => {
+    let t = 0;
+    const { fn, chamadas } = fetchFalso({ '/auth/gettoken': ['tok'] });
+    const relogio = () => (t += 6_000);
+    await expect(
+      criarClienteAsConnect(cfgBase, fn).imprimir('FA', '2026', '50', 10_000, relogio)
+    ).rejects.toThrow('sem tempo');
+    expect(chamadas.map((c) => c.url)).toEqual(['/auth/gettoken']);
+  });
+
+  it('HTTP de erro, Estado de recusa, DocGerado vazio ou rede em baixo: falha simples', async () => {
+    const http = (async (url: string) =>
+      url.endsWith('/auth/gettoken')
+        ? new Response('tok')
+        : new Response('erro interno', { status: 500 })) as unknown as typeof fetch;
+    const r1 = criarClienteAsConnect(cfgBase, http).imprimir('FA', '2026', '50', 20_000);
+    await expect(r1).rejects.toThrow('imprimir falhou (HTTP 500)');
+    await expect(r1).rejects.not.toBeInstanceOf(AmbiguoError);
+
+    const rede = (async (url: string) => {
+      if (url.endsWith('/auth/gettoken')) return new Response('tok');
+      throw new TypeError('connection refused');
+    }) as unknown as typeof fetch;
+    const r2 = criarClienteAsConnect(cfgBase, rede).imprimir('FA', '2026', '50', 20_000);
+    await expect(r2).rejects.toThrow('sem resposta do Primavera (connection refused)');
+    await expect(r2).rejects.not.toBeInstanceOf(AmbiguoError);
+  });
+
+  it('lê a resposta: recusa, ficheiro vazio, não-JSON e extensão por omissão', () => {
+    expect(() =>
+      lerRespostaImprimir(200, JSON.stringify({ Estado: { Mensagem: 'Documento inexistente' } }))
+    ).toThrow('Primavera recusou imprimir: Documento inexistente');
+    expect(() => lerRespostaImprimir(200, JSON.stringify({ DocGerado: 'eA==' }))).toThrow(
+      'sem Estado'
+    );
+    expect(() => lerRespostaImprimir(200, JSON.stringify({ ...SUCESSO, DocGerado: '' }))).toThrow(
+      'DocGerado vazio'
+    );
+    expect(() => lerRespostaImprimir(200, '<html>')).toThrow('não-JSON');
+    expect(() => lerRespostaImprimir(404, 'nada')).toThrow('HTTP 404');
+    expect(lerRespostaImprimir(200, JSON.stringify({ ...SUCESSO, DocGerado: 'eA==' }))).toEqual({
+      base64: 'eA==',
+      extensao: 'PDF',
+    });
+    // As views devolvem capitalização mista; "Sucesso." também é sucesso.
+    expect(
+      lerRespostaImprimir(
+        200,
+        JSON.stringify({
+          estado: { mensagem: 'Sucesso.' },
+          docgerado: 'eA==',
+          extensaodocgerado: '.pdf',
+        })
+      )
+    ).toEqual({ base64: 'eA==', extensao: 'PDF' });
+  });
+
+  it('prazo: não começa com mais de 30 s e acaba até aos 38 s', () => {
+    expect(timeoutDoImprimir(0, 5_000)).toBe(33_000);
+    expect(timeoutDoImprimir(0, 30_000)).toBe(8_000);
+    expect(timeoutDoImprimir(0, 30_001)).toBeNull();
+    expect(timeoutDoImprimir(undefined, 999_999)).toBe(38_000);
   });
 });

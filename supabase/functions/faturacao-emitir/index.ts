@@ -40,7 +40,7 @@
 //              body ({ provider, apiKey, settings }) para testar ANTES de gravar.
 //   'preflight' — confirma que a org tem o Recibo (RC) configurado e a chave
 //                 autentica, ANTES de se criar um acordo de parcelamento.
-//   'pdf'    — devolve o PDF (base64). Body: { provider_doctype, provider_docnum, serie?, signed? }
+//   'pdf'    — devolve o PDF (base64). Body: { invoice_id, provider_doctype?, provider_docnum?, serie?, signed? }
 //              PDF e 'void_receipt' usam a integração gravada na fatura
 //              (invoices.integracao_id) — ver getConfigDoDocumento.
 // ============================================================
@@ -64,6 +64,12 @@ import {
   type IntegracaoDaEmpresa,
   type TipoDoc,
 } from '../_shared/faturacao/escolha.ts';
+import {
+  type BdFaturas,
+  type DocumentoConsultado,
+  documentoDaConsulta,
+  faturaDoDocumento,
+} from '../_shared/faturacao/documento.ts';
 import { linhaDeFalhaEmissao } from '../_shared/faturacao/falhas.ts';
 import {
   recusaPorEmissaoIncerta,
@@ -122,6 +128,8 @@ interface Body {
    */
   org_id?: string;
   // pdf
+  /** A fatura local do documento; sem ele (clientes antigos) procura-se pelo número. */
+  invoice_id?: string;
   provider_doctype?: string;
   provider_docnum?: string;
   serie?: string;
@@ -412,23 +420,17 @@ async function getConfigDoDocumento(
   req: Request,
   payload: Body,
   hint: { provider_doctype?: string; provider_docnum?: string; serie?: string }
-): Promise<{ provider: string; cfg: ProviderConfig }> {
+): Promise<{ provider: string; cfg: ProviderConfig; documento: DocumentoConsultado }> {
   const orgId = await resolverOrgId(req, payload.org_id);
-  const db = serviceClient();
 
-  let fatura: { integracao_id: string | null } | null = null;
-  if (orgId && hint.provider_docnum) {
-    // Filtrado pela org do chamador: nunca consultar a chave de outra organização.
-    let q = db
-      .from('invoices')
-      .select('integracao_id')
-      .eq('org_id', orgId)
-      .eq('provider_docnum', hint.provider_docnum);
-    if (hint.provider_doctype) q = q.eq('provider_doctype', hint.provider_doctype);
-    if (hint.serie) q = q.eq('serie', hint.serie);
-    const { data } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle();
-    fatura = (data as { integracao_id: string | null } | null) ?? null;
-  }
+  // Filtrado pela org do chamador: nunca consultar a chave de outra organização.
+  const fatura = orgId
+    ? await faturaDoDocumento(serviceClient() as unknown as BdFaturas, orgId, {
+        ...hint,
+        invoice_id: payload.invoice_id,
+      })
+    : null;
+  const documento = documentoDaConsulta(fatura, hint);
 
   const origem = origemDaConsulta(fatura);
   if (origem.tipo === 'integracao_da_fatura') {
@@ -441,12 +443,24 @@ async function getConfigDoDocumento(
       );
     }
     const c = configDaLinha(row);
-    return { provider: c.provider, cfg: { apiKey: c.apiKey, settings: c.settings, orgId } };
+    // O Primavera põe o pedido na fila desta integração; sem o id não tem onde o pôr.
+    return {
+      provider: c.provider,
+      cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
+      documento,
+    };
   }
 
-  const emissorId = await resolverEmissorId(payload, hint);
+  const emissorId = await resolverEmissorId(
+    {
+      ...payload,
+      contrato_id: payload.contrato_id ?? fatura?.contrato_id ?? undefined,
+      cobranca_id: payload.cobranca_id ?? fatura?.cobranca_id ?? undefined,
+    },
+    documento
+  );
   const { provider, cfg } = await getOrgConfig(req, payload.org_id, undefined, emissorId);
-  return { provider, cfg };
+  return { provider, cfg, documento };
 }
 
 /** Erro do utilizador ao escolher (empresa errada, inativa, tipo não suportado). Nada foi emitido. */
@@ -728,22 +742,25 @@ serve(async (req) => {
   // ── pdf (base64 on-demand) ──
   if (payload.action === 'pdf') {
     try {
-      if (!payload.provider_doctype || !payload.provider_docnum) {
+      if (!payload.invoice_id && (!payload.provider_doctype || !payload.provider_docnum)) {
         return json({
           success: false,
-          error: 'pdf: provider_doctype e provider_docnum obrigatórios',
+          error: 'pdf: invoice_id, ou provider_doctype e provider_docnum, obrigatórios',
         });
       }
-      const { provider, cfg } = await getConfigDoDocumento(req, payload, {
+      const { provider, cfg, documento } = await getConfigDoDocumento(req, payload, {
         provider_doctype: payload.provider_doctype,
         provider_docnum: payload.provider_docnum,
         serie: payload.serie,
       });
+      if (!documento.provider_doctype || !documento.provider_docnum) {
+        return json({ success: false, error: 'pdf: o documento não tem número no fornecedor.' });
+      }
       const base64 = await pickAdapter(provider).pdf(
         {
-          doctype: payload.provider_doctype,
-          docnum: payload.provider_docnum,
-          serie: payload.serie ?? undefined,
+          doctype: documento.provider_doctype,
+          docnum: documento.provider_docnum,
+          serie: documento.serie ?? undefined,
           signed: payload.signed ?? undefined,
         },
         cfg
@@ -753,6 +770,7 @@ serve(async (req) => {
       console.error('[faturacao-emitir] pdf falhou:', (e as Error).message, {
         provider_doctype: payload.provider_doctype ?? null,
         provider_docnum: payload.provider_docnum ?? null,
+        invoice_id: payload.invoice_id ?? null,
       });
       return json({ success: false, error: (e as Error).message });
     }

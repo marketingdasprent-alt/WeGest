@@ -19,6 +19,13 @@ export const MENSAGEM_SEM_AGENTE =
   'Primavera (agente local): nenhum agente respondeu a tempo. Verifique se o agente está a ' +
   'correr na rede da empresa (ver instruções em agent/primavera-agent/). Nada foi emitido.';
 
+/** Gravada no job pelo provider quando o cancela antes de algum agente o reclamar. */
+export const MENSAGEM_CANCELADO_SEM_AGENTE =
+  'O WeGest desistiu de esperar antes de o agente reclamar o pedido. Nada foi emitido.';
+
+/** Início da mensagem com que o claim (migração 20261013120000) fecha um pendente expirado. */
+export const PREFIXO_EXPIRADO_SEM_AGENTE = 'Expirou antes de o agente o reclamar';
+
 export const MENSAGEM_AMBIGUO_CLAIMED =
   'Primavera (agente local): o agente reclamou o pedido mas não confirmou o resultado a tempo. ' +
   'Impossível saber se o documento foi criado. Não reemitir sem verificar no Primavera.';

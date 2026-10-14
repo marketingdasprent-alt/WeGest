@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
-import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { baixarPdfEmSegundoPlano, clienteRowToFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
@@ -314,17 +314,12 @@ export function ContratoFaturarDialog({
             cobrancaId,
             contratoId: contrato.id,
           });
-          if (res.invoice) {
-            try {
-              await baixarDocumentoPdf(res.invoice);
-            } catch (pdfErr) {
-              console.error('Documento emitido mas falhou o download do PDF:', pdfErr);
-            }
-          }
           toast.success(
             `Documento fiscal emitido no ${escolha.providerLabel ?? providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
           );
           if (res.warning) toast.warning(res.warning);
+          // Depois do sucesso e sem esperar: o PDF do Primavera pode levar dezenas de segundos.
+          baixarPdfEmSegundoPlano(res.invoice, (m) => toast.warning(m));
         } catch (kiErr: any) {
           console.error('Falha a emitir o documento fiscal:', kiErr);
           // Sem documento nenhum: emitir uma factura é acto de software
