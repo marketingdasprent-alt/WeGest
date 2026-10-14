@@ -441,7 +441,11 @@ async function getConfigDoDocumento(
       );
     }
     const c = configDaLinha(row);
-    return { provider: c.provider, cfg: { apiKey: c.apiKey, settings: c.settings, orgId } };
+    // O Primavera põe o pedido na fila desta integração; sem o id não tem onde o pôr.
+    return {
+      provider: c.provider,
+      cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
+    };
   }
 
   const emissorId = await resolverEmissorId(payload, hint);

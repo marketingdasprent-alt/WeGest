@@ -20,6 +20,13 @@ export const MENSAGEM_SEM_TEMPO_INSERIR =
   'Não executado: já não havia tempo para o Primavera responder antes de o WeGest deixar de ' +
   'esperar. O documento não foi enviado.';
 
+// O WeGest espera 30 s por um PDF (PDF_TIMEOUT_MS do provider); o imprimir pode passar dos 12 s
+// dos outros pedidos, por isso tem prazo próprio, contado também da criação do pedido.
+export const PRAZO_COMECAR_PDF_MS = 25_000;
+export const PRAZO_PDF_MS = 28_000;
+export const MENSAGEM_PDF_TARDE =
+  'Não executado: o pedido de PDF chegou tarde e o WeGest já não ia esperar pelo ficheiro.';
+
 /** O pedido saiu para o Primavera e não se sabe se o documento foi criado.
  *  Nunca se reporta como falha: a fila reemitiria. */
 export class AmbiguoError extends Error {}
@@ -191,6 +198,50 @@ export function timeoutDoInserir(criadoEm: number | undefined, agora: number): n
   return restante < MINIMO_INSERIR_MS ? null : Math.min(TIMEOUT_INSERIR_MS, restante);
 }
 
+/** Timeout do imprimir para acabar até PRAZO_PDF_MS; null quando já não vale a pena pedir. */
+export function timeoutDoImprimir(criadoEm: number | undefined, agora: number): number | null {
+  if (criadoEm === undefined) return PRAZO_PDF_MS;
+  if (agora - criadoEm > PRAZO_COMECAR_PDF_MS) return null;
+  return criadoEm + PRAZO_PDF_MS - agora;
+}
+
+export interface PdfImpresso {
+  base64: string;
+  extensao: string;
+}
+
+/** Resposta de /documentos/vendas/imprimir com DevolvePDF (provada no servidor a 14/10/2026). */
+export function lerRespostaImprimir(status: number, texto: string): PdfImpresso {
+  if (status < 200 || status >= 300) {
+    throw new Error(`imprimir falhou (HTTP ${status}): ${texto.slice(0, 300)}`);
+  }
+  let d: unknown;
+  try {
+    d = JSON.parse(texto);
+  } catch {
+    throw new Error(`imprimir: resposta não-JSON (${texto.slice(0, 300)})`);
+  }
+  const corpo = d && typeof d === 'object' ? (d as Record<string, unknown>) : undefined;
+  const estado = campoSemMaiusculas(corpo, 'Estado');
+  const mensagem =
+    estado && typeof estado === 'object'
+      ? campoSemMaiusculas(estado as Record<string, unknown>, 'Mensagem')
+      : undefined;
+  if (!estadoEhSucesso(mensagem)) {
+    throw new Error(`Primavera recusou imprimir: ${String(mensagem ?? 'sem Estado')}`);
+  }
+  const doc = campoSemMaiusculas(corpo, 'DocGerado');
+  if (typeof doc !== 'string' || !doc.trim()) {
+    throw new Error('imprimir: o Primavera respondeu sem o ficheiro (DocGerado vazio).');
+  }
+  const ext = campoSemMaiusculas(corpo, 'ExtensaoDocGerado');
+  return {
+    base64: doc.trim(),
+    extensao:
+      typeof ext === 'string' && ext.trim() ? ext.trim().replace(/^\./, '').toUpperCase() : 'PDF',
+  };
+}
+
 export interface PrazoEmit {
   /** Ver criadoEmLocal; sem ele (ex.: --fatura-teste) não há prazo. */
   criadoEm?: number;
@@ -257,13 +308,13 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     }
   }
 
-  async function obterToken(): Promise<string> {
+  async function obterToken(timeoutMs: number = TIMEOUT_PEDIDO_MS): Promise<string> {
     const { username, password, enterprise } = cfg.primavera;
     const res = await fetchFn(`${cfg.primavera.endpoint}/auth/gettoken`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, enterprise }),
-      signal: AbortSignal.timeout(TIMEOUT_PEDIDO_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const texto = await res.text();
     if (!res.ok) throw new Error(`gettoken falhou (HTTP ${res.status}): ${texto.slice(0, 200)}`);
@@ -452,5 +503,40 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     return { ok: true, artigo_por_omissao_existe: true };
   }
 
-  return { pedido, obterToken, consultar, garantirCliente, emitir, testar };
+  /** PDF de um documento já emitido. Sem efeito fiscal: qualquer falha é só falha. O
+   *  `timeoutMs` cobre o token e a impressão, para acabar dentro do que o WeGest espera. */
+  async function imprimir(
+    tipoDocumento: string,
+    serie: string,
+    numero: string,
+    timeoutMs: number,
+    relogio: () => number = Date.now
+  ): Promise<PdfImpresso> {
+    const fim = relogio() + timeoutMs;
+    if (!token) token = await obterToken(Math.max(1, Math.min(TIMEOUT_PEDIDO_MS, fim - relogio())));
+    const restante = fim - relogio();
+    if (restante <= 0)
+      throw new Error('imprimir: sem tempo para pedir o PDF depois da autenticação.');
+    let status: number;
+    let texto: string;
+    try {
+      const res = await fetchFn(`${cfg.primavera.endpoint}/documentos/vendas/imprimir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          Documento: { TipoDocumento: tipoDocumento, Serie: serie, NumeroDoc: numero },
+          Impressao: { DevolvePDF: true },
+        }),
+        signal: AbortSignal.timeout(restante),
+      });
+      status = res.status;
+      texto = await res.text();
+    } catch (erro) {
+      const msg = erro instanceof Error ? erro.message : String(erro);
+      throw new Error(`imprimir: sem resposta do Primavera (${msg}).`);
+    }
+    return lerRespostaImprimir(status, texto);
+  }
+
+  return { pedido, obterToken, consultar, garantirCliente, emitir, testar, imprimir };
 }

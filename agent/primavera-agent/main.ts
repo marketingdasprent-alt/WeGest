@@ -31,7 +31,10 @@ import {
   AmbiguoError,
   criadoEmLocal,
   MENSAGEM_NAO_EXECUTADO,
+  MENSAGEM_PDF_TARDE,
+  type PdfImpresso,
   podeComecar,
+  timeoutDoImprimir,
 } from './asconnect.ts';
 
 const TIMEOUT_WEGEST_MS = 30_000;
@@ -47,7 +50,7 @@ export interface ConfigAgente extends ConfigAsConnect {
 
 export interface JobRecebido {
   id: string;
-  tipo: 'emit' | 'health';
+  tipo: 'emit' | 'health' | 'pdf';
   payload: Record<string, unknown>;
   /** Ver criadoEmLocal; ausente com um WeGest que ainda não manda created_at. */
   criadoEm?: number;
@@ -133,9 +136,13 @@ export interface Resultado {
 /** O que identifica o desfecho num aviso: se o WeGest não o registar, o número do documento
  *  só fica no Primavera e neste log. */
 export function resumoDoResultado(r: Resultado): string {
-  const doc = r.resultado as { numero?: unknown; docnum?: unknown } | null | undefined;
+  const doc = r.resultado as
+    | { numero?: unknown; docnum?: unknown; base64?: unknown }
+    | null
+    | undefined;
   const numero = doc?.numero ?? doc?.docnum;
   if (numero) return `documento ${String(numero)}`;
+  if (typeof doc?.base64 === 'string') return `PDF (${doc.base64.length} caracteres em base64)`;
   return JSON.stringify(r.resultado ?? r.error ?? null).slice(0, 300);
 }
 
@@ -181,6 +188,20 @@ export async function reportarResultado(
   );
 }
 
+/** Um pdf que chega tarde não se pede: o WeGest já não ia esperar pelo ficheiro. */
+async function imprimirJob(
+  asconnect: ReturnType<typeof criarClienteAsConnect>,
+  job: JobRecebido
+): Promise<PdfImpresso> {
+  const timeout = timeoutDoImprimir(job.criadoEm, Date.now());
+  if (timeout === null) throw new Error(MENSAGEM_PDF_TARDE);
+  const p = job.payload as { tipo_documento?: unknown; serie?: unknown; numero?: unknown };
+  const tipo = String(p.tipo_documento ?? '').trim();
+  const numero = String(p.numero ?? '').trim();
+  if (!tipo || !numero) throw new Error('Pedido de PDF sem tipo de documento ou número.');
+  return asconnect.imprimir(tipo, String(p.serie ?? '').trim(), numero, timeout);
+}
+
 export async function processarJob(
   cfg: ConfigAgente,
   job: JobRecebido,
@@ -202,6 +223,7 @@ export async function processarJob(
         criadoEm: job.criadoEm,
       });
     } else if (job.tipo === 'health') resultado = await asconnect.testar();
+    else if (job.tipo === 'pdf') resultado = await imprimirJob(asconnect, job);
     else {
       throw new Error(
         `Tipo de job desconhecido: ${String(job.tipo)}. Este agente está desactualizado?`

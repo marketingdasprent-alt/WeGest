@@ -12,8 +12,8 @@
 //
 // As credenciais do AS Connect nunca ficam nesta BD — `cfg.apiKey` é só a
 // chave do agente. A documentação de 18/09/2026 já traz `TipoDocumento` no
-// pedido, mas o agente ainda só emite FT; PDF e anulação continuam sem
-// endpoint (ver project_primavera-integration.md).
+// pedido, mas o agente ainda só emite FT. O PDF vem de /documentos/vendas/imprimir
+// pelo mesmo agente (job 'pdf'); a anulação continua sem endpoint.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import type {
   EmitDocResult,
@@ -24,13 +24,20 @@ import type {
   VoidReceiptInput,
 } from '../types.ts';
 import { EmissaoAmbiguaError } from '../types.ts';
-import { desfechoDoJob, type JobLido } from '../../_shared/primavera/jobs.ts';
+import {
+  desfechoDoJob,
+  type JobLido,
+  MENSAGEM_CANCELADO_SEM_AGENTE,
+} from '../../_shared/primavera/jobs.ts';
+import { lerResultadoPdf, mensagemFalhaPdf, resultadoSemPdf } from '../../_shared/primavera/pdf.ts';
 
 const env = (k: string) => Deno.env.get(k);
 
 const POLL_INTERVAL_MS = 1000;
 const HEALTH_TIMEOUT_MS = 20_000;
 const EMIT_TIMEOUT_MS = 45_000;
+// O agente não começa um pdf com mais de 25 s e acaba-o até aos 28 s (ver main.ts do agente).
+const PDF_TIMEOUT_MS = 30_000;
 
 function adminClient() {
   return createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '');
@@ -42,7 +49,7 @@ function adminClient() {
  *  sem o executar; nunca se emite um documento de que o WeGest já desistiu. */
 async function enfileirar(
   cfg: ProviderConfig,
-  tipo: 'emit' | 'health',
+  tipo: 'emit' | 'health' | 'pdf',
   payload: Record<string, unknown>,
   timeoutMs: number
 ): Promise<string> {
@@ -89,7 +96,7 @@ async function cancelarSePendente(jobId: string): Promise<boolean> {
     .update({
       status: 'failed',
       completed_at: new Date().toISOString(),
-      error_message: 'O WeGest desistiu de esperar antes de o agente reclamar o pedido. Nada foi emitido.',
+      error_message: MENSAGEM_CANCELADO_SEM_AGENTE,
     })
     .eq('id', jobId)
     .eq('status', 'pending')
@@ -119,6 +126,24 @@ async function esperarResultado(
   if (d.tipo === 'ok') return d.resultado;
   if (d.tipo === 'falha') throw new Error(d.mensagem);
   throw new EmissaoAmbiguaError(d.tipo === 'ambiguo' ? d.mensagem : 'Primavera: desfecho desconhecido.');
+}
+
+/** Tira o ficheiro da fila depois de entregue (fica só extensão e tamanho). Se falhar, o
+ *  utilizador recebe o PDF na mesma: é limpeza, não faz parte da impressão. */
+async function largarPdfDaFila(jobId: string, resultado: Record<string, unknown>): Promise<void> {
+  try {
+    const { error } = await adminClient()
+      .from('primavera_jobs')
+      .update({ resultado: resultadoSemPdf(resultado) })
+      .eq('id', jobId);
+    if (error) throw error;
+  } catch (e) {
+    console.warn(
+      '[primavera] não consegui tirar o PDF da fila:',
+      jobId,
+      (e as Error)?.message ?? e
+    );
+  }
 }
 
 export const primaveraProvider: FaturacaoProvider = {
@@ -183,11 +208,26 @@ export const primaveraProvider: FaturacaoProvider = {
     };
   },
 
-  async pdf(_input: PdfInput, _cfg: ProviderConfig): Promise<string> {
-    throw new Error(
-      'Primavera (AS Connect): a documentação recebida não inclui um endpoint de PDF. ' +
-        'Confirmar com o AS Connect antes de activar esta funcionalidade.'
-    );
+  async pdf(input: PdfInput, cfg: ProviderConfig): Promise<string> {
+    // Imprimir não cria documento: qualquer falha, até "ambígua", é só "tente de novo".
+    try {
+      const jobId = await enfileirar(
+        cfg,
+        'pdf',
+        { tipo_documento: input.doctype, serie: input.serie ?? '', numero: input.docnum },
+        PDF_TIMEOUT_MS
+      );
+      const resultado = await esperarResultado(jobId, PDF_TIMEOUT_MS);
+      await largarPdfDaFila(jobId, resultado);
+      return lerResultadoPdf(resultado).base64;
+    } catch (e) {
+      throw new Error(
+        mensagemFalhaPdf({
+          ambiguo: e instanceof EmissaoAmbiguaError,
+          mensagem: e instanceof Error ? e.message : String(e),
+        })
+      );
+    }
   },
 
   async voidReceipt(_input: VoidReceiptInput, _cfg: ProviderConfig): Promise<void> {
