@@ -67,7 +67,12 @@ export const EX_CANDIDATURA_TVDE = {
   estado: 'submetido',
   criada_em: '2026-10-09T14:42:03Z',
   decidida_em: null,
+  com_conta: true,
 };
+
+// Só para o exemplo: um access_token do Supabase Auth tem esta forma (header.payload.assinatura).
+export const EX_TOKEN_MOTORISTA =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIuLi4ifQ.assinatura';
 
 const LER_TVDE = 'tvde:catalogo:read';
 
@@ -82,7 +87,18 @@ const DESCRICAO_CANDIDATURA =
   'use uma mensagem genérica, para o formulário não revelar quem já se candidatou. Limite de 50 candidaturas por dia por chave (429 ' +
   'LIMITE_EXCEDIDO com Retry-After). O formulário do site tem de ter CAPTCHA (Turnstile ou ' +
   'equivalente): sem ele qualquer robô esgota o limite. Não guarde os dados pessoais do ' +
-  'formulário nos logs do site. Sem cache. Corpo JSON até 64 KB.';
+  'formulário nos logs do site. Sem cache. Corpo JSON até 64 KB. Com o cabeçalho ' +
+  'X-Motorista-Token (motorista com conta no WeGest), a candidatura fica ligada à conta: o ' +
+  'email do corpo tem de ser o da conta e a conta tem de pertencer à organização da chave.';
+
+const DESCRICAO_TOKEN_MOTORISTA =
+  'Opcional. O access_token da sessão Supabase Auth do motorista no WeGest (o JWT que o ' +
+  'supabase-js guarda depois de "Entrar"). Com ele a candidatura fica ligada à conta do ' +
+  'motorista (com_conta: true); o email do corpo tem de ser o da conta (senão 400 ' +
+  'PARAMETRO_INVALIDO) e a conta tem de pertencer à organização da chave (senão 403 ' +
+  'CONTA_INVALIDA). Token inválido ou expirado dá 401 SESSAO_INVALIDA: renove a sessão e ' +
+  'repita. Não é o Authorization, que continua a ser alternativa à X-API-Key. Nunca o guarde ' +
+  'nem o registe nos logs do site. Sem o cabeçalho, a candidatura entra sem conta.';
 
 const DESCRICAO_DISPONIBILIDADE =
   'O aluguer TVDE não tem fim: renova-se semana a semana. Por isso uma viatura só conta se ' +
@@ -276,6 +292,12 @@ export function esquemasTvde(base: { Modelo: Esquema; Preco: Esquema }): Record<
           format: 'date-time',
           description: 'Quando foi aprovada ou rejeitada; null enquanto não há decisão.',
         },
+        com_conta: {
+          type: 'boolean',
+          description:
+            'true quando a candidatura está ligada à conta WeGest do motorista (enviada com ' +
+            'X-Motorista-Token).',
+        },
       },
       example: EX_CANDIDATURA_TVDE,
     },
@@ -407,6 +429,16 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
         description: DESCRICAO_CANDIDATURA,
         tags: ['TVDE'],
         'x-permissao': 'tvde:candidaturas:write',
+        parameters: [
+          {
+            name: 'X-Motorista-Token',
+            in: 'header',
+            required: false,
+            description: DESCRICAO_TOKEN_MOTORISTA,
+            schema: { type: 'string', maxLength: 4096 },
+            example: EX_TOKEN_MOTORISTA,
+          },
+        ],
         requestBody: {
           required: true,
           content: a.json(
@@ -422,10 +454,22 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
           ...a.errosPedido,
           '400': a.respostaErro(
             'Corpo inválido: PARAMETRO_INVALIDO (campo em falta ou mal formado, NIF ou IBAN com ' +
-              'o dígito de controlo errado, carta sem B, validade no passado) ou CORPO_INVALIDO ' +
-              '(JSON inválido)',
+              'o dígito de controlo errado, carta sem B, validade no passado, ou, com ' +
+              'X-Motorista-Token, email diferente do da conta) ou CORPO_INVALIDO (JSON inválido)',
             'PARAMETRO_INVALIDO',
             'carta_conducao.categorias tem de incluir B.'
+          ),
+          '401': a.respostaErro(
+            'SESSAO_INVALIDA: o X-Motorista-Token é inválido ou expirou (renove a sessão e ' +
+              'repita). Sem chave de API válida, NAO_AUTENTICADO',
+            'SESSAO_INVALIDA',
+            'Sessão do motorista inválida ou expirada. Volte a entrar.'
+          ),
+          '403': a.respostaErro(
+            'CONTA_INVALIDA: a conta do X-Motorista-Token não é motorista da organização da ' +
+              'chave. Chave sem tvde:candidaturas:write, SEM_PERMISSAO',
+            'CONTA_INVALIDA',
+            'A conta não é de um motorista desta organização.'
           ),
           '404': a.respostaErro(
             'modelo_pretendido_id não é um modelo TVDE publicado',
@@ -433,7 +477,9 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
             'modelo_pretendido_id não é um modelo TVDE publicado.'
           ),
           '409': a.respostaErro(
-            'A pessoa já tem uma candidatura em curso nesta organização (mesmo NIF ou email)',
+            'A pessoa já tem uma candidatura em curso nesta organização (mesmo NIF ou email) ' +
+              'ou, com X-Motorista-Token, a conta já tem candidatura, já é motorista ou a ' +
+              'referencia_externa já foi usada por outra conta',
             'CANDIDATURA_EXISTENTE',
             'Já existe uma candidatura em curso com este NIF ou email.'
           ),
