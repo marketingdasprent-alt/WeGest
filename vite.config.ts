@@ -134,7 +134,11 @@ export default defineConfig(({ mode }) => ({
         globIgnores: ['**/images/**', '**/assets/docs/**', '**/assets/LeitorScalar-*'],
         // /api/rent-a-car[/*] é a API externa (rewrite da Vercel), não uma rota da
         // SPA: o SW não pode responder-lhe com o index.html.
-        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\/rent-a-car(\/|$)/],
+        // /formulario/* vive em iframes no site de cada organização: o index.html
+        // do precache traz o X-Frame-Options: DENY da raiz, e a partir da segunda
+        // abertura o iframe ficava em branco. Vai sempre à rede, onde a Vercel
+        // responde sem esse cabeçalho só para esta rota (vercel.json).
+        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\/rent-a-car(\/|$)/, /^\/formulario\//],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Nota: o vite-plugin-pwa precacheia SEMPRE o manifest.webmanifest (não
         // tem interruptor, e `manifestTransforms` não chega às entradas que ele

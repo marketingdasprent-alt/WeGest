@@ -16,3 +16,18 @@ describe('cache PWA', () => {
     expect(main).toContain('removeLegacyAuthenticatedCache');
   });
 });
+
+describe('service worker e o formulário incorporável', () => {
+  const config = readFileSync(resolve(process.cwd(), 'vite.config.ts'), 'utf8');
+
+  it('o index.html está no precache, senão o SW rebenta ao arrancar e nunca instala', () => {
+    expect(config).toMatch(/globPatterns:\s*\['index\.html'/);
+  });
+
+  it('/formulario/ nunca é servido do precache: o index.html guardado traz X-Frame-Options DENY', () => {
+    // A partir da segunda abertura o iframe do site da organização ficava em
+    // branco (13/10/2026, site da Década Ousada). O formulário vai sempre à rede.
+    const denylist = config.match(/navigateFallbackDenylist:\s*\[([^\]]*)\]/)?.[1] ?? '';
+    expect(denylist).toContain('/^\\/formulario\\//');
+  });
+});
