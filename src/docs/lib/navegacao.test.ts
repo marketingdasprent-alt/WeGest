@@ -65,6 +65,12 @@ describe('navegação do docs', () => {
     expect(tvde?.introducao).toMatch(/CAPTCHA/);
   });
 
+  it('as introduções dizem o prazo: 15 dias no rent-a-car, livre hoje no TVDE', () => {
+    expect(recurso('recursos/modelos')?.introducao).toMatch(/próximos 15 dias/);
+    expect(recurso('recursos/disponibilidade')?.introducao).toMatch(/próximos 15 dias/);
+    expect(recurso('recursos/tvde')?.introducao).toMatch(/livre hoje/);
+  });
+
   it('Anterior/Seguinte saltam o "em breve" e as ligações externas', () => {
     expect(anteriorSeguinte('').anterior).toBeUndefined();
     expect(anteriorSeguinte('').seguinte?.slug).toBe('inicio-rapido');

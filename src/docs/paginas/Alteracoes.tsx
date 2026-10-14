@@ -15,6 +15,20 @@ const ALTERACOES: Alteracao[] = [
   {
     data: '2026-10-14',
     versao: '1.0.0',
+    tipo: 'Incompatível',
+    texto:
+      'Só se mostra o que se pode alugar. Rent-a-car: o levantamento em /disponibilidade, ' +
+      '/cotacoes e /reservas tem de ser nos próximos 15 dias (senão 400 PERIODO_INVALIDO); o ' +
+      'máximo de 30 dias de aluguer não muda. GET /modelos só lista modelos com um dia livre ' +
+      'nos próximos 15 dias e traz disponivel_desde (AAAA-MM-DD, o primeiro); GET /modelos/{id} ' +
+      'continua a responder, com disponivel_desde null quando não há dia livre. TVDE: ' +
+      'GET /tvde/modelos e GET /tvde/disponibilidade só contam carros livres hoje, e inicio ' +
+      'passa a ser só a data do levantamento; GET /tvde/modelos/{id} continua a responder. ' +
+      'Modelos com preço 0 € na tarifa deixam de aparecer.',
+  },
+  {
+    data: '2026-10-14',
+    versao: '1.0.0',
     tipo: 'Novo',
     texto:
       'Candidaturas TVDE com conta: o POST /tvde/candidaturas aceita o cabeçalho opcional ' +

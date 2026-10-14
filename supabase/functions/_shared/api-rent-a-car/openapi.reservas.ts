@@ -183,7 +183,7 @@ export function caminhosReservas(a: Ajudas): Record<string, Esquema> {
       post: {
         summary: 'Criar uma reserva (entra como pendente)',
         description:
-          'Revalida período, disponibilidade e preço. A viatura é atribuída pela equipa; a ' +
+          'Revalida período (levantamento nos próximos 15 dias), disponibilidade e preço. A viatura é atribuída pela equipa; a ' +
           'reserva fica pendente até ser confirmada no WeGest. Uma referencia_externa já usada ' +
           'devolve a reserva existente, mesmo cancelada: um pedido novo depois de cancelar precisa ' +
           'de referência nova. Sem cache. Corpo JSON até 64 KB.',

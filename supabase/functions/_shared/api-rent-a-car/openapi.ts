@@ -8,6 +8,7 @@
 // válida desta API) ou a permissão exigida (ex.: 'catalogo:read').
 import {
   EX_APRESENTACAO,
+  EX_CARTAO_MODELO,
   EX_CATEGORIA,
   EX_COBERTURA,
   EX_COTACAO,
@@ -81,12 +82,18 @@ const Categoria: Esquema = {
     idade_minima_condutor: inteiroOuNulo('Idade mínima do condutor, em anos.'),
     idade_maxima_condutor: inteiroOuNulo('Idade máxima do condutor, em anos.'),
     preco_dia_desde: nulavel({ ...Preco, description: 'Preço por dia mais baixo da categoria.' }),
-    modelos: { type: 'integer', description: 'Modelos publicáveis nesta categoria.' },
+    modelos: {
+      type: 'integer',
+      description:
+        'Modelos publicáveis nesta categoria, também os sem dia livre nos próximos 15 dias ' +
+        '(esses não aparecem em /modelos).',
+    },
   },
   example: EX_CATEGORIA,
 };
 
-const Modelo: Esquema = {
+// O cartão do modelo, comum ao catálogo, à disponibilidade e (sem tipo nem preco_dia) ao TVDE.
+const CartaoModelo: Esquema = {
   type: 'object',
   properties: {
     id: uuid(),
@@ -110,6 +117,22 @@ const Modelo: Esquema = {
     ),
     preco_dia: { ...Preco, description: 'Preço por dia na tarifa do site.' },
     frota: { type: 'integer', description: 'Viaturas deste modelo na frota de aluguer.' },
+  },
+  example: EX_CARTAO_MODELO,
+};
+
+const Modelo: Esquema = {
+  ...CartaoModelo,
+  properties: {
+    ...(CartaoModelo.properties as Esquema),
+    disponivel_desde: {
+      type: ['string', 'null'],
+      format: 'date',
+      description:
+        'Primeiro dia (AAAA-MM-DD, hora de Lisboa) com uma viatura deste modelo livre 24 h, ' +
+        'nos próximos 15 dias. Em /modelos vem sempre preenchido; em /modelos/{id} é null ' +
+        'quando não há nenhum dia livre nesse prazo.',
+    },
   },
   example: EX_MODELO,
 };
@@ -212,7 +235,7 @@ const Periodo: Esquema = {
 
 const ModeloDisponivel: Esquema = {
   allOf: [
-    Modelo,
+    CartaoModelo,
     {
       type: 'object',
       properties: {
@@ -252,7 +275,10 @@ const CotacaoPedido: Esquema = {
   required: ['modelo_id', 'inicio', 'fim', 'entrega', 'recolha'],
   properties: {
     modelo_id: uuid('Id do modelo (de /modelos ou /disponibilidade).'),
-    inicio: dataHora('ISO 8601 com fuso (Z ou ±HH:MM); sem fuso dá 400.'),
+    inicio: dataHora(
+      'Levantamento, ISO 8601 com fuso (Z ou ±HH:MM); sem fuso dá 400. No futuro e nos ' +
+        'próximos 15 dias.'
+    ),
     fim: dataHora('ISO 8601 com fuso, depois do início.'),
     entrega: uuid('Id da localização de entrega (de /localizacoes).'),
     recolha: uuid('Id da localização de recolha; pode ser diferente da entrega.'),
@@ -363,8 +389,9 @@ const ERROS_DISPONIBILIDADE = {
 
 const DESCRICAO_PERIODO =
   'Calculado na hora e nunca guardado em cache (Cache-Control: no-store, também nos erros). ' +
-  'O período tem de começar no futuro, durar no máximo 30 dias e começar dentro da validade ' +
-  'da tarifa do site. Sem tarifa do site configurada a resposta é 503 CONFIG_EM_FALTA.';
+  'O levantamento (inicio) tem de ser no futuro e nos próximos 15 dias (senão 400 ' +
+  'PERIODO_INVALIDO) e dentro da validade da tarifa do site; o aluguer dura no máximo 30 dias. ' +
+  'Sem tarifa do site configurada a resposta é 503 CONFIG_EM_FALTA.';
 
 const parametroData = (nome: string, description: string, example: string) => ({
   name: nome,
@@ -510,7 +537,12 @@ export const OPENAPI: Record<string, unknown> = {
     },
     '/modelos': {
       get: {
-        summary: 'Modelos publicáveis ("Clio ou similar")',
+        summary: 'Modelos com um dia livre nos próximos 15 dias ("Clio ou similar")',
+        description:
+          'Só os modelos com preço na tarifa do site e pelo menos um dia livre nos próximos 15 ' +
+          'dias; disponivel_desde diz qual é o primeiro. Uma viatura num contrato que acaba ' +
+          'daqui a 4 dias conta a partir do dia em que fica livre. Para as datas do cliente, ' +
+          'use /disponibilidade.',
         tags: ['Modelos'],
         'x-permissao': LER_CATALOGO,
         parameters: [
@@ -538,6 +570,9 @@ export const OPENAPI: Record<string, unknown> = {
     '/modelos/{id}': {
       get: {
         summary: 'Detalhe do modelo com tarifa e coberturas',
+        description:
+          'Responde para qualquer modelo publicável, mesmo sem dia livre nos próximos 15 dias ' +
+          '(disponivel_desde null): um link antigo do site não parte.',
         tags: ['Modelos'],
         'x-permissao': LER_CATALOGO,
         parameters: [
@@ -589,7 +624,8 @@ export const OPENAPI: Record<string, unknown> = {
         parameters: [
           parametroData(
             'inicio',
-            'Início do aluguer, ISO 8601 com fuso (Z ou ±HH:MM); sem fuso dá 400.',
+            'Levantamento, ISO 8601 com fuso (Z ou ±HH:MM); sem fuso dá 400. No futuro e nos ' +
+              'próximos 15 dias.',
             EX_INICIO
           ),
           parametroData('fim', 'Fim do aluguer, ISO 8601 com fuso, depois do início.', EX_FIM),
@@ -705,7 +741,7 @@ export const OPENAPI: Record<string, unknown> = {
       LinhaCotacao,
       Cotacao,
       ...esquemasReservas({ CotacaoPedido }),
-      ...esquemasTvde({ Modelo, Preco }),
+      ...esquemasTvde({ Modelo: CartaoModelo, Preco }),
     },
     responses: {
       NaoAutenticado: respostaErro(
@@ -736,7 +772,8 @@ export const OPENAPI: Record<string, unknown> = {
       PedidoInvalido: respostaErro(
         'Pedido inválido: PARAMETRO_INVALIDO (data sem fuso, UUID, extra repetido ou quantidade ' +
           'fora do limite), CORPO_INVALIDO (JSON inválido), PERIODO_INVALIDO (fim antes do ' +
-          'início, início no passado) ou PERIODO_EXCEDE_MAXIMO (mais de 30 dias)',
+          'início, início no passado ou a mais de 15 dias) ou PERIODO_EXCEDE_MAXIMO (mais de 30 ' +
+          'dias)',
         'PARAMETRO_INVALIDO',
         'inicio e fim são datas ISO 8601 com fuso.'
       ),

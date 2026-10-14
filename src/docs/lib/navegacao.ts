@@ -59,7 +59,8 @@ export const RECURSOS: Recurso[] = [
     ],
     introducao:
       'O que o site mostra ao cliente: "Renault Clio ou similar". A matrícula só se atribui na ' +
-      'entrega. Um modelo aparece quando tem viaturas na frota de aluguer e preço na tarifa do site.',
+      'entrega. Um modelo aparece quando tem viaturas na frota de aluguer, preço na tarifa do ' +
+      'site e pelo menos um dia livre nos próximos 15 dias (disponivel_desde diz qual).',
   },
   {
     slug: 'recursos/extras',
@@ -82,7 +83,8 @@ export const RECURSOS: Recurso[] = [
     operacoes: [{ id: 'GET /disponibilidade', ancora: 'consultar' }],
     introducao:
       'Os modelos com viatura livre num período, entre duas localizações, com o preço do ' +
-      'aluguer. Calculado na hora: nunca guarde a resposta em cache.',
+      'aluguer. O levantamento tem de ser nos próximos 15 dias e o aluguer dura no máximo 30. ' +
+      'Calculado na hora: nunca guarde a resposta em cache.',
   },
   {
     slug: 'recursos/cotacoes',
@@ -123,8 +125,8 @@ export const RECURSOS: Recurso[] = [
     ],
     introducao:
       'Carros para aluguer semanal a motoristas TVDE e as candidaturas desses motoristas. O ' +
-      'aluguer TVDE não tem fim: um carro só está disponível se estiver livre a partir do ' +
-      'início, sem nada marcado depois. O catálogo precisa da permissão tvde:catalogo:read; ' +
+      'aluguer TVDE não tem fim: um carro só está disponível se estiver livre hoje, sem nada ' +
+      'marcado depois; a data de início é só a do levantamento. O catálogo precisa da permissão tvde:catalogo:read; ' +
       'enviar candidaturas precisa de tvde:candidaturas:write e consultá-las de ' +
       'tvde:candidaturas:read. O formulário de candidatura do site tem de ter CAPTCHA.',
   },

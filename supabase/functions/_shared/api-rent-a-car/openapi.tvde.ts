@@ -102,9 +102,11 @@ const DESCRICAO_TOKEN_MOTORISTA =
 
 const DESCRICAO_DISPONIBILIDADE =
   'O aluguer TVDE não tem fim: renova-se semana a semana. Por isso uma viatura só conta se ' +
-  'estiver livre a partir de inicio sem nada marcado depois — uma reserva de rent-a-car daqui ' +
-  'a três meses já a tira daqui. Descontam-se as reservas sem viatura do modelo. inicio tem de ' +
-  'estar no futuro e a no máximo 180 dias (senão 400 PERIODO_INVALIDO). Sem tarifa TVDE do site ' +
+  'estiver livre hoje sem nada marcado depois — uma reserva de rent-a-car daqui a três meses ' +
+  'já a tira daqui — e fica guardada até ao levantamento. inicio é só a data do levantamento: ' +
+  'não muda a conta, que é sempre a de hoje. Descontam-se as reservas sem viatura do modelo. ' +
+  'inicio tem de estar no futuro e a no máximo 180 dias (senão 400 PERIODO_INVALIDO). Sem ' +
+  'tarifa TVDE do site ' +
   'a resposta é 503 CONFIG_EM_FALTA; com inicio fora da validade dessa tarifa, 409 ' +
   'TARIFA_INDISPONIVEL. Calculado na hora e nunca guardado em cache ' +
   '(Cache-Control: no-store, também nos erros). Só aparecem modelos com pelo menos uma viatura ' +
@@ -309,7 +311,8 @@ export function esquemasTvde(base: { Modelo: Esquema; Preco: Esquema }): Record<
           properties: {
             quantidade_disponivel: {
               type: 'integer',
-              description: 'Viaturas deste modelo livres a partir de inicio, sem fim (1 ou mais).',
+              description:
+                'Viaturas deste modelo livres hoje, sem nada marcado depois (1 ou mais).',
             },
           },
         },
@@ -319,7 +322,11 @@ export function esquemasTvde(base: { Modelo: Esquema; Preco: Esquema }): Record<
     DisponibilidadeTvde: {
       type: 'object',
       properties: {
-        inicio: { type: 'string', format: 'date-time', description: 'O inicio pedido, em UTC.' },
+        inicio: {
+          type: 'string',
+          format: 'date-time',
+          description: 'O levantamento pedido, em UTC.',
+        },
         modelos: {
           type: 'array',
           items: { $ref: '#/components/schemas/ModeloTvdeDisponivel' },
@@ -352,6 +359,8 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
         summary: 'Modelos para aluguer semanal TVDE',
         description:
           'Modelos com viaturas que podem fazer TVDE e preço por semana na tarifa TVDE do site. ' +
+          'Só os que têm uma viatura livre hoje, sem nada marcado depois: o aluguer é de longa ' +
+          'duração, por isso não se mostra o que só fica livre mais tarde. ' +
           'Dinheiro com o IVA do TVDE (6% por omissão), não o de rent-a-car. Como no ' +
           'rent-a-car, os valores da tarifa TVDE já incluem IVA: são o com_iva, e o sem_iva ' +
           'é a decomposição.',
@@ -371,6 +380,9 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
     '/tvde/modelos/{id}': {
       get: {
         summary: 'Detalhe de um modelo TVDE',
+        description:
+          'Responde mesmo com o modelo ocupado hoje: um link antigo do site não parte. Para saber ' +
+          'se há carro, use /tvde/modelos ou /tvde/disponibilidade.',
         tags: ['TVDE'],
         'x-permissao': LER_TVDE,
         parameters: [
@@ -395,7 +407,7 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
     },
     '/tvde/disponibilidade': {
       get: {
-        summary: 'Modelos TVDE livres a partir de uma data, sem fim',
+        summary: 'Modelos TVDE livres hoje, para levantar numa data',
         description: DESCRICAO_DISPONIBILIDADE,
         tags: ['TVDE'],
         'x-permissao': LER_TVDE,
@@ -405,15 +417,15 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
             in: 'query',
             required: true,
             description:
-              'Início do aluguer, ISO 8601 com fuso (Z ou ±HH:MM); sem fuso dá 400. No futuro e ' +
-              'a no máximo 180 dias.',
+              'Data do levantamento, ISO 8601 com fuso (Z ou ±HH:MM); sem fuso dá 400. No futuro ' +
+              'e a no máximo 180 dias. Não muda a conta: a disponibilidade é a de hoje.',
             schema: { type: 'string', format: 'date-time' },
             example: EX_TVDE_INICIO,
           },
         ],
         responses: {
           '200': {
-            description: 'Modelos TVDE livres a partir de inicio',
+            description: 'Modelos TVDE livres hoje',
             content: a.json(
               { $ref: '#/components/schemas/DisponibilidadeTvde' },
               EX_DISPONIBILIDADE_TVDE

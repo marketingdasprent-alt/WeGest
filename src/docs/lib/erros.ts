@@ -40,9 +40,9 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
     codigo: 'PERIODO_INVALIDO',
     estados: ['400'],
     quando:
-      'O fim não é depois do início, ou o início já passou. No TVDE, também o início a mais de ' +
-      '180 dias.',
-    fazer: 'Peça um período no futuro, com o fim depois do início.',
+      'O fim não é depois do início, o início já passou ou o levantamento é a mais de 15 dias. ' +
+      'No TVDE, o início a mais de 180 dias.',
+    fazer: 'Peça um levantamento nos próximos 15 dias (TVDE: 180), com o fim depois do início.',
   },
   {
     codigo: 'PERIODO_EXCEDE_MAXIMO',

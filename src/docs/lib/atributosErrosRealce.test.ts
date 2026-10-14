@@ -20,6 +20,18 @@ describe('atributos do esquema', () => {
     expect(por.preco_dia.filhos.every((f) => f.obrigatorio)).toBe(true);
   });
 
+  it('disponivel_desde: data nulável no catálogo e no detalhe, ausente na disponibilidade', () => {
+    const doCatalogo = atributosDe(esquemaComponente('Modelo')).find(
+      (x) => x.nome === 'disponivel_desde'
+    );
+    expect(doCatalogo?.nulavel).toBe(true);
+    expect(doCatalogo?.descricao).toMatch(/15 dias/);
+    const nomes = (nome: string) => atributosDe(esquemaComponente(nome)).map((x) => x.nome);
+    expect(nomes('ModeloDetalhe')).toContain('disponivel_desde');
+    expect(nomes('ModeloDisponivel')).not.toContain('disponivel_desde');
+    expect(nomes('ModeloTvde')).not.toContain('disponivel_desde');
+  });
+
   it('ModeloDetalhe junta o allOf e mostra a lista de coberturas pelo nome do esquema', () => {
     const a = atributosDe(esquemaComponente('ModeloDetalhe'));
     const nomes = a.map((x) => x.nome);
@@ -47,6 +59,11 @@ describe('códigos de erro', () => {
         expect(e?.estados, `${op.id} ${r.codigo}`).toContain(r.estado);
       }
     }
+  });
+
+  it('PERIODO_INVALIDO explica o levantamento até 15 dias', () => {
+    const e = ERROS_FASE_A.find((x) => x.codigo === 'PERIODO_INVALIDO');
+    expect(e?.quando).toMatch(/15 dias/);
   });
 
   it('os códigos das reservas (fase C) estão activos, com 409', () => {
