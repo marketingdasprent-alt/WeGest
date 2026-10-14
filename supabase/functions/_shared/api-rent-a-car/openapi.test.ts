@@ -222,13 +222,36 @@ Deno.test(
     for (const aviso of [/CAPTCHA/, /50 candidaturas por dia/, /logs/, /documentos/]) {
       assert(aviso.test(post.description), `descrição do POST sem ${aviso}`);
     }
-    // O GET não devolve dados pessoais: só id, estado e datas.
+    // O GET não devolve dados pessoais: só id, estado, datas e se tem conta.
     assertEquals(Object.keys(comp.schemas.CandidaturaTvde.properties), [
       'id',
       'estado',
       'criada_em',
       'decidida_em',
+      'com_conta',
     ]);
+    assertEquals(comp.schemas.CandidaturaTvde.properties.com_conta.type, 'boolean');
     assertEquals(comp.schemas.CandidaturaTvdeNova.properties.licenca_tvde.type, ['object', 'null']);
   }
 );
+
+Deno.test('POST /tvde/candidaturas documenta o X-Motorista-Token, 401 e 403 da conta', () => {
+  // deno-lint-ignore no-explicit-any
+  const post = (OPENAPI.paths as Record<string, Record<string, any>>)['/tvde/candidaturas'].post;
+  const [token] = post.parameters;
+  assertEquals(token.name, 'X-Motorista-Token');
+  assertEquals(token.in, 'header');
+  assertEquals(token.required, false);
+  assert(/access_token/.test(token.description) && /organização/.test(token.description));
+  const codigo = (estado: string) =>
+    post.responses[estado].content['application/json'].example.erro.codigo;
+  assertEquals(codigo('401'), 'SESSAO_INVALIDA');
+  assertEquals(codigo('403'), 'CONTA_INVALIDA');
+  // O GET não aceita o cabeçalho: só o POST liga a candidatura à conta.
+  // deno-lint-ignore no-explicit-any
+  const get = (OPENAPI.paths as Record<string, Record<string, any>>)['/tvde/candidaturas/{id}'].get;
+  assertEquals(
+    get.parameters.some((p: { name: string }) => p.name === 'X-Motorista-Token'),
+    false
+  );
+});

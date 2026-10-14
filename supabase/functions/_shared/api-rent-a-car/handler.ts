@@ -4,7 +4,7 @@
 // Vive aqui, e não na edge function, para ser testável (o CI só corre testes Deno em _shared).
 import { consumeRateLimit, trustedRequestIp } from '../rate-limit/rateLimit.ts';
 import { autenticar, type ChaveRecusada, type DbRpc } from './auth.ts';
-import { servirCandidaturas } from './candidaturas.ts';
+import { servirCandidaturas, type VerificadorSessao } from './candidaturas.ts';
 import { servirCatalogo } from './catalogo.ts';
 import { servirDisponibilidade } from './disponibilidade.ts';
 import type { ArmazemFotos } from './fotos.ts';
@@ -32,7 +32,7 @@ const APRESENTACAO = {
 };
 
 /** O que a edge function precisa do cliente Supabase (service_role). */
-export interface DbApi extends DbRpc, ArmazemFotos {
+export interface DbApi extends DbRpc, ArmazemFotos, VerificadorSessao {
   from(tabela: 'api_pedidos'): {
     insert(linha: LinhaAuditoria): PromiseLike<{ error: { message: string } | null }>;
   };

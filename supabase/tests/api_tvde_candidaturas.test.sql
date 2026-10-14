@@ -323,7 +323,7 @@ select ok(exists (select 1 from cron.job where jobname = 'tvde_candidaturas_anon
 -- ── 9) privilégios ──────────────────────────────────────────────────────────
 create temp table fns as select unnest(array[
   'public.api_tvde_candidatura_resumo(uuid,uuid)',
-  'public.api_tvde_criar_candidatura(uuid,uuid,jsonb)',
+  'public.api_tvde_criar_candidatura(uuid,uuid,jsonb,uuid)',
   'public.api_tvde_obter_candidatura(uuid,uuid)',
   'public.api_tvde_anonimizar_candidaturas()']) as f;
 select ok(bool_and(not has_function_privilege('anon', f, 'EXECUTE')

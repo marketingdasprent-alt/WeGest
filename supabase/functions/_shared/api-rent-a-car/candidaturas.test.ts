@@ -3,6 +3,7 @@ import {
   LIMITE_CANDIDATURAS_POR_DIA,
   servirCandidaturas,
   validarCorpoCandidatura,
+  type VerificadorSessao,
 } from './candidaturas.ts';
 import type { DbRpc } from './auth.ts';
 import type { Rota } from './router.ts';
@@ -39,20 +40,35 @@ type Corpo = ReturnType<typeof corpoValido>;
 
 const rotaPost: Rota = { metodo: 'POST', recurso: 'tvde/candidaturas', id: null };
 const rotaGet: Rota = { metodo: 'GET', recurso: 'tvde/candidaturas', id: ID };
-const pedido = (metodo: string, body?: unknown) =>
+const pedido = (metodo: string, body?: unknown, headers: Record<string, string> = {}) =>
   new Request('https://x/v1/tvde/candidaturas', {
     method: metodo,
     body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
   });
 // Nos testes do handler o corpo não pode depender do dia em que correm.
 const corpoIntemporal = () => ({ ...corpoValido(), data_inicio_pretendida: null });
 
 type Decisao = { allowed: boolean; retry_after: number };
-function dbFalso(o: { limite?: Decisao; resposta?: { data: unknown; error: unknown } } = {}) {
+type Sessao = { data: { user: { id: string } | null }; error: unknown };
+// Como o AuthApiError do supabase-js: token mau traz status 4xx.
+const SEM_SESSAO: Sessao = { data: { user: null }, error: { message: 'invalid JWT', status: 403 } };
+function dbFalso(
+  o: { limite?: Decisao; resposta?: { data: unknown; error: unknown }; sessao?: Sessao } = {}
+) {
   const rpcs: { name: string; args: Record<string, unknown> }[] = [];
-  const db: DbRpc & { rpcs: typeof rpcs } = {
+  const tokens: string[] = [];
+  const db: DbRpc & VerificadorSessao & { rpcs: typeof rpcs; tokens: string[] } = {
     rpcs,
+    tokens,
+    auth: {
+      getUser(jwt: string) {
+        tokens.push(jwt);
+        // Regista a ordem das chamadas junto das RPCs.
+        rpcs.push({ name: 'auth.getUser', args: {} });
+        return Promise.resolve(o.sessao ?? SEM_SESSAO);
+      },
+    },
     rpc(name: string, args: Record<string, unknown>) {
       rpcs.push({ name, args });
       if (name === 'consume_edge_rate_limit') {
@@ -332,6 +348,134 @@ Deno.test('POST válido → 201, RPC com org, chave e o corpo validado', async (
   const p = args.p_pedido as Record<string, unknown>;
   assertEquals(p.email, 'rui.condutor@exemplo.pt');
   assertEquals(p.iban, 'PT50000201231234567890154');
+  assertEquals(args.p_user_id, null);
+  assertEquals(db.tokens, []);
+});
+
+const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.c2lnbmF0dXJh';
+const USER_ID = '9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a';
+const comToken = (token: string) =>
+  pedido('POST', corpoIntemporal(), { 'x-motorista-token': token });
+
+Deno.test(
+  'X-Motorista-Token vazio ou só espaços → como sem cabeçalho (p_user_id null)',
+  async () => {
+    for (const token of ['', '   ']) {
+      const db = dbFalso();
+      const r = await servirCandidaturas(rotaPost, comToken(token), ctx, db);
+      assertEquals(r?.status, 201, JSON.stringify(token));
+      assertEquals(db.tokens, []);
+      assertEquals(db.rpcs[1].args.p_user_id, null);
+    }
+  }
+);
+
+Deno.test('token válido → getUser depois do limite diário e RPC com o id da conta', async () => {
+  const db = dbFalso({ sessao: { data: { user: { id: USER_ID } }, error: null } });
+  const r = await servirCandidaturas(rotaPost, comToken(`  ${TOKEN} `), ctx, db);
+  assertEquals(r?.status, 201);
+  assertEquals(db.tokens, [TOKEN]);
+  assertEquals(nomes(db), [
+    'consume_edge_rate_limit',
+    'auth.getUser',
+    'api_tvde_criar_candidatura',
+  ]);
+  assertEquals(db.rpcs[2].args.p_user_id, USER_ID);
+  assertEquals(db.rpcs[2].args.p_org_id, 'org1');
+});
+
+Deno.test('token rejeitado pelo GoTrue → 401 SESSAO_INVALIDA sem chamar a RPC', async () => {
+  for (const sessao of [SEM_SESSAO, { data: { user: null }, error: null }]) {
+    const db = dbFalso({ sessao });
+    const r = await servirCandidaturas(rotaPost, comToken(TOKEN), ctx, db);
+    assertEquals(r?.status, 401);
+    assertEquals(r?.headers.get('Cache-Control'), 'no-store');
+    const corpo = await r!.json();
+    assertEquals(corpo.erro.codigo, 'SESSAO_INVALIDA');
+    assertEquals(corpo.erro.mensagem, 'Sessão do motorista inválida ou expirada. Volte a entrar.');
+    assertEquals(nomes(db), ['consume_edge_rate_limit', 'auth.getUser']);
+  }
+});
+
+Deno.test('GoTrue em baixo → 503, não 401: o token pode estar bom', async () => {
+  for (const error of [
+    { message: 'fetch failed', status: 0 },
+    { message: 'x', status: 502 },
+    { message: 'rate limited', status: 429 },
+    {},
+  ]) {
+    const db = dbFalso({ sessao: { data: { user: null }, error } });
+    const r = await servirCandidaturas(rotaPost, comToken(TOKEN), ctx, db);
+    assertEquals(r?.status, 503);
+    assertEquals((await r!.json()).erro.codigo, 'ERRO_INTERNO');
+    assertEquals(nomes(db), ['consume_edge_rate_limit', 'auth.getUser']);
+  }
+});
+
+Deno.test('token gigante ou sem forma de JWT → 401 sem getUser e sem gastar o limite', async () => {
+  for (const token of ['a'.repeat(2049) + '.' + 'b'.repeat(2047) + '.c', 'nao-e-um-jwt']) {
+    const db = dbFalso({ sessao: { data: { user: { id: USER_ID } }, error: null } });
+    const r = await servirCandidaturas(rotaPost, comToken(token), ctx, db);
+    assertEquals(r?.status, 401, token.slice(0, 20));
+    assertEquals((await r!.json()).erro.codigo, 'SESSAO_INVALIDA');
+    assertEquals(db.rpcs.length, 0);
+  }
+});
+
+Deno.test('corpo inválido com token mau → 400: o corpo valida-se primeiro', async () => {
+  const db = dbFalso();
+  const r = await servirCandidaturas(
+    rotaPost,
+    pedido('POST', { ...corpoIntemporal(), nif: '1' }, { 'x-motorista-token': 'x' }),
+    ctx,
+    db
+  );
+  assertEquals(r?.status, 400);
+  assertEquals(db.rpcs.length, 0);
+});
+
+Deno.test('limite diário esgotado com token → 429 sem ir ao GoTrue', async () => {
+  const db = dbFalso({ limite: { allowed: false, retry_after: 60 } });
+  const r = await servirCandidaturas(rotaPost, comToken(TOKEN), ctx, db);
+  assertEquals(r?.status, 429);
+  assertEquals(db.tokens, []);
+});
+
+Deno.test('sessão recusada não deixa o token nem o email nos logs', async () => {
+  const registos: unknown[][] = [];
+  const originais = { error: console.error, warn: console.warn, log: console.log };
+  console.error =
+    console.warn =
+    console.log =
+      (...a: unknown[]) => {
+        registos.push(a);
+      };
+  try {
+    const db = dbFalso({
+      sessao: { data: { user: null }, error: { message: 'rui.condutor@exemplo.pt expirou' } },
+    });
+    await servirCandidaturas(rotaPost, comToken(TOKEN), ctx, db);
+  } finally {
+    Object.assign(console, originais);
+  }
+  const linha = JSON.stringify(registos);
+  assert(!linha.includes(TOKEN), linha);
+  assert(!linha.includes('rui.condutor'), linha);
+});
+
+Deno.test('CONTA_INVALIDA do SQL → 403; PARAMETRO_INVALIDO (email da conta) → 400', async () => {
+  for (const [codigo, estado] of [
+    ['CONTA_INVALIDA', 403],
+    ['PARAMETRO_INVALIDO', 400],
+  ] as const) {
+    const db = dbFalso({
+      sessao: { data: { user: { id: USER_ID } }, error: null },
+      resposta: { data: { erro: { codigo, mensagem: 'x' } }, error: null },
+    });
+    const r = await servirCandidaturas(rotaPost, comToken(TOKEN), ctx, db);
+    assertEquals(r?.status, estado, codigo);
+    assertEquals((await r!.json()).erro.codigo, codigo);
+  }
 });
 
 Deno.test('repetida: true → 200 sem o campo repetida', async () => {
