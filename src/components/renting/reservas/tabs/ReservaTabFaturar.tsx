@@ -36,7 +36,12 @@ import { cn } from '@/lib/utils';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
-import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import {
+  baixarDocumentoPdf,
+  baixarPdfEmSegundoPlano,
+  clienteRowToFatura,
+  anularCobrancasFaturacao,
+} from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
@@ -428,18 +433,13 @@ export function ReservaTabFaturar({ reserva }: Props) {
         cobrancaId: c.id,
         contratoId: reserva.id,
       });
-      if (res.invoice) {
-        try {
-          await baixarDocumentoPdf(res.invoice);
-        } catch {
-          /* best-effort */
-        }
-      }
       toast.success(
         `Documento fiscal emitido${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
       );
       if (res.warning) toast.warning(res.warning);
       refetchAll();
+      // Depois do sucesso e sem esperar: o PDF do Primavera pode levar dezenas de segundos.
+      baixarPdfEmSegundoPlano(res.invoice, (m) => toast.warning(m));
     } catch (e: any) {
       console.error('Erro a reemitir documento fiscal:', e);
       // 'unknown': o documento pode existir; o texto genérico de falha convidava a reemitir.

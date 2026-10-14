@@ -17,7 +17,7 @@ import { useProlongarContrato } from '@/hooks/useContratosRenting';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useEscolhaFornecedor } from '@/hooks/useOpcoesFaturacao';
 import { SeletorFornecedorFaturacao } from '@/components/faturacao/SeletorFornecedorFaturacao';
-import { carregarCobrancaParaEmitir, baixarDocumentoPdf } from '@/lib/faturacao';
+import { carregarCobrancaParaEmitir, baixarPdfEmSegundoPlano } from '@/lib/faturacao';
 import { calcularProlongamento, semIva, comIva } from '@/lib/prolongamentoContrato';
 import type { ContratoRenting } from '@/types/contratoRenting';
 
@@ -159,17 +159,12 @@ export function ProlongarContratoDialog({ open, onOpenChange, contrato }: Props)
           cobrancaId,
           contratoId: contrato.id,
         });
-        if (res.invoice) {
-          try {
-            await baixarDocumentoPdf(res.invoice);
-          } catch (pdfErr) {
-            console.error('Documento emitido mas falhou o download do PDF:', pdfErr);
-          }
-        }
         toast.success(
           `Contrato prolongado e fatura emitida${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
         );
         if (res.warning) toast.warning(res.warning);
+        // Depois do sucesso e sem esperar: o PDF do Primavera pode levar dezenas de segundos.
+        baixarPdfEmSegundoPlano(res.invoice, (m) => toast.warning(m));
       } catch (erroEmissao) {
         console.error('Falha a emitir o documento fiscal do prolongamento:', erroEmissao);
         toast.warning(

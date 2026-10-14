@@ -287,6 +287,8 @@ export async function fetchDocumentoPdf(invoice: InvoiceMetadata): Promise<strin
   }>(FN, {
     body: {
       action: 'pdf',
+      // O id distingue o FA 2026/50 de uma empresa do da outra na mesma organização.
+      invoice_id: invoice.id,
       provider_doctype: invoice.provider_doctype,
       provider_docnum: invoice.provider_docnum,
       serie: invoice.serie ?? undefined,
@@ -309,6 +311,23 @@ export async function baixarDocumentoPdf(invoice: InvoiceMetadata): Promise<void
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Descarrega o PDF de um documento acabado de emitir sem prender quem emitiu: a emissão já
+ * terminou e o PDF do Primavera passa pelo agente local, que pode levar dezenas de segundos.
+ * Uma falha aqui é só um aviso à parte; o documento continua emitido.
+ */
+export function baixarPdfEmSegundoPlano(
+  invoice: InvoiceMetadata | null | undefined,
+  avisar: (mensagem: string) => void,
+  baixar: (invoice: InvoiceMetadata) => Promise<void> = baixarDocumentoPdf
+): void {
+  if (!invoice) return;
+  void baixar(invoice).catch((e: unknown) => {
+    const motivo = e instanceof Error && e.message ? e.message : 'indisponível';
+    avisar(`Documento emitido, mas o PDF não descarregou (${motivo}). Use o botão PDF na lista.`);
+  });
 }
 
 /**
