@@ -10,69 +10,61 @@
 // As credenciais do AS Connect (username/password/enterprise) ficam SÓ neste
 // ficheiro de configuração, nesta máquina — nunca são enviadas ao WeGest.
 //
-// COMO CORRER
-//   1. Instalar o Deno (https://deno.land) OU usar o executável já compilado
-//      (primavera-agent.exe / primavera-agent), se vos foi entregue um.
-//   2. Copiar primavera-agent.config.example.json para
-//      primavera-agent.config.json, ao lado deste ficheiro, e preencher.
-//   3. Correr:
-//        deno run --allow-net --allow-read agent/primavera-agent/main.ts
-//      ou, com o executável compilado:
-//        ./primavera-agent
-//
-// PARA DEIXAR SEMPRE LIGADO (Windows): criar uma tarefa agendada
-// ("Agendador de Tarefas" → Criar Tarefa → Disparador "Ao iniciar sessão" →
-// Ação "Iniciar programa" → primavera-agent.exe) ou registar como serviço
-// com NSSM (https://nssm.cc/). Sem isto, o agente pára quando a sessão
-// fechar/o PC reiniciar.
+// COMO CORRER (ver README.md)
+//   deno run --allow-net --allow-read main.ts                 agente normal
+//   deno run --allow-net --allow-read main.ts --testar        só testa o AS Connect
+//   deno run --allow-net --allow-read main.ts --consultar ASC_Artigos [N] [campo] [campo=valor]
+//                                                             mostra N linhas de uma tabela
+//   deno run --allow-net --allow-read main.ts --fatura-teste <NIF> [preço]
+//                                                             emite 1 fatura só em empresa de teste
+// Outro ficheiro de configuração: passá-lo como primeiro argumento.
 // ============================================================
 
-import { lerRespostaInserir } from '../../supabase/functions/_shared/primavera/resposta.ts';
+import {
+  CLIENTES_POR_OMISSAO,
+  ehEmpresaDeTeste,
+  payloadFaturaTeste,
+  type ConfigAsConnect,
+  criarClienteAsConnect,
+  type PayloadEmit,
+  TIPOS_DOCUMENTO_POR_OMISSAO,
+  AmbiguoError,
+  criadoEmLocal,
+  MENSAGEM_NAO_EXECUTADO,
+  podeComecar,
+} from './asconnect.ts';
 
-// Tempos máximos por pedido. Sem eles um pedido pendurado deixava o agente
-// parado para sempre, e a fila dava o job por ambíguo passados 2 minutos.
-const TIMEOUT_TOKEN_MS = 20_000;
-const TIMEOUT_INSERIR_MS = 60_000;
 const TIMEOUT_WEGEST_MS = 30_000;
 
-/** O pedido saiu para o Primavera e não se sabe se o documento foi criado.
- *  Nunca se reporta como falha: a fila reemitiria. */
-class AmbiguoError extends Error {}
-
-interface ConfigAgente {
-  /** URL base das edge functions do WeGest, ex.:
-   *  "https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1" */
+export interface ConfigAgente extends ConfigAsConnect {
+  /** URL base das edge functions do WeGest. */
   wegest_url: string;
   /** Chave do agente (gerada em Admin → Faturação → Integração → Primavera). */
   chave_agente: string;
-  primavera: {
-    /** Endereço LOCAL do AS Connect nesta rede — nunca sai daqui. */
-    endpoint: string;
-    username: string;
-    password: string;
-    enterprise: string;
-  };
-  /** Taxa de IVA (%) -> código interno do Primavera. Obrigatório para emitir
-   *  — ver o aviso no ecrã de configuração sobre porquê isto não é opcional. */
-  iva_codes: Record<string, string>;
-  /** Segundos entre cada pergunta "há trabalho?" quando a fila está vazia.
-   *  Omitir usa o valor por omissão (5s). */
+  /** Segundos entre cada pergunta "há trabalho?" quando a fila está vazia (omissão 5). */
   poll_interval_segundos?: number;
 }
 
-interface JobRecebido {
+export interface JobRecebido {
   id: string;
   tipo: 'emit' | 'health';
   payload: Record<string, unknown>;
+  /** Ver criadoEmLocal; ausente com um WeGest que ainda não manda created_at. */
+  criadoEm?: number;
 }
-
-const CONSUMIDOR_FINAL = '999999990';
 
 function log(msg: string) {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
 
-async function carregarConfig(caminho: string): Promise<ConfigAgente> {
+function aviso(msg: string) {
+  console.warn(`[${new Date().toISOString()}] AVISO: ${msg}`);
+}
+
+export async function carregarConfig(
+  caminho: string,
+  exigirWegest: boolean
+): Promise<ConfigAgente> {
   let texto: string;
   try {
     texto = await Deno.readTextFile(caminho);
@@ -84,8 +76,8 @@ async function carregarConfig(caminho: string): Promise<ConfigAgente> {
   }
   const cfg = JSON.parse(texto) as Partial<ConfigAgente>;
   const faltam: string[] = [];
-  if (!cfg.wegest_url) faltam.push('wegest_url');
-  if (!cfg.chave_agente) faltam.push('chave_agente');
+  if (exigirWegest && !cfg.wegest_url) faltam.push('wegest_url');
+  if (exigirWegest && !cfg.chave_agente) faltam.push('chave_agente');
   if (!cfg.primavera?.endpoint) faltam.push('primavera.endpoint');
   if (!cfg.primavera?.username) faltam.push('primavera.username');
   if (!cfg.primavera?.password) faltam.push('primavera.password');
@@ -95,127 +87,23 @@ async function carregarConfig(caminho: string): Promise<ConfigAgente> {
   }
   return {
     ...cfg,
-    iva_codes: cfg.iva_codes ?? {},
-    primavera: cfg.primavera!,
+    primavera: { ...cfg.primavera!, endpoint: cfg.primavera!.endpoint.replace(/\/+$/, '') },
+    // Entradas vazias no ficheiro de exemplo contam como "não configurado".
+    iva_codes: Object.fromEntries(
+      Object.entries(cfg.iva_codes ?? {}).filter(([, v]) => typeof v === 'string' && v.trim())
+    ),
+    tipos_documento: { ...TIPOS_DOCUMENTO_POR_OMISSAO, ...(cfg.tipos_documento ?? {}) },
+    artigo_por_omissao: (cfg.artigo_por_omissao ?? '').trim(),
+    clientes: { ...CLIENTES_POR_OMISSAO, ...(cfg.clientes ?? {}) },
+    precos_com_iva: cfg.precos_com_iva === true,
+    condicao_pagamento: String(cfg.condicao_pagamento ?? '1').trim() || '1',
   } as ConfigAgente;
-}
-
-// ── Cliente AS Connect (protocolo descrito na doc "Webservice Primavera /
-//    Asconnect", 2026-09-18) — corre inteiramente dentro desta rede. ──
-
-async function obterToken(cfg: ConfigAgente): Promise<string> {
-  const res = await fetch(`${cfg.primavera.endpoint}/auth/gettoken`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: cfg.primavera.username,
-      password: cfg.primavera.password,
-      enterprise: cfg.primavera.enterprise,
-    }),
-    signal: AbortSignal.timeout(TIMEOUT_TOKEN_MS),
-  });
-  const texto = await res.text();
-  if (!res.ok) {
-    throw new Error(`gettoken falhou (HTTP ${res.status}): ${texto.slice(0, 200)}`);
-  }
-  let token: string | undefined;
-  try {
-    const parsed = JSON.parse(texto);
-    if (typeof parsed === 'string') token = parsed;
-    else token = parsed?.token ?? parsed?.access_token ?? parsed?.Token;
-  } catch {
-    token = texto.trim().replace(/^"|"$/g, '');
-  }
-  if (!token) throw new Error(`gettoken: resposta sem token reconhecível (${texto.slice(0, 200)})`);
-  return token;
-}
-
-function resolveCodIva(cfg: ConfigAgente, taxaIva: number): string {
-  const code = cfg.iva_codes[String(taxaIva)];
-  if (!code) {
-    throw new Error(
-      `Sem código de IVA mapeado para ${taxaIva}% — configura iva_codes no ficheiro de ` +
-        'configuração antes de emitir.'
-    );
-  }
-  return code;
-}
-
-async function executarEmit(
-  cfg: ConfigAgente,
-  payload: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  const cliente = (payload.cliente ?? {}) as { nif?: string };
-  const nif = (cliente.nif || '').trim();
-  if (!nif || nif === CONSUMIDOR_FINAL) {
-    throw new Error(
-      'Cliente sem NIF — "Entidade" é obrigatório para emitir (sem confirmação de como ' +
-        'emitir para consumidor final).'
-    );
-  }
-
-  const itens = (payload.itens ?? []) as Array<{
-    id_produto?: string;
-    ref?: string;
-    quantidade?: number;
-    taxa_iva?: number;
-    preco_unitario?: number;
-  }>;
-
-  const linhas = itens.map((it) => ({
-    Tipo: 'Normal',
-    Artigo: it.id_produto || it.ref || '',
-    Quantidade: String(Number(it.quantidade) || 1),
-    CodIva: resolveCodIva(cfg, Number(it.taxa_iva) || 0),
-    PrecoUnit: Number(it.preco_unitario) || 0,
-  }));
-
-  const comentarios = [payload.observacoes, payload.referencia_externa]
-    .filter((v) => typeof v === 'string' && v.trim())
-    .join(' | ');
-
-  // Até aqui nada saiu para o Primavera: qualquer erro é falha segura.
-  const token = await obterToken(cfg);
-
-  // A partir daqui o pedido pode ter chegado: um corte de rede, um timeout ou
-  // uma resposta sem forma são AMBÍGUOS (o documento pode existir), nunca falha.
-  let res: Response;
-  try {
-    res = await fetch(`${cfg.primavera.endpoint}/documentos/vendas/inserir`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        Documento: {
-          Entidade: nif,
-          DataDoc: new Date().toISOString(),
-          ...(payload.referencia_externa ? { Referencia: payload.referencia_externa } : {}),
-          ...(comentarios ? { Observacoes: comentarios } : {}),
-          Linhas: linhas,
-        },
-      }),
-      signal: AbortSignal.timeout(TIMEOUT_INSERIR_MS),
-    });
-  } catch (erro) {
-    const msg = erro instanceof Error ? erro.message : String(erro);
-    throw new AmbiguoError(
-      `inserir documento: a ligação caiu depois de o pedido sair (${msg}). O documento pode ter sido criado.`
-    );
-  }
-  const texto = await res.text();
-  const leitura = lerRespostaInserir(res.status, texto, String(payload.tipo ?? 'FT'));
-  if (leitura.tipo === 'recusado') throw new Error(leitura.mensagem);
-  if (leitura.tipo === 'ambiguo') throw new AmbiguoError(leitura.mensagem);
-  return { ...leitura.documento };
-}
-
-async function executarHealth(cfg: ConfigAgente): Promise<Record<string, unknown>> {
-  await obterToken(cfg);
-  return { ok: true };
 }
 
 // ── Ligação ao WeGest ──
 
 async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
+  const enviadoEm = Date.now();
   const res = await fetch(`${cfg.wegest_url}/primavera-agent-poll`, {
     method: 'POST',
     headers: {
@@ -228,19 +116,36 @@ async function poll(cfg: ConfigAgente): Promise<JobRecebido[]> {
   if (!res.ok || !corpo?.success) {
     throw new Error(`poll falhou: ${corpo?.error || `HTTP ${res.status}`}`);
   }
-  return (corpo.jobs ?? []) as JobRecebido[];
+  const jobs = (corpo.jobs ?? []) as Array<JobRecebido & { created_at?: unknown }>;
+  return jobs.map(({ created_at, ...j }) => ({
+    ...j,
+    criadoEm: criadoEmLocal(created_at, corpo.agora, enviadoEm),
+  }));
 }
 
-interface Resultado {
+export interface Resultado {
   success: boolean;
   ambiguous?: boolean;
   resultado?: unknown;
   error?: string;
 }
 
+/** O que identifica o desfecho num aviso: se o WeGest não o registar, o número do documento
+ *  só fica no Primavera e neste log. */
+export function resumoDoResultado(r: Resultado): string {
+  const doc = r.resultado as { numero?: unknown; docnum?: unknown } | null | undefined;
+  const numero = doc?.numero ?? doc?.docnum;
+  if (numero) return `documento ${String(numero)}`;
+  return JSON.stringify(r.resultado ?? r.error ?? null).slice(0, 300);
+}
+
 /** Entrega o resultado ao WeGest. Insiste: um resultado perdido deixava o job
  *  reclamado até a fila o dar por ambíguo, com o documento já emitido. */
-async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado): Promise<void> {
+export async function reportarResultado(
+  cfg: ConfigAgente,
+  jobId: string,
+  r: Resultado
+): Promise<void> {
   const tentativas = 4;
   for (let i = 1; i <= tentativas; i++) {
     try {
@@ -257,7 +162,10 @@ async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado)
       const texto = await res.text().catch(() => '');
       // 404/409: o WeGest já fechou o job doutra forma; insistir não muda nada.
       if (res.status === 404 || res.status === 409) {
-        log(`AVISO: o WeGest não aceitou o resultado do job ${jobId} (HTTP ${res.status}): ${texto.slice(0, 200)}`);
+        aviso(
+          `o WeGest não aceitou o resultado do job ${jobId} (HTTP ${res.status}): ` +
+            `${texto.slice(0, 200)} — ${resumoDoResultado(r)}`
+        );
         return;
       }
       log(`Falha ao reportar o job ${jobId} (HTTP ${res.status}), tentativa ${i}/${tentativas}.`);
@@ -267,16 +175,38 @@ async function reportarResultado(cfg: ConfigAgente, jobId: string, r: Resultado)
     }
     await new Promise((resolve) => setTimeout(resolve, 2000 * i));
   }
-  log(`AVISO: desisti de reportar o job ${jobId}. A fila vai dá-lo por ambíguo; confirmar no Primavera.`);
+  aviso(
+    `desisti de reportar o job ${jobId} — ${resumoDoResultado(r)}. ` +
+      'A fila vai dá-lo por ambíguo; confirmar no Primavera.'
+  );
 }
 
-async function processarJob(cfg: ConfigAgente, job: JobRecebido): Promise<void> {
+export async function processarJob(
+  cfg: ConfigAgente,
+  job: JobRecebido,
+  fetchPrimavera: typeof fetch = fetch
+): Promise<void> {
   log(`A processar job ${job.id} (${job.tipo})...`);
+  // Nada foi enviado ao Primavera: falhar é seguro e evita um documento que ninguém espera.
+  if (!podeComecar(job.criadoEm, Date.now())) {
+    log(`Job ${job.id} não executado: chegou depois de o WeGest deixar de esperar.`);
+    await reportarResultado(cfg, job.id, { success: false, error: MENSAGEM_NAO_EXECUTADO });
+    return;
+  }
+  // Um cliente por job: o token é pedido de novo, nunca fica a expirar entre jobs.
+  const asconnect = criarClienteAsConnect(cfg, fetchPrimavera);
   try {
-    let resultado: Record<string, unknown>;
-    if (job.tipo === 'emit') resultado = await executarEmit(cfg, job.payload);
-    else if (job.tipo === 'health') resultado = await executarHealth(cfg);
-    else throw new Error(`Tipo de job desconhecido: ${String(job.tipo)}. Este agente está desactualizado?`);
+    let resultado: unknown;
+    if (job.tipo === 'emit') {
+      resultado = await asconnect.emitir(job.payload as PayloadEmit, new Date(), {
+        criadoEm: job.criadoEm,
+      });
+    } else if (job.tipo === 'health') resultado = await asconnect.testar();
+    else {
+      throw new Error(
+        `Tipo de job desconhecido: ${String(job.tipo)}. Este agente está desactualizado?`
+      );
+    }
     await reportarResultado(cfg, job.id, { success: true, resultado });
     log(`Job ${job.id} concluído com sucesso.`);
   } catch (erro) {
@@ -291,11 +221,8 @@ async function processarJob(cfg: ConfigAgente, job: JobRecebido): Promise<void> 
   }
 }
 
-async function main() {
-  const caminhoConfig = Deno.args[0] ?? 'primavera-agent.config.json';
-  const cfg = await carregarConfig(caminhoConfig);
+async function correrAgente(cfg: ConfigAgente) {
   const intervaloMs = (cfg.poll_interval_segundos ?? 5) * 1000;
-
   log('Agente Primavera a arrancar...');
   log(`WeGest: ${cfg.wegest_url}`);
   log(`Primavera (local): ${cfg.primavera.endpoint}`);
@@ -318,6 +245,63 @@ async function main() {
   }
 }
 
+/** "NumContrib=123456789" -> filtro Equal; permite ver um registo concreto no --consultar. */
+function filtroDaLinhaDeComandos(arg: string | undefined) {
+  if (!arg) return undefined;
+  const i = arg.indexOf('=');
+  if (i <= 0) throw new Error(`Filtro inválido "${arg}" — usar campo=valor.`);
+  return [{ field: arg.slice(0, i), operator: 'Equal', value: arg.slice(i + 1) }];
+}
+
+async function main() {
+  const args = [...Deno.args];
+  const iTestar = args.indexOf('--testar');
+  const iConsultar = args.indexOf('--consultar');
+  const iFaturaTeste = args.indexOf('--fatura-teste');
+  const caminhoConfig =
+    args[0] && !args[0].startsWith('--') ? args[0] : 'primavera-agent.config.json';
+  const soLocal = iTestar >= 0 || iConsultar >= 0 || iFaturaTeste >= 0;
+  const cfg = await carregarConfig(caminhoConfig, !soLocal);
+
+  if (iTestar >= 0) {
+    const r = await criarClienteAsConnect(cfg).testar();
+    log(`AS Connect OK em ${cfg.primavera.endpoint}: ${JSON.stringify(r)}`);
+    return;
+  }
+  if (iConsultar >= 0) {
+    const tabela = args[iConsultar + 1];
+    if (!tabela)
+      throw new Error('Uso: --consultar <Tabela> [linhas] [campo para ordenar] [campo=valor]');
+    const linhas = await criarClienteAsConnect(cfg).consultar(tabela, {
+      pageSize: Number(args[iConsultar + 2]) || 20,
+      ordenarPor: args[iConsultar + 3],
+      filtros: filtroDaLinhaDeComandos(args[iConsultar + 4]),
+    });
+    console.log(JSON.stringify(linhas, null, 2));
+    return;
+  }
+  if (iFaturaTeste >= 0) {
+    // Emite um documento real; só em empresa de teste para nunca sujar a faturação.
+    if (!ehEmpresaDeTeste(cfg.primavera.enterprise)) {
+      throw new Error(
+        `--fatura-teste só corre numa empresa de teste; "${cfg.primavera.enterprise}" não tem TEST no nome.`
+      );
+    }
+    const nif = args[iFaturaTeste + 1];
+    if (!nif) throw new Error('Uso: --fatura-teste <NIF> [preço sem IVA]');
+    const r = await criarClienteAsConnect(cfg).emitir(
+      payloadFaturaTeste(nif, Number(args[iFaturaTeste + 2]) || 1)
+    );
+    log(`Fatura de teste emitida em ${cfg.primavera.enterprise}: ${r.numero}`);
+    console.log(JSON.stringify(r.raw, null, 2));
+    return;
+  }
+  await correrAgente(cfg);
+}
+
 if (import.meta.main) {
-  main();
+  main().catch((erro) => {
+    log(`ERRO: ${erro instanceof Error ? erro.message : String(erro)}`);
+    Deno.exit(1);
+  });
 }
