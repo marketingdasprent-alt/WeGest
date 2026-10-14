@@ -9,8 +9,8 @@
 -- Regras da conta: membro da org da chave, tipo motorista, sem ficha na org
 -- e sem outra candidatura; o email do pedido tem de ser o da conta.
 -- A aprovação não muda: a conta só segue para uma ficha NOVA. Uma ficha que
--- já existe (encontrada pelo NIF) nunca recebe a conta do site, porque a
--- confirmação de email está desligada e nem NIF nem email provam identidade.
+-- já existe (encontrada pelo NIF) nunca recebe a conta do site: nem o NIF
+-- nem o email do formulário provam que a ficha é de quem se candidata.
 -- ============================================================
 
 -- ── 1. Resumo com com_conta ─────────────────────────────────────────────────
