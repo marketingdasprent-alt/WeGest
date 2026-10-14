@@ -2,6 +2,9 @@
 # tudo pelo painel). Sem segredos: o Worker não precisa de nenhum, a chave da
 # API vem em cada pedido no cabeçalho X-API-Key.
 name = "api-wegest"
+# Conta marketing.dasprent: sem isto o wrangler publica na conta de quem tem sessão
+# iniciada (14-10-2026 foi parar a uma conta pessoal).
+account_id = "7a03f1c14324136d58e054b16940795e"
 main = "worker.js"
 # >= 2024-11-11 para o fetch aceitar cache: 'no-store' (o Worker não guarda nada).
 compatibility_date = "2026-09-01"
