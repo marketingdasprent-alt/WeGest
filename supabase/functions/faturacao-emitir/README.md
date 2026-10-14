@@ -16,7 +16,7 @@ config.provider` — nenhum interfere com o outro:
   abaixo. A documentação do AS Connect de 2026-09-18 já aceita `TipoDocumento` no
   pedido e traz endpoints de cliente e de consulta de tabelas, mas o agente ainda só
   emite FT. O PDF vem de `/documentos/vendas/imprimir` pelo mesmo agente (job `pdf`,
-  migração 20261014120000); a anulação continua sem endpoint — `voidReceipt()` falha
+  migração 20261014170000); a anulação continua sem endpoint — `voidReceipt()` falha
   sempre, de propósito, até isso ficar confirmado. Ver os comentários no topo do
   ficheiro para a lista exacta do que está por confirmar (ver também a memória do
   projecto, `project_primavera-integration.md`).

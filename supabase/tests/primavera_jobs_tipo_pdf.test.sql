@@ -3,7 +3,7 @@
 -- ============================================================
 -- Corre com:  supabase db start  &&  supabase test db
 --
--- Ver a migração 20261014120000. Provas:
+-- Ver a migração 20261014170000. Provas:
 --   (1) um job 'pdf' entra na fila; 'emit' e 'health' continuam aceites;
 --   (2) um tipo inventado é recusado;
 --   (3) um pdf reclamado há mais de 2 minutos volta à fila e nunca fica ambiguo
