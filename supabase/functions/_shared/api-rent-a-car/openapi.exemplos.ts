@@ -41,7 +41,8 @@ export const EX_CATEGORIA = {
   modelos: 2,
 };
 
-export const EX_MODELO = {
+/** O cartão do modelo, comum ao catálogo e à disponibilidade. */
+export const EX_CARTAO_MODELO = {
   id: 'b4e8f1a2-5c6d-4e7f-8a9b-0c1d2e3f4a5b',
   marca: 'Renault',
   modelo: 'Clio',
@@ -57,6 +58,9 @@ export const EX_MODELO = {
   preco_dia: EX_PRECO,
   frota: 4,
 };
+
+// No catálogo, o primeiro dia (Lisboa) com um Clio livre nos próximos 15 dias.
+export const EX_MODELO = { ...EX_CARTAO_MODELO, disponivel_desde: '2026-10-16' };
 
 export const EX_COBERTURA = {
   id: 'c9d0e1f2-3a4b-4c5d-8e6f-7a8b9c0d1e2f',
@@ -117,7 +121,7 @@ export const EX_PERIODO = {
 };
 
 export const EX_MODELO_DISPONIVEL = {
-  ...EX_MODELO,
+  ...EX_CARTAO_MODELO,
   quantidade_disponivel: 2,
   cotacao: {
     dias: 3,

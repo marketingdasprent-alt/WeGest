@@ -255,3 +255,37 @@ Deno.test('POST /tvde/candidaturas documenta o X-Motorista-Token, 401 e 403 da c
     false
   );
 });
+
+Deno.test(
+  'só disponíveis: levantamento até 15 dias, disponivel_desde no catálogo, TVDE de hoje',
+  () => {
+    // deno-lint-ignore no-explicit-any
+    const paths = OPENAPI.paths as Record<string, Record<string, any>>;
+    // deno-lint-ignore no-explicit-any
+    const comp = OPENAPI.components as Record<string, any>;
+    const disp = paths['/disponibilidade'].get;
+    const cot = paths['/cotacoes'].post;
+    for (const op of [disp, cot]) assert(/próximos 15 dias/.test(op.description), op.summary);
+    const inicio = disp.parameters.find((p: { name: string }) => p.name === 'inicio');
+    assert(/próximos 15 dias/.test(inicio.description));
+    assert(/próximos 15 dias/.test(comp.schemas.CotacaoPedido.properties.inicio.description));
+    assert(/a mais de 15 dias/.test(comp.responses.PedidoInvalido.description));
+
+    // Catálogo e detalhe trazem a data; a disponibilidade e o TVDE não.
+    const campo = comp.schemas.Modelo.properties.disponivel_desde;
+    assertEquals(campo.type, ['string', 'null']);
+    assertEquals(campo.format, 'date');
+    assert(/sempre preenchido/.test(campo.description) && /null/.test(campo.description));
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(comp.schemas.Modelo.example.disponivel_desde));
+    assert(/^\d{4}-\d{2}-\d{2}$/.test(comp.schemas.ModeloDetalhe.example.disponivel_desde));
+    assertEquals('disponivel_desde' in comp.schemas.ModeloDisponivel.allOf[0].properties, false);
+    assertEquals('disponivel_desde' in comp.schemas.ModeloDisponivel.example, false);
+    assertEquals('disponivel_desde' in comp.schemas.ModeloTvde.properties, false);
+    assert(/próximos 15 dias/.test(paths['/modelos'].get.description));
+    assert(/não parte/.test(paths['/modelos/{id}'].get.description));
+
+    assert(/livre hoje/.test(paths['/tvde/modelos'].get.description));
+    assert(/não parte/.test(paths['/tvde/modelos/{id}'].get.description));
+    assert(/a de hoje/.test(paths['/tvde/disponibilidade'].get.description));
+  }
+);

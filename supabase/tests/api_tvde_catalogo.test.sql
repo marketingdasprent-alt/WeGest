@@ -2,7 +2,7 @@
 -- Catálogo e disponibilidade TVDE da API do site (Fase D1)
 -- ============================================================
 -- Tarifa do site por tipo (renting/tvde), cartões TVDE com o IVA TVDE já incluído na tarifa,
--- disponibilidade aberta (inicio até 'infinity') só com viaturas de tipo
+-- disponibilidade aberta (de agora até 'infinity', seja qual for o inicio) só com viaturas de tipo
 -- elegível. Fixture ao padrão de api_disponibilidade.test.sql.
 -- Datas relativas a now(): nunca dependem do dia da semana.
 -- ============================================================

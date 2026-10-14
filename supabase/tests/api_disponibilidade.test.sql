@@ -1,12 +1,12 @@
 -- ============================================================
 -- Disponibilidade e cotação da API externa (Fase B)
 -- ============================================================
--- Regras: período no futuro, até 30 dias, dias no calendário de Lisboa;
+-- Regras: período no futuro, levantamento até 15 dias, até 30 dias, dias no calendário de Lisboa;
 -- livre = viaturas_com_disponibilidade; cotação = aluguer + cobertura + extras.
 -- Datas relativas a now(): nunca dependem do dia da semana.
 -- ============================================================
 begin;
-select plan(55);
+select plan(56);
 
 insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000d01ff', 'bootstrap@dispon.pt');
 insert into public.organizacoes (id, nome, codigo) values
@@ -96,8 +96,16 @@ select is((public.api_disponibilidade('00000000-0000-0000-0000-0000000d0a00', (s
   '00000000-0000-0000-0000-0000000d03b1', '00000000-0000-0000-0000-0000000d0301'))->'erro'->>'codigo', 'NAO_ENCONTRADO', 'estação de outra organização');
 select is((public.api_disponibilidade('00000000-0000-0000-0000-0000000d0b00', (select inicio from p) , (select fim from p),
   '00000000-0000-0000-0000-0000000d03b1', '00000000-0000-0000-0000-0000000d03b1'))->'erro'->>'codigo', 'CONFIG_EM_FALTA', 'organização sem tarifa do site');
+-- Levantamento a mais de 15 dias é recusado antes de olhar para a tarifa (que acaba a +45).
 select is((public.api_disponibilidade('00000000-0000-0000-0000-0000000d0a00', now() + interval '50 days', now() + interval '52 days',
+  '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301'))->'erro'->>'codigo', 'PERIODO_INVALIDO', 'levantamento a mais de 15 dias');
+-- Já não se chega a +50 dias: encurta-se a tarifa para acabar antes do início de p e repõe-se.
+update public.renting_tarifas set valido_ate = ((select inicio from p) at time zone 'Europe/Lisbon')::date - 1
+ where id = '00000000-0000-0000-0000-0000000d0f01';
+select is((public.api_disponibilidade('00000000-0000-0000-0000-0000000d0a00', (select inicio from p), (select fim from p),
   '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301'))->'erro'->>'codigo', 'TARIFA_INDISPONIVEL', 'início fora da validade da tarifa');
+update public.renting_tarifas set valido_ate = (now() + interval '45 days')::date
+ where id = '00000000-0000-0000-0000-0000000d0f01';
 
 -- disponibilidade
 create temp table d as select public.api_disponibilidade('00000000-0000-0000-0000-0000000d0a00', (select inicio from p), (select fim from p),
