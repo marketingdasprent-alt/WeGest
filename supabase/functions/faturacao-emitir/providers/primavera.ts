@@ -158,6 +158,7 @@ async function desistirDoPdf(jobId: string): Promise<void> {
         error_message: 'O WeGest deixou de esperar pelo PDF.',
       })
       .eq('id', jobId)
+      .eq('tipo', 'pdf')
       .in('status', ['pending', 'claimed']);
     if (error) throw error;
   } catch (e) {
