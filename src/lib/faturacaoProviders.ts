@@ -6,6 +6,8 @@
 // slug). Para suportar outro software, acrescenta-se aqui uma entrada e um
 // adapter na edge function `faturacao-emitir` (providers/<slug>.ts).
 
+import { TIPOS_NAO_SUPORTADOS } from '../../supabase/functions/_shared/faturacao/escolha';
+
 export interface FaturacaoProviderMeta {
   /** Slug interno (igual ao usado na BD e no adapter da edge function). */
   slug: string;
@@ -57,11 +59,7 @@ export const FATURACAO_PROVIDERS: Record<string, FaturacaoProviderMeta> = {
       'a falar com o WeGest, nunca dá acesso a nada do Primavera por si só. As credenciais ' +
       'reais do AS Connect (username, password, enterprise) ficam só na configuração desse ' +
       'agente — nunca chegam a esta base de dados. Ver agent/primavera-agent/README.md.',
-    // Só a emissão de Factura (FT) está confirmada contra a documentação
-    // recebida do AS Connect (2026-07-30) — ver providers/primavera.ts na
-    // edge function faturacao-emitir. FR/NC/RC e PDF/anulação ficam por
-    // confirmar antes de activar.
-    tiposNaoSuportados: ['FR', 'NC', 'RC'],
+    tiposNaoSuportados: TIPOS_NAO_SUPORTADOS.primavera,
   },
   // Exemplos futuros (basta criar o adapter na edge function):
   // moloni: { slug: 'moloni', label: 'Moloni' },

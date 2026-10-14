@@ -35,7 +35,9 @@ import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
 import { baixarDocumentoPdf, clienteRowToFatura, anularCobrancasFaturacao } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import {
@@ -106,6 +108,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
   }, [empresas, reserva.emissor_id]);
 
   const emitirMut = useEmitirEEscreverFatura();
+  const pedirFornecedor = usePedirFornecedor();
 
   // Condutor principal (cliente OU motorista) — para pré-preencher o envio por email.
   const { data: reservaCondutores } = useReservaCondutores(reserva.id);
@@ -385,22 +388,14 @@ export function ReservaTabFaturar({ reserva }: Props) {
   async function reemitirFatura(c: CobrancaRow) {
     setReemitindoId(c.id);
     try {
-      const { data: fresh } = await supabase
-        .from('contrato_cobrancas')
-        .select('documento_externo_ref')
-        .eq('id', c.id)
-        .single();
-      if (fresh?.documento_externo_ref) {
-        toast.info('Esta fatura já tem documento fiscal emitido.');
-        refetchCobrancas();
-        return;
-      }
+      const isFR = /^fa[c]?tura-recibo/i.test((c.descricao ?? '').trim());
+      const escolhido = await pedirFornecedor.pedir(isFR ? 'FR' : 'FT', { cobranca_id: c.id });
+      if (escolhido === 'cancelado') return;
       const { data: cli } = await supabase
         .from('clientes')
         .select('nome, nif, email, morada, codigo_postal, localidade')
         .eq('id', c.destinatario_id)
         .single();
-      const isFR = /^fa[c]?tura-recibo/i.test((c.descricao ?? '').trim());
       const itens: ItemFatura[] = [
         {
           descricao: `Aluguer — Reserva #${reserva.codigo}`,
@@ -409,12 +404,25 @@ export function ReservaTabFaturar({ reserva }: Props) {
           taxa_iva: c.taxa_iva ?? 0,
         },
       ];
+      // Reconfirmar p/ não duplicar só depois do diálogo: aberto, outro pode ter emitido.
+      const { data: fresh, error: fErr } = await supabase
+        .from('contrato_cobrancas')
+        .select('documento_externo_ref')
+        .eq('id', c.id)
+        .single();
+      if (fErr) throw fErr;
+      if (fresh?.documento_externo_ref) {
+        toast.info('Esta fatura já tem documento fiscal emitido.');
+        refetchCobrancas();
+        return;
+      }
       const res = await emitirMut.mutateAsync({
         payload: {
           tipo: isFR ? 'FR' : 'FT',
           cliente: clienteRowToFatura(cli, c.destinatario_nome),
           itens,
           cobranca_id: c.id,
+          integracao_id: escolhido.integracaoId ?? undefined,
           referencia_externa: `Reserva #${reserva.codigo}`,
         },
         cobrancaId: c.id,
@@ -434,7 +442,12 @@ export function ReservaTabFaturar({ reserva }: Props) {
       refetchAll();
     } catch (e: any) {
       console.error('Erro a reemitir documento fiscal:', e);
-      toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+      // 'unknown': o documento pode existir; o texto genérico de falha convidava a reemitir.
+      if (e?.classe === 'unknown') {
+        toast.error(mensagemFalhaEmissao(e, 'reserva'), { duration: DURACAO_AVISO_FALHA_MS });
+      } else {
+        toast.error(`Falha a emitir o documento fiscal: ${e?.message ?? 'tente novamente'}`);
+      }
     } finally {
       setReemitindoId(null);
     }
@@ -823,6 +836,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {pedirFornecedor.dialogo}
     </div>
   );
 }

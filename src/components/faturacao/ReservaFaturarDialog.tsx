@@ -39,6 +39,8 @@ import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { useEscolhaFornecedor } from '@/hooks/useOpcoesFaturacao';
+import { SeletorFornecedorFaturacao } from '@/components/faturacao/SeletorFornecedorFaturacao';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import type { ItemFatura } from '@/types/faturacao';
 import type { Reserva } from '@/types/reserva';
@@ -66,6 +68,11 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [tipo, setTipo] = useState<'fatura' | 'fatura_recibo'>('fatura');
+  const escolha = useEscolhaFornecedor(
+    tipo === 'fatura_recibo' ? 'FR' : 'FT',
+    { reserva_id: reserva.id },
+    open
+  );
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
@@ -197,6 +204,7 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
             cliente,
             itens,
             cobranca_id: cobrancaId,
+            integracao_id: escolha.integracaoId ?? undefined,
             referencia_externa: codigoLabel,
           },
           cobrancaId,
@@ -210,7 +218,7 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
           }
         }
         toast.success(
-          `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
+          `Documento fiscal emitido no ${escolha.providerLabel ?? providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
         );
         if (res.warning) toast.warning(res.warning);
       } catch (kiErr: any) {
@@ -320,11 +328,21 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
           )}
         </div>
 
+        <SeletorFornecedorFaturacao
+          {...escolha}
+          onChange={escolha.setIntegracaoId}
+          disabled={submitting}
+        />
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancelar
           </Button>
-          <Button onClick={handleCriar} disabled={submitting || !podeFaturar} className="gap-2">
+          <Button
+            onClick={handleCriar}
+            disabled={submitting || !podeFaturar || escolha.bloqueiaConfirmar}
+            className="gap-2"
+          >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Faturar
           </Button>

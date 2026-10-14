@@ -40,6 +40,7 @@ import {
 import { DefinicoesAvancadasFields } from './DefinicoesAvancadasFields';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import type { Json } from '@/integrations/supabase/types';
+import { filtroMesmoFornecedor } from '@/lib/integracoesFaturacao';
 
 export type { FaturacaoConfigRow };
 
@@ -179,18 +180,13 @@ export function FaturacaoIntegracaoDialog({
     }
     setTesting(true);
     try {
-      // Primavera (chave gerada pelo WeGest): o teste confirma que o AGENTE
-      // já configurado está a responder — depende de a linha já estar
-      // gravada (senão não há fila nenhuma onde pôr o pedido de teste, é o
-      // próprio adapter que explica isto na mensagem de erro). Manda-se o
-      // `provider` explícito (não confiar em "o que estiver ativo agora") —
-      // esta integração pode estar a ser testada sem ainda ser a que emite
-      // de facto (ex.: Primavera em teste enquanto o KeyInvoice continua em
-      // produção).
-      // `emissor_id`: com uma integração por empresa, é a empresa que diz qual
-      // das linhas do provider se testa.
+      // Primavera (chave gerada pelo WeGest): testa o agente da linha já gravada. Com
+      // integracao_id o servidor usa esta integração e não "a que estiver ativa agora";
+      // sem linha gravada, a empresa diz qual das linhas do provider se testa.
       const body = providerMeta?.chaveGeradaPeloWeGest
-        ? { action: 'health', provider, emissor_id: emissorId }
+        ? row?.id
+          ? { action: 'health', integracao_id: row.id }
+          : { action: 'health', provider, emissor_id: emissorId }
         : { action: 'health', provider, apiKey: apiKey.trim(), settings: settingsAtuais() };
       const { data, error } = await supabase.functions.invoke('faturacao-emitir', { body });
       if (error) throw new Error(error.message);
@@ -225,19 +221,20 @@ export function FaturacaoIntegracaoDialog({
       const settings = settingsAtuais();
       const nomeFinal = nome.trim() || providerMeta?.label || provider;
 
-      // "Ativar" (ligado) promove ESTA integração a activa PARA A EMPRESA
-      // escolhida. A exclusividade é por empresa, não por organização: cada
-      // empresa emissora fatura pela sua própria conta, e várias coexistem na
-      // mesma organização (índice uq_faturacao_ativa_por_emissor). Desactivar
-      // primeiro as outras DA MESMA EMPRESA, senão o insert/update viola o
-      // índice. Com "Ativar" desligado isto só GRAVA credenciais, para testar.
+      // Uma activa por empresa E fornecedor (uq_faturacao_ativa_por_emissor_fornecedor): ativar
+      // esta só desliga outra do mesmo fornecedor; a de outro fornecedor continua a poder ser escolhida.
       if (ativo) {
-        const { error: deactivateErr } = await supabase
+        const filtro = filtroMesmoFornecedor(provider);
+        const desativar = supabase
           .from('plataformas_configuracao')
           .update({ ativo: false })
           .eq('plataforma', 'faturacao')
           .eq('emissor_id', emissorId)
           .neq('id', row?.id ?? '00000000-0000-0000-0000-000000000000');
+        const { error: deactivateErr } =
+          filtro.tipo === 'or'
+            ? await desativar.or(filtro.expressao)
+            : await desativar.ilike('config->>provider', filtro.valor);
         if (deactivateErr) throw deactivateErr;
       }
 
@@ -294,7 +291,7 @@ export function FaturacaoIntegracaoDialog({
         );
       } else if (msg.includes('uq_faturacao_ativa')) {
         toast.error(
-          `${empresaNome} já tem uma integração de faturação activa. Desactive-a primeiro, ou edite-a em vez de criar outra.`
+          `${empresaNome} já tem outra integração ${providerMeta?.label ?? provider} ativa. Desative-a primeiro, ou edite-a em vez de criar outra.`
         );
       } else {
         toast.error(`Não foi possível guardar: ${msg}`);
@@ -521,7 +518,7 @@ export function FaturacaoIntegracaoDialog({
               <Label htmlFor="fat-ativo">Usar para emitir documentos</Label>
               <p className="text-xs text-muted-foreground">
                 {ativo && existeOutraIntegracaoAtiva
-                  ? `Ao guardar, passa a ser esta a emitir os documentos de ${empresaNome} — desliga a integração que essa empresa tinha antes. As outras empresas não são afectadas.`
+                  ? `Ao guardar, passa a ser esta a integração ${providerMeta?.label ?? provider} de ${empresaNome} — desliga a outra do mesmo fornecedor. As integrações de outros fornecedores continuam disponíveis para escolher ao faturar.`
                   : ativo
                     ? `Ao guardar, passa a emitir faturas, recibos e notas de crédito de ${empresaNome}.`
                     : 'Fica guardada e testável, sem emitir nada. Enquanto assim estiver, esta empresa não pode ser faturada.'}

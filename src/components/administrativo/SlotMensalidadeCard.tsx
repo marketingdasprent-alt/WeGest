@@ -23,6 +23,7 @@ import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { useSlotCobrancasMensais, type SlotCobranca } from '@/hooks/useSlotCobrancasMensais';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
+import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
 import { clienteRowToFatura, baixarDocumentoPdf } from '@/lib/faturacao';
 import type { ItemFatura } from '@/types/faturacao';
 
@@ -37,6 +38,7 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
   const qc = useQueryClient();
   const { data: cobrancas = [], isLoading } = useSlotCobrancasMensais(motoristaId);
   const emitirMut = useEmitirEEscreverFatura();
+  const pedirFornecedor = usePedirFornecedor();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const visiveis = cobrancas.filter((c) => c.estado !== 'anulada');
@@ -67,7 +69,7 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
     return list;
   }, [visiveis, sortField, sortDir]);
 
-  if (!motoristaId || (!isLoading && visiveis.length === 0)) return null;
+  if (!motoristaId || (!isLoading && visiveis.length === 0)) return <>{pedirFornecedor.dialogo}</>;
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ['slot-cobrancas-mensais', motoristaId] });
@@ -89,12 +91,15 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
           taxa_iva: c.taxa_iva ?? 23,
         },
       ];
+      const escolhido = await pedirFornecedor.pedir('FR', { cobranca_id: c.id });
+      if (escolhido === 'cancelado') return;
       const res = await emitirMut.mutateAsync({
         payload: {
           tipo: 'FR',
           cliente: clienteRowToFatura(cli, c.destinatario_nome),
           itens,
           cobranca_id: c.id,
+          integracao_id: escolhido.integracaoId ?? undefined,
           referencia_externa: c.descricao ?? 'Slot mensal',
         },
         cobrancaId: c.id,
@@ -234,6 +239,7 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
           </TableBody>
         </Table>
       </div>
+      {pedirFornecedor.dialogo}
     </div>
   );
 }
