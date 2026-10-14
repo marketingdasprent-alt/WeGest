@@ -33,6 +33,7 @@ export interface CreateFaturaPayload {
   itens: ItemFatura[];
   contrato_id?: string;
   cobranca_id?: string;
+  integracao_id?: string; // escolhida no ecrã (FT/FR); NC/RC seguem a fatura original
   observacoes?: string;
   referencia_externa?: string; // ex.: número do contrato
   documento_referencia?: string; // obrigatório p/ NC (documento original)
@@ -94,3 +95,4 @@ export interface FaturacaoDocEmitente {
   nif?: string | null;
   sede?: string | null;
 }
+export type { OpcaoFornecedor } from '../../supabase/functions/_shared/faturacao/escolha';

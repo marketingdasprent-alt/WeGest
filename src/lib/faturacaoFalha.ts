@@ -13,9 +13,24 @@ export const DURACAO_AVISO_FALHA_MS = 15_000;
 export function mensagemFalhaEmissao(erro: unknown, registo: RegistoLocal = 'fatura'): string {
   const inicio = registo === 'reserva' ? 'Reserva faturada' : 'Fatura registada';
   const motivo = errorMessage(erro, 'motivo desconhecido');
+  // 'unknown': o fornecedor pode ter emitido (ex.: o agente Primavera apanhou o pedido
+  // e não respondeu); mandar reemitir aqui duplicava o documento fiscal.
+  if (classeDoErro(erro) === 'unknown') {
+    return (
+      `${inicio} na conta-corrente, mas não se sabe se o documento fiscal foi emitido — PODE ter sido. ` +
+      `Motivo: ${motivo}. ` +
+      'Confirme no software de faturação antes de reemitir; reemitir sem confirmar pode duplicar o documento.'
+    );
+  }
   return (
     `${inicio} na conta-corrente, mas o documento fiscal NÃO foi emitido. ` +
     `Motivo: ${motivo}. ` +
     'Reemita-o na lista de faturas — até lá não existe documento para entregar ao cliente.'
   );
+}
+
+function classeDoErro(erro: unknown): string | undefined {
+  if (typeof erro !== 'object' || erro === null) return undefined;
+  const classe = (erro as { classe?: unknown }).classe;
+  return typeof classe === 'string' ? classe : undefined;
 }

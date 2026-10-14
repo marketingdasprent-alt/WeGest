@@ -34,6 +34,8 @@ import {
 } from '@/components/faturacao/ParcelamentoDialog';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { useEscolhaFornecedor } from '@/hooks/useOpcoesFaturacao';
+import { SeletorFornecedorFaturacao } from '@/components/faturacao/SeletorFornecedorFaturacao';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { FATURA_ARTIGO_TIPOS } from '@/lib/faturaArtigoTipos';
 import type { ItemFatura } from '@/types/faturacao';
@@ -121,6 +123,11 @@ export function NovaFaturaDialog({
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [tipoDoc, setTipoDoc] = useState<'fatura' | 'fatura_recibo'>('fatura');
+  const escolha = useEscolhaFornecedor(
+    tipoDoc === 'fatura_recibo' ? 'FR' : 'FT',
+    alvo.tipo === 'contrato' ? { contrato_id: alvo.id } : { reserva_id: alvo.id },
+    open
+  );
   const [entidade, setEntidade] = useState<'cliente' | 'motorista'>('cliente');
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
@@ -318,6 +325,7 @@ export function NovaFaturaDialog({
             itens: calc.itens,
             contrato_id: alvo.tipo === 'contrato' ? alvo.id : undefined,
             cobranca_id: cobrancaId,
+            integracao_id: escolha.integracaoId ?? undefined,
             referencia_externa: alvo.codigoLabel,
             observacoes: observacoesParaEmitir(observacoes),
           },
@@ -330,7 +338,7 @@ export function NovaFaturaDialog({
           } catch {}
         }
         toast.success(
-          `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`,
+          `Documento fiscal emitido no ${escolha.providerLabel ?? providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`,
           // Só ofereça parcelamento para contratos com saldo ainda por liquidar.
           alvo.tipo === 'contrato' && tipoDoc === 'fatura'
             ? {
@@ -416,6 +424,11 @@ export function NovaFaturaDialog({
                   </Button>
                 </div>
               </div>
+              <SeletorFornecedorFaturacao
+                {...escolha}
+                onChange={escolha.setIntegracaoId}
+                disabled={submitting}
+              />
               <div className="grid grid-cols-3 gap-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Método</Label>
@@ -651,7 +664,11 @@ export function NovaFaturaDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
               Cancelar
             </Button>
-            <Button onClick={handleCriar} disabled={submitting || !podeCriar} className="gap-2">
+            <Button
+              onClick={handleCriar}
+              disabled={submitting || !podeCriar || escolha.bloqueiaConfirmar}
+              className="gap-2"
+            >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               Criar
             </Button>

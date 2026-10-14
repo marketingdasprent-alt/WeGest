@@ -11,6 +11,8 @@ import type {
   CreateFaturaPayload,
   EmitResult,
   InvoiceMetadata,
+  OpcaoFornecedor,
+  TipoFatura,
 } from '@/types/faturacao';
 
 export type { CreateFaturaPayload, EmitResult };
@@ -88,6 +90,28 @@ export async function emitirDocumento(payload: CreateFaturaPayload): Promise<Emi
     throw err;
   }
   return data;
+}
+
+export interface ContextoFaturacao {
+  contrato_id?: string;
+  reserva_id?: string;
+  cobranca_id?: string;
+}
+
+/** Fornecedores possíveis para um documento novo. Vem do servidor: a tabela das integrações é só de admins. */
+export async function buscarOpcoesFaturacao(
+  tipo: TipoFatura,
+  ctx: ContextoFaturacao
+): Promise<OpcaoFornecedor[]> {
+  const { data, error } = await supabase.functions.invoke<{
+    success: boolean;
+    opcoes?: OpcaoFornecedor[];
+    error?: string;
+  }>(FN, { body: { action: 'opcoes', tipo, ...ctx } });
+  if (error) throw new Error(error.message || 'Falha a contactar o serviço de faturação');
+  if (!data?.success)
+    throw new Error(data?.error || 'Não foi possível obter os fornecedores de faturação');
+  return data.opcoes ?? [];
 }
 
 /** Health-check: confirma que a edge function autentica no provider configurado. */

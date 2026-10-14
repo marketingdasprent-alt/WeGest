@@ -29,6 +29,23 @@ describe('mensagemFalhaEmissao', () => {
   it('numa reserva o registo local chama-se reserva', () => {
     expect(mensagemFalhaEmissao(new Error('x'), 'reserva')).toMatch(/^Reserva faturada/);
   });
+
+  it('com classe unknown avisa que pode ter sido emitido e nunca manda reemitir às cegas', () => {
+    const erro = Object.assign(new Error('O agente apanhou o pedido e não respondeu'), {
+      classe: 'unknown',
+    });
+    const msg = mensagemFalhaEmissao(erro);
+    expect(msg).toContain('PODE ter sido');
+    expect(msg).toContain('Motivo: O agente apanhou o pedido e não respondeu.');
+    expect(msg).toContain('Confirme no software de faturação antes de reemitir');
+    expect(msg).not.toContain('NÃO foi emitido');
+    expect(msg).not.toContain('Reemita-o');
+  });
+
+  it('com classe known_failed mantém o aviso de que não foi emitido', () => {
+    const erro = Object.assign(new Error('Série inválida'), { classe: 'known_failed' });
+    expect(mensagemFalhaEmissao(erro)).toContain('NÃO foi emitido');
+  });
 });
 
 describe('linhaDeFalhaEmissao', () => {

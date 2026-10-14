@@ -29,6 +29,8 @@ import { baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { useEscolhaFornecedor } from '@/hooks/useOpcoesFaturacao';
+import { SeletorFornecedorFaturacao } from '@/components/faturacao/SeletorFornecedorFaturacao';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import type { ItemFatura } from '@/types/faturacao';
 import type { ContratoRenting } from '@/types/contratoRenting';
@@ -95,6 +97,11 @@ export function ContratoFaturarDialog({
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
   const [entidade, setEntidade] = useState<'cliente' | 'condutor' | 'motorista'>('cliente');
   const [tipo, setTipo] = useState<'fatura' | 'fatura_recibo'>('fatura');
+  const escolha = useEscolhaFornecedor(
+    tipo === 'fatura_recibo' ? 'FR' : 'FT',
+    { contrato_id: contrato.id },
+    open
+  );
   const [metodo, setMetodo] = useState<string>('transferencia');
   const [dataDoc, setDataDoc] = useState<string>(hoje());
   const [dataVenc, setDataVenc] = useState<string>(maisDias(30));
@@ -300,6 +307,7 @@ export function ContratoFaturarDialog({
               itens: itensFatura,
               contrato_id: contrato.id,
               cobranca_id: cobrancaId,
+              integracao_id: escolha.integracaoId ?? undefined,
               referencia_externa: `Contrato #${String(contrato.codigo).padStart(4, '0')}`,
               observacoes: observacoesParaEmitir(observacoes),
             },
@@ -314,7 +322,7 @@ export function ContratoFaturarDialog({
             }
           }
           toast.success(
-            `Documento fiscal emitido no ${providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
+            `Documento fiscal emitido no ${escolha.providerLabel ?? providerLabel}${res.fullDocNumber ? ` (${res.fullDocNumber})` : ''}.`
           );
           if (res.warning) toast.warning(res.warning);
         } catch (kiErr: any) {
@@ -349,7 +357,8 @@ export function ContratoFaturarDialog({
             Faturar contrato #{String(contrato.codigo).padStart(4, '0')}
           </DialogTitle>
           <DialogDescription>
-            Regista a fatura no WeGest e emite o documento fiscal no {providerLabel}.
+            Regista a fatura no WeGest e emite o documento fiscal no{' '}
+            {escolha.providerLabel ?? providerLabel}.
           </DialogDescription>
         </DialogHeader>
 
@@ -506,6 +515,12 @@ export function ContratoFaturarDialog({
             </p>
           )}
 
+          <SeletorFornecedorFaturacao
+            {...escolha}
+            onChange={escolha.setIntegracaoId}
+            disabled={submitting}
+          />
+
           {!podeFaturar ? (
             <p className="text-xs text-amber-600 dark:text-amber-400">
               O total a faturar é negativo. Verifique o desconto do contrato antes de faturar.
@@ -513,8 +528,8 @@ export function ContratoFaturarDialog({
           ) : faturaZero ? (
             <p className="text-xs text-muted-foreground">
               Fatura a 0€ (cortesia / 100% desconto) — o contrato fica facturado e não gera
-              movimento de conta-corrente, mas o documento fiscal é emitido no {providerLabel} na
-              mesma.
+              movimento de conta-corrente, mas o documento fiscal é emitido no{' '}
+              {escolha.providerLabel ?? providerLabel} na mesma.
             </p>
           ) : null}
         </div>
@@ -523,7 +538,11 @@ export function ContratoFaturarDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancelar
           </Button>
-          <Button onClick={handleCriar} disabled={submitting || !podeFaturar} className="gap-2">
+          <Button
+            onClick={handleCriar}
+            disabled={submitting || !podeFaturar || escolha.bloqueiaConfirmar}
+            className="gap-2"
+          >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Criar
           </Button>
