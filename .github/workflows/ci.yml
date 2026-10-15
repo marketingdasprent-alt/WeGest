@@ -364,6 +364,7 @@ jobs:
             emails_externos_de_notificacao \
             primavera_fila_por_integracao \
             ticket_ativo_poe_viatura_em_manutencao \
+            contrato_recusa_viatura_em_manutencao \
             fotos_da_viatura
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
