@@ -3,7 +3,7 @@
 -- ============================================================
 -- Corre com:  supabase db start  &&  supabase test db
 --
--- Ver a migração 20261014120000. Provas:
+-- Ver a migração 20261015150000. Provas:
 --   (1) contrato novo numa viatura em manutenção é recusado; numa disponível passa;
 --   (2) mudar um contrato para uma viatura em manutenção é recusado;
 --   (3) renovar (versão nova) com a MESMA viatura passa, mesmo em manutenção;
