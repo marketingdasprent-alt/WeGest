@@ -11,6 +11,7 @@ import { SortableTableHead } from '@/components/ui/sortable-table-head';
 import type { Reserva } from '@/types/reserva';
 import { EstadoBadge } from './EstadoBadge';
 import { RegimeBadge } from './RegimeBadge';
+import { SelosOrigemReserva } from './SelosOrigemReserva';
 import { formatDateTime } from './reservasUtils';
 
 export type SortColumn =
@@ -163,7 +164,12 @@ export const ReservasTabela: React.FC<ReservasTabelaProps> = ({
                 className="border-border hover:bg-muted/30 cursor-pointer"
                 onClick={() => onRowClick(r)}
               >
-                <TableCell className="font-medium text-foreground">{r.codigo}</TableCell>
+                <TableCell className="font-medium text-foreground">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {r.codigo}
+                    <SelosOrigemReserva reserva={r} />
+                  </div>
+                </TableCell>
                 <TableCell className="text-foreground">{r.matricula ?? '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{r.grupo ?? '—'}</TableCell>
                 <TableCell>

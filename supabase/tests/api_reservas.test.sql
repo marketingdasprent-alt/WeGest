@@ -141,10 +141,11 @@ grant select on r1 to public;
 
 select is((select r->>'estado' from res where nome = 'r1'), 'pendente', 'entra como pendente');
 select is((select r->'total'->>'com_iva' from res where nome = 'r1'), '191.00', 'total com IVA = cotação');
-select ok((select viatura_id is null and modelo_id = '00000000-0000-0000-0000-0000000d0d01' and origem = 'site'
+-- Desde 20261015190000 entra com matrícula: a e06 (TVDE acaba a +5 dias) para menos tempo parado que a e01.
+select ok((select viatura_id = '00000000-0000-0000-0000-0000000d0e06' and modelo_id = '00000000-0000-0000-0000-0000000d0d01' and origem = 'site'
             and api_chave_id = '00000000-0000-0000-0000-0000000d0901' and regime = 'rent_a_car'
             and emissor_id = '00000000-0000-0000-0000-0000000d0910' and grupo_id = '00000000-0000-0000-0000-0000000d0101'
-           from r1), 'sem viatura, com modelo, origem site, chave, emissora e grupo');
+           from r1), 'com a viatura que encaixa (e06), modelo, origem site, chave, emissora e grupo');
 select ok((select valor_total = 105.00 and valor_total_manual = 105.00 from r1),
   'valor_total é o aluguer da tarifa (já com IVA), congelado em valor_total_manual');
 select ok((select cobertura_nome = 'Premium' and cobertura_preco_dia = 12 and franquia_valor = 0 from r1),
@@ -161,6 +162,7 @@ select is((select dados_site->'carta_conducao'->>'numero' from r1), 'L-123', 'ca
 select is((select dados_site->>'cliente_divergente' from r1), 'false', 'cliente novo: cliente_divergente false');
 select is((select count(*)::int from public.domain_events where event_type = 'reserva.site_recebida'
             and entity_id = (select id from r1) and org_id = '00000000-0000-0000-0000-0000000d0a00'), 1, 'um evento para o sino');
+-- Tira-a pela matrícula (api_viaturas_livres), já não pela procura sem viatura.
 select is(public.api_quantidade_disponivel('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01',
   (select inicio from p), (select fim from p)), 1, 'a reserva tira uma Clio');
 

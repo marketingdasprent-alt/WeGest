@@ -8,6 +8,9 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/components/renting/reservas/selosReserva.ts",
+    "src/components/renting/reservas/SelosOrigemReserva.tsx",
+    "src/components/renting/reservas/SelosOrigemReserva.test.tsx",
     "src/hooks/useFundoTransparente.ts",
     "src/hooks/useFundoTransparente.test.ts",
     "src/lib/observacoesFatura.ts",
