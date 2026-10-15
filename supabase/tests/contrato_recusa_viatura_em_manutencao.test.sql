@@ -40,14 +40,26 @@ insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id, status)
 insert into public.clientes (id, org_id, nome) values
   ('00000000-0000-0000-0000-00000c700c01', '00000000-0000-0000-0000-00000c700000', 'Cliente Manut');
 
+-- Contrato nasce sempre de uma reserva (reserva_id NOT NULL); a versão nova herda a mesma.
+insert into public.reservas
+  (id, org_id, codigo, regime, estado, data_inicio, viatura_id, cliente_id, created_by)
+values
+  ('00000000-0000-0000-0000-00000c700f01', '00000000-0000-0000-0000-00000c700000', 992001,
+   'tvde', 'confirmada', timestamptz '2026-10-14 10:00+00', '00000000-0000-0000-0000-00000c700e01',
+   '00000000-0000-0000-0000-00000c700c01', '00000000-0000-0000-0000-00000c700a01'),
+  ('00000000-0000-0000-0000-00000c700f02', '00000000-0000-0000-0000-00000c700000', 992002,
+   'tvde', 'em_curso', timestamptz '2026-10-14 10:00+00', '00000000-0000-0000-0000-00000c700e02',
+   '00000000-0000-0000-0000-00000c700c01', '00000000-0000-0000-0000-00000c700a01');
+
 -- ── (1) Contrato novo ──────────────────────────────────────
 
 select throws_ok(
   $$ insert into public.contratos_renting
-       (id, org_id, codigo, cliente_id, viatura_id, matricula, data_inicio,
+       (id, org_id, codigo, reserva_id, cliente_id, viatura_id, matricula, data_inicio,
         estado_operacional, estado_financeiro, regime, taxa_iva, created_by)
      values
        ('00000000-0000-0000-0000-00000c700b01', '00000000-0000-0000-0000-00000c700000', 992001,
+        '00000000-0000-0000-0000-00000c700f01',
         '00000000-0000-0000-0000-00000c700c01', '00000000-0000-0000-0000-00000c700e01', 'CM-01-AA',
         timestamptz '2026-10-14 10:00+00', 'em_curso', 'pendente', 'tvde', 23,
         '00000000-0000-0000-0000-00000c700a01') $$,
@@ -58,10 +70,11 @@ select throws_ok(
 
 select lives_ok(
   $$ insert into public.contratos_renting
-       (id, org_id, codigo, cliente_id, viatura_id, matricula, data_inicio,
+       (id, org_id, codigo, reserva_id, cliente_id, viatura_id, matricula, data_inicio,
         estado_operacional, estado_financeiro, regime, taxa_iva, created_by)
      values
        ('00000000-0000-0000-0000-00000c700b02', '00000000-0000-0000-0000-00000c700000', 992002,
+        '00000000-0000-0000-0000-00000c700f02',
         '00000000-0000-0000-0000-00000c700c01', '00000000-0000-0000-0000-00000c700e02', 'CM-02-AA',
         timestamptz '2026-10-14 10:00+00', 'em_curso', 'pendente', 'tvde', 23,
         '00000000-0000-0000-0000-00000c700a01') $$,
@@ -91,11 +104,12 @@ update public.contratos_renting
 
 select lives_ok(
   $$ insert into public.contratos_renting
-       (id, org_id, codigo, cliente_id, viatura_id, matricula, data_inicio,
+       (id, org_id, codigo, reserva_id, cliente_id, viatura_id, matricula, data_inicio,
         estado_operacional, estado_financeiro, regime, taxa_iva, created_by,
         versao, contrato_anterior_id, motivo_versao)
      values
        ('00000000-0000-0000-0000-00000c700b03', '00000000-0000-0000-0000-00000c700000', 992002,
+        '00000000-0000-0000-0000-00000c700f02',
         '00000000-0000-0000-0000-00000c700c01', '00000000-0000-0000-0000-00000c700e02', 'CM-02-AA',
         timestamptz '2026-10-21 10:00+00', 'em_curso', 'pendente', 'tvde', 23,
         '00000000-0000-0000-0000-00000c700a01',
@@ -105,11 +119,12 @@ select lives_ok(
 
 select throws_ok(
   $$ insert into public.contratos_renting
-       (id, org_id, codigo, cliente_id, viatura_id, matricula, data_inicio,
+       (id, org_id, codigo, reserva_id, cliente_id, viatura_id, matricula, data_inicio,
         estado_operacional, estado_financeiro, regime, taxa_iva, created_by,
         versao, contrato_anterior_id, motivo_versao)
      values
        ('00000000-0000-0000-0000-00000c700b04', '00000000-0000-0000-0000-00000c700000', 992002,
+        '00000000-0000-0000-0000-00000c700f02',
         '00000000-0000-0000-0000-00000c700c01', '00000000-0000-0000-0000-00000c700e01', 'CM-01-AA',
         timestamptz '2026-10-21 10:00+00', 'em_curso', 'pendente', 'tvde', 23,
         '00000000-0000-0000-0000-00000c700a01',
