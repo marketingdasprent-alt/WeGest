@@ -1,8 +1,9 @@
 -- ============================================================
 -- Reservas sem viatura contam contra o modelo (Fase C da API)
 -- ============================================================
--- Uma reserva do site não tem viatura: viaturas_com_disponibilidade não a vê.
--- api_procura_sem_viatura desconta-a nas funções api_*; o balcão não muda.
+-- Uma reserva sem viatura (balcão, ou do site antes de 20261015190000):
+-- viaturas_com_disponibilidade não a vê. api_procura_sem_viatura desconta-a
+-- nas funções api_*; o balcão não muda. As do site novas já trazem matrícula.
 -- Fixture copiada de api_disponibilidade.test.sql (do auth.users à temp table p).
 -- ============================================================
 begin;

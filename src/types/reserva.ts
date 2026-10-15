@@ -65,6 +65,17 @@ export const REGIME_LABELS: Record<ReservaRegime, string> = {
   slot: 'Slot',
 };
 
+/** 'site' = criada pela API externa (site da Década); 'app' = criada no WeGest. */
+export type ReservaOrigem = 'app' | 'site';
+
+// `type` e não `interface`: tem de continuar atribuível ao Json do types.ts gerado.
+/** Subconjunto de reservas.dados_site que o ecrã usa (o resto fica para a API). */
+export type ReservaDadosSite = {
+  /** Os dados enviados pelo site não batem com a ficha do cliente existente. */
+  cliente_divergente?: boolean;
+  mensagem?: string | null;
+};
+
 export type Reserva = {
   id: string;
   org_id: string;
@@ -103,6 +114,11 @@ export type Reserva = {
   tarifa_id: string | null;
   observacoes: string | null;
   observacoes_internas: string | null;
+  // Só de leitura: preenchidos pela API do site, nunca pelo formulário. Ausente = 'app'.
+  origem?: ReservaOrigem;
+  /** Modelo pedido pelo cliente no site (viatura_modelos.id). */
+  modelo_id?: string | null;
+  dados_site?: ReservaDadosSite | null;
   // Longa duração / renovação
   is_longa_duracao: boolean;
   renovacao_opcao: RenovacaoOpcao | null;
@@ -132,6 +148,9 @@ export type ReservaInsert = Omit<
   | 'updated_at'
   // gestor_id é preenchido por DEFAULT na BD (= quem cria); reatribuível via Update.
   | 'gestor_id'
+  | 'origem'
+  | 'modelo_id'
+  | 'dados_site'
 >;
 
 export type ReservaUpdate = Partial<ReservaInsert> & {

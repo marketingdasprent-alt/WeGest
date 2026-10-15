@@ -38,6 +38,7 @@ const SELECT_COLUMNS = `
   gestor_id,
   estado, regime, tarifa_id, slot_valor_semanal, valor_total, valor_total_manual,
   observacoes, observacoes_internas,
+  origem, modelo_id, dados_site,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,
   deleted_at, created_by, updated_by, created_at, updated_at
