@@ -4,6 +4,9 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { ROTAS_CANDIDATURAS, validarCorpoCandidatura } from './candidaturas.ts';
 import { ROTAS_CATALOGO } from './catalogo.ts';
+import { validarRascunho } from './candidaturaRascunho.ts';
+import { TIPOS_DOCUMENTO_CANDIDATURA } from './contaCandidatura.ts';
+import { EX_RASCUNHO_PEDIDO } from './openapi.contaCandidatura.ts';
 import { EX_COTACAO } from './openapi.exemplos.ts';
 import { EX_RESERVA, EX_RESERVA_PEDIDO } from './openapi.reservas.ts';
 import { OPENAPI, PERMISSOES_ESPECIAIS } from './openapi.ts';
@@ -109,4 +112,21 @@ Deno.test('o total com IVA da cotação é a soma dos preços da tarifa, sem IVA
   assertEquals(EX_COTACAO.subtotal.com_iva, soma);
   assertEquals(EX_COTACAO.subtotal, { sem_iva: 155.28, com_iva: 191, iva: 23 });
   assertEquals(EX_RESERVA_PEDIDO.total_esperado, EX_RESERVA.total.com_iva);
+});
+
+Deno.test('o exemplo do PUT /conta/candidatura passa a validação do rascunho', () => {
+  const v = validarRascunho(EX_RASCUNHO_PEDIDO, new Date('2026-10-16T12:00:00Z'));
+  assert(v.ok, v.ok ? '' : v.mensagem);
+  const put = paths['/conta/candidatura'].put as unknown as {
+    requestBody: { content: Record<string, { example: unknown }> };
+  };
+  assertEquals(put.requestBody.content['application/json'].example, EX_RASCUNHO_PEDIDO);
+});
+
+Deno.test('o parâmetro tipo dos documentos da conta lista exactamente os tipos da edge', () => {
+  const op = paths['/conta/candidatura-documentos/{tipo}'].post as unknown as {
+    parameters: { name: string; schema: { enum: string[] } }[];
+  };
+  const tipo = op.parameters.find((p) => p.name === 'tipo');
+  assertEquals(tipo?.schema.enum, [...TIPOS_DOCUMENTO_CANDIDATURA]);
 });

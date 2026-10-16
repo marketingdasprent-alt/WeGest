@@ -3,6 +3,7 @@
 // health e auditoria.
 // Vive aqui, e não na edge function, para ser testável (o CI só corre testes Deno em _shared).
 import { consumeRateLimit, trustedRequestIp } from '../rate-limit/rateLimit.ts';
+import type { ArmazemDocumentos } from './armazemDocumentos.ts';
 import { autenticar, type ChaveRecusada, type DbRpc } from './auth.ts';
 import { servirCandidaturas } from './candidaturas.ts';
 import { servirCatalogo } from './catalogo.ts';
@@ -56,6 +57,8 @@ export interface LinhaAuditoria {
 export interface OpcoesPedido {
   /** Pede o PDF de uma fatura ao programa de faturação; sem ele, o PDF responde 503. */
   pedirPdfFatura?: PedirPdfFatura;
+  /** Storage dos documentos da candidatura da conta; sem ele, essas rotas respondem 503. */
+  armazemDocumentos?: ArmazemDocumentos;
 }
 
 const SEM_PDF: PedirPdfFatura = () => Promise.resolve({ erro: 'pedirPdfFatura em falta' });
@@ -71,11 +74,21 @@ export async function tratarPedido(
   db: DbApi,
   opcoes: OpcoesPedido = {}
 ): Promise<Resultado> {
-  const r = await tratar(req, db, opcoes.pedirPdfFatura ?? SEM_PDF);
+  const r = await tratar(
+    req,
+    db,
+    opcoes.pedirPdfFatura ?? SEM_PDF,
+    opcoes.armazemDocumentos ?? null
+  );
   return { ...r, resposta: comCors(req, r.resposta) };
 }
 
-async function tratar(req: Request, db: DbApi, pedirPdf: PedirPdfFatura): Promise<Resultado> {
+async function tratar(
+  req: Request,
+  db: DbApi,
+  pedirPdf: PedirPdfFatura,
+  armazem: ArmazemDocumentos | null
+): Promise<Resultado> {
   const inicio = Date.now();
   if (req.method === 'OPTIONS') {
     return { resposta: new Response(null, { headers: CORS_HEADERS }), auditoria: null };
@@ -167,7 +180,7 @@ async function tratar(req: Request, db: DbApi, pedirPdf: PedirPdfFatura): Promis
       // tvde/modelos nunca chegue ao catálogo de rent-a-car.
       resposta =
         (await servirCandidaturas(rota, req, ctx, db)) ??
-        (await servirConta(rota, req, ctx, db, pedirPdf)) ??
+        (await servirConta(rota, req, ctx, db, pedirPdf, armazem)) ??
         (await servirTvde(rota, url, ctx, db)) ??
         (await servirCatalogo(rota, url, ctx, db)) ??
         (await servirDisponibilidade(rota, url, req, ctx, db)) ??
