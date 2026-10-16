@@ -27,7 +27,14 @@ const corpo = () => ({
   total_esperado: 129.15,
   referencia_externa: 'site-001',
 });
+// Sem cabeçalho de sessão, o GoTrue nunca é chamado.
+const semAuth = {
+  getUser(): never {
+    throw new Error('não devia ir ao GoTrue');
+  },
+};
 const semBase = {
+  auth: semAuth,
   rpc(): never {
     throw new Error('não devia chamar a base');
   },
@@ -134,6 +141,7 @@ Deno.test(
   async () => {
     let args: Record<string, unknown> = {};
     const db = {
+      auth: semAuth,
       rpc(nome: string, a: Record<string, unknown>) {
         assertEquals(nome, 'api_criar_reserva');
         args = a;
@@ -156,6 +164,7 @@ Deno.test(
 
 Deno.test('POST repetido → 200 e o corpo não leva "repetida"', async () => {
   const db = {
+    auth: semAuth,
     rpc: () =>
       Promise.resolve({
         data: { id: 'r1', codigo: 7, estado: 'pendente', repetida: true },
@@ -174,6 +183,7 @@ Deno.test('POST repetido → 200 e o corpo não leva "repetida"', async () => {
 
 Deno.test('PRECO_ALTERADO → 409 com a cotação em detalhes', async () => {
   const db = {
+    auth: semAuth,
     rpc: () =>
       Promise.resolve({
         data: {
@@ -200,6 +210,7 @@ Deno.test(
       pedido('DELETE', 'reservas/7'),
       ctx,
       {
+        auth: semAuth,
         rpc(nome: string, a: Record<string, unknown>) {
           assertEquals(nome, 'api_cancelar_reserva');
           assertEquals(a.p_codigo, 7);
@@ -216,6 +227,7 @@ Deno.test(
       pedido('GET', 'reservas/7'),
       ctx,
       {
+        auth: semAuth,
         rpc(nome: string) {
           assertEquals(nome, 'api_obter_reserva');
           return Promise.resolve({ data: { id: 'r1', codigo: 7 }, error: null });
@@ -261,6 +273,7 @@ Deno.test(
         pedido('POST', 'reservas', corpo()),
         ctx,
         {
+          auth: semAuth,
           rpc: () => Promise.resolve({ data: null, error: { code: '22007', message: mensagemPg } }),
         }
       );
@@ -277,3 +290,105 @@ Deno.test(
     assert(linha.includes('api_criar_reserva'), linha);
   }
 );
+
+// --- POST com a conta de cliente (X-Conta-Token / X-Motorista-Token) ---------------
+
+const TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.c2lnbmF0dXJh';
+const USER_ID = '9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a';
+type Sessao = { data: { user: { id: string } | null }; error: unknown };
+
+function dbComSessao(sessao: Sessao) {
+  const chamadas: { name: string; args: Record<string, unknown> }[] = [];
+  return {
+    chamadas,
+    auth: {
+      getUser(jwt: string) {
+        chamadas.push({ name: 'auth.getUser', args: { jwt } });
+        return Promise.resolve(sessao);
+      },
+    },
+    rpc(name: string, args: Record<string, unknown>) {
+      chamadas.push({ name, args });
+      return Promise.resolve({ data: { id: 'r1', codigo: 7, estado: 'pendente' }, error: null });
+    },
+  };
+}
+const postCom = (cabecalhos: Record<string, string>) =>
+  new Request('https://x/v1/reservas', {
+    method: 'POST',
+    body: JSON.stringify(corpo()),
+    headers: { 'content-type': 'application/json', ...cabecalhos },
+  });
+const rotaPost = { metodo: 'POST' as const, recurso: 'reservas', id: null };
+const CONTA_OK: Sessao = { data: { user: { id: USER_ID } }, error: null };
+
+Deno.test('POST sem token: a RPC não recebe p_user_id (igual a antes da conta)', async () => {
+  const db = dbComSessao(CONTA_OK);
+  const r = await servirReservas(rotaPost, postCom({}), ctx, db);
+  assertEquals(r?.status, 201);
+  assertEquals(
+    db.chamadas.map((c) => c.name),
+    ['api_criar_reserva']
+  );
+  assertEquals('p_user_id' in db.chamadas[0].args, false);
+});
+
+Deno.test('POST com X-Conta-Token ou X-Motorista-Token válido → p_user_id da conta', async () => {
+  for (const cabecalho of ['x-conta-token', 'x-motorista-token']) {
+    const db = dbComSessao(CONTA_OK);
+    const r = await servirReservas(rotaPost, postCom({ [cabecalho]: ` ${TOKEN} ` }), ctx, db);
+    assertEquals(r?.status, 201, cabecalho);
+    assertEquals(
+      db.chamadas.map((c) => c.name),
+      ['auth.getUser', 'api_criar_reserva']
+    );
+    assertEquals(db.chamadas[0].args.jwt, TOKEN);
+    assertEquals(db.chamadas[1].args.p_user_id, USER_ID);
+    assertEquals(db.chamadas[1].args.p_org_id, 'org1');
+  }
+});
+
+Deno.test('POST com token recusado pelo GoTrue → 401 SESSAO_INVALIDA sem criar', async () => {
+  const db = dbComSessao({ data: { user: null }, error: { message: 'expirado', status: 403 } });
+  const r = await servirReservas(rotaPost, postCom({ 'x-conta-token': TOKEN }), ctx, db);
+  assertEquals(r?.status, 401);
+  assertEquals(r?.headers.get('Cache-Control'), 'no-store');
+  assertEquals((await r!.json()).erro.codigo, 'SESSAO_INVALIDA');
+  assertEquals(
+    db.chamadas.map((c) => c.name),
+    ['auth.getUser']
+  );
+});
+
+Deno.test('POST com token sem forma de JWT → 401 sem ir ao GoTrue nem à base', async () => {
+  const db = dbComSessao(CONTA_OK);
+  const r = await servirReservas(rotaPost, postCom({ 'x-conta-token': 'nao-e-jwt' }), ctx, db);
+  assertEquals(r?.status, 401);
+  assertEquals(db.chamadas, []);
+});
+
+Deno.test('POST com GoTrue em baixo → 503, sem criar a reserva sem conta', async () => {
+  const db = dbComSessao({ data: { user: null }, error: { message: 'x', status: 502 } });
+  const r = await servirReservas(rotaPost, postCom({ 'x-conta-token': TOKEN }), ctx, db);
+  assertEquals(r?.status, 503);
+  assertEquals(
+    db.chamadas.map((c) => c.name),
+    ['auth.getUser']
+  );
+});
+
+Deno.test('POST com corpo inválido e token → 400 sem ir ao GoTrue', async () => {
+  const db = dbComSessao(CONTA_OK);
+  const r = await servirReservas(
+    rotaPost,
+    new Request('https://x/v1/reservas', {
+      method: 'POST',
+      body: JSON.stringify({ ...corpo(), referencia_externa: 'com espaço' }),
+      headers: { 'content-type': 'application/json', 'x-conta-token': TOKEN },
+    }),
+    ctx,
+    db
+  );
+  assertEquals(r?.status, 400);
+  assertEquals(db.chamadas, []);
+});

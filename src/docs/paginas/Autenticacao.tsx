@@ -1,6 +1,7 @@
 import { PERMISSOES_POR_ESCOPO, rotuloPermissao } from '@/lib/apiChaves';
 import { Callout } from '../componentes/Callout';
 import { CodeBlock } from '../componentes/CodeBlock';
+import { DocLink } from '../componentes/DocLink';
 import { C, GuiaPagina, Seccao } from '../componentes/GuiaPagina';
 
 export default function Autenticacao() {
@@ -23,6 +24,14 @@ export default function Autenticacao() {
           Uma chave no browser fica à vista de qualquer visitante. Chame a API do servidor do site e
           devolva ao browser só o que ele precisa de mostrar.
         </Callout>
+        <p>
+          As rotas de <C>/conta</C> pedem também a sessão da pessoa que entrou no site, no cabeçalho{' '}
+          <C>X-Conta-Token</C>: ver{' '}
+          <DocLink para="contas-de-cliente" className="text-primary-text underline">
+            Contas de cliente
+          </DocLink>
+          .
+        </p>
       </Seccao>
       <Seccao id="permissoes" titulo="Permissões">
         <p>Cada chave tem as permissões escolhidas ao criá-la:</p>

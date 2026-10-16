@@ -102,6 +102,41 @@ describe('Worker api.wegest.pt', () => {
     expect(f.mock.calls[0][0].headers.get('x-motorista-token')).toBe(token);
   });
 
+  it('passa o X-Conta-Token da conta de cliente tal qual, também num DELETE', async () => {
+    const f = fetchQueResponde(new Response('{}'));
+    const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.assinatura';
+    await tratar(
+      new Request('https://api.wegest.pt/v1/conta/reservas/1042', {
+        method: 'DELETE',
+        headers: { 'x-api-key': 'wg_ra_abc', 'X-Conta-Token': token },
+      }),
+      f
+    );
+    const pedido = f.mock.calls[0][0];
+    expect(pedido.method).toBe('DELETE');
+    expect(pedido.url).toBe(`${ORIGEM}/v1/conta/reservas/1042`);
+    expect(pedido.headers.get('x-conta-token')).toBe(token);
+  });
+
+  it('o PDF da fatura passa em binário, com Content-Type e Content-Disposition', async () => {
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0xff, 0x00, 0x0a]);
+    const origem = new Response(bytes, {
+      headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': 'inline; filename="67 12.pdf"',
+        'cache-control': 'private, no-store',
+      },
+    });
+    const r = await tratar(
+      new Request('https://api.wegest.pt/v1/conta/faturas/8e9f0a1b-2c3d-4e5f-8a6b-7c8d9e0f1a2b'),
+      fetchQueResponde(origem)
+    );
+    expect(r.headers.get('content-type')).toBe('application/pdf');
+    expect(r.headers.get('content-disposition')).toBe('inline; filename="67 12.pdf"');
+    expect(r.headers.get('cache-control')).toBe('private, no-store');
+    expect(new Uint8Array(await r.arrayBuffer())).toEqual(bytes);
+  });
+
   it('não guarda em cache no Worker', async () => {
     const f = fetchQueResponde(new Response('{}'));
     await tratar(new Request('https://api.wegest.pt/v1/modelos'), f);
@@ -150,6 +185,10 @@ describe('Worker api.wegest.pt', () => {
       '/v1/%2e%2e/auth',
       '/v1/modelos/abc/extra',
       '/v1/tvde/modelos/abc/extra',
+      '/v1/conta/reservas/7/extra',
+      '/v1/conta/faturas/a%2fb',
+      '/v1/conta%2freservas',
+      '/v1/tvde/conta/reservas/7',
       `/v1/${'a'.repeat(65)}`,
       '/v1//modelos',
     ]) {
@@ -169,6 +208,12 @@ describe('Worker api.wegest.pt', () => {
       '/v1/tvde/modelos',
       '/v1/tvde/modelos/ca9ad30a-2da7-45c1-bdfc-5482c4fc3a0c',
       '/v1/tvde/candidaturas/c1d3fd38-5c15-4a7a-a80e-c1f05d6384ae',
+      '/v1/conta',
+      '/v1/conta/',
+      '/v1/conta/reservas',
+      '/v1/conta/reservas/1042',
+      '/v1/conta/faturas',
+      '/v1/conta/faturas/8e9f0a1b-2c3d-4e5f-8a6b-7c8d9e0f1a2b',
     ]) {
       const f = fetchQueResponde(new Response('{}'));
       await tratar(new Request(`https://api.wegest.pt${caminho}`), f);

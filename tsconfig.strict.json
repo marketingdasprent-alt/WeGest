@@ -8,6 +8,9 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/docs/paginas/ContasDeCliente.tsx",
+    "src/lib/contaCliente.ts",
+    "src/lib/contaCliente.test.ts",
     "src/components/renting/reservas/selosReserva.ts",
     "src/components/renting/reservas/SelosOrigemReserva.tsx",
     "src/components/renting/reservas/SelosOrigemReserva.test.tsx",

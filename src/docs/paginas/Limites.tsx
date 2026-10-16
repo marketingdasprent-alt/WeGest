@@ -17,6 +17,10 @@ export default function Limites() {
             <strong className="tabular-nums">60 por minuto</strong> por IP, contados só nos pedidos
             sem chave válida. Quem tem chave válida nunca gasta este limite.
           </li>
+          <li>
+            <strong className="tabular-nums">10 PDF de faturas por minuto</strong> por conta e
+            chave, em <C>GET /conta/faturas/{'{id}'}</C>. Cada PDF pode demorar até cerca de 45 s.
+          </li>
         </ul>
         <p>
           Acima do limite, a resposta é <C>429 LIMITE_EXCEDIDO</C> com o cabeçalho{' '}
@@ -47,6 +51,10 @@ export default function Limites() {
           </li>
           <li>
             <C>/v1/health</C> não se guarda.
+          </li>
+          <li>
+            <C>/v1/conta</C> e tudo o que está debaixo dele (reservas, faturas, PDF):{' '}
+            <C>no-store</C>. São dados de uma pessoa: nunca os guarde numa cache partilhada.
           </li>
         </ul>
       </Seccao>

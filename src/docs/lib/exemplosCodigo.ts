@@ -1,7 +1,8 @@
 // Exemplos de pedido gerados a partir da operação (método, caminho, parâmetros)
 // e do servidor. A chave nunca aparece literal: vem sempre de uma variável de
-// ambiente do servidor (WEGEST_API_KEY). Nunca há exemplo de browser.
-import type { Operacao } from './spec';
+// ambiente do servidor (WEGEST_API_KEY). Nunca há exemplo de browser. Um cabeçalho
+// obrigatório além da chave (ex.: X-Conta-Token) vem de uma variável com o seu nome.
+import { respostaDeSucesso, type Operacao } from './spec';
 
 export type Linguagem = 'curl' | 'javascript' | 'php';
 
@@ -25,6 +26,33 @@ export function urlExemplo(op: Operacao, servidor: string): string {
   return query ? `${base}?${query}` : base;
 }
 
+interface Cabecalho {
+  nome: string;
+  /** X-Conta-Token → CONTA_TOKEN (shell) e contaToken (JavaScript e PHP). */
+  shell: string;
+  variavel: string;
+}
+
+/** Os cabeçalhos obrigatórios da operação, além da chave. */
+function cabecalhos(op: Operacao): Cabecalho[] {
+  return op.parametros
+    .filter((p) => p.em === 'header' && p.obrigatorio)
+    .map((p) => {
+      const palavras = p.nome.replace(/^X-/i, '').toLowerCase().split('-');
+      return {
+        nome: p.nome,
+        shell: palavras.join('_').toUpperCase(),
+        variavel: palavras.map((w, i) => (i ? w[0].toUpperCase() + w.slice(1) : w)).join(''),
+      };
+    });
+}
+
+/** A resposta de sucesso é um ficheiro (ex.: o PDF de uma fatura), não JSON. */
+function respostaBinaria(op: Operacao): boolean {
+  const tipo = respostaDeSucesso(op.respostas)?.tipo;
+  return !!tipo && tipo !== 'application/json';
+}
+
 /** Corpo de exemplo numa linha de JSON, ou null quando a operação não leva corpo. */
 const corpoJson = (op: Operacao): string | null =>
   op.corpo?.exemplo === undefined ? null : JSON.stringify(op.corpo.exemplo);
@@ -36,6 +64,8 @@ const plicasPhp = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'
 function curl(op: Operacao, url: string): string {
   const linhas = [op.metodo === 'GET' ? `curl "${url}"` : `curl -X ${op.metodo} "${url}"`];
   if (!op.publica) linhas.push('  -H "X-API-Key: $WEGEST_API_KEY"');
+  for (const c of cabecalhos(op)) linhas.push(`  -H "${c.nome}: $${c.shell}"`);
+  if (respostaBinaria(op)) linhas.push('  -o documento.pdf');
   const corpo = corpoJson(op);
   if (corpo) linhas.push('  -H "Content-Type: application/json"', `  -d ${plicasShell(corpo)}`);
   return linhas.join(' \\\n');
@@ -45,13 +75,11 @@ function javascript(op: Operacao, url: string): string {
   const opcoes: string[] = [];
   const corpo = corpoJson(op);
   if (op.metodo !== 'GET') opcoes.push(`  method: '${op.metodo}',`);
-  if (!op.publica && corpo) {
-    opcoes.push(
-      `  headers: { 'X-API-Key': process.env.WEGEST_API_KEY, 'Content-Type': 'application/json' },`
-    );
-  } else if (!op.publica) {
-    opcoes.push(`  headers: { 'X-API-Key': process.env.WEGEST_API_KEY },`);
-  }
+  const h: string[] = [];
+  if (!op.publica) h.push("'X-API-Key': process.env.WEGEST_API_KEY");
+  for (const c of cabecalhos(op)) h.push(`'${c.nome}': ${c.variavel}`);
+  if (!op.publica && corpo) h.push("'Content-Type': 'application/json'");
+  if (h.length) opcoes.push(`  headers: { ${h.join(', ')} },`);
   if (corpo) opcoes.push(`  body: JSON.stringify(${corpo}),`);
   const chamada = opcoes.length
     ? `await fetch('${url}', {\n${opcoes.join('\n')}\n})`
@@ -59,7 +87,9 @@ function javascript(op: Operacao, url: string): string {
   return [
     '// Node.js (servidor): a chave nunca vai para o browser.',
     `const resposta = ${chamada};`,
-    'const dados = await resposta.json();',
+    respostaBinaria(op)
+      ? 'const pdf = Buffer.from(await resposta.arrayBuffer());'
+      : 'const dados = await resposta.json();',
   ].join('\n');
 }
 
@@ -68,8 +98,10 @@ function php(op: Operacao, url: string): string {
   if (op.metodo !== 'GET') opcoes.push(`    CURLOPT_CUSTOMREQUEST => '${op.metodo}',`);
   const corpo = corpoJson(op);
   if (!op.publica) {
-    const json = corpo ? ", 'Content-Type: application/json'" : '';
-    opcoes.push(`    CURLOPT_HTTPHEADER => ['X-API-Key: ' . getenv('WEGEST_API_KEY')${json}],`);
+    const h = ["'X-API-Key: ' . getenv('WEGEST_API_KEY')"];
+    for (const c of cabecalhos(op)) h.push(`'${c.nome}: ' . $${c.variavel}`);
+    if (corpo) h.push("'Content-Type: application/json'");
+    opcoes.push(`    CURLOPT_HTTPHEADER => [${h.join(', ')}],`);
   }
   if (corpo) opcoes.push(`    CURLOPT_POSTFIELDS => ${plicasPhp(corpo)},`);
   return [
@@ -78,7 +110,7 @@ function php(op: Operacao, url: string): string {
     'curl_setopt_array($ch, [',
     ...opcoes,
     ']);',
-    '$dados = json_decode(curl_exec($ch), true);',
+    respostaBinaria(op) ? '$pdf = curl_exec($ch);' : '$dados = json_decode(curl_exec($ch), true);',
     'curl_close($ch);',
   ].join('\n');
 }

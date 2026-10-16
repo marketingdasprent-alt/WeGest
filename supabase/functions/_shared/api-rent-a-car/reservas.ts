@@ -1,12 +1,14 @@
 // Reservas da API externa (fase C). Valida o formato do pedido, chama as funções
 // SQL api_* com o org_id e o id da chave e traduz o código de erro em HTTP. Nunca
-// em cache, e nunca registar dados do cliente nos logs.
+// em cache, e nunca registar dados do cliente nos logs. Com X-Conta-Token (ou
+// X-Motorista-Token) válido, a reserva fica na ficha de cliente ligada à conta.
 import { readBoundedJson, RequestBodyError } from '../http/boundedJson.ts';
 import type { ContextoApi, DbRpc } from './auth.ts';
 import { exigirPermissao } from './auth.ts';
 import { type CorpoCotacao, ESTADO_POR_CODIGO, validarCorpoCotacao } from './disponibilidade.ts';
 import type { Rota } from './router.ts';
 import { type CodigoErro, erro, ok } from './respostas.ts';
+import { confirmarSessao, lerTokenSessao, type VerificadorSessao } from './sessao.ts';
 
 const CORPO_MAXIMO = 65536;
 const CODIGO = /^\d{1,12}$/;
@@ -207,7 +209,7 @@ export async function servirReservas(
   rota: Rota,
   req: Request,
   ctx: ContextoApi,
-  db: DbRpc
+  db: DbRpc & VerificadorSessao
 ): Promise<Response | null> {
   const resposta = await servir(rota, req, ctx, db);
   resposta?.headers.set('Cache-Control', 'no-store');
@@ -218,7 +220,7 @@ async function servir(
   rota: Rota,
   req: Request,
   ctx: ContextoApi,
-  db: DbRpc
+  db: DbRpc & VerificadorSessao
 ): Promise<Response | null> {
   if (rota.recurso !== 'reservas') return null;
   const def = ROTAS_RESERVAS.find((r) => r.metodo === rota.metodo && r.comCodigo === !!rota.id);
@@ -242,6 +244,18 @@ async function servir(
   }
   const v = validarCorpoReserva(corpo);
   if (!v.ok) return erro('PARAMETRO_INVALIDO', v.mensagem, 400);
+
+  // Sem cabeçalho, o pedido é o de sempre (sem p_user_id); com token, só depois de o
+  // GoTrue o confirmar.
+  const token = lerTokenSessao(req);
+  if ('recusa' in token) return token.recusa;
+  let conta: { p_user_id: string } | Record<string, never> = {};
+  if (token.token) {
+    const sessao = await confirmarSessao(db, token.token);
+    if ('recusa' in sessao) return sessao.recusa;
+    conta = { p_user_id: sessao.userId };
+  }
+
   const { data, error } = await db.rpc('api_criar_reserva', {
     p_org_id: ctx.orgId,
     p_api_chave_id: ctx.chaveId,
@@ -250,6 +264,7 @@ async function servir(
       inicio: new Date(v.valor.inicio).toISOString(),
       fim: new Date(v.valor.fim).toISOString(),
     },
+    ...conta,
   });
   return responder('api_criar_reserva', data, error, 201);
 }

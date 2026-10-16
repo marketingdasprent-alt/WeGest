@@ -8,6 +8,7 @@ import {
   EX_MODELO,
   EX_PERIODO,
 } from './openapi.exemplos.ts';
+import { EX_TOKEN_CONTA } from './openapi.conta.ts';
 
 type Esquema = Record<string, unknown>;
 
@@ -164,6 +165,24 @@ interface Ajudas {
   erros: Esquema;
 }
 
+const DESCRICAO_TOKEN_CONTA =
+  'Opcional. O access_token da sessão Supabase Auth do cliente que entrou no site (o JWT ' +
+  'que o supabase-js guarda depois de entrar). Com ele a reserva fica na ficha do cliente ' +
+  'ligada à conta nesta organização e aparece em /conta/reservas. X-Motorista-Token é ' +
+  'aceite como sinónimo; com os dois, vale o X-Conta-Token. Token inválido ou expirado dá ' +
+  '401 SESSAO_INVALIDA: renove a sessão e repita. Não é o Authorization, que continua a ser ' +
+  'alternativa à X-API-Key. Nunca o guarde nem o registe nos logs do site. Sem o cabeçalho, ' +
+  'a reserva usa a ficha do cliente do corpo, como sempre.';
+
+const parametroTokenConta = {
+  name: 'X-Conta-Token',
+  in: 'header',
+  required: false,
+  description: DESCRICAO_TOKEN_CONTA,
+  schema: { type: 'string', maxLength: 4096 },
+  example: EX_TOKEN_CONTA,
+};
+
 const parametroCodigo = {
   name: 'codigo',
   in: 'path',
@@ -189,6 +208,7 @@ export function caminhosReservas(a: Ajudas): Record<string, Esquema> {
           'de referência nova. Sem cache. Corpo JSON até 64 KB.',
         tags: ['Reservas'],
         'x-permissao': 'reservas:write',
+        parameters: [parametroTokenConta],
         requestBody: {
           required: true,
           content: a.json({ $ref: '#/components/schemas/ReservaPedido' }, EX_RESERVA_PEDIDO),
@@ -210,6 +230,13 @@ export function caminhosReservas(a: Ajudas): Record<string, Esquema> {
             'Corpo JSON inválido ou acima de 64 KB.'
           ),
           ...a.erros,
+          // Depois de a.erros: o 401 do POST também cobre a sessão da conta.
+          '401': a.respostaErro(
+            'NAO_AUTENTICADO: sem chave de API válida. SESSAO_INVALIDA: o X-Conta-Token (ou ' +
+              'X-Motorista-Token) é inválido ou expirou (renove a sessão e repita)',
+            'SESSAO_INVALIDA',
+            'Sessão inválida ou expirada. Volte a entrar.'
+          ),
         },
       },
     },

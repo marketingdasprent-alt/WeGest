@@ -13,6 +13,19 @@ interface Alteracao {
 /** Lista cronológica, mais recente primeiro. A versão é a do OpenAPI (info.version). */
 const ALTERACOES: Alteracao[] = [
   {
+    data: '2026-10-16',
+    versao: '1.0.0',
+    tipo: 'Novo',
+    texto:
+      'Conta de cliente: quem cria conta no site (signUp com tipo_utilizador: cliente) e ' +
+      'confirma o email vê as suas reservas e faturas. Rotas novas GET /conta, GET ' +
+      '/conta/reservas, DELETE /conta/reservas/{codigo}, GET /conta/faturas e GET ' +
+      '/conta/faturas/{id} (o PDF), todas com o cabeçalho X-Conta-Token (access_token da ' +
+      'pessoa). Permissões novas conta:read e conta:write. O POST /reservas aceita o mesmo ' +
+      'cabeçalho e põe a reserva na ficha da conta. X-Conta-Token passa a ser o nome do ' +
+      'cabeçalho também no POST /tvde/candidaturas; X-Motorista-Token continua a funcionar.',
+  },
+  {
     data: '2026-10-14',
     versao: '1.0.0',
     tipo: 'Incompatível',

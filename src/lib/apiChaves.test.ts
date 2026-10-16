@@ -30,7 +30,10 @@ describe('validarPermissoes', () => {
       'tvde:catalogo:read',
       'tvde:candidaturas:read',
       'tvde:candidaturas:write',
+      'conta:read',
+      'conta:write',
     ]);
+    expect(validarPermissoes('rent_a_car', ['conta:read', 'conta:write'])).toBeNull();
     expect(validarPermissoes('rent_a_car', ['tvde:catalogo:read'])).toBeNull();
     expect(validarPermissoes('rent_a_car', ['tvde:candidaturas:write'])).toBeNull();
     expect(validarPermissoes('rent_a_car', ['tvde:xpto'])).toBe(
@@ -45,6 +48,9 @@ describe('rotuloPermissao', () => {
     expect(rotuloPermissao('tvde:catalogo:read')).toBe('TVDE: catálogo e disponibilidade');
     expect(rotuloPermissao('tvde:candidaturas:read')).toBe('TVDE: consultar candidaturas');
     expect(rotuloPermissao('tvde:candidaturas:write')).toBe('TVDE: enviar candidaturas');
+    expect(rotuloPermissao('conta:read')).toBe(
+      'Área de cliente: ver as próprias reservas e faturas'
+    );
     expect(ROTULO_ESCOPO.rent_a_car).toBe('Site (rent-a-car e TVDE)');
     expect(rotuloPermissao('x:y')).toBe('x:y');
   });

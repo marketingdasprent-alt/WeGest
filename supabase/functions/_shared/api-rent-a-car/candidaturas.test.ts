@@ -528,3 +528,31 @@ Deno.test('erro do PG → 500 e o console.error leva só { rpc, codigo }', async
   assert(!linha.includes('123456789'), linha);
   assert(!linha.includes('rui'), linha);
 });
+
+Deno.test('X-Conta-Token também liga a candidatura à conta (mesma validação)', async () => {
+  const db = dbFalso({ sessao: { data: { user: { id: USER_ID } }, error: null } });
+  const r = await servirCandidaturas(
+    rotaPost,
+    pedido('POST', corpoIntemporal(), { 'x-conta-token': TOKEN }),
+    ctx,
+    db
+  );
+  assertEquals(r?.status, 201);
+  assertEquals(db.tokens, [TOKEN]);
+  assertEquals(db.rpcs[2].args.p_user_id, USER_ID);
+});
+
+Deno.test('X-Conta-Token recusado mantém a mensagem do motorista', async () => {
+  const db = dbFalso();
+  const r = await servirCandidaturas(
+    rotaPost,
+    pedido('POST', corpoIntemporal(), { 'x-conta-token': TOKEN }),
+    ctx,
+    db
+  );
+  assertEquals(r?.status, 401);
+  assertEquals(
+    (await r!.json()).erro.mensagem,
+    'Sessão do motorista inválida ou expirada. Volte a entrar.'
+  );
+});

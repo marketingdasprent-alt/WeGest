@@ -53,7 +53,9 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
   {
     codigo: 'NAO_ENCONTRADO',
     estados: ['404'],
-    quando: 'Rota ou recurso inexistente nesta organização.',
+    quando:
+      'Rota ou recurso inexistente nesta organização, ou o PDF de uma fatura que não tem ' +
+      'número no programa de faturação.',
     fazer: 'Use os ids devolvidos pelas listas; não repita o pedido.',
   },
   {
@@ -92,27 +94,33 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
     codigo: 'SESSAO_INVALIDA',
     estados: ['401'],
     quando:
-      'O cabeçalho X-Motorista-Token não é uma sessão válida do motorista no WeGest (inválido ' +
-      'ou expirado).',
-    fazer: 'Renove a sessão do motorista (ou peça-lhe para voltar a entrar) e repita o pedido.',
+      'Falta o X-Conta-Token numa rota /conta, ou o X-Conta-Token (ou X-Motorista-Token) não é ' +
+      'uma sessão válida no WeGest (inválido ou expirado).',
+    fazer: 'Renove a sessão da pessoa (ou peça-lhe para voltar a entrar) e repita o pedido.',
   },
   {
     codigo: 'CONTA_INVALIDA',
     estados: ['403'],
-    quando: 'A conta do X-Motorista-Token não é motorista da organização da chave de API.',
-    fazer: 'Envie a candidatura sem o X-Motorista-Token, ou com a conta certa.',
+    quando:
+      'Na candidatura TVDE, a conta do token não é motorista da organização da chave de API; ' +
+      'numa rota /conta, a conta já não existe.',
+    fazer:
+      'Envie a candidatura sem o token, ou com a conta certa; na conta, peça para voltar a entrar.',
   },
   {
     codigo: 'LIMITE_EXCEDIDO',
     estados: ['429'],
     quando:
-      'Passou o limite de pedidos por minuto, ou o de 50 candidaturas TVDE por dia por chave.',
+      'Passou o limite de pedidos por minuto, o de 50 candidaturas TVDE por dia por chave ou o ' +
+      'de 10 PDF de faturas por minuto por conta.',
     fazer: 'Espere os segundos do cabeçalho Retry-After e use a cache do catálogo.',
   },
   {
     codigo: 'ERRO_INTERNO',
     estados: ['500', '503'],
-    quando: 'Falha do nosso lado (500) ou serviço temporariamente indisponível (503).',
+    quando:
+      'Falha do nosso lado (500) ou serviço temporariamente indisponível (503), incluindo o ' +
+      'programa de faturação quando se pede o PDF de uma fatura.',
     fazer: 'Tente de novo com espera crescente; no 503 respeite o Retry-After.',
   },
   {

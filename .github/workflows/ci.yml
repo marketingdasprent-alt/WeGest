@@ -316,7 +316,11 @@ jobs:
             evento_reserva_site_recebida \
             api_tvde_catalogo \
             api_foto_da_viatura \
-            api_tvde_candidaturas
+            api_tvde_candidaturas \
+            api_candidatura_com_conta \
+            api_so_disponiveis \
+            api_reserva_com_matricula \
+            conta_cliente
 
       # ── Gate 3: ingestão de plataformas ───────────────────────────────
       # Os dois modos de falha que custaram dinheiro a sério em Setembro de
@@ -348,6 +352,7 @@ jobs:
             rls_org_isolation \
             rls_anon_exposure \
             signup_nao_confia_na_metadata \
+            signup_sem_ligacao_por_telefone \
             salvar_precos_modelo_tarifa \
             aceitar_convite_pelo_titular \
             buckets_viaturas_fase0 \

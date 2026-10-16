@@ -1,8 +1,8 @@
 // Candidaturas TVDE da API externa (fase D2). Valida o formato do pedido, aplica o
 // limite diário por chave, chama a função SQL api_tvde_* com o org_id e o id da chave
 // e traduz o código de erro em HTTP. Os checksums de NIF e IBAN ficam para o SQL.
-// Com X-Motorista-Token, a candidatura fica ligada à conta Supabase Auth do motorista.
-// Nunca em cache, e nunca registar dados pessoais (nem o token) nos logs.
+// Com X-Motorista-Token (ou X-Conta-Token), a candidatura fica ligada à conta Supabase Auth
+// do motorista. Nunca em cache, e nunca registar dados pessoais (nem o token) nos logs.
 import { readBoundedJson, RequestBodyError } from '../http/boundedJson.ts';
 import { consumeRateLimit } from '../rate-limit/rateLimit.ts';
 import type { ContextoApi, DbRpc } from './auth.ts';
@@ -19,20 +19,11 @@ import {
 } from './reservas.ts';
 import type { Rota } from './router.ts';
 import { type CodigoErro, erro, ok, respostaLimite } from './respostas.ts';
+import { confirmarSessao, lerTokenSessao, type VerificadorSessao } from './sessao.ts';
+
+export type { VerificadorSessao } from './sessao.ts';
 
 export const LIMITE_CANDIDATURAS_POR_DIA = 50;
-
-/** Cabeçalho com o access_token do motorista; o Authorization já é da chave de API. */
-const CABECALHO_TOKEN_MOTORISTA = 'x-motorista-token';
-const TOKEN_MAXIMO = 4096;
-const JWT = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
-
-/** O pedaço do cliente supabase-js (service_role) que confirma a sessão no GoTrue. */
-export interface VerificadorSessao {
-  auth: {
-    getUser(jwt: string): PromiseLike<{ data: { user: { id: string } | null }; error: unknown }>;
-  };
-}
 
 const CORPO_MAXIMO = 65536;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -259,36 +250,6 @@ function responder(rpc: string, data: unknown, error: unknown, status: number): 
 const sessaoInvalida = () =>
   erro('SESSAO_INVALIDA', 'Sessão do motorista inválida ou expirada. Volte a entrar.', 401);
 
-/**
- * O X-Motorista-Token do pedido: null sem cabeçalho (candidatura sem conta), recusa
- * quando nem tem forma de JWT. Só a forma: a sessão confirma-se em confirmarSessao.
- */
-function lerTokenMotorista(req: Request): { token: string | null } | { recusa: Response } {
-  const token = req.headers.get(CABECALHO_TOKEN_MOTORISTA)?.trim();
-  if (!token) return { token: null };
-  if (token.length > TOKEN_MAXIMO || !JWT.test(token)) return { recusa: sessaoInvalida() };
-  return { token };
-}
-
-/** O id da conta dona do token, validado no GoTrue (assinatura e sessão), ou a recusa 401. */
-async function confirmarSessao(
-  db: VerificadorSessao,
-  token: string
-): Promise<{ userId: string } | { recusa: Response }> {
-  // Nunca registar o token nem o user: o erro do GoTrue pode citar o email.
-  const { data, error } = await db.auth.getUser(token);
-  // GoTrue em baixo ou a limitar (sem status, 0, 429 ou 5xx) não é culpa do token: 503.
-  const status = (error as { status?: unknown } | null)?.status;
-  if (error && (typeof status !== 'number' || status === 0 || status === 429 || status >= 500)) {
-    return {
-      recusa: erro('ERRO_INTERNO', 'Serviço de contas temporariamente indisponível.', 503),
-    };
-  }
-  const id = data?.user?.id;
-  if (error || !id) return { recusa: sessaoInvalida() };
-  return { userId: id };
-}
-
 /** Devolve a Response das rotas /tvde/candidaturas, ou null quando o recurso não é este. */
 export async function servirCandidaturas(
   rota: Rota,
@@ -332,7 +293,7 @@ async function servir(
   }
   const v = validarCorpoCandidatura(corpo);
   if (!v.ok) return erro('PARAMETRO_INVALIDO', v.mensagem, 400);
-  const token = lerTokenMotorista(req);
+  const token = lerTokenSessao(req, sessaoInvalida);
   if ('recusa' in token) return token.recusa;
 
   // Depois da validação (um corpo mal formado não gasta a quota) e antes de gravar.
@@ -352,7 +313,7 @@ async function servir(
   // repetido não o martele; o custo é um token expirado gastar uma candidatura da quota.
   let userId: string | null = null;
   if (token.token) {
-    const sessao = await confirmarSessao(db, token.token);
+    const sessao = await confirmarSessao(db, token.token, sessaoInvalida);
     if ('recusa' in sessao) return sessao.recusa;
     userId = sessao.userId;
   }

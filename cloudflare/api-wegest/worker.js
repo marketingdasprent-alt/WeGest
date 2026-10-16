@@ -28,7 +28,9 @@ const APRESENTACAO = {
 const PASSAM = new Set([
   'x-api-key',
   'authorization',
-  // Sessão do motorista no POST /tvde/candidaturas; a edge valida-a no GoTrue.
+  // Sessão da pessoa que entrou no site (conta de cliente, reservas, candidaturas TVDE);
+  // a edge valida-a no GoTrue. X-Motorista-Token é o nome antigo, mantido por compatibilidade.
+  'x-conta-token',
   'x-motorista-token',
   'content-type',
   'accept',
@@ -39,9 +41,9 @@ const PASSAM = new Set([
   'access-control-request-headers',
 ]);
 
-// /v1, o prefixo opcional tvde (como no router da edge) e no máximo dois segmentos
-// (recurso e id), só com caracteres seguros: nenhum % (ex.: ..%2f) chega à origem.
-const V1 = /^\/v1(?:\/tvde)?(?:\/[A-Za-z0-9._-]{1,64}){0,2}\/?$/;
+// /v1, um prefixo opcional tvde ou conta (como no router da edge) e no máximo dois
+// segmentos (recurso e id), só com caracteres seguros: nenhum % (ex.: ..%2f) chega à origem.
+const V1 = /^\/v1(?:\/(?:tvde|conta))?(?:\/[A-Za-z0-9._-]{1,64}){0,2}\/?$/;
 
 export const CORPO_MAXIMO = 65536;
 

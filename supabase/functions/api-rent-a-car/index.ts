@@ -9,6 +9,7 @@
 // https://<projecto>.supabase.co/functions/v1/api-rent-a-car/v1/*.
 // ============================================================
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { criarPedirPdfFatura } from '../_shared/api-rent-a-car/faturaPdf.ts';
 import { tratarPedido } from '../_shared/api-rent-a-car/handler.ts';
 
 // Supabase Edge Runtime: sem waitUntil, o isolate pode fechar logo depois da
@@ -17,9 +18,11 @@ declare const EdgeRuntime: { waitUntil(promessa: Promise<unknown>): void } | und
 
 const env = (k: string) => Deno.env.get(k) ?? '';
 const db = () => createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
+// PDF das faturas da conta de cliente: faturacao-emitir com a service role.
+const pedirPdfFatura = criarPedirPdfFatura(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
 
 Deno.serve(async (req) => {
-  const { resposta, auditoria } = await tratarPedido(req, db());
+  const { resposta, auditoria } = await tratarPedido(req, db(), { pedirPdfFatura });
   if (auditoria && typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(auditoria);
   return resposta;
 });

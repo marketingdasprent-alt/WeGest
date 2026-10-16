@@ -17,6 +17,8 @@ export interface Parametro {
 export interface Resposta {
   estado: string;
   descricao: string;
+  /** Tipo do conteúdo (ex.: application/json, application/pdf); undefined sem corpo. */
+  tipo?: string;
   codigo?: string;
   exemplo?: unknown;
   esquema?: Esquema;
@@ -80,11 +82,13 @@ export function esquemaComponente(nome: string): Esquema {
 
 function lerResposta(estado: string, bruta: Esquema): Resposta {
   const r = typeof bruta.$ref === 'string' ? resolverRef(bruta.$ref) : bruta;
-  const json = (r.content as Record<string, Esquema> | undefined)?.['application/json'];
+  const conteudo = r.content as Record<string, Esquema> | undefined;
+  const json = conteudo?.['application/json'];
   const exemplo = json?.example as { erro?: { codigo?: string } } | undefined;
   return {
     estado,
     descricao: String(r.description ?? ''),
+    tipo: conteudo ? Object.keys(conteudo)[0] : undefined,
     codigo: exemplo?.erro?.codigo,
     exemplo,
     esquema: json?.schema as Esquema | undefined,

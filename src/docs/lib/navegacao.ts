@@ -113,6 +113,23 @@ export const RECURSOS: Recurso[] = [
       'reserva: uma chave só se dá ao vosso próprio site.',
   },
   {
+    slug: 'recursos/conta',
+    titulo: 'Conta de cliente',
+    objecto: 'ReservaConta',
+    operacoes: [
+      { id: 'GET /conta', ancora: 'conta' },
+      { id: 'GET /conta/reservas', ancora: 'reservas' },
+      { id: 'DELETE /conta/reservas/{codigo}', ancora: 'cancelar' },
+      { id: 'GET /conta/faturas', ancora: 'faturas' },
+      { id: 'GET /conta/faturas/{id}', ancora: 'fatura-pdf' },
+    ],
+    introducao:
+      'As reservas de rent-a-car e as faturas de quem entrou no site com a sua conta. Cada ' +
+      'pedido leva a chave e o access_token da pessoa no cabeçalho X-Conta-Token, e só devolve ' +
+      'o que é da ficha de cliente ligada a essa conta. Ler pede conta:read e cancelar pede ' +
+      'conta:write. Como criar a conta no site: ver Contas de cliente.',
+  },
+  {
     slug: 'recursos/tvde',
     titulo: 'TVDE',
     objecto: 'ModeloTvde',
@@ -189,6 +206,18 @@ export const PAGINAS: PaginaNav[] = [
     seccoes: [
       { id: 'envelope', titulo: 'O envelope de erro' },
       { id: 'codigos', titulo: 'Códigos' },
+    ],
+  },
+  {
+    slug: 'contas-de-cliente',
+    titulo: 'Contas de cliente',
+    grupo: 'Conceitos',
+    seccoes: [
+      { id: 'criar-a-conta', titulo: '1. Criar a conta' },
+      { id: 'confirmar-o-email', titulo: '2. Confirmar o email' },
+      { id: 'pedidos-com-a-conta', titulo: '3. Pedidos com a conta' },
+      { id: 'reservar-com-a-conta', titulo: '4. Reservar com a conta' },
+      { id: 'faturas', titulo: '5. Faturas' },
     ],
   },
   {
