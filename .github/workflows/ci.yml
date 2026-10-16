@@ -356,6 +356,7 @@ jobs:
             salvar_precos_modelo_tarifa \
             aceitar_convite_pelo_titular \
             buckets_viaturas_fase0 \
+            storage_buckets_internos \
             gerar_cobrancas_slot_tolerante \
             atribuicao_segue_estado_do_contrato \
             tvde_parado_volta_a_cobrar \
