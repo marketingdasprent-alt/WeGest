@@ -1,7 +1,7 @@
 // Router da API externa: aceita /api-rent-a-car/v1/<recurso>[/<id>] (gateway do
 // Supabase, que prefixa o nome da função) e /v1/<recurso>[/<id>] (local e testes).
 export interface Rota {
-  metodo: 'GET' | 'POST' | 'DELETE';
+  metodo: 'GET' | 'POST' | 'PUT' | 'DELETE';
   recurso: string;
   id: string | null;
 }
@@ -17,6 +17,6 @@ const PADRAO =
 export function resolverRota(url: URL, metodo: string): Rota | null {
   const m = PADRAO.exec(url.pathname);
   if (!m) return null;
-  if (metodo !== 'GET' && metodo !== 'POST' && metodo !== 'DELETE') return null;
+  if (metodo !== 'GET' && metodo !== 'POST' && metodo !== 'PUT' && metodo !== 'DELETE') return null;
   return { metodo, recurso: m[1], id: m[2] ?? null };
 }

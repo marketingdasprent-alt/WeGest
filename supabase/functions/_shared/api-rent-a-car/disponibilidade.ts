@@ -30,6 +30,10 @@ export const ESTADO_POR_CODIGO: Record<string, number> = {
   PRECO_ALTERADO: 409,
   ESTADO_INVALIDO: 409,
   CANDIDATURA_EXISTENTE: 409,
+  // Rascunho da conta: já submetida (409), a faltar campos (422) ou valor recusado pelo SQL (422).
+  CANDIDATURA_NAO_EDITAVEL: 409,
+  CANDIDATURA_INCOMPLETA: 422,
+  PEDIDO_INVALIDO: 422,
   // A conta do X-Motorista-Token não é motorista da organização da chave.
   CONTA_INVALIDA: 403,
   CONFIG_EM_FALTA: 503,

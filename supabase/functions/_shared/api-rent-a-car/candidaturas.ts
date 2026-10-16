@@ -26,13 +26,13 @@ export type { VerificadorSessao } from './sessao.ts';
 export const LIMITE_CANDIDATURAS_POR_DIA = 50;
 
 const CORPO_MAXIMO = 65536;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const NIF = /^\d{9}$/;
-const CODIGO_POSTAL = /^\d{4}-\d{3}$/;
-const IBAN = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
-const TIPOS_DOCUMENTO = ['cc', 'bi', 'ar', 'tr', 'passaporte'] as const;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const NIF = /^\d{9}$/;
+export const CODIGO_POSTAL = /^\d{4}-\d{3}$/;
+export const IBAN = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
+export const TIPOS_DOCUMENTO = ['cc', 'bi', 'ar', 'tr', 'passaporte'] as const;
 // Espelha src/utils/candidatura.ts (CATEGORIAS_CARTA).
-const CATEGORIAS_CARTA = new Set([
+export const CATEGORIAS_CARTA = new Set([
   'A',
   'A1',
   'A2',
@@ -47,9 +47,9 @@ const CATEGORIAS_CARTA = new Set([
   'D1',
   'DE',
 ]);
-const CATEGORIAS_MAXIMO = 16;
-const INICIO_MAXIMO_DIAS = 180;
-const CONSENTIMENTO_FUTURO_MS = 5 * 60 * 1000;
+export const CATEGORIAS_MAXIMO = 16;
+export const INICIO_MAXIMO_DIAS = 180;
+export const CONSENTIMENTO_FUTURO_MS = 5 * 60 * 1000;
 
 export const ROTAS_CANDIDATURAS = [
   { metodo: 'POST', comId: false, permissao: 'tvde:candidaturas:write' },
@@ -83,12 +83,12 @@ type Validacao = { ok: true; valor: CorpoCandidatura } | { ok: false; mensagem: 
 const recusa = (mensagem: string): Validacao => ({ ok: false, mensagem });
 
 /** AAAA-MM-DD depois de hoje (uma validade que acaba hoje já não serve). */
-function validadeFutura(v: unknown, hoje: string): string | null {
+export function validadeFutura(v: unknown, hoje: string): string | null {
   const d = lerData(v);
   return d && d > hoje ? d : null;
 }
 
-function somarDias(dia: string, dias: number): string {
+export function somarDias(dia: string, dias: number): string {
   const d = new Date(`${dia}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + dias);
   return d.toISOString().slice(0, 10);

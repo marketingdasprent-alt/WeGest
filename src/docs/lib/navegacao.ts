@@ -148,6 +148,26 @@ export const RECURSOS: Recurso[] = [
       'tvde:candidaturas:read. O formulário de candidatura do site tem de ter CAPTCHA.',
   },
   {
+    slug: 'recursos/candidatura',
+    titulo: 'Candidatura da conta',
+    objecto: 'CandidaturaConta',
+    operacoes: [
+      { id: 'GET /conta/candidatura', ancora: 'consultar' },
+      { id: 'PUT /conta/candidatura', ancora: 'guardar' },
+      { id: 'POST /conta/candidatura', ancora: 'submeter' },
+      { id: 'POST /conta/candidatura-documentos/{tipo}', ancora: 'pedir-envio' },
+      { id: 'PUT /conta/candidatura-documentos/{tipo}', ancora: 'confirmar-envio' },
+      { id: 'DELETE /conta/candidatura-documentos/{tipo}', ancora: 'remover' },
+    ],
+    introducao:
+      'A candidatura TVDE de quem entrou no site com a sua conta de motorista, do rascunho à ' +
+      'submissão. Cada pedido leva a chave e o access_token da pessoa no cabeçalho ' +
+      'X-Conta-Token. Os dados guardam-se por passos; os 8 documentos (a licença TVDE só é ' +
+      'dispensada em formação) enviam-se directamente para um URL assinado, sem passar pela ' +
+      'chave. Só com tudo presente a candidatura passa a submetida e chega à equipa. Ler pede ' +
+      'conta:read e o resto conta:write.',
+  },
+  {
     slug: 'recursos/health',
     titulo: 'Health',
     operacoes: [{ id: 'GET /health', ancora: 'estado' }],

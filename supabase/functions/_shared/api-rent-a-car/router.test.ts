@@ -29,8 +29,18 @@ Deno.test('openapi.json é um recurso de /v1 (tem ponto no nome)', () => {
   });
 });
 
-Deno.test('método fora de GET/POST/DELETE é null', () => {
-  assertEquals(resolverRota(new URL('https://x/v1/modelos'), 'PUT'), null);
+Deno.test('método fora de GET/POST/PUT/DELETE é null', () => {
+  assertEquals(resolverRota(new URL('https://x/v1/modelos'), 'PATCH'), null);
+  assertEquals(resolverRota(new URL('https://x/v1/modelos'), 'PUT')?.metodo, 'PUT');
+  assertEquals(
+    resolverRota(new URL('https://x/v1/conta/candidatura-documentos/documento_frente'), 'PUT'),
+    { metodo: 'PUT', recurso: 'conta/candidatura-documentos', id: 'documento_frente' }
+  );
+  assertEquals(resolverRota(new URL('https://x/v1/conta/candidatura'), 'PUT'), {
+    metodo: 'PUT',
+    recurso: 'conta/candidatura',
+    id: null,
+  });
   assertEquals(resolverRota(new URL('https://x/v1/reservas/r1'), 'DELETE')?.metodo, 'DELETE');
 });
 

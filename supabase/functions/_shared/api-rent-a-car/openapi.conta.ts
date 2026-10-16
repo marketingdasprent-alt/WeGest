@@ -1,5 +1,6 @@
 // OpenAPI da conta de cliente (reservas e faturas da pessoa que entrou no site). Funções
 // puras: recebem os helpers de openapi.ts, que as chama, para não haver import circular.
+import { caminhosContaCandidatura, esquemasContaCandidatura } from './openapi.contaCandidatura.ts';
 import { EX_LOCALIZACAO, EX_MODELO } from './openapi.exemplos.ts';
 
 type Esquema = Record<string, unknown>;
@@ -222,6 +223,7 @@ export function esquemasConta(): Record<string, Esquema> {
       },
       example: EX_FATURA_CONTA,
     },
+    ...esquemasContaCandidatura(),
   };
 }
 
@@ -396,5 +398,6 @@ export function caminhosConta(a: Ajudas): Record<string, Esquema> {
         },
       },
     },
+    ...caminhosContaCandidatura(a, { descricao: DESCRICAO_CONTA, parametroToken, erros }),
   };
 }

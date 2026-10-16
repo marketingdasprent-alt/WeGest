@@ -9,6 +9,7 @@
 // https://<projecto>.supabase.co/functions/v1/api-rent-a-car/v1/*.
 // ============================================================
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { criarArmazemDocumentos } from '../_shared/api-rent-a-car/armazemDocumentos.ts';
 import { criarPedirPdfFatura } from '../_shared/api-rent-a-car/faturaPdf.ts';
 import { tratarPedido } from '../_shared/api-rent-a-car/handler.ts';
 
@@ -22,7 +23,13 @@ const db = () => createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KE
 const pedirPdfFatura = criarPedirPdfFatura(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
 
 Deno.serve(async (req) => {
-  const { resposta, auditoria } = await tratarPedido(req, db(), { pedirPdfFatura });
+  const cliente = db();
+  // Documentos da candidatura da conta: URL assinado de envio e verificação do ficheiro.
+  const armazemDocumentos = criarArmazemDocumentos(cliente);
+  const { resposta, auditoria } = await tratarPedido(req, cliente, {
+    pedirPdfFatura,
+    armazemDocumentos,
+  });
   if (auditoria && typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(auditoria);
   return resposta;
 });

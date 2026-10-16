@@ -6,7 +6,6 @@
 import { consumeRateLimit } from '../rate-limit/rateLimit.ts';
 import type { ContextoApi, DbRpc } from './auth.ts';
 import { exigirPermissao } from './auth.ts';
-import { ESTADO_POR_CODIGO } from './disponibilidade.ts';
 import {
   bytesDoPdf,
   limparMensagem,
@@ -14,9 +13,12 @@ import {
   type PedirPdfFatura,
   respostaPdf,
 } from './faturaPdf.ts';
+import type { ArmazemDocumentos } from './armazemDocumentos.ts';
+import { eTipoDocumento, guardarRascunho, servirDocumento } from './contaCandidatura.ts';
 import type { Rota } from './router.ts';
-import { type CodigoErro, erro, ok, respostaLimite } from './respostas.ts';
+import { erro, ok, respostaLimite } from './respostas.ts';
 import { confirmarSessao, lerTokenSessao, type VerificadorSessao } from './sessao.ts';
+import { erroDoSql, falhouRpc } from './sql.ts';
 
 // Cada PDF pode ocupar o agente do Primavera até 40 s: 10 por minuto chega a uma pessoa.
 export const LIMITE_PDF_POR_MINUTO = 10;
@@ -43,6 +45,48 @@ export const ROTAS_CONTA = [
   },
   {
     metodo: 'GET',
+    recurso: 'conta/candidatura',
+    comId: false,
+    permissao: 'conta:read',
+    rpc: 'api_conta_candidatura',
+  },
+  {
+    metodo: 'PUT',
+    recurso: 'conta/candidatura',
+    comId: false,
+    permissao: 'conta:write',
+    rpc: 'api_conta_candidatura_guardar',
+  },
+  {
+    metodo: 'POST',
+    recurso: 'conta/candidatura',
+    comId: false,
+    permissao: 'conta:write',
+    rpc: 'api_conta_candidatura_submeter',
+  },
+  {
+    metodo: 'POST',
+    recurso: 'conta/candidatura-documentos',
+    comId: true,
+    permissao: 'conta:write',
+    rpc: 'api_conta_candidatura',
+  },
+  {
+    metodo: 'PUT',
+    recurso: 'conta/candidatura-documentos',
+    comId: true,
+    permissao: 'conta:write',
+    rpc: 'api_conta_candidatura_documento',
+  },
+  {
+    metodo: 'DELETE',
+    recurso: 'conta/candidatura-documentos',
+    comId: true,
+    permissao: 'conta:write',
+    rpc: 'api_conta_candidatura_documento',
+  },
+  {
+    metodo: 'GET',
     recurso: 'conta/faturas',
     comId: false,
     permissao: 'conta:read',
@@ -57,23 +101,8 @@ export const ROTAS_CONTA = [
   },
 ] as const;
 
-type Erro = { erro?: { codigo: string; mensagem: string; detalhes?: unknown } };
-
-/** Só o SQLSTATE e a RPC vão para o log: a mensagem do Postgres pode citar dados. */
-function falhou(rpc: string, error: unknown): Response {
-  const codigo = (error as { code?: unknown }).code;
-  console.error('[api-rent-a-car] conta falhou:', {
-    rpc,
-    codigo: typeof codigo === 'string' ? codigo : null,
-  });
-  return erro('ERRO_INTERNO', 'Falha a ler ou gravar os dados da conta. Tente de novo.', 500);
-}
-
-function erroDoSql(data: unknown): Response | null {
-  const e = (data as Erro | null)?.erro;
-  if (!e) return null;
-  return erro(e.codigo as CodigoErro, e.mensagem, ESTADO_POR_CODIGO[e.codigo] ?? 400, e.detalhes);
-}
+const MSG_FALHA = 'Falha a ler ou gravar os dados da conta. Tente de novo.';
+const falhou = (rpc: string, error: unknown) => falhouRpc(rpc, error, MSG_FALHA);
 
 /** Devolve a Response das rotas /conta*, ou null quando o recurso não é da conta. */
 export async function servirConta(
@@ -81,10 +110,11 @@ export async function servirConta(
   req: Request,
   ctx: ContextoApi,
   db: DbRpc & VerificadorSessao,
-  pedirPdf: PedirPdfFatura
+  pedirPdf: PedirPdfFatura,
+  armazem: ArmazemDocumentos | null = null
 ): Promise<Response | null> {
   if (rota.recurso !== 'conta' && !rota.recurso.startsWith('conta/')) return null;
-  const resposta = await servir(rota, req, ctx, db, pedirPdf);
+  const resposta = await servir(rota, req, ctx, db, pedirPdf, armazem);
   // O PDF já traz "private, no-store"; o resto, erros incluídos, nunca vai para cache.
   if (!resposta.headers.has('Cache-Control')) resposta.headers.set('Cache-Control', 'no-store');
   return resposta;
@@ -95,7 +125,8 @@ async function servir(
   req: Request,
   ctx: ContextoApi,
   db: DbRpc & VerificadorSessao,
-  pedirPdf: PedirPdfFatura
+  pedirPdf: PedirPdfFatura,
+  armazem: ArmazemDocumentos | null
 ): Promise<Response> {
   const def = ROTAS_CONTA.find(
     (r) => r.recurso === rota.recurso && r.metodo === rota.metodo && r.comId === !!rota.id
@@ -115,8 +146,13 @@ async function servir(
     );
   }
 
+  // Um tipo de documento desconhecido nunca existe: recusa sem ir ao GoTrue nem à base.
+  if (def.recurso === 'conta/candidatura-documentos' && !eTipoDocumento(rota.id as string)) {
+    return erro('PARAMETRO_INVALIDO', 'tipo de documento desconhecido.', 400);
+  }
+
   // Um id com forma errada nunca existe: 404 sem ir ao GoTrue nem à base.
-  if (rota.id !== null) {
+  if (rota.id !== null && def.recurso !== 'conta/candidatura-documentos') {
     const valido =
       def.recurso === 'conta/reservas'
         ? CODIGO.test(rota.id) && Number(rota.id) > 0
@@ -130,6 +166,14 @@ async function servir(
   const sessao = await confirmarSessao(db, token.token);
   if ('recusa' in sessao) return sessao.recusa;
   const base = { p_org_id: ctx.orgId, p_user_id: sessao.userId };
+
+  if (def.recurso === 'conta/candidatura' && def.metodo === 'PUT') {
+    return await guardarRascunho(req, ctx, db, base);
+  }
+  if (def.recurso === 'conta/candidatura-documentos') {
+    const tipo = rota.id as Parameters<typeof servirDocumento>[1];
+    return await servirDocumento(def.metodo, tipo, req, ctx, db, base, armazem);
+  }
 
   if (def.rpc === 'api_conta_fatura') {
     return await pdfDaFatura(rota.id as string, ctx, db, base, pedirPdf);

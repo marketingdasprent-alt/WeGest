@@ -91,6 +91,24 @@ export const ERROS_FASE_A: CodigoDeErro[] = [
     fazer: 'Diga ao motorista que a candidatura já foi recebida e que a equipa entra em contacto.',
   },
   {
+    codigo: 'CANDIDATURA_NAO_EDITAVEL',
+    estados: ['409'],
+    quando: 'A candidatura já foi submetida ou está em análise, aprovada ou rejeitada.',
+    fazer: 'Mostre o estado ao motorista; só o rascunho se edita e aceita ficheiros.',
+  },
+  {
+    codigo: 'CANDIDATURA_INCOMPLETA',
+    estados: ['422'],
+    quando: 'Ao submeter, faltam campos ou documentos obrigatórios.',
+    fazer: 'Use erro.em_falta (campos e documentos) para dizer ao motorista o que falta.',
+  },
+  {
+    codigo: 'PEDIDO_INVALIDO',
+    estados: ['422'],
+    quando: 'O ficheiro enviado é maior que 10 MB ou não é um PDF, JPEG ou PNG verdadeiro.',
+    fazer: 'Peça outro ficheiro e envie-o de novo; o ficheiro recusado é apagado.',
+  },
+  {
     codigo: 'SESSAO_INVALIDA',
     estados: ['401'],
     quando:
