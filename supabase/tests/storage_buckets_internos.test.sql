@@ -43,6 +43,12 @@ insert into public.motoristas_ativos (id, org_id, nome, user_id) values
   ('00000000-0000-4000-8000-0000000c0021', '00000000-0000-4000-8000-0000000c0001', 'Motorista Um', '00000000-0000-4000-8000-0000000c0013'),
   ('00000000-0000-4000-8000-0000000c0022', '00000000-0000-4000-8000-0000000c0001', 'Motorista Dois', '00000000-0000-4000-8000-0000000c0014');
 
+-- O aviso "documento por aprovar" tem FK para notificacao_tipos e nenhuma migração
+-- semeia o tipo (em produção foi posto à mão): sem isto o insert abaixo morre no CI.
+insert into public.notificacao_tipos (tipo, descricao)
+values ('motorista_documento_pendente', 'Documento de motorista por aprovar')
+on conflict (tipo) do nothing;
+
 -- O storage recente recusa DELETE directo fora da API (protect_delete).
 select set_config('storage.allow_delete_query', 'true', false);
 
