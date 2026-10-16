@@ -103,6 +103,56 @@ describe('DocsApp', () => {
     }
   });
 
+  it('Conta de cliente: cinco operações, X-Conta-Token obrigatório e o PDF sem JSON', () => {
+    abrir('/docs/recursos/conta');
+    const c = conteudo();
+    expect(c.getByRole('heading', { level: 1, name: 'Conta de cliente' })).toBeTruthy();
+    const seccao = (id: string) => within(document.getElementById(id) as HTMLElement);
+    const titulos: [string, string, string][] = [
+      ['conta', '/v1/conta', 'conta:read'],
+      ['reservas', '/v1/conta/reservas', 'conta:read'],
+      ['cancelar', '/v1/conta/reservas/{codigo}', 'conta:write'],
+      ['faturas', '/v1/conta/faturas', 'conta:read'],
+      ['fatura-pdf', '/v1/conta/faturas/{id}', 'conta:read'],
+    ];
+    for (const [id, nome, permissao] of titulos) {
+      expect(seccao(id).getByRole('heading', { level: 2, name: nome }), id).toBeTruthy();
+      expect(seccao(id).getByText(permissao), id).toBeTruthy();
+      expect(seccao(id).getAllByText('X-Conta-Token').length, id).toBeGreaterThan(0);
+    }
+    expect(
+      seccao('fatura-pdf').getByText(
+        (_, el) => el?.tagName === 'P' && el.textContent === '200 — O PDF da fatura'
+      )
+    ).toBeTruthy();
+  });
+
+  it('Contas de cliente explica o registo com tipo_utilizador cliente', () => {
+    abrir('/docs/contas-de-cliente');
+    const c = conteudo();
+    expect(c.getByRole('heading', { level: 1, name: 'Contas de cliente' })).toBeTruthy();
+    expect((document.getElementById('criar-a-conta') as HTMLElement).textContent).toContain(
+      "tipo_utilizador: 'cliente'"
+    );
+  });
+
+  it('Contas de cliente: sem sessão antes de confirmar, ficha particular e PDF até 45 s', () => {
+    abrir('/docs/contas-de-cliente');
+    const texto = (id: string) => (document.getElementById(id) as HTMLElement).textContent ?? '';
+    const confirmar = texto('confirmar-o-email');
+    expect(confirmar).not.toContain('email_confirmado: false');
+    expect(confirmar).toContain('email_confirmado: true');
+    expect(confirmar).toContain('particular');
+    expect(confirmar).toContain('uma única');
+    expect(confirmar).toContain('fichas de empresa, não se liga nada');
+    expect(confirmar).toContain('não vai para a ficha');
+    const faturas = texto('faturas');
+    expect(faturas).toContain('em nome do cliente');
+    expect(faturas).toContain('45 s');
+    expect(faturas).toContain('10 PDF por minuto');
+    expect(faturas).toContain('Esta fatura não tem PDF disponível.');
+  });
+
   it('POST /reservas mostra primeiro o 201 (criada), não o 200 (repetida)', () => {
     abrir('/docs/recursos/reservas');
     const criar = within(document.getElementById('criar') as HTMLElement);

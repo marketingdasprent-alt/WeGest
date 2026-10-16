@@ -196,7 +196,7 @@ select ok(not has_function_privilege('authenticated', 'public.api_escolher_viatu
   'authenticated não executa api_escolher_viatura');
 select ok(has_function_privilege('service_role', 'public.api_escolher_viatura(uuid,uuid,timestamptz,timestamptz)', 'execute'),
   'service_role executa api_escolher_viatura');
-select ok(has_function_privilege('service_role', 'public.api_criar_reserva(uuid,uuid,jsonb)', 'execute'),
+select ok(has_function_privilege('service_role', 'public.api_criar_reserva(uuid,uuid,jsonb,uuid)', 'execute'),
   'service_role executa api_criar_reserva');
 
 select * from finish();

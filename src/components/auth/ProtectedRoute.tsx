@@ -9,6 +9,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useModules } from '@/hooks/useModules';
 import { computeDefaultRoute } from '@/hooks/useDefaultRoute';
 import { getUnauthenticatedRoute } from '@/lib/native';
+import { ehContaDeClienteDoSite } from '@/lib/contaCliente';
 import { Loader2, Shield, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Modulo } from '@/types/modulo';
@@ -35,7 +36,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireOrgIds,
 }) => {
   const { user, loading: authLoading, signOut } = useAuth();
-  const { orgId, orgs, loading: tenantLoading } = useTenant();
+  const { orgId, orgs, orgsCarregadas, loading: tenantLoading } = useTenant();
   const {
     isAdmin,
     hasAccessToResource,
@@ -145,6 +146,27 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (!user) {
     return null;
+  }
+
+  // Conta da área de cliente do site: sem organização, aqui não há nada para ela.
+  if (orgsCarregadas && ehContaDeClienteDoSite(user, orgs.length)) {
+    return (
+      <div className="auth-screen auth-screen-safe">
+        <div className="auth-screen__background" aria-hidden="true" />
+        <div className="auth-screen__pattern" aria-hidden="true" />
+        <div className="relative z-10 max-w-md text-center">
+          <Shield className="mx-auto mb-4 h-12 w-12 text-primary" />
+          <h2 className="mb-2 text-xl font-bold text-foreground">Conta de cliente</h2>
+          <p className="mb-4 text-muted-foreground">
+            Esta conta é da área de cliente do site onde a criou. Entre por esse site para ver as
+            suas reservas e faturas.
+          </p>
+          <Button onClick={() => void signOut()} className="auth-primary-button">
+            Sair
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   // App instalada, utilizador sem acesso ao que a app serve. Não se

@@ -81,6 +81,35 @@ describe('exemplos de pedido', () => {
     expect(php).toContain(`CURLOPT_POSTFIELDS => '${json}'`);
   });
 
+  it('rotas da conta levam o X-Conta-Token de uma variável, nas três linguagens', () => {
+    const conta = operacao('GET /conta/reservas');
+    expect(exemploDePedido(conta, 'curl', S)).toBe(
+      `curl "${S}/conta/reservas" \\\n  -H "X-API-Key: $WEGEST_API_KEY" \\\n  -H "X-Conta-Token: $CONTA_TOKEN"`
+    );
+    expect(exemploDePedido(conta, 'javascript', S)).toContain(
+      "headers: { 'X-API-Key': process.env.WEGEST_API_KEY, 'X-Conta-Token': contaToken },"
+    );
+    expect(exemploDePedido(conta, 'php', S)).toContain(
+      "CURLOPT_HTTPHEADER => ['X-API-Key: ' . getenv('WEGEST_API_KEY'), 'X-Conta-Token: ' . $contaToken],"
+    );
+    // O cabeçalho opcional das candidaturas não entra no exemplo.
+    expect(exemploDePedido(operacao('POST /tvde/candidaturas'), 'curl', S)).not.toContain('Token');
+  });
+
+  it('o PDF da fatura guarda o ficheiro em vez de ler JSON', () => {
+    const pdf = operacao('GET /conta/faturas/{id}');
+    expect(exemploDePedido(pdf, 'curl', S)).toContain('-o documento.pdf');
+    const js = exemploDePedido(pdf, 'javascript', S);
+    expect(js).toContain('Buffer.from(await resposta.arrayBuffer())');
+    expect(js).not.toContain('resposta.json()');
+    const php = exemploDePedido(pdf, 'php', S);
+    expect(php).toContain('$pdf = curl_exec($ch);');
+    expect(php).not.toContain('json_decode');
+    expect(exemploDePedido(operacao('GET /conta'), 'javascript', S)).toContain(
+      'await resposta.json()'
+    );
+  });
+
   it('GET não leva corpo', () => {
     expect(operacao('GET /disponibilidade').corpo).toBeUndefined();
     expect(exemploDePedido(operacao('GET /disponibilidade'), 'curl', S)).not.toContain('-d ');

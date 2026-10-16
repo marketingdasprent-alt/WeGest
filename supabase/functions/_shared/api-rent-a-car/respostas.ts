@@ -11,7 +11,8 @@ const ORIGENS_PERMITIDAS: ReadonlySet<string> = new Set([
 
 /** Cabeçalhos CORS fixos. O Allow-Origin é posto por comCors, conforme o Origin do pedido. */
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
-  'Access-Control-Allow-Headers': 'x-api-key, authorization, content-type, x-motorista-token',
+  'Access-Control-Allow-Headers':
+    'x-api-key, authorization, content-type, x-motorista-token, x-conta-token',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
   // O Allow-Origin varia com o Origin do pedido, também no preflight (OPTIONS).
   Vary: 'Origin',

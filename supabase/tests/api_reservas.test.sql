@@ -260,8 +260,8 @@ select is((public.api_cancelar_reserva('00000000-0000-0000-0000-0000000d0a00', 9
   'código inexistente');
 
 -- Permissões
-select ok(not has_function_privilege('anon', 'public.api_criar_reserva(uuid,uuid,jsonb)', 'execute'), 'anon não cria');
-select ok(not has_function_privilege('authenticated', 'public.api_criar_reserva(uuid,uuid,jsonb)', 'execute'), 'authenticated não cria');
+select ok(not has_function_privilege('anon', 'public.api_criar_reserva(uuid,uuid,jsonb,uuid)', 'execute'), 'anon não cria');
+select ok(not has_function_privilege('authenticated', 'public.api_criar_reserva(uuid,uuid,jsonb,uuid)', 'execute'), 'authenticated não cria');
 select ok(not has_function_privilege('authenticated', 'public.api_cancelar_reserva(uuid,bigint)', 'execute'), 'authenticated não cancela');
 
 select * from finish();

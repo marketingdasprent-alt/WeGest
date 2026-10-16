@@ -11,6 +11,7 @@ import { pagina, recurso } from './lib/navegacao';
 import { guardarLinguagem, lerLinguagem } from './lib/preferencias';
 import Alteracoes from './paginas/Alteracoes';
 import Autenticacao from './paginas/Autenticacao';
+import ContasDeCliente from './paginas/ContasDeCliente';
 import DatasEDinheiro from './paginas/DatasEDinheiro';
 import Erros from './paginas/Erros';
 import { A_Carregar, EmBreve, NaoEncontrada } from './paginas/EstadosPagina';
@@ -31,6 +32,7 @@ const GUIAS: Record<string, ComponentType> = {
   testes: Testes,
   limites: Limites,
   erros: Erros,
+  'contas-de-cliente': ContasDeCliente,
   'datas-e-dinheiro': DatasEDinheiro,
   referencia: Referencia,
   alteracoes: Alteracoes,

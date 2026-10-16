@@ -63,10 +63,14 @@ Deno.test('todos os parâmetros têm description e example', () => {
   }
 });
 
-Deno.test('todas as respostas 200 trazem example', () => {
+Deno.test('todas as respostas 200 trazem example (o PDF é binário, sem JSON)', () => {
   for (const { id, op } of operacoes) {
     const r200 = op.responses['200'];
     assert(r200, `${id} sem 200`);
+    if (r200.content?.['application/pdf']) {
+      assertEquals(Object.keys(r200.content), ['application/pdf'], id);
+      continue;
+    }
     const json = r200.content?.['application/json'];
     assert(json?.example !== undefined, `${id}: 200 sem example`);
   }

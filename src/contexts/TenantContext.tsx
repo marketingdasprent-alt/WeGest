@@ -26,6 +26,8 @@ interface TenantContextType {
   orgId: string | null;
   orgNome: string | null;
   orgs: Organizacao[];
+  /** A lista de orgs foi lida com sucesso (um erro deixa-a vazia sem ser verdade). */
+  orgsCarregadas: boolean;
   loading: boolean;
   initialized: boolean;
   switchOrg: (orgId: string) => Promise<void>;
@@ -36,6 +38,7 @@ const TenantContext = createContext<TenantContextType | undefined>(undefined);
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const [orgs, setOrgs] = useState<Organizacao[]>([]);
+  const [orgsCarregadas, setOrgsCarregadas] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
@@ -50,6 +53,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       if (!user) {
         setOrgs([]);
+        setOrgsCarregadas(false);
         setOrgId(null);
         setLoading(false);
         setInitialized(true);
@@ -67,6 +71,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
         if (orgsError) {
           console.error('[TenantContext] Erro ao carregar orgs:', orgsError);
+          setOrgsCarregadas(false);
           if (!silent) setLoading(false);
           setInitialized(true);
           return;
@@ -77,6 +82,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           .filter((o: any) => o && o.ativa);
 
         setOrgs(orgsList);
+        setOrgsCarregadas(true);
 
         // Refresh silencioso (aba a voltar a ficar visível): só serve para
         // detetar orgs novas associadas entretanto — nunca toca em orgId. A
@@ -184,7 +190,9 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const orgNome = orgs.find((o) => o.id === orgId)?.nome ?? null;
 
   return (
-    <TenantContext.Provider value={{ orgId, orgNome, orgs, loading, initialized, switchOrg }}>
+    <TenantContext.Provider
+      value={{ orgId, orgNome, orgs, orgsCarregadas, loading, initialized, switchOrg }}
+    >
       {children}
     </TenantContext.Provider>
   );

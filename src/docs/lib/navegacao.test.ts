@@ -65,6 +65,19 @@ describe('navegação do docs', () => {
     expect(tvde?.introducao).toMatch(/CAPTCHA/);
   });
 
+  it('a conta de cliente é página de recurso e tem guia em Conceitos', () => {
+    expect(pagina('recursos/conta')?.grupo).toBe('Recursos');
+    expect(recurso('recursos/conta')?.operacoes.map((o) => o.id)).toEqual([
+      'GET /conta',
+      'GET /conta/reservas',
+      'DELETE /conta/reservas/{codigo}',
+      'GET /conta/faturas',
+      'GET /conta/faturas/{id}',
+    ]);
+    expect(recurso('recursos/conta')?.introducao).toMatch(/X-Conta-Token/);
+    expect(pagina('contas-de-cliente')?.grupo).toBe('Conceitos');
+  });
+
   it('as introduções dizem o prazo: 15 dias no rent-a-car, livre hoje no TVDE', () => {
     expect(recurso('recursos/modelos')?.introducao).toMatch(/próximos 15 dias/);
     expect(recurso('recursos/disponibilidade')?.introducao).toMatch(/próximos 15 dias/);
@@ -77,7 +90,8 @@ describe('navegação do docs', () => {
     expect(anteriorSeguinte('recursos/health').seguinte?.slug).toBe('referencia');
     expect(anteriorSeguinte('referencia').seguinte?.slug).toBe('alteracoes');
     expect(anteriorSeguinte('recursos/reservas').anterior?.slug).toBe('recursos/cotacoes');
-    expect(anteriorSeguinte('recursos/reservas').seguinte?.slug).toBe('recursos/tvde');
+    expect(anteriorSeguinte('recursos/reservas').seguinte?.slug).toBe('recursos/conta');
+    expect(anteriorSeguinte('recursos/conta').seguinte?.slug).toBe('recursos/tvde');
     expect(anteriorSeguinte('recursos/tvde').seguinte?.slug).toBe('recursos/health');
   });
 

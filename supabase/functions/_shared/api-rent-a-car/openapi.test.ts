@@ -1,10 +1,15 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { ROTAS_CANDIDATURAS } from './candidaturas.ts';
 import { ROTAS_CATALOGO } from './catalogo.ts';
+import { ROTAS_CONTA } from './conta.ts';
 import { ROTAS_DISPONIBILIDADE } from './disponibilidade.ts';
 import { OPENAPI, caminhosDocumentados } from './openapi.ts';
 import { ROTAS_RESERVAS } from './reservas.ts';
 import { ROTAS_TVDE } from './tvde.ts';
+
+/** O caminho do OpenAPI de uma rota da conta: o id das reservas é o codigo. */
+const caminhoConta = (r: (typeof ROTAS_CONTA)[number]) =>
+  `/${r.recurso}${r.comId ? (r.recurso === 'conta/reservas' ? '/{codigo}' : '/{id}') : ''}`;
 
 Deno.test(
   'toda a rota de catálogo e disponibilidade está documentada, e só essas mais health/openapi',
@@ -32,6 +37,7 @@ Deno.test(
     for (const r of ROTAS_CANDIDATURAS) {
       esperados.add(`${r.metodo} /tvde/candidaturas${r.comId ? '/{id}' : ''}`);
     }
+    for (const r of ROTAS_CONTA) esperados.add(`${r.metodo} ${caminhoConta(r)}`);
     assertEquals([...doc].sort(), [...esperados].sort());
   }
 );
@@ -289,3 +295,85 @@ Deno.test(
     assert(/a de hoje/.test(paths['/tvde/disponibilidade'].get.description));
   }
 );
+
+Deno.test(
+  'conta documentada: permissão do router, X-Conta-Token obrigatório e 401 SESSAO_INVALIDA',
+  () => {
+    // deno-lint-ignore no-explicit-any
+    const paths = OPENAPI.paths as Record<string, Record<string, any>>;
+    for (const r of ROTAS_CONTA) {
+      const op = paths[caminhoConta(r)][r.metodo.toLowerCase()];
+      assertEquals(op['x-permissao'], r.permissao, r.rpc);
+      assertEquals(op.tags, ['Conta'], r.rpc);
+      const [token] = op.parameters;
+      assertEquals(token.name, 'X-Conta-Token', r.rpc);
+      assertEquals(token.in, 'header');
+      assertEquals(token.required, true);
+      assert(/X-Motorista-Token/.test(token.description), 'falta a compatibilidade');
+      const codigo = (estado: string) =>
+        op.responses[estado].content['application/json'].example.erro.codigo;
+      assertEquals(codigo('401'), 'SESSAO_INVALIDA', r.rpc);
+      assertEquals(op.responses['503'].$ref, '#/components/responses/Indisponivel', r.rpc);
+      assert(/no-store/.test(op.description), `${r.rpc}: sem no-store`);
+    }
+    const cancelar = paths['/conta/reservas/{codigo}'].delete;
+    assertEquals(
+      cancelar.responses['409'].content['application/json'].example.erro.codigo,
+      'ESTADO_INVALIDO'
+    );
+    // O PDF é binário: sem exemplo JSON, com o limite próprio e o 503 do fornecedor explicado.
+    const pdf = paths['/conta/faturas/{id}'].get;
+    assertEquals(pdf.responses['200'].content, {
+      'application/pdf': { schema: { type: 'string', format: 'binary' } },
+    });
+    assert(/Fatura indisponível de momento/.test(pdf.description));
+    assert(/10 PDF/.test(pdf.description) && /45 s/.test(pdf.description));
+    assert(/não tem PDF disponível/.test(pdf.responses['404'].description));
+    assertEquals(
+      pdf.responses['429'].content['application/json'].example.erro.mensagem,
+      'Limite de 10 faturas por minuto excedido.'
+    );
+    // A matrícula de uma reserva pendente nunca aparece; a ficha não leva morada nem email.
+    // deno-lint-ignore no-explicit-any
+    const comp = OPENAPI.components as Record<string, any>;
+    assert(/pendente/.test(comp.schemas.ReservaConta.properties.matricula.description));
+    assertEquals(Object.keys(comp.schemas.Conta.properties.cliente.properties), [
+      'id',
+      'nome',
+      'nif',
+      'telefone',
+    ]);
+    assert((OPENAPI.tags as { name: string }[]).some((t) => t.name === 'Conta'));
+
+    // O rascunho também sai da base; fim e dias vêm null numa reserva sem devolução.
+    const estado = comp.schemas.Conta.properties.motorista.properties.candidatura.properties.estado;
+    assertEquals(estado.type, ['string', 'null']);
+    assert(estado.enum.includes('rascunho') && estado.enum.includes(null));
+    const props = comp.schemas.ReservaConta.properties;
+    assertEquals(props.fim.type, ['string', 'null']);
+    assertEquals(props.dias.type, ['integer', 'null']);
+    assert(/null/.test(props.fim.description) && /null/.test(props.dias.description));
+  }
+);
+
+Deno.test('POST /reservas documenta o X-Conta-Token opcional e o 401 da sessão', () => {
+  // deno-lint-ignore no-explicit-any
+  const paths = OPENAPI.paths as Record<string, Record<string, any>>;
+  const post = paths['/reservas'].post;
+  const [token] = post.parameters;
+  assertEquals(token.name, 'X-Conta-Token');
+  assertEquals(token.in, 'header');
+  assertEquals(token.required, false);
+  assert(/X-Motorista-Token/.test(token.description), 'falta o sinónimo');
+  assert(/ficha do cliente/.test(token.description));
+  const r401 = post.responses['401'];
+  assertEquals(r401.content['application/json'].example.erro.codigo, 'SESSAO_INVALIDA');
+  assert(/NAO_AUTENTICADO/.test(r401.description) && /SESSAO_INVALIDA/.test(r401.description));
+  // GET e DELETE de /reservas/{codigo} não aceitam o cabeçalho.
+  for (const op of [paths['/reservas/{codigo}'].get, paths['/reservas/{codigo}'].delete]) {
+    assertEquals(
+      op.parameters.some((p: { name: string }) => p.name === 'X-Conta-Token'),
+      false
+    );
+  }
+});

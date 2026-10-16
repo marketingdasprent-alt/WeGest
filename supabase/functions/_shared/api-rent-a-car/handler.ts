@@ -1,17 +1,20 @@
 // Tratamento de um pedido da API externa: router, openapi público, limite anónimo por
-// IP, chave, limite por chave, candidaturas/TVDE/catálogo/disponibilidade/reservas/health
-// e auditoria.
+// IP, chave, limite por chave, candidaturas/conta/TVDE/catálogo/disponibilidade/reservas/
+// health e auditoria.
 // Vive aqui, e não na edge function, para ser testável (o CI só corre testes Deno em _shared).
 import { consumeRateLimit, trustedRequestIp } from '../rate-limit/rateLimit.ts';
 import { autenticar, type ChaveRecusada, type DbRpc } from './auth.ts';
-import { servirCandidaturas, type VerificadorSessao } from './candidaturas.ts';
+import { servirCandidaturas } from './candidaturas.ts';
 import { servirCatalogo } from './catalogo.ts';
+import { servirConta } from './conta.ts';
 import { servirDisponibilidade } from './disponibilidade.ts';
+import type { PedirPdfFatura } from './faturaPdf.ts';
 import type { ArmazemFotos } from './fotos.ts';
 import { OPENAPI } from './openapi.ts';
 import { servirReservas } from './reservas.ts';
 import { comCors, CORS_HEADERS, erro, ok, respostaLimite } from './respostas.ts';
 import { resolverRota } from './router.ts';
+import type { VerificadorSessao } from './sessao.ts';
 import { servirTvde } from './tvde.ts';
 
 const CACHE_OPENAPI_SEGUNDOS = 3600;
@@ -49,18 +52,30 @@ export interface LinhaAuditoria {
   ip: string;
 }
 
+/** O que vem de fora do pedido e da base: injectável para os testes. */
+export interface OpcoesPedido {
+  /** Pede o PDF de uma fatura ao programa de faturação; sem ele, o PDF responde 503. */
+  pedirPdfFatura?: PedirPdfFatura;
+}
+
+const SEM_PDF: PedirPdfFatura = () => Promise.resolve({ erro: 'pedirPdfFatura em falta' });
+
 export interface Resultado {
   resposta: Response;
   /** Escrita best-effort em api_pedidos; null quando o pedido nem chegou a /v1. */
   auditoria: Promise<void> | null;
 }
 
-export async function tratarPedido(req: Request, db: DbApi): Promise<Resultado> {
-  const r = await tratar(req, db);
+export async function tratarPedido(
+  req: Request,
+  db: DbApi,
+  opcoes: OpcoesPedido = {}
+): Promise<Resultado> {
+  const r = await tratar(req, db, opcoes.pedirPdfFatura ?? SEM_PDF);
   return { ...r, resposta: comCors(req, r.resposta) };
 }
 
-async function tratar(req: Request, db: DbApi): Promise<Resultado> {
+async function tratar(req: Request, db: DbApi, pedirPdf: PedirPdfFatura): Promise<Resultado> {
   const inicio = Date.now();
   if (req.method === 'OPTIONS') {
     return { resposta: new Response(null, { headers: CORS_HEADERS }), auditoria: null };
@@ -152,6 +167,7 @@ async function tratar(req: Request, db: DbApi): Promise<Resultado> {
       // tvde/modelos nunca chegue ao catálogo de rent-a-car.
       resposta =
         (await servirCandidaturas(rota, req, ctx, db)) ??
+        (await servirConta(rota, req, ctx, db, pedirPdf)) ??
         (await servirTvde(rota, url, ctx, db)) ??
         (await servirCatalogo(rota, url, ctx, db)) ??
         (await servirDisponibilidade(rota, url, req, ctx, db)) ??

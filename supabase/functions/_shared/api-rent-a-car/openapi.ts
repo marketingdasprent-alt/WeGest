@@ -1,6 +1,7 @@
 // Especificação OpenAPI 3.1 da API externa de rent-a-car (Fase A: catálogo;
 // Fase B: disponibilidade e cotação; Fase C: reservas, em openapi.reservas.ts;
-// Fase D1: catálogo e disponibilidade TVDE; fase D2: candidaturas TVDE; em openapi.tvde.ts).
+// Fase D1: catálogo e disponibilidade TVDE; fase D2: candidaturas TVDE; em openapi.tvde.ts;
+// conta de cliente: reservas e faturas de quem entrou no site, em openapi.conta.ts).
 // Fonte única: o endpoint /v1/openapi.json e o site docs.wegest.pt saem daqui.
 // Os esquemas seguem exactamente as chaves devolvidas pelas funções SQL api_*.
 // Em 3.1 não existe `nullable`: um campo opcional é `type: [X, 'null']`.
@@ -28,6 +29,7 @@ import {
   EX_PRECO,
   exErro,
 } from './openapi.exemplos.ts';
+import { caminhosConta, esquemasConta } from './openapi.conta.ts';
 import { caminhosReservas, esquemasReservas } from './openapi.reservas.ts';
 import { caminhosTvde, esquemasTvde } from './openapi.tvde.ts';
 
@@ -409,7 +411,8 @@ export const OPENAPI: Record<string, unknown> = {
     version: '1.0.0',
     description:
       'Catálogo, disponibilidade, cotação e reservas de rent-a-car da organização, e o ' +
-      'catálogo de aluguer semanal TVDE e as candidaturas de motoristas (/tvde). ' +
+      'catálogo de aluguer semanal TVDE e as candidaturas de motoristas (/tvde), e as ' +
+      'reservas e faturas de quem entrou no site com a sua conta (/conta). ' +
       'Chave no cabeçalho X-API-Key, só a partir do backend do site. Datas ISO 8601 com fuso. ' +
       'Dinheiro em euros com 2 casas, sempre sem e com IVA; o preço da tarifa já inclui IVA ' +
       '(é o com_iva) e nunca se soma IVA por cima. ' +
@@ -438,6 +441,7 @@ export const OPENAPI: Record<string, unknown> = {
     { name: 'Cotações' },
     { name: 'Reservas' },
     { name: 'TVDE' },
+    { name: 'Conta' },
   ],
   paths: {
     '/': {
@@ -722,6 +726,11 @@ export const OPENAPI: Record<string, unknown> = {
         ...ERROS_DISPONIBILIDADE,
       },
     }),
+    ...caminhosConta({
+      json,
+      respostaErro,
+      erros: { '404': refErro('NaoEncontrado'), ...ERROS_CATALOGO },
+    }),
   },
   components: {
     securitySchemes: { ApiKey: { type: 'apiKey', in: 'header', name: 'X-API-Key' } },
@@ -742,6 +751,7 @@ export const OPENAPI: Record<string, unknown> = {
       Cotacao,
       ...esquemasReservas({ CotacaoPedido }),
       ...esquemasTvde({ Modelo: CartaoModelo, Preco }),
+      ...esquemasConta(),
     },
     responses: {
       NaoAutenticado: respostaErro(
@@ -783,7 +793,8 @@ export const OPENAPI: Record<string, unknown> = {
         'Falha a ler o catálogo.'
       ),
       Indisponivel: respostaErro(
-        'Serviço temporariamente indisponível (quotas ou base); ver Retry-After',
+        'Serviço temporariamente indisponível (quotas, base, contas ou, no PDF de uma fatura, o ' +
+          'programa de faturação); ver Retry-After quando vier',
         'ERRO_INTERNO',
         'Serviço temporariamente indisponível.'
       ),

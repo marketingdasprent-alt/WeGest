@@ -91,3 +91,40 @@ Deno.test('rotas existentes não mudam com o prefixo tvde/', () => {
     );
   }
 });
+
+Deno.test('conta/ é prefixo como tvde/; /v1/conta sozinho é o recurso conta', () => {
+  const uuid = '2b7c0b7e-1111-4222-8333-444455556666';
+  const casos: [string, string, string, string | null][] = [
+    ['/v1/conta', 'GET', 'conta', null],
+    ['/v1/conta/', 'GET', 'conta', null],
+    ['/api-rent-a-car/v1/conta', 'GET', 'conta', null],
+    ['/v1/conta/reservas', 'GET', 'conta/reservas', null],
+    ['/v1/conta/reservas/1042', 'DELETE', 'conta/reservas', '1042'],
+    ['/v1/conta/faturas', 'GET', 'conta/faturas', null],
+    [`/api-rent-a-car/v1/conta/faturas/${uuid}`, 'GET', 'conta/faturas', uuid],
+  ];
+  for (const [caminho, metodo, recurso, id] of casos) {
+    assertEquals(
+      resolverRota(new URL(`https://x${caminho}`), metodo),
+      { metodo, recurso, id },
+      caminho
+    );
+  }
+});
+
+Deno.test('conta: prefixos repetidos, misturados, % e segmentos a mais não entram', () => {
+  for (const caminho of [
+    '/v1/conta/conta/reservas',
+    '/v1/conta/tvde/modelos',
+    '/v1/tvde/conta/reservas',
+    '/v1/conta/reservas/1/extra',
+    '/v1/conta/faturas/a.b',
+    '/v1/conta/faturas/a%2fb',
+    '/v1/conta%2freservas',
+  ]) {
+    assertEquals(resolverRota(new URL(`https://x${caminho}`), 'GET'), null, caminho);
+  }
+  // Resolvem, mas nenhum serviço os conhece (404 em servirConta).
+  assertEquals(resolverRota(new URL('https://x/v1/conta/123'), 'GET')?.id, '123');
+  assertEquals(resolverRota(new URL('https://x/v1/contas'), 'GET')?.recurso, 'contas');
+});

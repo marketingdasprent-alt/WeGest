@@ -1,5 +1,6 @@
 import { assertEquals, assertMatch } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { type LinhaAuditoria, tratarPedido } from './handler.ts';
+import type { PedirPdfFatura } from './faturaPdf.ts';
+import { type LinhaAuditoria, type OpcoesPedido, tratarPedido } from './handler.ts';
 
 const CHAVE = 'wg_ra_' + 'b'.repeat(48);
 const UUID = '2b7c0b7e-1111-4222-8333-444455556666';
@@ -37,6 +38,8 @@ interface Opcoes {
   candidatura?: unknown;
   /** Id da conta que o GoTrue devolve para o X-Motorista-Token; omisso = sessão inválida. */
   motorista?: string;
+  /** O que as api_conta_* devolvem. */
+  conta?: unknown;
 }
 
 function dbFalso(o: Opcoes = {}) {
@@ -92,6 +95,9 @@ function dbFalso(o: Opcoes = {}) {
       if (name === 'api_criar_reserva') {
         return Promise.resolve({ data: o.reserva ?? null, error: null });
       }
+      if (name.startsWith('api_conta')) {
+        return Promise.resolve({ data: o.conta ?? null, error: null });
+      }
       if (name === 'api_modelos') {
         if (o.rebentar) throw new Error('base em baixo');
         return Promise.resolve({ data: o.modelos ?? [{ id: UUID }], error: null });
@@ -125,8 +131,8 @@ function pedido(caminho: string, headers: Record<string, string> = {}, method = 
   });
 }
 
-async function correr(req: Request, db: ReturnType<typeof dbFalso>) {
-  const { resposta, auditoria } = await tratarPedido(req, db);
+async function correr(req: Request, db: ReturnType<typeof dbFalso>, opcoes?: OpcoesPedido) {
+  const { resposta, auditoria } = await tratarPedido(req, db, opcoes);
   await auditoria;
   return resposta;
 }
@@ -624,4 +630,123 @@ Deno.test('GET /v1/tvde/candidaturas sem id → 404 sem chegar à base', async (
     db.rpcs.map((c) => c.name),
     ['api_chave_por_hash', 'consume_edge_rate_limit']
   );
+});
+
+// --- Conta de cliente ----------------------------------------------------------------
+
+const TOKEN_CONTA = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.assinatura';
+const chaveConta = { ...linhaOk, permissoes: ['conta:read', 'conta:write', 'reservas:write'] };
+
+Deno.test(
+  'GET /v1/conta com X-Conta-Token chega a api_conta, sem cache e sem o token na auditoria',
+  async () => {
+    const db = dbFalso({
+      chave: chaveConta,
+      motorista: 'u1',
+      conta: { email: 'x', tipo: 'cliente' },
+    });
+    const r = await correr(
+      pedido('/api-rent-a-car/v1/conta', {
+        'x-conta-token': TOKEN_CONTA,
+        origin: 'https://docs.wegest.pt',
+      }),
+      db
+    );
+    assertEquals(r.status, 200);
+    assertEquals(r.headers.get('cache-control'), 'no-store');
+    assertEquals(r.headers.get('access-control-allow-origin'), 'https://docs.wegest.pt');
+    assertEquals((await r.json()).tipo, 'cliente');
+    const conta = db.rpcs.find((c) => c.name === 'api_conta');
+    assertEquals(conta?.args, { p_org_id: 'org1', p_user_id: 'u1' });
+    assertEquals(db.tokens, [TOKEN_CONTA]);
+    assertEquals(db.pedidos[0].estado_http, 200);
+    assertEquals(db.pedidos[0].api_chave_id, 'k1');
+    assertEquals(JSON.stringify(db.pedidos).includes(TOKEN_CONTA), false);
+  }
+);
+
+Deno.test('GET /v1/conta sem token → 401 SESSAO_INVALIDA auditado com a chave', async () => {
+  const db = dbFalso({ chave: chaveConta });
+  const r = await correr(pedido('/v1/conta/reservas'), db);
+  assertEquals(r.status, 401);
+  assertEquals((await r.json()).erro.codigo, 'SESSAO_INVALIDA');
+  assertEquals(db.pedidos[0].estado_http, 401);
+  assertEquals(db.pedidos[0].api_chave_id, 'k1');
+  assertEquals(db.tokens, []);
+});
+
+Deno.test('GET /v1/conta com chave sem conta:read → 403', async () => {
+  const db = dbFalso({ motorista: 'u1' });
+  const r = await correr(pedido('/v1/conta', { 'x-conta-token': TOKEN_CONTA }), db);
+  assertEquals(r.status, 403);
+  assertEquals((await r.json()).erro.mensagem, 'A chave não tem a permissão conta:read.');
+  assertEquals(db.tokens, []);
+});
+
+Deno.test('GET /v1/conta/faturas/{id} serve o PDF do PedirPdfFatura injectado', async () => {
+  const db = dbFalso({
+    chave: chaveConta,
+    motorista: 'u1',
+    conta: { id: UUID, tipo: 'FT', serie: '67', numero: '3' },
+  });
+  const pedidos: [string, string][] = [];
+  const pedirPdfFatura: PedirPdfFatura = (id, org) => {
+    pedidos.push([id, org]);
+    return Promise.resolve({ base64: btoa('%PDF-1.7\n%%EOF') });
+  };
+  const r = await correr(
+    pedido(`/v1/conta/faturas/${UUID}`, { 'x-conta-token': TOKEN_CONTA }),
+    db,
+    { pedirPdfFatura }
+  );
+  assertEquals(r.status, 200);
+  assertEquals(r.headers.get('content-type'), 'application/pdf');
+  assertEquals(r.headers.get('content-disposition'), 'inline; filename="67 3.pdf"');
+  assertEquals(r.headers.get('cache-control'), 'private, no-store');
+  assertEquals(await r.text(), '%PDF-1.7\n%%EOF');
+  assertEquals(pedidos, [[UUID, 'org1']]);
+  assertEquals(opsLimite(db), [
+    'api-rent-a-car',
+    'api-rent-a-car-conta-pdf',
+    'api-rent-a-car-conta-pdf-org',
+  ]);
+  assertEquals(db.pedidos[0].estado_http, 200);
+});
+
+Deno.test(
+  'sem PedirPdfFatura configurado, o PDF responde 503 e o resto da conta funciona',
+  async () => {
+    const db = dbFalso({
+      chave: chaveConta,
+      motorista: 'u1',
+      conta: { id: UUID, serie: '1', numero: '1' },
+    });
+    const r = await correr(
+      pedido(`/v1/conta/faturas/${UUID}`, { 'x-conta-token': TOKEN_CONTA }),
+      db
+    );
+    assertEquals(r.status, 503);
+    assertEquals((await r.json()).erro.mensagem, 'Fatura indisponível de momento.');
+  }
+);
+
+Deno.test('DELETE /v1/conta/reservas/{codigo} chega a api_conta_cancelar_reserva', async () => {
+  const db = dbFalso({
+    chave: chaveConta,
+    motorista: 'u1',
+    conta: { codigo: 7, estado: 'cancelada' },
+  });
+  const r = await correr(
+    pedido('/v1/conta/reservas/7', { 'x-motorista-token': TOKEN_CONTA }, 'DELETE'),
+    db
+  );
+  assertEquals(r.status, 200);
+  const rpc = db.rpcs.find((c) => c.name === 'api_conta_cancelar_reserva');
+  assertEquals(rpc?.args, { p_org_id: 'org1', p_user_id: 'u1', p_codigo: 7 });
+});
+
+Deno.test('OPTIONS deixa o browser mandar X-Conta-Token', async () => {
+  const r = await correr(new Request('https://x/v1/conta', { method: 'OPTIONS' }), dbFalso());
+  assertEquals(r.headers.get('access-control-allow-headers')?.includes('x-conta-token'), true);
+  assertEquals(r.headers.get('access-control-allow-headers')?.includes('x-motorista-token'), true);
 });

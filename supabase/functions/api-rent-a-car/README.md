@@ -45,6 +45,17 @@ Cloudflare, não o do servidor do site. Quem precisar de whitelist usa o URL dir
   caminho até 200 caracteres), recusas incluídas: `401` e `429` anónimo com org/chave a null,
   `403` e `429` da chave com a org e a chave em causa.
 
+## Conta de cliente (`/v1/conta*`)
+
+- Além da chave (`conta:read` nos GET, `conta:write` no DELETE), cada pedido traz o
+  access_token da pessoa em `X-Conta-Token` (ou `X-Motorista-Token`, o nome antigo), validado
+  no GoTrue a cada pedido (`_shared/api-rent-a-car/sessao.ts`): 401 sem ele ou inválido, 503 se
+  o GoTrue falhar. O `POST /v1/reservas` com o mesmo cabeçalho passa `p_user_id` a
+  `api_criar_reserva`.
+- `GET /v1/conta/faturas/{id}` valida a fatura com `api_conta_fatura` e pede o PDF a
+  `faturacao-emitir` (`action: 'pdf'`, service role e `org_id` da chave). Limite próprio de 60
+  por minuto por conta e chave (`api-rent-a-car-conta-pdf`). Falha do fornecedor → 503.
+
 ## Testes
 
 `deno test --allow-read --allow-env --allow-net=127.0.0.1 --node-modules-dir=none supabase/functions/_shared/api-rent-a-car`
