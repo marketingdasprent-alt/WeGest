@@ -134,40 +134,9 @@ const ContratoForm = () => {
   const motoristaIdPrincipal =
     condutoresDb?.find((c) => c.is_principal && c.motorista_id)?.motorista_id ?? null;
 
-  // Um contrato já existente não se edita por aqui — só as acções dedicadas
-  // (Prolongar, Renovar, Fechar, Reverter para reserva) mexem nos valores.
-  // Na criação (isEdit=false) os campos continuam livres, para dar para
-  // preencher o contrato pela primeira vez.
-  const camposTravados = isEdit && !!contrato;
-  // pointer-events-none é o reforço: o Select da Radix decide se abre pelo
-  // seu próprio estado em JS, não só pelo atributo disabled nativo, por isso
-  // o fieldset sozinho não lhe chega. O cinzento dos campos já vem do próprio
-  // componente (disabled:opacity-*) — não se acrescenta opacidade ao bloco
-  // inteiro, que escurecia tudo lá dentro (labels, cartões) no tema escuro.
-  // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
-  // que partia os grids lá dentro.
-  const camposFieldsetClass = camposTravados
-    ? 'min-w-0 border-0 p-0 m-0 pointer-events-none select-none'
-    : 'min-w-0 border-0 p-0 m-0';
-
-  // A excepção ao bloqueio: a viatura. Sem isto o botão Guardar continuava
-  // desactivado e a troca não chegava a lado nenhum — dava para escolher o
-  // carro novo e não dava para o gravar.
-  //
-  // O `!!viaturaEscolhida` fecha a janela entre o contrato chegar e o
-  // formulário hidratar: nesse instante o campo ainda tem o '' por omissão e
-  // o contrato já tem uuid, o que dava a diferença por boa e activava o botão
-  // sozinho. A validação apanhava-o a seguir (o schema exige uuid), mas um
-  // botão que pisca activo sem nada ter mudado convida ao clique.
-  const viaturaEscolhida = form.watch('viatura_id');
-  const viaturaTrocada =
-    camposTravados && !!viaturaEscolhida && viaturaEscolhida !== contrato?.viatura_id;
-
-  const notasInternas = form.watch('observacoes_internas');
-  const notasInternasAlteradas =
-    camposTravados &&
-    notasInternas != null &&
-    notasInternas !== (contrato?.observacoes_internas ?? '');
+  // Num contrato gravado o preço (tarifa, valor semanal, kms, franquia) muda
+  // por pedido ao supervisor; os restantes campos editam-se.
+  const precoTravado = isEdit && !!contrato;
 
   const abriuEntregaAoCriarRef = useRef(false);
 
@@ -311,12 +280,7 @@ const ContratoForm = () => {
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={
-            isPending ||
-            contrato?.substituido_em != null ||
-            condutoresRascunho.length > 0 ||
-            (camposTravados && !viaturaTrocada && !notasInternasAlteradas)
-          }
+          disabled={isPending || contrato?.substituido_em != null || condutoresRascunho.length > 0}
           className="gap-2"
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -417,10 +381,6 @@ const ContratoForm = () => {
                     <TabsTrigger value="anexos">Anexos</TabsTrigger>
                   </TabsList>
 
-                  {/* Sem fieldset à volta: aqui o bloqueio é por dentro
-                      (prop `travado`), para a secção da Viatura poder ficar de
-                      fora dele. Um fieldset desactivado desactiva todos os
-                      descendentes e um aninhado não os reactiva. */}
                   <TabsContent value="geral" className="mt-4">
                     <ContratoTabGeral
                       form={form}
@@ -436,7 +396,7 @@ const ContratoForm = () => {
                       contratoId={contrato?.id ?? null}
                       onCriarNovoCliente={() => setClienteDialogOpen(true)}
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
-                      travado={camposTravados}
+                      travado={precoTravado}
                       proximaRenovacaoEm={contrato?.proxima_renovacao_em ?? null}
                       precoSemanaAcordado={contrato?.preco_semana_acordado ?? null}
                     />
@@ -444,23 +404,17 @@ const ContratoForm = () => {
 
                   {isEdit && contrato && (
                     <TabsContent value="coberturas" className="mt-4">
-                      <fieldset disabled={camposTravados} className={camposFieldsetClass}>
-                        <ContratoTabCoberturas form={form} coberturas={coberturas} />
-                      </fieldset>
+                      <ContratoTabCoberturas form={form} coberturas={coberturas} />
                     </TabsContent>
                   )}
 
                   <TabsContent value="extras" className="mt-4">
-                    <fieldset disabled={camposTravados} className={camposFieldsetClass}>
-                      <ContratoTabExtras form={form} extras={extrasCatalogo} />
-                    </fieldset>
+                    <ContratoTabExtras form={form} extras={extrasCatalogo} />
                   </TabsContent>
 
                   {isEdit && contrato && (
                     <TabsContent value="taxas" className="mt-4">
-                      <fieldset disabled={camposTravados} className={camposFieldsetClass}>
-                        <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
-                      </fieldset>
+                      <ContratoTabTaxas form={form} taxas={taxasCatalogo} />
                     </TabsContent>
                   )}
 
@@ -519,7 +473,7 @@ const ContratoForm = () => {
             totalSnapshot={contrato?.total_final}
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
-            editavel={!camposTravados}
+            editavel={!precoTravado}
             acaoValor={
               isEdit && contrato && regime === 'tvde' ? (
                 <PedidoPrecoSemanal

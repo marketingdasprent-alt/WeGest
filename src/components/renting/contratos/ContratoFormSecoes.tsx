@@ -63,14 +63,8 @@ interface ContratoFormSecoesProps {
   /** Contrato já existente (edição) — activa o botão "Pedir alteração de kms". */
   contratoId?: string | null;
   /**
-   * Contrato já aberto: tudo fica em cinzento e sem clique — MENOS a secção
-   * da Viatura e as notas internas, que podem mudar depois de o contrato
-   * existir (trocar o cliente de carro sem refazer o contrato).
-   *
-   * O bloqueio vive aqui, e não num `<fieldset disabled>` à volta do
-   * separador inteiro, porque um fieldset desactivado desactiva TODOS os
-   * descendentes e um fieldset aninhado não os reactiva — a única forma de
-   * deixar um campo de fora é ele não estar lá dentro.
+   * Contrato gravado: trava só o bloco Tarifa & Faturação. O preço, os kms e a
+   * franquia mudam por pedido ao supervisor; o resto do contrato edita-se.
    */
   travado?: boolean;
   /** proxima_renovacao_em do contrato (edição) — mostrada na Recolha dos TVDE. */
@@ -249,7 +243,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
 
   return (
     <div className="space-y-6">
-      <fieldset disabled={travado} className={blocoTravadoClass}>
+      <div className="space-y-6">
         <SectionRegime form={form} />
         <SectionEmpresaEmissora form={form} />
         <SectionCliente form={form} clientes={clientes} />
@@ -262,10 +256,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
             quando esta viatura entrou, que é a data que faltava. */}
         <TrocaViaturaInfo contratoId={contratoId} />
         <ALDFields idPrefix="contrato" />
-      </fieldset>
+      </div>
 
-      {/* FORA do bloqueio, de propósito: num contrato aberto trocar de
-          viatura é a única alteração permitida. */}
       <SectionViatura
         form={form}
         viaturas={viaturas}
@@ -433,8 +425,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       </fieldset>
 
       {/* Os pedidos ficam FORA do bloqueio: só existem num contrato gravado, que
-          está sempre travado — dentro do fieldset nunca se podiam carregar. O
-          do valor semanal vive no cartão do resumo (PedidoPrecoSemanal). */}
+          tem a tarifa travada. O do valor semanal vive no cartão do resumo
+          (PedidoPrecoSemanal). */}
       {contratoId && (
         <div className="flex flex-wrap justify-end gap-4">
           <BotaoPedirAlteracao
@@ -454,17 +446,15 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         </div>
       )}
 
-      <fieldset disabled={travado} className={blocoTravadoClass}>
-        <CondutoresFields
-          regime={regime}
-          clientes={clientes}
-          motoristas={motoristas}
-          clientePrincipalLabel="Cliente do contrato também conduz"
-          onCriarNovoCliente={onCriarNovoCliente}
-          onCriarNovoMotorista={onCriarNovoMotorista}
-        />
-      </fieldset>
-      <SectionInfoAdicional form={form} travado={travado} />
+      <CondutoresFields
+        regime={regime}
+        clientes={clientes}
+        motoristas={motoristas}
+        clientePrincipalLabel="Cliente do contrato também conduz"
+        onCriarNovoCliente={onCriarNovoCliente}
+        onCriarNovoMotorista={onCriarNovoMotorista}
+      />
+      <SectionInfoAdicional form={form} />
 
       {contratoId && dialogAberto && (
         <PedirAlteracaoContratoDialog
