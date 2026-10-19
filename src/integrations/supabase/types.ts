@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "12.2.3"
   }
   graphql_public: {
     Tables: {
@@ -3197,6 +3197,7 @@ export type Database = {
           codigo_postal: string | null
           created_at: string
           created_by: string | null
+          criada_no_registo: boolean
           data_nascimento: string | null
           deleted_at: string | null
           elegivel_anuncios: boolean
@@ -3225,6 +3226,7 @@ export type Database = {
           tipo_cliente: string
           updated_at: string
           updated_by: string | null
+          user_id: string | null
         }
         Insert: {
           cargo_representante?: string | null
@@ -3233,6 +3235,7 @@ export type Database = {
           codigo_postal?: string | null
           created_at?: string
           created_by?: string | null
+          criada_no_registo?: boolean
           data_nascimento?: string | null
           deleted_at?: string | null
           elegivel_anuncios?: boolean
@@ -3261,6 +3264,7 @@ export type Database = {
           tipo_cliente?: string
           updated_at?: string
           updated_by?: string | null
+          user_id?: string | null
         }
         Update: {
           cargo_representante?: string | null
@@ -3269,6 +3273,7 @@ export type Database = {
           codigo_postal?: string | null
           created_at?: string
           created_by?: string | null
+          criada_no_registo?: boolean
           data_nascimento?: string | null
           deleted_at?: string | null
           elegivel_anuncios?: boolean
@@ -3297,6 +3302,7 @@ export type Database = {
           tipo_cliente?: string
           updated_at?: string
           updated_by?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -4473,6 +4479,7 @@ export type Database = {
           org_id: string
           origem: Database["public"]["Enums"]["contrato_origem_enum"]
           periodo: unknown
+          preco_semana_acordado: number | null
           proxima_renovacao_em: string | null
           regime: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias: number | null
@@ -4553,6 +4560,7 @@ export type Database = {
           org_id?: string
           origem?: Database["public"]["Enums"]["contrato_origem_enum"]
           periodo?: unknown
+          preco_semana_acordado?: number | null
           proxima_renovacao_em?: string | null
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
@@ -4633,6 +4641,7 @@ export type Database = {
           org_id?: string
           origem?: Database["public"]["Enums"]["contrato_origem_enum"]
           periodo?: unknown
+          preco_semana_acordado?: number | null
           proxima_renovacao_em?: string | null
           regime?: Database["public"]["Enums"]["contrato_regime_enum"]
           renovacao_intervalo_dias?: number | null
@@ -9803,7 +9812,9 @@ export type Database = {
           completed_at: string | null
           created_at: string
           error_message: string | null
+          expires_at: string | null
           id: string
+          integracao_id: string | null
           org_id: string
           payload: Json
           resultado: Json | null
@@ -9815,7 +9826,9 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
+          expires_at?: string | null
           id?: string
+          integracao_id?: string | null
           org_id: string
           payload: Json
           resultado?: Json | null
@@ -9827,7 +9840,9 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
+          expires_at?: string | null
           id?: string
+          integracao_id?: string | null
           org_id?: string
           payload?: Json
           resultado?: Json | null
@@ -9835,6 +9850,13 @@ export type Database = {
           tipo?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "primavera_jobs_integracao_id_fkey"
+            columns: ["integracao_id"]
+            isOneToOne: false
+            referencedRelation: "plataformas_configuracao"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "primavera_jobs_org_id_fkey"
             columns: ["org_id"]
@@ -14957,6 +14979,30 @@ export type Database = {
         }
         Relationships: []
       }
+      zz_transferencia_urbango_20261015: {
+        Row: {
+          created_at: string | null
+          new_id: string | null
+          nota: string | null
+          old_id: string
+          tabela: string
+        }
+        Insert: {
+          created_at?: string | null
+          new_id?: string | null
+          nota?: string | null
+          old_id: string
+          tabela: string
+        }
+        Update: {
+          created_at?: string | null
+          new_id?: string | null
+          nota?: string | null
+          old_id?: string
+          tabela?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       automacao_estatisticas_por_regra: {
@@ -15213,6 +15259,66 @@ export type Database = {
       }
       api_chaves_desativar: { Args: { p_id: string }; Returns: undefined }
       api_coberturas: { Args: { p_org_id: string }; Returns: Json }
+      api_conta: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
+      api_conta_cancelar_reserva: {
+        Args: { p_codigo: number; p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
+      api_conta_candidatura: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
+      api_conta_candidatura_conta_ok: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      api_conta_candidatura_documento: {
+        Args: {
+          p_caminho: string
+          p_org_id: string
+          p_tipo: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      api_conta_candidatura_faltas: { Args: { p_id: string }; Returns: Json }
+      api_conta_candidatura_guardar: {
+        Args: {
+          p_api_chave_id: string
+          p_org_id: string
+          p_pedido: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      api_conta_candidatura_json: { Args: { p_id: string }; Returns: Json }
+      api_conta_candidatura_submeter: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
+      api_conta_cliente_id: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: string
+      }
+      api_conta_fatura: {
+        Args: { p_invoice_id: string; p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
+      api_conta_faturas: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
+      api_conta_reserva_resumo: {
+        Args: { p_org_id: string; p_reserva_id: string }
+        Returns: Json
+      }
+      api_conta_reservas: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: Json
+      }
       api_cotacao: {
         Args: {
           p_cobertura_id?: string
@@ -15227,7 +15333,12 @@ export type Database = {
         Returns: Json
       }
       api_criar_reserva: {
-        Args: { p_api_chave_id: string; p_org_id: string; p_pedido: Json }
+        Args: {
+          p_api_chave_id: string
+          p_org_id: string
+          p_pedido: Json
+          p_user_id?: string
+        }
         Returns: Json
       }
       api_dias: { Args: { p_fim: string; p_inicio: string }; Returns: number }
@@ -15247,6 +15358,15 @@ export type Database = {
         Args: { p_codigo: string; p_mensagem: string }
         Returns: Json
       }
+      api_escolher_viatura: {
+        Args: {
+          p_fim: string
+          p_inicio: string
+          p_modelo_id: string
+          p_org_id: string
+        }
+        Returns: string
+      }
       api_extras: { Args: { p_org_id: string }; Returns: Json }
       api_foto_modelo: {
         Args: { p_modelo_id: string; p_org_id: string }
@@ -15262,6 +15382,17 @@ export type Database = {
       api_modelos: {
         Args: { p_categoria?: string; p_org_id: string; p_tipo?: string }
         Returns: Json
+      }
+      api_modelos_cartoes: {
+        Args: { p_categoria?: string; p_org_id: string; p_tipo?: string }
+        Returns: Json
+      }
+      api_modelos_disponivel_desde: {
+        Args: { p_org_id: string }
+        Returns: {
+          disponivel_desde: string
+          modelo_id: string
+        }[]
       }
       api_modelos_publicaveis: {
         Args: { p_org_id: string }
@@ -15288,6 +15419,10 @@ export type Database = {
         Returns: Json
       }
       api_preco_json: {
+        Args: { p_iva: number; p_valor: number }
+        Returns: Json
+      }
+      api_preco_json_iva_incluido: {
         Args: { p_iva: number; p_valor: number }
         Returns: Json
       }
@@ -15319,18 +15454,31 @@ export type Database = {
         Returns: Json
       }
       api_tvde_criar_candidatura: {
-        Args: { p_api_chave_id: string; p_org_id: string; p_pedido: Json }
+        Args: {
+          p_api_chave_id: string
+          p_org_id: string
+          p_pedido: Json
+          p_user_id?: string
+        }
         Returns: Json
       }
       api_tvde_disponibilidade: {
         Args: { p_inicio: string; p_org_id: string }
         Returns: Json
       }
+      api_tvde_livres_hoje: {
+        Args: { p_org_id: string }
+        Returns: {
+          modelo_id: string
+          quantidade: number
+        }[]
+      }
       api_tvde_modelo: {
         Args: { p_modelo_id: string; p_org_id: string }
         Returns: Json
       }
       api_tvde_modelos: { Args: { p_org_id: string }; Returns: Json }
+      api_tvde_modelos_cartoes: { Args: { p_org_id: string }; Returns: Json }
       api_tvde_modelos_publicaveis: {
         Args: { p_org_id: string }
         Returns: {
@@ -15642,6 +15790,10 @@ export type Database = {
         Args: { p_cliente_id: string; p_motorista_id: string }
         Returns: string
       }
+      cliente_ligar_conta: {
+        Args: { p_org_id?: string; p_user_id: string }
+        Returns: string
+      }
       cobranca_ceder_a_motorista: {
         Args: { p_cobranca_id: string; p_motorista_id: string }
         Returns: undefined
@@ -15823,6 +15975,7 @@ export type Database = {
         Args: { p_erro: string; p_id: string }
         Returns: undefined
       }
+      e_colaborador_com_organizacao: { Args: never; Returns: boolean }
       edge_internal_authorization_header: { Args: never; Returns: string }
       email_caixa_tem_credenciais: {
         Args: { _caixa_id: string }
@@ -15948,6 +16101,10 @@ export type Database = {
       fn_accao_viatura_atualizar_campo: {
         Args: { p_config: Json; p_entity_id: string; p_org_id: string }
         Returns: Json
+      }
+      fn_aplicar_preco_semana_negociado: {
+        Args: { p_contrato_id: string; p_pedido_id: string; p_preco: number }
+        Returns: string
       }
       fn_avaliar_condicao: {
         Args: { p_condicao: Json; p_payload: Json }
@@ -16379,6 +16536,12 @@ export type Database = {
         }
         Returns: undefined
       }
+      movimentos_ja_no_resumo: {
+        Args: { p_motorista_ids: string[] }
+        Returns: {
+          movimento_id: string
+        }[]
+      }
       nif_pt_valido: { Args: { p_nif: string }; Returns: boolean }
       norm_nome_match: { Args: { t: string }; Returns: string }
       normalizar_numero_cartao: { Args: { p_numero: string }; Returns: string }
@@ -16473,14 +16636,16 @@ export type Database = {
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
       org_sistema: { Args: never; Returns: string }
       pode_rever_documentos_motorista: { Args: never; Returns: boolean }
-      primavera_jobs_claim: {
-        Args: { p_max: number; p_org_id: string }
+      primavera_jobs_claim_integracao: {
+        Args: { p_integracao_id: string; p_max: number }
         Returns: {
           claimed_at: string | null
           completed_at: string | null
           created_at: string
           error_message: string | null
+          expires_at: string | null
           id: string
+          integracao_id: string | null
           org_id: string
           payload: Json
           resultado: Json | null
@@ -16701,6 +16866,7 @@ export type Database = {
         Returns: undefined
       }
       testar_regra_automacao: { Args: { p_rule_id: string }; Returns: Json }
+      ticket_estados_ativos: { Args: never; Returns: string[] }
       trocar_condutor: {
         Args: {
           p_contrato_id: string
@@ -16787,6 +16953,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      viatura_libertar_sem_tickets: {
+        Args: { p_viatura_id: string }
+        Returns: undefined
       }
       viatura_ocupacao_intervalos: {
         Args: { p_from?: string; p_to?: string; p_viatura_id: string }

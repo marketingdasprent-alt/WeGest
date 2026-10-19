@@ -48,6 +48,7 @@ import { ContratoTabAnexos } from '@/components/renting/contratos/ContratoTabAne
 import { ContratoTabDanos } from '@/components/renting/contratos/ContratoTabDanos';
 import { ContratoTabFaturar } from '@/components/renting/contratos/ContratoTabFaturar';
 import { ResumoContrato } from '@/components/renting/contratos/ResumoContrato';
+import { PedidoPrecoSemanal } from '@/components/renting/contratos/PedidoPrecoSemanal';
 import { HistoricoEdicoesContrato } from '@/components/renting/contratos/HistoricoEdicoesContrato';
 
 import { usePermissions } from '@/hooks/usePermissions';
@@ -437,6 +438,7 @@ const ContratoForm = () => {
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                       travado={camposTravados}
                       proximaRenovacaoEm={contrato?.proxima_renovacao_em ?? null}
+                      precoSemanaAcordado={contrato?.preco_semana_acordado ?? null}
                     />
                   </TabsContent>
 
@@ -518,6 +520,16 @@ const ContratoForm = () => {
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
             editavel={!camposTravados}
+            acaoValor={
+              isEdit && contrato && regime === 'tvde' ? (
+                <PedidoPrecoSemanal
+                  contratoId={contrato.id}
+                  valorAtual={
+                    contrato.preco_semana_acordado ?? valorTotalManual ?? baseAluguerTarifa ?? 0
+                  }
+                />
+              ) : null
+            }
             onValorTotalManualChange={(valor) =>
               // Nota sobre shouldDirty: o que se escreve aqui sobrevive aos
               // `form.reset` dos efeitos de hidratação das relações (condutores,

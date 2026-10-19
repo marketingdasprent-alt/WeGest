@@ -40,6 +40,7 @@ const SELECT_COLUMNS = `
   estacao_origem_viatura_id,
   estado_operacional, estado_financeiro, origem, regime,
   tarifa_diaria, tarifa_id, desconto_percentagem, taxa_iva, valor_total_manual,
+  preco_semana_acordado,
   total_subtotal, total_iva, total_final, facturado_em,
   is_longa_duracao, renovacao_opcao, renovacao_intervalo_dias, proxima_renovacao_em,
   franquia_valor, caucao_valor, kms_incluidos, km_adicional_valor,

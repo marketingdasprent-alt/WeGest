@@ -168,3 +168,75 @@ describe('COLUNAS_CONTRATO_PARA_PERIODO', () => {
     }
   });
 });
+
+describe('periodosDeContratos — preço semanal negociado', () => {
+  const tabela = { porTarifaModelo: new Map([['tarifa-tvde|m1', 325]]) };
+
+  it('em TVDE o preço negociado ganha à tarifa', () => {
+    const { periodos, estimado } = periodosDeContratos(
+      [{ ...contratoBase, preco_semana_acordado: '250.00' }],
+      tabela
+    );
+    expect(periodos[0].preco_semana).toBe(250);
+    expect(estimado).toBe(false);
+  });
+
+  it('um 0 negociado cobra 0 — não cai para a tabela do modelo', () => {
+    const { periodos } = periodosDeContratos(
+      [{ ...contratoBase, preco_semana_acordado: 0 }],
+      tabela
+    );
+    expect(periodos[0].preco_semana).toBe(0);
+    const slots = buildSlotPeriodos(
+      periodos,
+      new Date('2026-09-07T00:00:00Z'),
+      new Date('2026-09-13T00:00:00Z'),
+      new Map([['m1', 300]])
+    );
+    expect(slots.reduce((s, p) => s + p.custo, 0)).toBe(0);
+  });
+
+  it('fora de TVDE o preco_semana_acordado não se aplica', () => {
+    const { periodos } = periodosDeContratos(
+      [
+        {
+          ...contratoBase,
+          regime: 'rent_a_car',
+          valor_total_manual: null,
+          preco_semana_acordado: 10,
+        },
+      ],
+      tabela
+    );
+    expect(periodos[0].preco_semana).toBe(325);
+  });
+
+  // O aceite abre uma versão nova na segunda-feira: a semana anterior fica na
+  // versão antiga, com o preço da tabela, e não muda quando se recalcula.
+  it('a versão antiga mantém o preço antigo nas semanas que já cobriu', () => {
+    const antiga: ContratoParaPeriodo = {
+      ...contratoBase,
+      data_inicio: '2026-08-01',
+      data_fim: '2026-09-14T00:00:00+01',
+      substituido_em: '2026-09-16T10:00:00Z',
+      estado_operacional: 'fechado',
+    };
+    const nova: ContratoParaPeriodo = {
+      ...contratoBase,
+      data_inicio: '2026-09-14T00:00:00+01',
+      data_fim: null,
+      preco_semana_acordado: 250,
+    };
+    const { periodos } = periodosDeContratos([antiga, nova], tabela);
+    const custoDaSemana = (ini: string, fim: string) =>
+      buildSlotPeriodos(
+        periodos,
+        new Date(`${ini}T00:00:00Z`),
+        new Date(`${fim}T00:00:00Z`),
+        new Map()
+      ).reduce((s, p) => s + p.custo, 0);
+
+    expect(custoDaSemana('2026-09-07', '2026-09-13')).toBeCloseTo(325, 2);
+    expect(custoDaSemana('2026-09-21', '2026-09-27')).toBeCloseTo(250, 2);
+  });
+});

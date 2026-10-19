@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { motivoTvdeSemPreco } from './precoContratoTvde';
+import { motivoTvdeSemPreco, precoSemanaNegociadoTvde } from './precoContratoTvde';
 
 const base = {
   regime: 'tvde',
@@ -37,5 +37,24 @@ describe('contrato TVDE tem de ter preço', () => {
   it('rent-a-car e slot não entram nesta regra', () => {
     expect(motivoTvdeSemPreco({ ...base, regime: 'rent_a_car', tarifaId: null })).toBeNull();
     expect(motivoTvdeSemPreco({ ...base, regime: 'slot', tarifaId: null })).toBeNull();
+  });
+});
+
+describe('precoSemanaNegociadoTvde', () => {
+  it('TVDE com preço negociado devolve-o', () => {
+    expect(precoSemanaNegociadoTvde('tvde', 180)).toBe(180);
+    expect(precoSemanaNegociadoTvde('tvde', '180.50')).toBe(180.5);
+  });
+  it('0 é um preço negociado, não "segue a tarifa"', () => {
+    expect(precoSemanaNegociadoTvde('tvde', 0)).toBe(0);
+  });
+  it('sem preço negociado segue a tarifa', () => {
+    expect(precoSemanaNegociadoTvde('tvde', null)).toBeNull();
+    expect(precoSemanaNegociadoTvde('tvde', undefined)).toBeNull();
+    expect(precoSemanaNegociadoTvde('tvde', '')).toBeNull();
+  });
+  it('fora de TVDE nunca se aplica', () => {
+    expect(precoSemanaNegociadoTvde('rent_a_car', 180)).toBeNull();
+    expect(precoSemanaNegociadoTvde(null, 180)).toBeNull();
   });
 });

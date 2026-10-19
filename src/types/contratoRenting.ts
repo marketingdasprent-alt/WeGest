@@ -128,6 +128,8 @@ export type ContratoRenting = {
   /** TVDE: próxima renovação — é o que renovar avança (não cria versão nem
    *  mexe na data de início). Opcional: nem todas as queries a seleccionam. */
   proxima_renovacao_em?: string | null;
+  /** TVDE: preço semanal negociado e aprovado. NULL segue a tarifa. */
+  preco_semana_acordado?: number | null;
 
   franquia_valor: number | null;
   caucao_valor: number | null;
@@ -183,6 +185,8 @@ export type ContratoRentingInsert = Omit<
   | 'contrato_anterior_id'
   | 'substituido_em'
   | 'motivo_versao'
+  // Só a aprovação do pedido (responder_pedido_troca_kms) o escreve.
+  | 'preco_semana_acordado'
   | 'km_saida'
   | 'km_entrada'
   | 'combustivel_saida'

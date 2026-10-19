@@ -42,6 +42,8 @@ interface ResumoContratoProps {
   baseAluguerTarifa?: number | null;
   /** Torna o preço editável no cartão. Por omissão o cartão é só-leitura. */
   editavel?: boolean;
+  /** Contrato travado: acção por baixo do valor (ex.: pedir alteração ao supervisor). */
+  acaoValor?: React.ReactNode;
 }
 
 /** Dias entre 2 datas com ceil (1d+1h = 2 dias) — ver lib/contratoDias.ts. */
@@ -65,6 +67,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   onValorTotalManualChange,
   editavel = false,
   baseAluguerTarifa,
+  acaoValor,
 }) => {
   const calculo = useMemo(() => {
     if (isFacturado && totalSnapshot != null) {
@@ -323,6 +326,8 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
               muted
             />
           )}
+
+          {!editavel && acaoValor && <div className="flex justify-end">{acaoValor}</div>}
 
           {!isFacturado && calculo.custoCoberturas > 0 && (
             <Row label="Coberturas" value={formatCurrency(calculo.custoCoberturas)} muted />

@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { buildWeeklyContractSummary } from '../_shared/resumo-semanal-viatura/calc.ts';
 import { repartirDiasPorMotorista } from '../_shared/resumo-semanal-viatura/diasPorMotorista.ts';
+import { precoSemanaNegociadoTvde } from '../_shared/resumo/precoAluguer.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +26,7 @@ interface ContratoRow {
   tarifa_id: string | null;
   tarifa_diaria: number | null;
   valor_total_manual: number | null;
+  preco_semana_acordado: number | null;
   estado_operacional: string;
   versao: number;
   substituido_em: string | null;
@@ -120,7 +122,7 @@ Deno.serve(async (req) => {
     const { data: contratosSemana, error: contratosError } = await supabase
       .from('contratos_renting')
       .select(
-        'id, org_id, viatura_id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, estado_operacional, versao, substituido_em'
+        'id, org_id, viatura_id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, preco_semana_acordado, estado_operacional, versao, substituido_em'
       )
       .eq('org_id', orgId)
       .is('deleted_at', null)
@@ -196,10 +198,15 @@ Deno.serve(async (req) => {
 
           const condutorRow = condutorPorContrato.get(contrato.id) ?? null;
 
-          let valorSemanalTvde = 0;
+          // Preço negociado (aprovado pelo supervisor) ganha à tarifa.
+          const negociado = precoSemanaNegociadoTvde(
+            contrato.regime,
+            contrato.preco_semana_acordado
+          );
+          let valorSemanalTvde = negociado ?? 0;
           const tarifaDiariaRentACar = Number(contrato.tarifa_diaria) || 0;
 
-          if (contrato.regime === 'tvde' && contrato.tarifa_id) {
+          if (negociado == null && contrato.regime === 'tvde' && contrato.tarifa_id) {
             const { data: tarifa } = await supabase
               .from('renting_tarifas')
               .select('preco_semana')

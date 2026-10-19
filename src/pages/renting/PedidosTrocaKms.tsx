@@ -19,12 +19,14 @@ const LABEL_VALOR: Record<PedidoTrocaKms['tipo'], { label: string; sufixo: strin
   kms: { label: 'Kms incluídos', sufixo: '' },
   franquia: { label: 'Franquia', sufixo: ' €' },
   tarifa: { label: 'Tarifa diária', sufixo: ' €' },
+  preco_semana: { label: 'Valor semanal', sufixo: ' €' },
 };
 
 const TIPO_BADGE_LABEL: Record<PedidoTrocaKms['tipo'], string> = {
   kms: 'Kms',
   franquia: 'Franquia',
   tarifa: 'Tarifa',
+  preco_semana: 'Valor semanal',
 };
 
 function PedidoValores({ pedido }: { pedido: PedidoTrocaKms }) {

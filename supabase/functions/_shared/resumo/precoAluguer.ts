@@ -38,6 +38,19 @@ const numero = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/**
+ * Preço semanal negociado de um TVDE (aprovado pelo supervisor), ou `null`
+ * quando segue a tarifa. 0 é um preço; só NULL/vazio segue a tarifa.
+ * Fonte única: o fecho semanal (edge) e o frontend usam esta.
+ */
+export function precoSemanaNegociadoTvde(
+  regime: string | null | undefined,
+  precoSemanaAcordado: number | string | null | undefined
+): number | null {
+  if ((regime ?? '').trim().toLowerCase() !== 'tvde') return null;
+  return numero(precoSemanaAcordado);
+}
+
 const SEM_PRECO: PrecoAluguer = { precoSemana: null, origem: 'sem-preco', estimado: true };
 
 export function resolverPrecoAluguer(

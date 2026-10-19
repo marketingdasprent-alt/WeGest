@@ -7,6 +7,9 @@ export interface PrecoContratoTvdeInput {
   precoSemanaModelo: number | null | undefined;
 }
 
+// A mesma regra do fecho semanal (edge function) — uma só fonte.
+export { precoSemanaNegociadoTvde } from '@shared/precoAluguer';
+
 /**
  * Porque é que um contrato TVDE ficaria sem aluguer a cobrar; `null` quando tem
  * preço. Sem tarifa, sem modelo na viatura ou sem preço para o modelo, o fecho
@@ -26,4 +29,17 @@ export function motivoTvdeSemPreco(input: PrecoContratoTvdeInput): string | null
     return 'O modelo da viatura não tem preço na tarifa escolhida. Define o preço em Renting → Tarifas ou indica o valor acordado.';
   }
   return null;
+}
+
+/** "Negociado 180 € · tabela 200 €" — a tabela só aparece quando difere. */
+export function textoPrecoSemanaTvde(
+  acordado: number | null | undefined,
+  tabela: number | null | undefined
+): string {
+  if (acordado != null) {
+    return tabela != null && tabela !== acordado
+      ? `${acordado} € · tabela ${tabela} €`
+      : `${acordado} €`;
+  }
+  return tabela != null ? `${tabela} €` : 'Sem preço';
 }

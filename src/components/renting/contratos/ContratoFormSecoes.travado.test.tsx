@@ -45,11 +45,20 @@ vi.mock('./TrocaViaturaInfo', () => ({ TrocaViaturaInfo: marcador('sec-troca') }
 vi.mock('@/components/renting/shared/ALDFields', () => ({ ALDFields: marcador('sec-ald') }));
 
 import { ContratoFormSecoes } from './ContratoFormSecoes';
+import { textoPrecoSemanaTvde } from '@/utils/precoContratoTvde';
 
 // Form a sério: o bloco "Tarifa & Faturação" é inline neste componente e usa
 // FormField com o `control` verdadeiro — um duplo fino não chega.
-function Harness({ travado }: { travado: boolean }) {
-  const form = useForm({ defaultValues: { regime: 'tvde', viatura_id: null, tarifa_id: null } });
+function Harness({
+  travado,
+  contratoId,
+  regime = 'tvde',
+}: {
+  travado: boolean;
+  contratoId?: string;
+  regime?: string;
+}) {
+  const form = useForm({ defaultValues: { regime, viatura_id: null, tarifa_id: null } });
   return (
     <FormProvider {...form}>
       <ContratoFormSecoes
@@ -60,6 +69,7 @@ function Harness({ travado }: { travado: boolean }) {
         grupos={[]}
         estacoes={[]}
         travado={travado}
+        contratoId={contratoId}
       />
     </FormProvider>
   );
@@ -123,5 +133,44 @@ describe('ContratoFormSecoes — contrato aberto', () => {
     for (const sec of ['sec-regime', 'sec-cliente', 'sec-viatura']) {
       expect(fieldsetTravadoDe(sec)).toBeNull();
     }
+  });
+});
+
+// Os pedidos só existem num contrato gravado, que está sempre travado: dentro
+// do fieldset os botões nunca se podiam carregar (aconteceu aos de kms e
+// franquia, mortos desde que o contrato aberto passou a ficar travado).
+describe('ContratoFormSecoes — pedidos de alteração num contrato aberto', () => {
+  const renderGravado = (regime = 'tvde') =>
+    render(<Harness travado contratoId="c-1" regime={regime} />);
+
+  it.each(['Pedir alteração de kms', 'Pedir alteração de franquia'])(
+    '"%s" fica fora do bloqueio e carregável',
+    (label) => {
+      renderGravado();
+      const botao = screen.getByRole('button', { name: label });
+      expect(botao.closest('fieldset[disabled]')).toBeNull();
+      expect(botao).toBeEnabled();
+    }
+  );
+
+  it('em rent-a-car os pedidos de kms e franquia também ficam carregáveis', () => {
+    renderGravado('rent_a_car');
+    expect(screen.getByRole('button', { name: 'Pedir alteração de kms' })).toBeEnabled();
+  });
+});
+
+describe('textoPrecoSemanaTvde', () => {
+  it('negociado diferente da tabela mostra os dois', () => {
+    expect(textoPrecoSemanaTvde(180, 200)).toBe('180 € · tabela 200 €');
+  });
+  it('negociado igual à tabela mostra só um', () => {
+    expect(textoPrecoSemanaTvde(200, 200)).toBe('200 €');
+  });
+  it('0 negociado é um preço, não "sem preço"', () => {
+    expect(textoPrecoSemanaTvde(0, 200)).toBe('0 € · tabela 200 €');
+  });
+  it('sem negociado segue a tabela', () => {
+    expect(textoPrecoSemanaTvde(null, 200)).toBe('200 €');
+    expect(textoPrecoSemanaTvde(null, null)).toBe('Sem preço');
   });
 });

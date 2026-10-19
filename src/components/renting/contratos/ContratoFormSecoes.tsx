@@ -31,7 +31,9 @@ import { ALDFields } from '@/components/renting/shared/ALDFields';
 import { CondutoresFields } from '@/components/renting/shared/CondutoresFields';
 import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields';
 import { PedirAlteracaoContratoDialog } from './PedirAlteracaoContratoDialog';
-import { usePedidoTrocaKmsPendente, type TipoPedidoAlteracao } from '@/hooks/usePedidosTrocaKms';
+import { type TipoPedidoAlteracao } from '@/hooks/usePedidosTrocaKms';
+import { BotaoPedirAlteracao } from './BotaoPedirAlteracao';
+import { textoPrecoSemanaTvde } from '@/utils/precoContratoTvde';
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionCliente } from './SectionCliente';
 import { SectionEmpresaEmissora } from './SectionEmpresaEmissora';
@@ -41,28 +43,6 @@ import { SectionInfoAdicional } from './SectionInfoAdicional';
 import { SectionRegime } from './SectionRegime';
 import { SectionViatura } from './SectionViatura';
 import { CONTROLOS_SEM_CLIQUE } from './contratoFormConstants';
-
-/** Link "Pedir alteração de X" sob o campo travado — trava enquanto já há um pedido pendente desse tipo. */
-const BotaoPedirAlteracao: React.FC<{
-  contratoId: string;
-  tipo: TipoPedidoAlteracao;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  onClick: () => void;
-}> = ({ contratoId, tipo, label, icon: Icon, onClick }) => {
-  const { data: pedidoPendente } = usePedidoTrocaKmsPendente(contratoId, tipo);
-  return (
-    <button
-      type="button"
-      disabled={!!pedidoPendente}
-      onClick={onClick}
-      className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:text-muted-foreground disabled:no-underline disabled:cursor-not-allowed"
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {pedidoPendente ? 'Pedido pendente' : label}
-    </button>
-  );
-};
 
 interface ContratoFormSecoesProps {
   form: UseFormReturn<ContratoFormValues>;
@@ -95,6 +75,8 @@ interface ContratoFormSecoesProps {
   travado?: boolean;
   /** proxima_renovacao_em do contrato (edição) — mostrada na Recolha dos TVDE. */
   proximaRenovacaoEm?: string | null;
+  /** TVDE: preço semanal negociado e aprovado (contrato gravado). NULL segue a tarifa. */
+  precoSemanaAcordado?: number | null;
 }
 
 /**
@@ -119,6 +101,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   contratoId,
   travado,
   proximaRenovacaoEm,
+  precoSemanaAcordado = null,
 }) => {
   // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
   // que partia os grids lá dentro. O cinzento vem dos próprios campos
@@ -228,6 +211,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     kms: kmsIncluidos ?? 0,
     franquia: franquiaValor ?? 0,
     tarifa: tarifaDiaria ?? 0,
+    preco_semana: precoSemanaAcordado ?? precoModeloSemanaTvde ?? 0,
   };
 
   // Mudar a tarifa NÃO recalculava o preço do contrato: valor_total_manual
@@ -367,9 +351,11 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                         : '—',
                     },
                     {
-                      label: 'Preço / semana',
-                      value:
-                        precoModeloSemanaTvde != null ? `${precoModeloSemanaTvde} €` : 'Sem preço',
+                      label:
+                        precoSemanaAcordado != null
+                          ? 'Preço / semana (negociado)'
+                          : 'Preço / semana',
+                      value: textoPrecoSemanaTvde(precoSemanaAcordado, precoModeloSemanaTvde),
                     },
                     { label: 'Faturação', value: 'Semanal' },
                   ]
@@ -434,8 +420,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                     Condutor · conta-corrente semanal
                   </p>
                   <p className="shrink-0 text-sm font-semibold tabular-nums">
-                    {faturacao.semanalCondutor != null
-                      ? `${faturacao.semanalCondutor.toFixed(2)} €/sem`
+                    {(precoSemanaAcordado ?? faturacao.semanalCondutor) != null
+                      ? `${(precoSemanaAcordado ?? faturacao.semanalCondutor ?? 0).toFixed(2)} €/sem`
                       : '— sem preço/semana'}
                   </p>
                 </div>
@@ -443,33 +429,32 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
             </div>
           )}
         </div>
+        <FranquiaKmsFields franquiaReadOnly kmsReadOnly />
+      </fieldset>
 
-        <FranquiaKmsFields
-          franquiaReadOnly
-          kmsReadOnly
-          franquiaAction={
-            contratoId ? (
-              <BotaoPedirAlteracao
-                contratoId={contratoId}
-                tipo="franquia"
-                label="Pedir alteração de franquia"
-                icon={Coins}
-                onClick={() => setDialogAberto('franquia')}
-              />
-            ) : null
-          }
-          kmsAction={
-            contratoId ? (
-              <BotaoPedirAlteracao
-                contratoId={contratoId}
-                tipo="kms"
-                label="Pedir alteração de kms"
-                icon={Gauge}
-                onClick={() => setDialogAberto('kms')}
-              />
-            ) : null
-          }
-        />
+      {/* Os pedidos ficam FORA do bloqueio: só existem num contrato gravado, que
+          está sempre travado — dentro do fieldset nunca se podiam carregar. O
+          do valor semanal vive no cartão do resumo (PedidoPrecoSemanal). */}
+      {contratoId && (
+        <div className="flex flex-wrap justify-end gap-4">
+          <BotaoPedirAlteracao
+            contratoId={contratoId}
+            tipo="franquia"
+            label="Pedir alteração de franquia"
+            icon={Coins}
+            onClick={() => setDialogAberto('franquia')}
+          />
+          <BotaoPedirAlteracao
+            contratoId={contratoId}
+            tipo="kms"
+            label="Pedir alteração de kms"
+            icon={Gauge}
+            onClick={() => setDialogAberto('kms')}
+          />
+        </div>
+      )}
+
+      <fieldset disabled={travado} className={blocoTravadoClass}>
         <CondutoresFields
           regime={regime}
           clientes={clientes}

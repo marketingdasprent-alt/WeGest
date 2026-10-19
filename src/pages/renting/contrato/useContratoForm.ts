@@ -48,7 +48,7 @@ import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
 import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
-import { motivoTvdeSemPreco } from '@/utils/precoContratoTvde';
+import { motivoTvdeSemPreco, precoSemanaNegociadoTvde } from '@/utils/precoContratoTvde';
 
 import type {
   CoberturaFormItem,
@@ -780,7 +780,14 @@ export function useContratoForm(): UseContratoFormReturn {
       !isTvdeReg ? (linha?.preco_dia ?? null) : null,
       !isTvdeReg ? (linha?.preco_mes ?? null) : null
     );
-    if (fat) form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
+    // Preço negociado e aprovado viaja com o contrato na troca; a tabela do
+    // modelo novo não o pode desfazer — muda-se com outro pedido.
+    const negociado = precoSemanaNegociadoTvde(regime, contrato?.preco_semana_acordado);
+    if (negociado != null) {
+      form.setValue('valor_total_manual', negociado, { shouldDirty: true });
+    } else if (fat) {
+      form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
+    }
   };
 
   // ── Aluguer pela tarifa ───────────────────────────────────────
