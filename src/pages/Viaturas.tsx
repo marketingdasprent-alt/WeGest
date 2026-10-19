@@ -32,6 +32,7 @@ import { ViaturasCartoesMobile } from '@/components/viaturas/lista/ViaturasCarto
 import { acoesDaViatura } from '@/components/viaturas/lista/acoesViatura';
 import { rotaNovoTicketDaViatura } from '@/utils/novoTicketAssistencia';
 import { useSituacaoViaturas } from '@/hooks/useSituacaoViaturas';
+import { useViaturasComDua } from '@/hooks/useViaturasComDua';
 import { proximaValidade, resumoAtencao } from '@/utils/documentosViatura';
 import {
   filtrarViaturas,
@@ -109,6 +110,7 @@ export default function Viaturas() {
   const [categoriaFilter, setCategoriaFilter] = filtroNoUrl('categoria', 'all');
   const [combustivelFilter, setCombustivelFilter] = filtroNoUrl('combustivel', 'all');
   const [tipoFilter, setTipoFilter] = filtroNoUrl('tipo', 'all');
+  const [duaFilter, setDuaFilter] = filtroNoUrl('dua', 'all');
   const [sortField, setSortField] = filtroNoUrl('sort', 'matricula');
   const [sortDirRaw, setSortDir] = filtroNoUrl('dir', 'asc');
   const sortDir = sortDirRaw as 'asc' | 'desc';
@@ -120,14 +122,15 @@ export default function Viaturas() {
     statusFilter !== 'all' ||
     categoriaFilter !== 'all' ||
     combustivelFilter !== 'all' ||
-    tipoFilter !== 'all';
+    tipoFilter !== 'all' ||
+    duaFilter !== 'all';
 
   // Uma só alteração faz o histórico desfazer toda a limpeza de filtros de uma vez.
   const limparFiltros = () =>
     setSearchParams(
       (anterior) => {
         const proximo = new URLSearchParams(anterior);
-        for (const chave of ['search', 'status', 'categoria', 'combustivel', 'tipo']) {
+        for (const chave of ['search', 'status', 'categoria', 'combustivel', 'tipo', 'dua']) {
           proximo.delete(chave);
         }
         return proximo;
@@ -178,14 +181,16 @@ export default function Viaturas() {
 
   // Com quem está cada viatura e há quanto tempo está livre.
   const { data: situacoes } = useSituacaoViaturas();
+  const { data: comDua } = useViaturasComDua();
   // O nome de quem tem a viatura também se pesquisa ("joão" → o carro dele).
   const viaturasPesquisaveis = useMemo(
     () =>
       viaturas.map((v) => ({
         ...v,
         ocupante_nome: situacoes?.get(v.id)?.ocupante?.nome ?? null,
+        tem_dua: comDua ? comDua.has(v.id) : null,
       })),
-    [viaturas, situacoes]
+    [viaturas, situacoes, comDua]
   );
   const atencao = useMemo(() => resumoAtencao(viaturas, estadoDe), [viaturas, estadoDe]);
 
@@ -272,8 +277,9 @@ export default function Viaturas() {
       categoria: categoriaFilter,
       combustivel: combustivelFilter,
       tipo: tipoFilter,
+      dua: duaFilter,
     }),
-    [searchTerm, statusFilter, categoriaFilter, combustivelFilter, tipoFilter]
+    [searchTerm, statusFilter, categoriaFilter, combustivelFilter, tipoFilter, duaFilter]
   );
   const opcoesFiltros = useMemo(
     () => opcoesFiltrosViaturas(viaturasPesquisaveis, filtros, estadoDe),
@@ -295,9 +301,12 @@ export default function Viaturas() {
       { replace: true }
     );
   const setFiltro = (faceta: FacetaViaturas, valor: string) =>
-    ({ status: setStatusFilter, categoria: setCategoriaFilter, combustivel: setCombustivelFilter })[
-      faceta
-    ](valor);
+    ({
+      status: setStatusFilter,
+      categoria: setCategoriaFilter,
+      combustivel: setCombustivelFilter,
+      dua: setDuaFilter,
+    })[faceta](valor);
 
   const filteredViaturas = useMemo(() => {
     const result = filtrarViaturas(viaturasPesquisaveis, filtros, estadoDe);
@@ -364,7 +373,7 @@ export default function Viaturas() {
   } = usePagination(
     filteredViaturas,
     25,
-    `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}`,
+    `${searchTerm}|${statusFilter}|${categoriaFilter}|${combustivelFilter}|${tipoFilter}|${duaFilter}`,
     'page'
   );
 

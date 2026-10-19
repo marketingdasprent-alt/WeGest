@@ -10,7 +10,7 @@ import {
 const PAGINA = 1000;
 
 /** O PostgREST corta em 1000 linhas; o histórico de associações passa disso. */
-async function todasAsPaginas<T>(
+export async function todasAsPaginas<T>(
   pedir: (de: number, ate: number) => PromiseLike<{ data: unknown; error: unknown }>
 ): Promise<T[]> {
   const linhas: T[] = [];
