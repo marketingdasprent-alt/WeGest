@@ -92,7 +92,8 @@ describe('navegação do docs', () => {
     expect(anteriorSeguinte('recursos/reservas').anterior?.slug).toBe('recursos/cotacoes');
     expect(anteriorSeguinte('recursos/reservas').seguinte?.slug).toBe('recursos/conta');
     expect(anteriorSeguinte('recursos/conta').seguinte?.slug).toBe('recursos/tvde');
-    expect(anteriorSeguinte('recursos/tvde').seguinte?.slug).toBe('recursos/health');
+    expect(anteriorSeguinte('recursos/tvde').seguinte?.slug).toBe('recursos/candidatura');
+    expect(anteriorSeguinte('recursos/candidatura').seguinte?.slug).toBe('recursos/health');
   });
 
   it('a descarga do OpenAPI aponta para o servidor público', () => {

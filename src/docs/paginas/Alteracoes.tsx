@@ -17,6 +17,17 @@ const ALTERACOES: Alteracao[] = [
     versao: '1.0.0',
     tipo: 'Novo',
     texto:
+      'Candidatura TVDE pelo site: o motorista guarda o rascunho, envia os 8 documentos ' +
+      'directamente para um URL assinado e submete, tudo com a sessão da sua conta ' +
+      '(X-Conta-Token). Rotas novas GET, PUT e POST /conta/candidatura e POST, PUT e DELETE ' +
+      '/conta/candidatura-documentos/{tipo}. A API passa a aceitar o método PUT. Códigos novos ' +
+      'CANDIDATURA_NAO_EDITAVEL (409), CANDIDATURA_INCOMPLETA (422) e PEDIDO_INVALIDO (422).',
+  },
+  {
+    data: '2026-10-16',
+    versao: '1.0.0',
+    tipo: 'Novo',
+    texto:
       'Conta de cliente: quem cria conta no site (signUp com tipo_utilizador: cliente) e ' +
       'confirma o email vê as suas reservas e faturas. Rotas novas GET /conta, GET ' +
       '/conta/reservas, DELETE /conta/reservas/{codigo}, GET /conta/faturas e GET ' +

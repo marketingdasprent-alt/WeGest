@@ -8,8 +8,12 @@ import { ROTAS_RESERVAS } from './reservas.ts';
 import { ROTAS_TVDE } from './tvde.ts';
 
 /** O caminho do OpenAPI de uma rota da conta: o id das reservas é o codigo. */
+const SUFIXO_ID: Record<string, string> = {
+  'conta/reservas': '/{codigo}',
+  'conta/candidatura-documentos': '/{tipo}',
+};
 const caminhoConta = (r: (typeof ROTAS_CONTA)[number]) =>
-  `/${r.recurso}${r.comId ? (r.recurso === 'conta/reservas' ? '/{codigo}' : '/{id}') : ''}`;
+  `/${r.recurso}${r.comId ? (SUFIXO_ID[r.recurso] ?? '/{id}') : ''}`;
 
 Deno.test(
   'toda a rota de catálogo e disponibilidade está documentada, e só essas mais health/openapi',

@@ -1,4 +1,4 @@
-import { assertEquals, assertMatch } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals, assertMatch } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import type { PedirPdfFatura } from './faturaPdf.ts';
 import { type LinhaAuditoria, type OpcoesPedido, tratarPedido } from './handler.ts';
 
@@ -750,3 +750,36 @@ Deno.test('OPTIONS deixa o browser mandar X-Conta-Token', async () => {
   assertEquals(r.headers.get('access-control-allow-headers')?.includes('x-conta-token'), true);
   assertEquals(r.headers.get('access-control-allow-headers')?.includes('x-motorista-token'), true);
 });
+
+Deno.test(
+  'PUT /v1/conta/candidatura-documentos/{tipo} chega à conta, e o preflight admite PUT',
+  async () => {
+    const db = dbFalso({ chave: chaveConta, motorista: 'u1' });
+    const armazemDocumentos = {
+      assinarEnvio: () => Promise.resolve({ erro: 'x' }),
+      info: () => Promise.resolve({ naoExiste: true as const }),
+      inicio: () => Promise.resolve({ naoExiste: true as const }),
+      apagar: () => Promise.resolve(true),
+    };
+    const req = new Request('https://x/v1/conta/candidatura-documentos/carta_frente', {
+      method: 'PUT',
+      headers: {
+        'x-api-key': CHAVE,
+        'x-conta-token': TOKEN_CONTA,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        caminho: 'u1/candidatura/carta_frente/0b7e3c1a-5d2f-4a8b-9c6e-1f3a5b7d9e2c.jpg',
+      }),
+    });
+    const r = await correr(req, db, { armazemDocumentos });
+    // O ficheiro não existe no armazém falso: chegou à edge da conta e foi verificado lá.
+    assertEquals(r.status, 404);
+    assertEquals((await r.json()).erro.codigo, 'NAO_ENCONTRADO');
+    const pre = await correr(
+      new Request('https://x/v1/conta/candidatura', { method: 'OPTIONS' }),
+      dbFalso()
+    );
+    assert(pre.headers.get('access-control-allow-methods')?.includes('PUT'));
+  }
+);

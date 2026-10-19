@@ -13,7 +13,7 @@ const ORIGENS_PERMITIDAS: ReadonlySet<string> = new Set([
 export const CORS_HEADERS: Readonly<Record<string, string>> = {
   'Access-Control-Allow-Headers':
     'x-api-key, authorization, content-type, x-motorista-token, x-conta-token',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   // O Allow-Origin varia com o Origin do pedido, também no preflight (OPTIONS).
   Vary: 'Origin',
 };
@@ -37,6 +37,9 @@ export type CodigoErro =
   | 'LIMITE_EXCEDIDO'
   | 'ESTADO_INVALIDO'
   | 'CANDIDATURA_EXISTENTE'
+  | 'CANDIDATURA_NAO_EDITAVEL'
+  | 'CANDIDATURA_INCOMPLETA'
+  | 'PEDIDO_INVALIDO'
   | 'SESSAO_INVALIDA'
   | 'CONTA_INVALIDA'
   | 'ERRO_INTERNO';
