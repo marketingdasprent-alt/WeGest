@@ -20,3 +20,17 @@ export function fichaDaContaPorContacto(
   if (porTelefone && porEmail && porTelefone !== porEmail) return null;
   return porTelefone ?? porEmail;
 }
+
+/**
+ * Se o ID Bolt da conta pode ficar gravado nesta ficha. Só quando o contacto
+ * da conta é dela: gravado, passa a decidir de quem é a conta para sempre.
+ * A 2026-10-19 o CSV da PREMIUM RIDE gravou "Jorge Silva" (Jorge Campos) na
+ * ficha do Paulo Jorge Amado da Silva, a única activa com "Jorge" e "Silva".
+ */
+export function podeGravarIdNaFicha(
+  conta: ContaBolt,
+  fichaId: string,
+  matcher: MatcherMotoristas
+): boolean {
+  return fichaDaContaPorContacto(conta, matcher) === fichaId;
+}

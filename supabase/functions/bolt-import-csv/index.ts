@@ -15,6 +15,7 @@ import {
   type LinhaHistorico,
   SEMANAS_HISTORICO,
 } from '../_shared/bolt-import-csv/qualidade.ts';
+import { podeGravarIdNaFicha } from '../_shared/bolt/fichaDaConta.ts';
 import {
   construirArgsMergeCsv,
   type ContextoImportacao,
@@ -488,10 +489,17 @@ Deno.serve(async (req) => {
           const jaNoutraActiva = [...boltIdDaFicha].some(
             ([id, bolt]) => bolt === record.identificador_motorista && id !== record.motorista_id,
           );
+          // Só se grava o ID quando o telefone ou o email da conta são desta
+          // ficha. Pelo nome não: "Jorge Silva" cabia no Paulo Jorge Amado.
           if (
             record.identificador_motorista &&
             !jaNoutraActiva &&
-            boltIdDaFicha.get(record.motorista_id) !== record.identificador_motorista
+            boltIdDaFicha.get(record.motorista_id) !== record.identificador_motorista &&
+            podeGravarIdNaFicha(
+              { telefone: record.telefone, email: record.email },
+              record.motorista_id,
+              matcher,
+            )
           ) {
             const { error: updateError } = await supabase
               .from('motoristas_ativos')
