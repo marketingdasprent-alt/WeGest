@@ -286,6 +286,7 @@ jobs:
             automacao_saude_ignorar_failed_job \
             automacao_timeline_views \
             retry_failed_job \
+            vigiar_cron_edge \
             cartao_frota_alterado \
             contrato_alterado
 
