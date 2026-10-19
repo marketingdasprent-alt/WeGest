@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 import { ViaturasFiltrosBarra } from './ViaturasFiltrosBarra';
-import type { FiltrosViaturas, OpcaoFiltro } from '@/utils/filtrosViaturas';
+import type { FacetaViaturas, FiltrosViaturas, OpcaoFiltro } from '@/utils/filtrosViaturas';
 
 const FILTROS: FiltrosViaturas = {
   search: '',
@@ -10,8 +10,9 @@ const FILTROS: FiltrosViaturas = {
   categoria: 'all',
   combustivel: 'all',
   tipo: 'all',
+  dua: 'all',
 };
-const OPCOES: Record<'status' | 'categoria' | 'combustivel', OpcaoFiltro[]> = {
+const OPCOES: Record<FacetaViaturas, OpcaoFiltro[]> = {
   status: [
     { value: 'all', label: 'Todos', count: 10 },
     { value: 'disponivel', label: 'Disponível', count: 3 },
@@ -23,6 +24,10 @@ const OPCOES: Record<'status' | 'categoria' | 'combustivel', OpcaoFiltro[]> = {
   categoria: [
     { value: 'all', label: 'Todas', count: 10 },
     { value: 'sem_info', label: 'Sem informação', count: 10 },
+  ],
+  dua: [
+    { value: 'all', label: 'Todas', count: 10 },
+    { value: 'sem', label: 'Sem DUA', count: 4 },
   ],
 };
 
@@ -60,6 +65,14 @@ describe('ViaturasFiltrosBarra', () => {
     expect(screen.getByText('Elétrico')).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Limpar filtro Combustível' }));
     expect(props.onFiltro).toHaveBeenCalledWith('combustivel', 'all');
+  });
+
+  it('há um filtro de DUA, e limpá-lo volta a "Todas"', () => {
+    const props = montar({ filtros: { ...FILTROS, dua: 'sem' }, temFiltros: true });
+    expect(screen.getByText('DUA:')).not.toBeNull();
+    expect(screen.getByText('Sem DUA')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar filtro DUA' }));
+    expect(props.onFiltro).toHaveBeenCalledWith('dua', 'all');
   });
 
   it('a pesquisa tem ✕ para apagar, e "Limpar filtros" limpa tudo', () => {

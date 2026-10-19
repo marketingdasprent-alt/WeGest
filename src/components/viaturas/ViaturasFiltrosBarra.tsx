@@ -107,6 +107,12 @@ export function ViaturasFiltrosBarra({
           options={opcoes.combustivel}
           onChange={(v) => onFiltro('combustivel', v)}
         />
+        <FiltroChip
+          label="DUA"
+          value={filtros.dua}
+          options={opcoes.dua}
+          onChange={(v) => onFiltro('dua', v)}
+        />
         {temCategorias && (
           <FiltroChip
             label="Categoria"

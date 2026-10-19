@@ -21,6 +21,7 @@ interface V {
   inspecao_validade?: string | null;
   seguro_validade?: string | null;
   ocupante_nome?: string | null;
+  tem_dua?: boolean | null;
   estado: string;
 }
 
@@ -31,6 +32,7 @@ const SEM_FILTROS: FiltrosViaturas = {
   categoria: 'all',
   combustivel: 'all',
   tipo: 'all',
+  dua: 'all',
 };
 const f = (mudar: Partial<FiltrosViaturas>) => ({ ...SEM_FILTROS, ...mudar });
 
@@ -157,5 +159,35 @@ describe('filtros novos da Frota', () => {
   it('pesquisa também pelo nome de quem tem a viatura', () => {
     const r = filtrarViaturas(frota, f({ search: 'joão' }), estadoDe);
     expect(r.map((v) => v.matricula)).toEqual(['DD-44-DD']);
+  });
+});
+
+describe('filtro DUA — fichas sem o DUA anexado', () => {
+  const frota: V[] = [
+    { matricula: 'AA-11-AA', estado: 'disponivel', tem_dua: true },
+    { matricula: 'BB-22-BB', estado: 'em_tvde', tem_dua: false },
+    { matricula: 'CC-33-CC', estado: 'em_tvde', tem_dua: false, combustivel: 'Diesel' },
+    // Ainda não se sabe (documentos por carregar): não entra em "com" nem em "sem".
+    { matricula: 'DD-44-DD', estado: 'disponivel', tem_dua: null },
+  ];
+
+  it('"Sem DUA" mostra só as viaturas sem DUA anexado', () => {
+    const r = filtrarViaturas(frota, f({ dua: 'sem' }), estadoDe);
+    expect(r.map((v) => v.matricula)).toEqual(['BB-22-BB', 'CC-33-CC']);
+  });
+
+  it('"Com DUA" mostra só as que o têm', () => {
+    const r = filtrarViaturas(frota, f({ dua: 'com' }), estadoDe);
+    expect(r.map((v) => v.matricula)).toEqual(['AA-11-AA']);
+  });
+
+  it('sem filtro de DUA não esconde nenhuma, nem as por saber', () => {
+    expect(filtrarViaturas(frota, SEM_FILTROS, estadoDe)).toHaveLength(4);
+  });
+
+  it('as contagens respeitam os outros filtros', () => {
+    const op = opcoesFiltrosViaturas(frota, f({ combustivel: 'diesel' }), estadoDe);
+    expect(op.dua.find((o) => o.value === 'sem')?.count).toBe(1);
+    expect(op.dua.find((o) => o.value === 'com')?.count).toBe(0);
   });
 });
