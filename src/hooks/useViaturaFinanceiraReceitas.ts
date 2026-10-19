@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { precoSemanaNegociadoTvde } from '@/utils/precoContratoTvde';
+
 import type { ReceitasData } from '@/components/viaturas/tabs/ViaturaFinanceiraMovimentos';
 
 function toDateStr(d: Date): string {
@@ -43,14 +45,14 @@ export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
       const { data: contratosAtivos } = await supabase
         .from('contratos_renting')
         .select(
-          'id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, estado_operacional'
+          'id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, preco_semana_acordado, estado_operacional'
         )
         .eq('viatura_id', viaturaId)
         .is('deleted_at', null)
         .is('substituido_em', null)
         .in('estado_operacional', ['agendado', 'em_curso']);
 
-      const temTarifa = (c: (typeof contratosAtivos)[number]) =>
+      const temTarifa = (c: NonNullable<typeof contratosAtivos>[number]) =>
         !!c.tarifa_id || (Number(c.tarifa_diaria) || 0) > 0 || c.valor_total_manual != null;
 
       const contrato =
@@ -80,8 +82,9 @@ export function useViaturaFinanceiraReceitas(viaturaId: string | undefined) {
         const dias = diasEntre(dataInicio, periodoFim);
         const semanas = Math.ceil(dias / 7);
 
-        let valorSemanal = 0;
-        if (contrato.tarifa_id) {
+        const negociado = precoSemanaNegociadoTvde(contrato.regime, contrato.preco_semana_acordado);
+        let valorSemanal = negociado ?? 0;
+        if (negociado == null && contrato.tarifa_id) {
           const { data: tarifa } = await supabase
             .from('renting_tarifas')
             .select('preco_semana')

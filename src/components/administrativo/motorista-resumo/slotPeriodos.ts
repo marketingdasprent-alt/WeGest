@@ -65,10 +65,13 @@ export function buildSlotPeriodos(
     const tarifas = mv.viaturas?.renting_grupos?.renting_tarifas || [];
     const tarifa = tarifas.find((t) => t.ativa);
     const modeloId = mv.viaturas?.modelo_id;
+    // Preço do período (contrato) manda, mesmo 0 — um 0 negociado não pode
+    // cair para a tarifa. Só sem preço se recorre ao grupo/modelo.
     const valorSemanal =
-      Number(mv.preco_semana ?? 0) ||
-      Number(tarifa?.preco_semana ?? 0) ||
-      (modeloId ? (tvdeModeloPrecoMap.get(modeloId) ?? 0) : 0);
+      mv.preco_semana != null
+        ? Number(mv.preco_semana) || 0
+        : Number(tarifa?.preco_semana ?? 0) ||
+          (modeloId ? (tvdeModeloPrecoMap.get(modeloId) ?? 0) : 0);
     if (!valorSemanal) return;
 
     // O dia em que o motorista LEVANTA o carro não é cobrado a ninguém: a

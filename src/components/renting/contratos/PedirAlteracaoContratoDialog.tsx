@@ -39,6 +39,13 @@ const TIPO_CONFIG: Record<
     step: '0.01',
     placeholder: 'Ex: 25',
   },
+  preco_semana: {
+    titulo: 'Pedir alteração do valor semanal',
+    labelValor: 'Valor semanal pedido (€)',
+    sufixo: '€/semana',
+    step: '0.01',
+    placeholder: 'Ex: 180',
+  },
 };
 
 interface PedirAlteracaoContratoDialogProps {
@@ -96,6 +103,7 @@ export const PedirAlteracaoContratoDialog: React.FC<PedirAlteracaoContratoDialog
             Este contrato usa {valorAtual} {cfg.sufixo} (sugestão da tarifa do grupo). Se não condiz
             com este contrato, pede uma excepção ao Supervisor Gestor TVDE — só entra em vigor
             depois de aceite.
+            {tipo === 'preco_semana' && ' Aceite, conta a partir do próximo fecho semanal.'}
           </DialogDescription>
         </DialogHeader>
 

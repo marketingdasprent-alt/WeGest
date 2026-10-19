@@ -283,3 +283,25 @@ describe('ResumoContrato — desconto gravado continua a contar', () => {
     expect(screen.getAllByText((content) => content === totalEsperado).length).toBeGreaterThan(0);
   });
 });
+
+// Contrato gravado: o cartão é só leitura e o valor semanal muda-se por pedido
+// ao supervisor, cuja acção aparece por baixo do valor.
+describe('ResumoContrato — acção sobre o valor num contrato travado', () => {
+  const tvdeTravado = (over: Partial<Props> = {}) =>
+    props({ regime: 'tvde', dataFim: null, valorTotalManual: 225, editavel: false, ...over });
+
+  it('mostra a acção por baixo do valor semanal', () => {
+    render(<ResumoContrato {...tvdeTravado({ acaoValor: <button>Pedir alteração</button> })} />);
+    expect(screen.getByText('Valor semanal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pedir alteração' })).toBeInTheDocument();
+  });
+
+  it('com o cartão editável (contrato novo) a acção não aparece', () => {
+    render(
+      <ResumoContrato
+        {...tvdeTravado({ editavel: true, acaoValor: <button>Pedir alteração</button> })}
+      />
+    );
+    expect(screen.queryByRole('button', { name: 'Pedir alteração' })).toBeNull();
+  });
+});

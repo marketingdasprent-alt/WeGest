@@ -2,7 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-export type TipoPedidoAlteracao = 'kms' | 'franquia' | 'tarifa';
+export type TipoPedidoAlteracao = 'kms' | 'franquia' | 'tarifa' | 'preco_semana';
+
+export const LABEL_TIPO_PEDIDO: Record<TipoPedidoAlteracao, string> = {
+  kms: 'kms',
+  franquia: 'franquia',
+  tarifa: 'tarifa',
+  preco_semana: 'valor semanal',
+};
 
 export interface PedidoTrocaKms {
   id: string;
@@ -143,11 +150,9 @@ export function useCriarPedidoTrocaKms() {
       qc.invalidateQueries({
         queryKey: ['pedidos-troca-kms', 'pendente', variables.contratoId, variables.tipo],
       });
-      const label =
-        variables.tipo === 'franquia' ? 'franquia' : variables.tipo === 'tarifa' ? 'tarifa' : 'kms';
       toast({
         title: 'Pedido enviado',
-        description: `O Supervisor Gestor TVDE vai avaliar o pedido de alteração de ${label}.`,
+        description: `O Supervisor Gestor TVDE vai avaliar o pedido de alteração de ${LABEL_TIPO_PEDIDO[variables.tipo]}.`,
       });
     },
     onError: (error: any) => {

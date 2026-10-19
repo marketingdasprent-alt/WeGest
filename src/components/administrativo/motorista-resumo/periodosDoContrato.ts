@@ -1,3 +1,4 @@
+import { precoSemanaNegociadoTvde } from '@/utils/precoContratoTvde';
 import type { ViaturaPeriodoInput } from './slotPeriodos';
 
 /**
@@ -7,7 +8,7 @@ import type { ViaturaPeriodoInput } from './slotPeriodos';
  * rent-a-car (316,13 € em vez dos 300 € da tarifa).
  */
 export const COLUNAS_CONTRATO_PARA_PERIODO =
-  'viatura_id, data_inicio, data_fim, valor_total_manual, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)';
+  'viatura_id, data_inicio, data_fim, valor_total_manual, preco_semana_acordado, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)';
 
 export interface ContratoParaPeriodo {
   viatura_id: string | null;
@@ -16,6 +17,8 @@ export interface ContratoParaPeriodo {
   data_fim: string | null;
 
   valor_total_manual?: number | string | null;
+  /** TVDE: preço semanal negociado. Ganha à tarifa; NULL segue a tarifa. */
+  preco_semana_acordado?: number | string | null;
   tarifa_id?: string | null;
   estado_operacional?: string | null;
 
@@ -107,7 +110,9 @@ export function periodosDeContratos(
     // function `fechar-semana-financeiro` só lhe toca em rent-a-car; segue-se
     // a mesma regra, para o ecrã dizer o que os livros lançam.
     const isTvde = (c.regime ?? '').trim().toLowerCase() === 'tvde';
-    let preco = isTvde ? null : precoSemanalManualRentACar(c);
+    let preco = isTvde
+      ? precoSemanaNegociadoTvde(c.regime, c.preco_semana_acordado)
+      : precoSemanalManualRentACar(c);
 
     if (preco === null && c.tarifa_id) {
       if (modeloId) {
