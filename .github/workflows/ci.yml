@@ -342,7 +342,8 @@ jobs:
             reimportar_substitui_a_semana \
             id_de_plataforma_fica_na_ultima_ficha \
             associar_plataforma_conta_de_outro \
-            saldo_pendente_igual_ao_resumo
+            saldo_pendente_igual_ao_resumo \
+            bolt_viagens_sem_update_vazio
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
