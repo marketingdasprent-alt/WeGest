@@ -8,9 +8,11 @@ export interface FiltrosViaturas {
   categoria: string;
   combustivel: string;
   tipo: string;
+  /** 'com' | 'sem' — DUA anexado na ficha. */
+  dua: string;
 }
 
-export type FacetaViaturas = 'status' | 'categoria' | 'combustivel';
+export type FacetaViaturas = 'status' | 'categoria' | 'combustivel' | 'dua';
 
 export interface ViaturaFiltravel {
   matricula?: string | null;
@@ -25,6 +27,8 @@ export interface ViaturaFiltravel {
   seguro_validade?: string | null;
   /** Motorista ou cliente que tem a viatura — também se pesquisa por ele. */
   ocupante_nome?: string | null;
+  /** DUA anexado (frente, verso ou legado). null/undefined = ainda não se sabe. */
+  tem_dua?: boolean | null;
 }
 
 export interface OpcaoFiltro {
@@ -51,6 +55,12 @@ const ESTADOS: readonly OpcaoFiltro[] = [
   { value: 'inativo', label: 'Inativas' },
   { value: 'vendido', label: 'Vendidas' },
   { value: 'todos_vendidos', label: 'Todas (com vendidas)' },
+];
+
+const OPCOES_DUA: readonly OpcaoFiltro[] = [
+  { value: 'all', label: 'Todas' },
+  { value: 'sem', label: 'Sem DUA' },
+  { value: 'com', label: 'Com DUA' },
 ];
 
 const COMBUSTIVEIS: Record<string, string> = {
@@ -124,6 +134,13 @@ export function passaEstado<V extends ViaturaFiltravel>(
   return estado === status;
 }
 
+/** Enquanto os documentos carregam não se sabe: fica fora de "com" e de "sem". */
+function passaDua(v: ViaturaFiltravel, dua: string): boolean {
+  if (dua === 'all') return true;
+  if (v.tem_dua == null) return false;
+  return dua === 'com' ? v.tem_dua : !v.tem_dua;
+}
+
 /** Aplica os filtros; `ignorar` deixa uma faceta de fora (para contar as suas opções). */
 export function filtrarViaturas<V extends ViaturaFiltravel>(
   viaturas: readonly V[],
@@ -154,6 +171,7 @@ export function filtrarViaturas<V extends ViaturaFiltravel>(
       grupoCombustivel(v.combustivel) !== f.combustivel
     )
       return false;
+    if (ignorar !== 'dua' && !passaDua(v, f.dua)) return false;
     // Um tipo específico exclui slots; o filtro slot é uma categoria própria.
     if (f.tipo === 'slot') return !!v.is_slot;
     if (f.tipo !== 'all') return !v.is_slot && v.tipo_id === f.tipo;
@@ -202,8 +220,15 @@ export function opcoesFiltrosViaturas<V extends ViaturaFiltravel>(
     count: semEstado.filter((v) => passaEstado(v, o.value, estadoDe)).length,
   })).filter((o) => o.count > 0 || o.value === 'all' || o.value === f.status);
 
+  const foraDoDua = filtrarViaturas(viaturas, f, estadoDe, 'dua');
+  const dua = OPCOES_DUA.map((o) => ({
+    ...o,
+    count: foraDoDua.filter((v) => passaDua(v, o.value)).length,
+  }));
+
   return {
     status: estados,
+    dua,
     combustivel: opcoesDeGrupos(
       contarGrupos(filtrarViaturas(viaturas, f, estadoDe, 'combustivel'), (v) =>
         grupoCombustivel(v.combustivel)
