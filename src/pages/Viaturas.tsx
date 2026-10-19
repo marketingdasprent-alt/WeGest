@@ -13,7 +13,7 @@ import { exportViaturasPdf, exportViaturasExcel } from '@/utils/viaturasExport';
 import { useViaturasOcupacao } from '@/hooks/useViaturasOcupacao';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
-import { toggleSort } from '@/components/ui/sortable-table-head';
+import { ordenarNoUrl } from '@/utils/ordenacaoNoUrl';
 import { EmptyState } from '@/components/ui/empty-state';
 import { TableSkeleton } from '@/components/ui/table-skeleton';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -111,10 +111,13 @@ export default function Viaturas() {
   const [combustivelFilter, setCombustivelFilter] = filtroNoUrl('combustivel', 'all');
   const [tipoFilter, setTipoFilter] = filtroNoUrl('tipo', 'all');
   const [duaFilter, setDuaFilter] = filtroNoUrl('dua', 'all');
-  const [sortField, setSortField] = filtroNoUrl('sort', 'matricula');
-  const [sortDirRaw, setSortDir] = filtroNoUrl('dir', 'asc');
+  const [sortField] = filtroNoUrl('sort', 'matricula');
+  const [sortDirRaw] = filtroNoUrl('dir', 'asc');
   const sortDir = sortDirRaw as 'asc' | 'desc';
-  const handleSort = (f: string) => toggleSort(f, { sortField, sortDir }, setSortField, setSortDir);
+  const handleSort = (f: string) =>
+    setSearchParams((anterior) => ordenarNoUrl(anterior, f, { sortField, sortDir }, 'matricula'), {
+      replace: true,
+    });
 
   // Lista vazia e filtros sem resultados exigem ações diferentes.
   const temFiltrosAtivos =
