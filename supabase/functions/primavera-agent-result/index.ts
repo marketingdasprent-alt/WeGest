@@ -13,6 +13,8 @@
 // já deu por ambíguo ou expirado, não reescreve esse estado.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
+import { integracaoDaChave } from '../_shared/faturacao/chaveAgente.ts';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -51,19 +53,19 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // SEM filtro por `ativo` — ver o mesmo comentário em primavera-agent-poll.
+    // Chave comparada aqui, nunca no filtro, e SEM filtro por `ativo`: ver os
+    // comentários em primavera-agent-poll.
     const { data: configs, error: erroConfig } = await supabase
       .from('plataformas_configuracao')
-      .select('id')
+      .select('id, client_secret')
       .eq('plataforma', 'faturacao')
-      .eq('client_secret', chave)
       .filter('config->>provider', 'eq', 'primavera');
 
     if (erroConfig) return json({ success: false, error: erroConfig.message }, 500);
-    if (!configs || configs.length !== 1) {
+    const integracaoId = integracaoDaChave(configs ?? [], chave);
+    if (!integracaoId) {
       return json({ success: false, error: 'Chave de agente não reconhecida.' }, 401);
     }
-    const integracaoId = configs[0].id as string;
 
     // A integração do job tem de bater com a da chave — um agente nunca fecha
     // um job que não seja seu, mesmo que soubesse o id (defesa em
