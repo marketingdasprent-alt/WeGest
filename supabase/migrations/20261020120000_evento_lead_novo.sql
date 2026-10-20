@@ -10,8 +10,8 @@
 --
 -- DECISÕES (utilizador, 20-10)
 --   · Destinatários: cargo "Gestor TVDE" (nome sem distinguir maiúsculas, a
---     Premium Ride tem "GESTOR TVDE"). Organização sem esse cargo (as novas
---     nascem só com "Administrador"): a regra aponta ao Administrador e o
+--     Premium Ride tem "GESTOR TVDE"). As orgs novas já o têm (ensure_base_cargos);
+--     se alguém o renomear ou apagar, a regra aponta ao Administrador e o
 --     resto muda-se na aba de automações.
 --   · Email + sino.
 --   · Link para /crm/lead/<id>: cada lead é uma entidade nova, logo a
