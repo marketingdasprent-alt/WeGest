@@ -152,7 +152,8 @@ export function ModeloSiteFields({ value, onChange, modeloId, orgId }: Props) {
         )}
         {erroFoto && <p className="text-xs text-destructive">{erroFoto}</p>}
         <p className="text-xs text-muted-foreground">
-          Foto de marketing (JPEG, PNG ou WebP até 2 MB). Nunca uma foto com matrícula.
+          É a foto que o site mostra para este modelo (JPEG, PNG ou WebP até 2 MB). Nunca uma foto
+          com matrícula.
         </p>
       </div>
     </fieldset>

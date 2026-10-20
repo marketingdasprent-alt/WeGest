@@ -189,25 +189,21 @@ Deno.test('TVDE documentado: tag, permissão, só inicio obrigatório, IVA a 6% 
   assertEquals(typeof health.example.tarifa_site_tvde, 'boolean');
 });
 
-Deno.test(
-  'imagem_url do modelo é a foto de uma viatura, com link de 24 h; a categoria não muda',
-  () => {
-    // deno-lint-ignore no-explicit-any
-    const comp = OPENAPI.components as Record<string, any>;
-    for (const nome of ['Modelo', 'ModeloTvde']) {
-      const campo = comp.schemas[nome].properties.imagem_url;
-      assert(/Foto de uma viatura deste modelo/.test(campo.description), nome);
-      assert(/24 h/.test(campo.description), `${nome}: falta a validade do link`);
-      assert(!/marketing/i.test(campo.description), `${nome}: ainda fala da foto de marketing`);
-      assert(
-        /\/object\/sign\/viatura-documentos\//.test(comp.schemas[nome].example.imagem_url),
-        `${nome}: o exemplo tem de ser um link assinado de viatura-documentos`
-      );
-    }
-    assertEquals('foto_path' in comp.schemas.Modelo.properties, false);
-    assertEquals(comp.schemas.Categoria.example.imagem_url, null);
+Deno.test('imagem_url do modelo é a foto do modelo, num link público; a categoria não muda', () => {
+  // deno-lint-ignore no-explicit-any
+  const comp = OPENAPI.components as Record<string, any>;
+  for (const nome of ['Modelo', 'ModeloTvde']) {
+    const campo = comp.schemas[nome].properties.imagem_url;
+    assert(/Foto do modelo/.test(campo.description), nome);
+    assert(!/viatura|24 h/.test(campo.description), `${nome}: ainda fala da foto da viatura`);
+    assert(
+      /\/object\/public\/modelos-viaturas\//.test(comp.schemas[nome].example.imagem_url),
+      `${nome}: o exemplo tem de ser um link público de modelos-viaturas`
+    );
   }
-);
+  assertEquals('foto_path' in comp.schemas.Modelo.properties, false);
+  assertEquals(comp.schemas.Categoria.example.imagem_url, null);
+});
 
 Deno.test(
   'candidaturas TVDE: permissão do router, 201/200/409/429 no POST, GET só com o estado',

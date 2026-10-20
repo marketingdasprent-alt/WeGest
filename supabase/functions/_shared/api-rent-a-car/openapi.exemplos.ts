@@ -11,9 +11,9 @@ const preco = (comIva: number) => ({
 
 export const EX_PRECO = preco(35);
 
-// Foto de uma viatura do modelo: link assinado, válido 24 h.
-export const EX_FOTO_VIATURA =
-  'https://hkqzzxgeedsmjnhyquke.supabase.co/storage/v1/object/sign/viatura-documentos/6f1e3d5b-7a9c-4b2e-8d4f-1a3c5e7b9d2f/fotos/1790777910834.webp?token=exemplo';
+// Foto do modelo, carregada na aba Modelos: link público e fixo.
+export const EX_FOTO_MODELO =
+  'https://hkqzzxgeedsmjnhyquke.supabase.co/storage/v1/object/public/modelos-viaturas/1c4e7a9b-2d5f-4e8a-b1c3-6d9e2f5a8b0c/5b8e1f3a-9c2d-4a7e-b6f0-3d1a8c5e9b7f.webp?v=1790777910834';
 
 export const EX_LOCALIZACAO = {
   id: '3f1c2a6e-8b4d-4c1e-9a7f-1d2e3f4a5b6c',
@@ -54,7 +54,7 @@ export const EX_CARTAO_MODELO = {
   portas: 5,
   bagageira: 2,
   ar_condicionado: true,
-  imagem_url: EX_FOTO_VIATURA,
+  imagem_url: EX_FOTO_MODELO,
   preco_dia: EX_PRECO,
   frota: 4,
 };
