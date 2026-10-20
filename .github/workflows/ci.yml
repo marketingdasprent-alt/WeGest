@@ -323,6 +323,7 @@ jobs:
             api_tvde_candidaturas \
             api_candidatura_com_conta \
             api_so_disponiveis \
+            api_disponivel_desde_em_cache \
             api_reserva_com_matricula \
             conta_cliente \
             api_conta_candidatura
