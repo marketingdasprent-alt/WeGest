@@ -1,6 +1,6 @@
 // OpenAPI das rotas TVDE (fase D1: catálogo; fase D2: candidaturas). Funções puras: recebem os esquemas e helpers de
 // openapi.ts, que as chama, para não haver import circular.
-import { EX_FOTO_VIATURA } from './openapi.exemplos.ts';
+import { EX_FOTO_MODELO } from './openapi.exemplos.ts';
 
 type Esquema = Record<string, unknown>;
 
@@ -25,7 +25,7 @@ export const EX_MODELO_TVDE = {
   portas: 5,
   bagageira: 3,
   ar_condicionado: true,
-  imagem_url: EX_FOTO_VIATURA,
+  imagem_url: EX_FOTO_MODELO,
   preco_semana: precoTvde(230),
   caucao: precoTvde(500),
   franquia: precoTvde(1500),

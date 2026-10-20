@@ -13,6 +13,16 @@ interface Alteracao {
 /** Lista cronológica, mais recente primeiro. A versão é a do OpenAPI (info.version). */
 const ALTERACOES: Alteracao[] = [
   {
+    data: '2026-10-20',
+    versao: '1.0.0',
+    tipo: 'Correcção',
+    texto:
+      'imagem_url dos modelos (rent-a-car e TVDE, no catálogo e na disponibilidade) volta a ser ' +
+      'a foto do próprio modelo, num link público e fixo que só muda quando a foto é ' +
+      'substituída. null se o modelo não tiver foto; a foto das viaturas deixa de ser usada. ' +
+      'A imagem das categorias não muda.',
+  },
+  {
     data: '2026-10-16',
     versao: '1.0.0',
     tipo: 'Novo',

@@ -317,7 +317,7 @@ jobs:
             api_reservas \
             evento_reserva_site_recebida \
             api_tvde_catalogo \
-            api_foto_da_viatura \
+            api_foto_do_modelo \
             api_tvde_candidaturas \
             api_candidatura_com_conta \
             api_so_disponiveis \
