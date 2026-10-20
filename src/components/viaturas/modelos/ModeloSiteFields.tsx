@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { ImageUp, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +17,7 @@ import {
   validarFotoModelo,
   type ModeloSiteInput,
 } from './modeloSite.schema';
+import { ZonaFotoModelo } from './ZonaFotoModelo';
 
 interface Props {
   value: ModeloSiteInput;
@@ -123,28 +123,12 @@ export function ModeloSiteFields({ value, onChange, modeloId, orgId }: Props) {
 
       <div className="space-y-1.5">
         <Label htmlFor="modelo-foto">Foto do modelo</Label>
-        {value.imagem_url && (
-          <img
-            src={value.imagem_url}
-            alt="Foto do modelo para o site"
-            className="h-24 w-auto rounded-md border object-contain"
-          />
-        )}
         {modeloId ? (
-          <div className="flex items-center gap-2">
-            <Input
-              id="modelo-foto"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              disabled={aCarregar}
-              onChange={(e) => carregarFoto(e.target.files?.[0])}
-            />
-            {aCarregar ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-label="A carregar" />
-            ) : (
-              <ImageUp className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            )}
-          </div>
+          <ZonaFotoModelo
+            imagemUrl={value.imagem_url}
+            aCarregar={aCarregar}
+            onFicheiro={carregarFoto}
+          />
         ) : (
           <p className="text-xs text-muted-foreground">
             Guarde o modelo primeiro para carregar a foto.
