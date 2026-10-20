@@ -306,3 +306,20 @@ describe('cartao_frota_alterado', () => {
     expect(TIPOS_NOTIFICACAO).toContain('cartao_frota_alterado');
   });
 });
+
+describe('lead_novo', () => {
+  it('com link do motor abre o lead no CRM', () => {
+    const n = fixture({ tipo: 'lead_novo', link: '/crm/lead/abc' });
+    expect(notificacaoLink(n)).toBe('/crm/lead/abc');
+    expect(notificacaoLabel(n)).toBe('Ver lead');
+  });
+
+  it('sem link cai no CRM', () => {
+    const n = fixture({ tipo: 'lead_novo', link: null });
+    expect(notificacaoLink(n)).toBe('/crm');
+  });
+
+  it('está registado na lista de tipos', () => {
+    expect(TIPOS_NOTIFICACAO).toContain('lead_novo');
+  });
+});

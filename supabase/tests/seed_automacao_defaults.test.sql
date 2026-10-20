@@ -49,13 +49,17 @@
 -- 'reserva.site_recebida' vem da seed_alerta_reserva_site_recebida() (migração
 -- 20261003120000), pelo mesmo padrão. Só semeia a regra 'notificacao', sem
 -- gémea de email (decisão do utilizador: o email fica para a fase seguinte).
+--
+-- ── 24.ª regra (2026-10-20) ─────────────────────────────────────────────────
+-- 'lead.novo' vem da seed_alerta_lead_novo() (migração 20261020120000), pelo
+-- mesmo padrão de cartão e contrato: duas gémeas, só a 'notificacao' conta.
 -- ============================================================
 
 begin;
 select plan(6);
 
 -- Actualizar ao acrescentar/remover uma regra semeada na criação da organização.
-create temp table _esperado as select 23::int as regras_esperadas;
+create temp table _esperado as select 24::int as regras_esperadas;
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000000a0000', 'Org Seed A', 'seed-automacao-a');

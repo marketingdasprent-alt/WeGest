@@ -13,6 +13,7 @@ export const TIPOS_NOTIFICACAO = [
   'contrato_renting_sem_checkin',
   'escalonamento',
   'invoice_nao_enviada_ao_cliente',
+  'lead_novo',
   'motorista_candidatura_parada',
   'motorista_carta_expirando',
   'motorista_documento_pendente',
@@ -108,6 +109,10 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
   cartao_frota_alterado: { label: 'Ver cartões', rota: '/administrativo/cartoes' },
   invoice_nao_enviada_ao_cliente: { label: 'Ver fatura', rota: '/administrativo/faturacao' },
   recibo_anulado: { label: 'Ver recibos', rota: '/administrativo' },
+
+  // ── CRM ─────────────────────────────────────────────────────────────────
+  // O motor preenche `link` com /crm/lead/<id>; a rota base é rede de segurança.
+  lead_novo: { label: 'Ver lead', rota: '/crm' },
 
   // ── Assistência e calendário ────────────────────────────────────────────
   assistencia_ticket_aberto_demasiado_tempo: { label: 'Ver ticket', rota: '/assistencia' },
