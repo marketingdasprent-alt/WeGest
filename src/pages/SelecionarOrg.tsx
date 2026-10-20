@@ -1,12 +1,27 @@
 import React from 'react';
-import { Building2 } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
+import { Building2, Loader2 } from 'lucide-react';
 import { useTenant } from '@/contexts/TenantContext';
+import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 
 const SelecionarOrg = () => {
-  const { orgs, switchOrg } = useTenant();
+  const { orgId, orgs, switchOrg } = useTenant();
+  const { defaultRoute } = useDefaultRoute();
+
+  // switchOrg recarrega a página no mesmo endereço: sem isto, escolher a
+  // empresa voltava a mostrar este ecrã para sempre (Inês, 2026-10-20).
+  if (orgId) {
+    if (defaultRoute) return <Navigate to={defaultRoute} replace />;
+    return (
+      <div className="auth-screen auth-screen-safe">
+        <div className="auth-screen__background" aria-hidden="true" />
+        <Loader2 className="relative z-10 h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <AuthMobileShell

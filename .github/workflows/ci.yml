@@ -289,7 +289,9 @@ jobs:
             vigiar_cron_edge \
             cartao_frota_alterado \
             contrato_alterado \
-            lead_novo
+            lead_novo \
+            lead_reenvio_junta_ao_existente \
+            email_lead_novo_respostas_legiveis
 
       # ── Gate 2: notificações ──────────────────────────────────────────
       - name: pgTAP — notificações
