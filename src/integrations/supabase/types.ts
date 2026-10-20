@@ -444,6 +444,32 @@ export type Database = {
           },
         ]
       }
+      api_disponivel_desde_cache: {
+        Row: {
+          calculado_em: string
+          modelos: Json
+          org_id: string
+        }
+        Insert: {
+          calculado_em?: string
+          modelos?: Json
+          org_id: string
+        }
+        Update: {
+          calculado_em?: string
+          modelos?: Json
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_disponivel_desde_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_pedidos: {
         Row: {
           api_chave_id: string | null
@@ -15368,8 +15394,8 @@ export type Database = {
         Returns: string
       }
       api_extras: { Args: { p_org_id: string }; Returns: Json }
-      api_foto_modelo: {
-        Args: { p_modelo_id: string; p_org_id: string }
+      api_imagem_modelo: {
+        Args: { p_org_id: string; p_url: string }
         Returns: string
       }
       api_iva_rent_a_car: { Args: { p_org_id: string }; Returns: number }
@@ -15388,6 +15414,13 @@ export type Database = {
         Returns: Json
       }
       api_modelos_disponivel_desde: {
+        Args: { p_org_id: string }
+        Returns: {
+          disponivel_desde: string
+          modelo_id: string
+        }[]
+      }
+      api_modelos_disponivel_desde_calcular: {
         Args: { p_org_id: string }
         Returns: {
           disponivel_desde: string
@@ -15442,6 +15475,7 @@ export type Database = {
         }
         Returns: number
       }
+      api_refrescar_disponivel_desde: { Args: never; Returns: undefined }
       api_reserva_resumo: {
         Args: { p_org_id: string; p_reserva_id: string }
         Returns: Json
@@ -16445,6 +16479,10 @@ export type Database = {
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
       is_suporte_ti_decada: { Args: never; Returns: boolean }
+      lead_respostas_legiveis: {
+        Args: { p_observacoes: string; p_sem_formacao_tvde?: boolean }
+        Returns: string
+      }
       limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
       limpar_links_curtos_expirados: { Args: never; Returns: number }
       limpar_notificacoes_antigas: {
