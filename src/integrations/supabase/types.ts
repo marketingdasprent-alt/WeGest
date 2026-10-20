@@ -16835,6 +16835,7 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      seed_alerta_lead_novo: { Args: { p_org_id: string }; Returns: undefined }
       seed_alerta_reserva_site_recebida: {
         Args: { p_org_id: string }
         Returns: undefined
