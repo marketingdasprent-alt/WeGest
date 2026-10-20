@@ -15,6 +15,8 @@
 // configuração local.
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 
+import { integracaoDaChave } from '../_shared/faturacao/chaveAgente.ts';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -44,10 +46,9 @@ Deno.serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Sem .single(): uma chave "duplicada" nunca deveria acontecer (é
-    // aleatória, 32 bytes), mas tratar isso como "não encontrada" em vez de
-    // deixar rebentar é mais seguro do que assumir unicidade sem a garantir
-    // por constraint — o mesmo bug já mordeu a integração Bolt.
+    // A chave nunca vai no filtro (ficaria na URL e nos logs): lêem-se as
+    // integrações Primavera e compara-se aqui. Chave repetida conta como não
+    // reconhecida (ver integracaoDaChave).
     //
     // SEM filtro por `ativo`: o agente tem de conseguir autenticar-se e
     // reclamar jobs de TESTE mesmo antes de esta integração ser promovida a
@@ -57,16 +58,15 @@ Deno.serve(async (req) => {
     // sério, não uma camada de segurança adicional.
     const { data: configs, error: erroConfig } = await supabase
       .from('plataformas_configuracao')
-      .select('id')
+      .select('id, client_secret')
       .eq('plataforma', 'faturacao')
-      .eq('client_secret', chave)
       .filter('config->>provider', 'eq', 'primavera');
 
     if (erroConfig) return json({ success: false, error: erroConfig.message }, 500);
-    if (!configs || configs.length !== 1) {
+    const integracaoId = integracaoDaChave(configs ?? [], chave);
+    if (!integracaoId) {
       return json({ success: false, error: 'Chave de agente não reconhecida.' }, 401);
     }
-    const integracaoId = configs[0].id as string;
 
     const { data: jobs, error: erroClaim } = await supabase.rpc('primavera_jobs_claim_integracao', {
       p_integracao_id: integracaoId,
