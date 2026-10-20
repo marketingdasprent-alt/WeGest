@@ -17,6 +17,14 @@ create table if not exists public.api_disponivel_desde_cache (
 );
 alter table public.api_disponivel_desde_cache enable row level security;
 revoke all on table public.api_disponivel_desde_cache from public, anon, authenticated;
+-- As duas redes de sempre (rls_org_isolation e rls_deny_anon), mesmo sem grants.
+drop policy if exists rls_deny_anon on public.api_disponivel_desde_cache;
+create policy rls_deny_anon on public.api_disponivel_desde_cache as restrictive to anon
+  using (false) with check (false);
+drop policy if exists rls_org_isolation on public.api_disponivel_desde_cache;
+create policy rls_org_isolation on public.api_disponivel_desde_cache as restrictive to authenticated
+  using (org_id = public.get_current_org_id())
+  with check (org_id = public.get_current_org_id());
 
 -- O cálculo de sempre (corpo de 20261014190000), agora só chamado pelo cron
 -- e como recurso quando a cache falta.
