@@ -81,48 +81,53 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           .map((uo: any) => uo.organizacoes)
           .filter((o: any) => o && o.ativa);
 
-        setOrgs(orgsList);
-        setOrgsCarregadas(true);
-
-        // Refresh silencioso (aba a voltar a ficar visível): só serve para
-        // detetar orgs novas associadas entretanto — nunca toca em orgId. A
-        // org ativa desta aba, uma vez resolvida, é fixa (ver sessionStorage
-        // abaixo); só muda por ação explícita do utilizador (switchOrg).
-        if (silent) return;
-
-        // Já resolvida nesta aba/sessão do browser? Usa o valor fixado, sem
-        // voltar a ler `user_org_ativa` (que é partilhado entre abas e pode
-        // ter sido alterado por outra aba/portal entretanto).
+        // A org ativa desta aba, uma vez resolvida, é fixa (sessionStorage):
+        // só muda por ação explícita do utilizador (switchOrg).
         const sessionKey = getOrgSessionStorageKey(user.id);
         const pinnedOrgId = sessionStorage.getItem(sessionKey);
-        if (pinnedOrgId && orgsList.some((o) => o.id === pinnedOrgId)) {
-          setOrgId(pinnedOrgId);
+
+        // Refresh silencioso numa aba já resolvida: só deteta orgs novas, nunca
+        // toca em orgId. Sem nada fixado (a primeira carga falhou, ex.: API em
+        // baixo a 2026-10-20) segue para resolver, senão quem tem várias orgs
+        // ia parar ao "Selecionar Empresa" com a empresa já escolhida.
+        if (silent && pinnedOrgId) {
+          setOrgs(orgsList);
+          setOrgsCarregadas(true);
           return;
         }
 
-        // Primeira resolução nesta aba — usa `user_org_ativa` como valor por
-        // omissão (última org ativa da conta) e fixa-o para esta aba.
-        const { data: orgAtiva } = await supabase
-          .from('user_org_ativa')
-          .select('org_id')
-          .eq('user_id', user.id)
-          .single();
-
-        if (orgAtiva?.org_id && orgsList.some((o) => o.id === orgAtiva.org_id)) {
-          setOrgId(orgAtiva.org_id);
-          sessionStorage.setItem(sessionKey, orgAtiva.org_id);
-        } else if (orgsList.length === 1) {
-          // Auto-selecionar se só tem uma org
-          const singleOrgId = orgsList[0].id;
-          setOrgId(singleOrgId);
-          sessionStorage.setItem(sessionKey, singleOrgId);
-          await supabase
+        // Já resolvida nesta aba? Usa o valor fixado, sem voltar a ler
+        // `user_org_ativa` (partilhado entre abas e pode ter sido alterado por
+        // outra aba/portal entretanto). Senão, `user_org_ativa` é o valor por
+        // omissão (última org ativa da conta) e fica fixado para esta aba.
+        let orgResolvida: string | null = null;
+        if (pinnedOrgId && orgsList.some((o) => o.id === pinnedOrgId)) {
+          orgResolvida = pinnedOrgId;
+        } else {
+          const { data: orgAtiva } = await supabase
             .from('user_org_ativa')
-            .upsert({ user_id: user.id, org_id: singleOrgId }, { onConflict: 'user_id' });
-        } else if (orgsList.length > 1) {
-          // Múltiplas orgs sem seleção — user precisa escolher
-          setOrgId(null);
+            .select('org_id')
+            .eq('user_id', user.id)
+            .single();
+
+          if (orgAtiva?.org_id && orgsList.some((o) => o.id === orgAtiva.org_id)) {
+            orgResolvida = orgAtiva.org_id;
+          } else if (orgsList.length === 1) {
+            // Auto-selecionar se só tem uma org
+            orgResolvida = orgsList[0].id;
+            await supabase
+              .from('user_org_ativa')
+              .upsert({ user_id: user.id, org_id: orgResolvida }, { onConflict: 'user_id' });
+          }
+          // Várias orgs sem seleção: fica null e o utilizador escolhe.
         }
+
+        if (orgResolvida) sessionStorage.setItem(sessionKey, orgResolvida);
+        // Lista e org entram juntas: com várias orgs e orgId ainda null, o
+        // ProtectedRoute mandaria logo para o seletor.
+        setOrgs(orgsList);
+        setOrgsCarregadas(true);
+        setOrgId(orgResolvida);
       } catch (err) {
         console.error('[TenantContext] Erro:', err);
       } finally {
