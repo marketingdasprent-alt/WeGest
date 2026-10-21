@@ -22,6 +22,7 @@ const ENTITY_OPTIONS: { value: EntidadeAuditavel; label: string }[] = [
   { value: 'motorista', label: 'Motorista' },
   { value: 'lead', label: 'Lead' },
   { value: 'calendario', label: 'Calendário' },
+  { value: 'viatura', label: 'Viatura' },
 ];
 
 /**
