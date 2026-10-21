@@ -444,6 +444,32 @@ export type Database = {
           },
         ]
       }
+      api_disponivel_desde_cache: {
+        Row: {
+          calculado_em: string
+          modelos: Json
+          org_id: string
+        }
+        Insert: {
+          calculado_em?: string
+          modelos?: Json
+          org_id: string
+        }
+        Update: {
+          calculado_em?: string
+          modelos?: Json
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_disponivel_desde_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: true
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_pedidos: {
         Row: {
           api_chave_id: string | null
@@ -14096,6 +14122,59 @@ export type Database = {
           },
         ]
       }
+      viatura_historico: {
+        Row: {
+          ator_id: string | null
+          criado_em: string
+          detalhe: string | null
+          estado_anterior: string | null
+          estado_novo: string | null
+          evento_tipo: string
+          id: string
+          org_id: string
+          origem: string | null
+          profundidade: number | null
+          user_agent: string | null
+          viatura_id: string
+        }
+        Insert: {
+          ator_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          estado_anterior?: string | null
+          estado_novo?: string | null
+          evento_tipo: string
+          id?: string
+          org_id: string
+          origem?: string | null
+          profundidade?: number | null
+          user_agent?: string | null
+          viatura_id: string
+        }
+        Update: {
+          ator_id?: string | null
+          criado_em?: string
+          detalhe?: string | null
+          estado_anterior?: string | null
+          estado_novo?: string | null
+          evento_tipo?: string
+          id?: string
+          org_id?: string
+          origem?: string | null
+          profundidade?: number | null
+          user_agent?: string | null
+          viatura_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viatura_historico_viatura_id_fkey"
+            columns: ["viatura_id"]
+            isOneToOne: false
+            referencedRelation: "viaturas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       viatura_km_leituras: {
         Row: {
           created_at: string
@@ -14979,6 +15058,78 @@ export type Database = {
         }
         Relationships: []
       }
+      zz_bolt_ficheiro_desfazer_20261021: {
+        Row: {
+          comissoes: number | null
+          fonte_viagens: string | null
+          ganhos_brutos_app: number | null
+          ganhos_brutos_dinheiro: number | null
+          ganhos_liquidos: number | null
+          gorjetas: number | null
+          guardado_em: string | null
+          pagamento_previsto: number | null
+          portagens: number | null
+          resumo_id: string
+          taxas_cancelamento: number | null
+          taxas_reserva: number | null
+        }
+        Insert: {
+          comissoes?: number | null
+          fonte_viagens?: string | null
+          ganhos_brutos_app?: number | null
+          ganhos_brutos_dinheiro?: number | null
+          ganhos_liquidos?: number | null
+          gorjetas?: number | null
+          guardado_em?: string | null
+          pagamento_previsto?: number | null
+          portagens?: number | null
+          resumo_id: string
+          taxas_cancelamento?: number | null
+          taxas_reserva?: number | null
+        }
+        Update: {
+          comissoes?: number | null
+          fonte_viagens?: string | null
+          ganhos_brutos_app?: number | null
+          ganhos_brutos_dinheiro?: number | null
+          ganhos_liquidos?: number | null
+          gorjetas?: number | null
+          guardado_em?: string | null
+          pagamento_previsto?: number | null
+          portagens?: number | null
+          resumo_id?: string
+          taxas_cancelamento?: number | null
+          taxas_reserva?: number | null
+        }
+        Relationships: []
+      }
+      zz_desfazer_identidades_20261021: {
+        Row: {
+          criado_em: string | null
+          identificador: string | null
+          linha_id: string
+          motorista_id_antes: string | null
+          plataforma: string | null
+          tabela: string
+        }
+        Insert: {
+          criado_em?: string | null
+          identificador?: string | null
+          linha_id: string
+          motorista_id_antes?: string | null
+          plataforma?: string | null
+          tabela: string
+        }
+        Update: {
+          criado_em?: string | null
+          identificador?: string | null
+          linha_id?: string
+          motorista_id_antes?: string | null
+          plataforma?: string | null
+          tabela?: string
+        }
+        Relationships: []
+      }
       zz_transferencia_urbango_20261015: {
         Row: {
           created_at: string | null
@@ -15368,8 +15519,8 @@ export type Database = {
         Returns: string
       }
       api_extras: { Args: { p_org_id: string }; Returns: Json }
-      api_foto_modelo: {
-        Args: { p_modelo_id: string; p_org_id: string }
+      api_imagem_modelo: {
+        Args: { p_org_id: string; p_url: string }
         Returns: string
       }
       api_iva_rent_a_car: { Args: { p_org_id: string }; Returns: number }
@@ -15388,6 +15539,13 @@ export type Database = {
         Returns: Json
       }
       api_modelos_disponivel_desde: {
+        Args: { p_org_id: string }
+        Returns: {
+          disponivel_desde: string
+          modelo_id: string
+        }[]
+      }
+      api_modelos_disponivel_desde_calcular: {
         Args: { p_org_id: string }
         Returns: {
           disponivel_desde: string
@@ -15442,6 +15600,7 @@ export type Database = {
         }
         Returns: number
       }
+      api_refrescar_disponivel_desde: { Args: never; Returns: undefined }
       api_reserva_resumo: {
         Args: { p_org_id: string; p_reserva_id: string }
         Returns: Json
@@ -15683,6 +15842,7 @@ export type Database = {
         Args: { p_integracao_id?: string }
         Returns: number
       }
+      bolt_csv_numero: { Args: { p_valor: string }; Returns: number }
       bolt_normalizar_nome: { Args: { p_nome: string }; Returns: string }
       bolt_resumo_merge_api: {
         Args: {
@@ -16445,6 +16605,10 @@ export type Database = {
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
       is_suporte_ti_decada: { Args: never; Returns: boolean }
+      lead_respostas_legiveis: {
+        Args: { p_observacoes: string; p_sem_formacao_tvde?: boolean }
+        Returns: string
+      }
       limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
       limpar_links_curtos_expirados: { Args: never; Returns: number }
       limpar_notificacoes_antigas: {
