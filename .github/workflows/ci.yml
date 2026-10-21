@@ -375,7 +375,8 @@ jobs:
             primavera_fila_por_integracao \
             ticket_ativo_poe_viatura_em_manutencao \
             contrato_recusa_viatura_em_manutencao \
-            fotos_da_viatura
+            fotos_da_viatura \
+            viatura_historico_estado
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

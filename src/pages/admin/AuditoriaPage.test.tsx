@@ -282,6 +282,25 @@ describe('AuditoriaPage', () => {
     );
   });
 
+  it('oferece a entidade Viatura e consulta o seu histórico', () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('option', { name: 'Viatura' }));
+
+    // Viatura tem tabela de histórico: nada de aviso, botão activo.
+    expect(screen.queryByText(/não tem tabelas de histórico dedicadas/i)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/ID do registo/i), {
+      target: { value: 'viatura-uuid-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Auditar/i }));
+
+    expect(mockUseAuditHistory).toHaveBeenCalledWith({
+      entidade: 'viatura',
+      id: 'viatura-uuid-1',
+    });
+  });
+
   it('mostra estado vazio quando não há entradas', async () => {
     mockUseAuditHistory.mockReturnValue({
       data: [],

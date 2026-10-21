@@ -95,9 +95,39 @@ const TABLES_BY_ENTITY: Record<string, TableMapping[]> = {
       actionColumn: 'campo',
     },
   ],
+  viatura: [
+    {
+      table: 'viatura_historico',
+      fkColumn: 'viatura_id',
+      entidade: 'viatura',
+      acaoPadrao: 'estado',
+      dateColumn: 'criado_em',
+      actorColumn: 'ator_id',
+      detailColumn: 'detalhe',
+      payloadColumn: null,
+      actionColumn: 'evento_tipo',
+    },
+  ],
   reserva: [],
   motorista: [],
 };
+
+/**
+ * Detalhe de uma linha de viatura_historico: ao texto do trigger junta a origem
+ * ('PATCH /viaturas', 'servidor', ...) e assinala quando veio de outro trigger.
+ * Ex.: 'status: em_uso → disponivel · PATCH /contratos_renting · em cascata'
+ */
+export function composeViaturaDetalhe(row: Record<string, unknown>): string | null {
+  const detalhe = typeof row['detalhe'] === 'string' ? row['detalhe'] : null;
+  if (!detalhe) return null;
+
+  const partes = [detalhe];
+  if (typeof row['origem'] === 'string' && row['origem']) partes.push(row['origem']);
+  if (typeof row['profundidade'] === 'number' && row['profundidade'] > 1) {
+    partes.push('em cascata');
+  }
+  return partes.join(' · ');
+}
 
 function rowToAuditEntry(row: Record<string, unknown>, mapping: TableMapping): AuditEntry {
   const actorId =
@@ -116,6 +146,8 @@ function rowToAuditEntry(row: Record<string, unknown>, mapping: TableMapping): A
     if (campo) {
       detalhe = `${campo}: ${valorAnterior ?? '—'} → ${valorNovo ?? '—'}`;
     }
+  } else if (mapping.table === 'viatura_historico') {
+    detalhe = composeViaturaDetalhe(row);
   } else if (mapping.detailColumn && typeof row[mapping.detailColumn] === 'string') {
     detalhe = row[mapping.detailColumn] as string;
   }

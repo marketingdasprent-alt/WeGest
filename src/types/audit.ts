@@ -5,10 +5,17 @@
  * - `contrato`   → contratos_edicoes, contratos_reimpressoes, contrato_historico
  * - `lead`       → lead_status_history
  * - `calendario` → calendario_eventos_historico
+ * - `viatura`    → viatura_historico (mudanças de estado, escritas por trigger)
  * - `reserva`    — sem tabela de histórico dedicada (hard delete)
  * - `motorista`  — sem tabela de histórico dedicada (hard delete)
  */
-export type EntidadeAuditavel = 'contrato' | 'reserva' | 'motorista' | 'lead' | 'calendario';
+export type EntidadeAuditavel =
+  | 'contrato'
+  | 'reserva'
+  | 'motorista'
+  | 'lead'
+  | 'calendario'
+  | 'viatura';
 
 /**
  * Entrada genérica de auditoria, normalizada a partir de qualquer tabela de

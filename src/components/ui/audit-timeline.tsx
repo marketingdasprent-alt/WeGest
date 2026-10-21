@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Calendar,
   CalendarClock,
+  Car,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -26,6 +27,7 @@ const ENTITY_ICONS: Record<EntidadeAuditavel, React.FC<React.SVGProps<SVGSVGElem
   motorista: User,
   lead: Target,
   calendario: CalendarClock,
+  viatura: Car,
 };
 
 const ENTITY_LABELS: Record<EntidadeAuditavel, string> = {
@@ -34,6 +36,7 @@ const ENTITY_LABELS: Record<EntidadeAuditavel, string> = {
   motorista: 'Motorista',
   lead: 'Lead',
   calendario: 'Calendário',
+  viatura: 'Viatura',
 };
 
 const PAGE_SIZE = 10;

@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
-import { useAuditHistory } from './useAuditHistory';
+import { useAuditHistory, composeViaturaDetalhe } from './useAuditHistory';
 import { supabase } from '@/integrations/supabase/client';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -143,6 +143,46 @@ describe('useAuditHistory', () => {
     });
   });
 
+  it('consulta viatura_historico para entidade viatura e compõe o detalhe com a origem', async () => {
+    const now = new Date().toISOString();
+    const fakeRows = [
+      {
+        id: 'vh1',
+        viatura_id: 'viatura-1',
+        org_id: 'org-1',
+        evento_tipo: 'estado',
+        estado_anterior: 'em_uso',
+        estado_novo: 'disponivel',
+        ator_id: 'user-3',
+        origem: 'PATCH /viaturas',
+        user_agent: 'Mozilla/5.0',
+        profundidade: 1,
+        detalhe: 'status: em_uso → disponivel',
+        criado_em: now,
+      },
+    ];
+
+    mockFromResolve(fakeRows);
+
+    const { result } = renderHook(() => useAuditHistory({ entidade: 'viatura', id: 'viatura-1' }), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.data).toHaveLength(1);
+    expect(result.current.data![0]).toMatchObject({
+      entidade: 'viatura',
+      tabelaOrigem: 'viatura_historico',
+      acao: 'estado',
+      actorId: 'user-3',
+      detalhe: 'status: em_uso → disponivel · PATCH /viaturas',
+      payload: null,
+      createdAt: now,
+    });
+    expect(supabase.from).toHaveBeenCalledTimes(1);
+    expect(supabase.from).toHaveBeenCalledWith('viatura_historico');
+  });
+
   it('consulta as 3 tabelas de histórico para entidade contrato', async () => {
     mockFromResolve([]);
 
@@ -227,5 +267,42 @@ describe('useAuditHistory', () => {
     expect(result.current.data![0].tabelaOrigem).toBe('contrato_historico');
     expect(result.current.data![1].createdAt).toBe(earlier);
     expect(result.current.data![1].tabelaOrigem).toBe('contratos_edicoes');
+  });
+});
+
+describe('composeViaturaDetalhe', () => {
+  it('junta a origem ao detalhe do trigger', () => {
+    expect(
+      composeViaturaDetalhe({
+        detalhe: 'status: disponivel → em_uso',
+        origem: 'POST /rpc/atribuir_viatura',
+        profundidade: 1,
+      })
+    ).toBe('status: disponivel → em_uso · POST /rpc/atribuir_viatura');
+  });
+
+  it('assinala a cascata quando a mudança veio de outro trigger', () => {
+    expect(
+      composeViaturaDetalhe({
+        detalhe: 'status: em_uso → disponivel',
+        origem: 'PATCH /contratos_renting',
+        profundidade: 2,
+      })
+    ).toBe('status: em_uso → disponivel · PATCH /contratos_renting · em cascata');
+  });
+
+  it('fica só com o detalhe quando não há origem (semente da migração sem profundidade)', () => {
+    expect(
+      composeViaturaDetalhe({
+        detalhe: 'estado inicial registado pela migração',
+        origem: null,
+        profundidade: 0,
+      })
+    ).toBe('estado inicial registado pela migração');
+  });
+
+  it('devolve null sem detalhe', () => {
+    expect(composeViaturaDetalhe({ origem: 'servidor', profundidade: 1 })).toBeNull();
+    expect(composeViaturaDetalhe({ detalhe: '', origem: 'servidor' })).toBeNull();
   });
 });
