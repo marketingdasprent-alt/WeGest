@@ -5,6 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgId } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
+import { useViaturasSubstitutas } from '@/hooks/useViaturasSubstitutas';
+import { marcarViaturaEmManutencao } from '@/lib/ticketEstadoViatura';
 import {
   Card,
   CardContent,
@@ -96,12 +98,17 @@ export default function AssistenciaNova() {
 
   const [selectedViatura, setSelectedViatura] = useState<Viatura | null>(null);
   const [viaturaSubstituta, setViaturaSubstituta] = useState<Viatura | null>(null);
-  const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
   const [showSubstituteSearch, setShowSubstituteSearch] = useState(false);
   const [substituteSearchTerm, setSubstituteSearchTerm] = useState('');
   const [motoristaId, setMotoristaId] = useState<string | null>(null);
   const [mediaFiles, setMediaFiles] = useState<any[]>([]);
   const [atribuidoA, setAtribuidoA] = useState<string | null>(null);
+
+  // Substitutas possíveis para o carro escolhido; só se usam no passo 4.
+  const { data: viaturasSubstitutas } = useViaturasSubstitutas({
+    excluirViaturaId: selectedViatura?.id,
+    enabled: !!selectedViatura,
+  });
 
   const [formData, setFormData] = useState({
     categoria_id: '',
@@ -200,15 +207,6 @@ export default function AssistenciaNova() {
       .is('data_fim', null)
       .maybeSingle();
     setMotoristaId(assoc?.motorista_id || null);
-
-    // Buscar viaturas disponíveis para eventual substituta
-    const { data: disponiveis } = await supabase
-      .from('viaturas')
-      .select('id, matricula, marca, modelo, status, km_atual')
-      .eq('status', 'disponivel')
-      .neq('id', viatura.id)
-      .order('matricula');
-    setViaturasDisponiveis(disponiveis || []);
 
     setStep(2); // Vai para Multimédia
   };
@@ -373,12 +371,9 @@ export default function AssistenciaNova() {
         tipo: 'status_change',
       });
 
-      // 2. Viatura original → manutencao
-      const { error: viaturaError } = await supabase
-        .from('viaturas')
-        .update({ status: 'manutencao' })
-        .eq('id', selectedViatura.id);
-      if (viaturaError) throw viaturaError;
+      // 2. Viatura original → manutencao (o ticket nasce 'pendente', que a
+      // trigger da BD ignora); respeita inativo/vendida como a trigger faz.
+      await marcarViaturaEmManutencao(supabase, selectedViatura.id);
 
       // 3. Viatura substituta (se selecionada)
       if (viaturaSubstituta && motoristaId && ticket) {
@@ -960,7 +955,7 @@ export default function AssistenciaNova() {
                                 className="h-8 text-sm"
                               />
                               <div className="max-h-32 overflow-y-auto space-y-1">
-                                {viaturasDisponiveis
+                                {(viaturasSubstitutas ?? [])
                                   .filter((v) => matchesSearch(v.matricula, substituteSearchTerm))
                                   .map((v) => (
                                     <button

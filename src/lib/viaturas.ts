@@ -170,3 +170,20 @@ export const deriveViaturaEstado = (
   if (base === 'em_uso' || base === 'em uso') return 'em_uso';
   return 'disponivel';
 };
+
+/**
+ * Estado a gravar com a ficha financeira; `undefined` = não mexer.
+ * Só muda quando a venda muda: vendida entra em 'inativo' (o único estado
+ * manual; a venda em si é `is_vendida`, de onde a UI deriva "Vendida") e anular
+ * a venda só devolve 'disponivel' a quem estava fora de frota — o resto é das
+ * triggers da BD.
+ */
+export const statusAoGravarVenda = (
+  viatura: { status?: string | null; is_vendida?: boolean | null },
+  isVendidaNovo: boolean
+): string | undefined => {
+  if (!!viatura.is_vendida === isVendidaNovo) return undefined;
+  if (isVendidaNovo) return 'inativo';
+  const base = (viatura.status || '').toLowerCase();
+  return base === 'inativo' || base === 'vendida' ? 'disponivel' : undefined;
+};
