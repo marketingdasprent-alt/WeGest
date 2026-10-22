@@ -2,6 +2,11 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  gravarFechoTicket,
+  type DecisaoSubstituta,
+  type TicketUpdate,
+} from '@/lib/ticketEstadoViatura';
 import type { TicketRaw as Ticket } from '@/types/ticket';
 import type { Viatura, Motorista } from '@/components/assistencia/ticket/types';
 
@@ -18,7 +23,7 @@ export interface ClosureFormData {
 }
 
 export type ClosureDecisao = 'motorista' | 'empresa' | 'aberto' | null;
-export type ClosureSubstDecisao = 'devolver' | 'definitivo' | null;
+export type ClosureSubstDecisao = DecisaoSubstituta;
 
 export interface ExitMediaFile {
   url: string;
@@ -267,7 +272,7 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           }
         }
 
-        const ticketUpdates: any = {
+        const ticketUpdates: TicketUpdate = {
           km_fim: kmFim,
           km_fim_indisponivel: closureData.km_fim_indisponivel,
           combustivel_fim: closureData.combustivel_fim,
@@ -277,81 +282,25 @@ export function useTicketClosure({ ticket, viatura, motorista }: UseTicketClosur
           fatura_url: faturaUrl,
           reparacao_id: reparacaoId,
         };
-        if (!isEditMode) {
-          ticketUpdates.status = 'resolvido';
-          ticketUpdates.data_resolucao = new Date().toISOString();
-        }
 
-        const { error: ticketUpdateError } = await supabase
-          .from('assistencia_tickets')
-          .update(ticketUpdates)
-          .eq('id', ticketId);
-        if (ticketUpdateError) throw ticketUpdateError;
-
-        if (!isEditMode) {
-          const viaturaOriginalStatus = motorista?.id ? 'em_uso' : 'disponivel';
-          const viaturaUpdate: { status: string; km_atual?: number } = {
-            status: viaturaOriginalStatus,
-          };
-          if (kmFim != null) viaturaUpdate.km_atual = kmFim;
-          const { error: viaturaUpdateError } = await supabase
-            .from('viaturas')
-            .update(viaturaUpdate)
-            .eq('id', viatura.id);
-          if (viaturaUpdateError) throw viaturaUpdateError;
-
-          if (motorista?.id) {
-            const { data: existingAssoc } = await supabase
-              .from('motorista_viaturas')
-              .select('id')
-              .eq('motorista_id', motorista.id)
-              .eq('viatura_id', viatura.id)
-              .eq('status', 'ativo')
-              .is('data_fim', null)
-              .maybeSingle();
-
-            if (!existingAssoc) {
-              const { error: reassocError } = await supabase.from('motorista_viaturas').insert({
-                motorista_id: motorista.id,
-                viatura_id: viatura.id,
-                data_inicio: new Date().toISOString().split('T')[0],
-                status: 'ativo',
-                tipo: 'normal',
-              });
-              if (reassocError) throw reassocError;
-            }
-          }
-
-          if (ticket.viatura_substituta_id && motorista?.id) {
-            if (substDecisao === 'devolver') {
-              const { error: encerraSubstitutaError } = await supabase
-                .from('motorista_viaturas')
-                .update({
-                  data_fim: new Date().toISOString().split('T')[0],
-                  status: 'encerrado',
-                })
-                .eq('viatura_id', ticket.viatura_substituta_id)
-                .eq('motorista_id', motorista.id)
-                .eq('tipo', 'substituta')
-                .is('data_fim', null);
-              if (encerraSubstitutaError) throw encerraSubstitutaError;
-
-              const { error: liberaSubstitutaError } = await supabase
-                .from('viaturas')
-                .update({ status: 'disponivel' })
-                .eq('id', ticket.viatura_substituta_id);
-              if (liberaSubstitutaError) throw liberaSubstitutaError;
-            } else if (substDecisao === 'definitivo') {
-              const { error: definitivoError } = await supabase
-                .from('motorista_viaturas')
-                .update({ tipo: 'normal' })
-                .eq('viatura_id', ticket.viatura_substituta_id)
-                .eq('motorista_id', motorista.id)
-                .eq('tipo', 'substituta')
-                .is('data_fim', null);
-              if (definitivoError) throw definitivoError;
-            }
-          }
+        if (isEditMode) {
+          const { error: ticketUpdateError } = await supabase
+            .from('assistencia_tickets')
+            .update(ticketUpdates)
+            .eq('id', ticketId);
+          if (ticketUpdateError) throw ticketUpdateError;
+        } else {
+          // O estado da viatura original é da trigger que corre ao resolver o
+          // ticket; a associação ao motorista tem de estar gravada antes disso.
+          await gravarFechoTicket(supabase, {
+            ticketId,
+            ticketUpdates,
+            viaturaId: viatura.id,
+            motoristaId: motorista?.id ?? null,
+            kmFim,
+            viaturaSubstitutaId: ticket.viatura_substituta_id ?? null,
+            substDecisao,
+          });
 
           const checkoutMessage =
             `Viatura reparada com check-out completo - ` +

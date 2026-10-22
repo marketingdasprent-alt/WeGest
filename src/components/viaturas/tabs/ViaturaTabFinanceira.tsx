@@ -21,6 +21,7 @@ import { DepreciacaoSection } from './financeira/sections/DepreciacaoSection';
 import { VendaSection } from './financeira/sections/VendaSection';
 import { useViaturaFinanceiraReceitas } from '@/hooks/useViaturaFinanceiraReceitas';
 import { calculateRestanteFinanciamento } from '@/utils/viaturas-financeiro';
+import { statusAoGravarVenda } from '@/lib/viaturas';
 import type { ReceitasData } from './ViaturaFinanceiraMovimentos';
 
 const financeiraSchema = z.object({
@@ -153,6 +154,9 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
         }
       }
 
+      // O estado só vai quando a venda muda; nos outros casos é das triggers da BD.
+      const status = statusAoGravarVenda(viatura, data.is_vendida);
+
       const { error } = await supabase
         .from('viaturas')
         .update({
@@ -178,11 +182,7 @@ export function ViaturaTabFinanceira({ viatura, onUpdate }: ViaturaTabFinanceira
           metodo_depreciacao: data.metodo_depreciacao,
           vida_util_anos: data.vida_util_anos ? parseInt(data.vida_util_anos) : 5,
           is_vendida: data.is_vendida,
-          status: data.is_vendida
-            ? 'vendida'
-            : viatura.status === 'vendida'
-              ? 'disponivel'
-              : viatura.status,
+          ...(status ? { status } : {}),
           data_venda: data.data_venda || null,
           valor_venda: data.valor_venda ? parseFloat(data.valor_venda) : null,
           venda_observacoes: data.venda_observacoes || null,

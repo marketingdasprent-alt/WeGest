@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { viaturaToFormValues, VIATURA_FK_FIELDS } from './viaturaFormValues';
-import type { Viatura } from './viaturaTabDados.types';
+import { viaturaToFormValues, montarPayloadViatura, VIATURA_FK_FIELDS } from './viaturaFormValues';
+import type { Viatura, ViaturaFormData } from './viaturaTabDados.types';
 
 const viatura: Viatura = {
   id: 'v1',
@@ -39,9 +39,10 @@ describe('viaturaToFormValues', () => {
     expect(v.km_atual).toBe('120000');
   });
 
-  it('mapeia o estado derivado "em_uso" para "disponivel"', () => {
-    expect(viaturaToFormValues(viatura).status).toBe('disponivel');
+  it('mantém o estado tal como está na BD (em_uso não vira disponivel)', () => {
+    expect(viaturaToFormValues(viatura).status).toBe('em_uso');
     expect(viaturaToFormValues({ ...viatura, status: 'manutencao' }).status).toBe('manutencao');
+    expect(viaturaToFormValues({ ...viatura, status: null }).status).toBe('disponivel');
   });
 
   it('trata nulos/indefinidos como strings vazias', () => {
@@ -63,5 +64,64 @@ describe('viaturaToFormValues', () => {
     expect(VIATURA_FK_FIELDS).toContain('marca_id');
     expect(VIATURA_FK_FIELDS).toContain('grupo_id');
     expect(VIATURA_FK_FIELDS).toHaveLength(6);
+  });
+});
+
+describe('montarPayloadViatura — quando o estado vai no payload', () => {
+  const nomes = { marcaNome: 'Renault', modeloNome: 'Megane', combustivelNome: 'Diesel' };
+  const data: ViaturaFormData = { ...viaturaToFormValues(viatura), km_atual: '121000' };
+
+  it('viatura existente sem mexer no estado: o payload não tem a chave status', () => {
+    const payload = montarPayloadViatura(data, {
+      ...nomes,
+      isNew: false,
+      statusAtual: 'em_uso',
+      statusAlterado: false,
+    });
+    expect('status' in payload).toBe(false);
+    expect(payload.km_atual).toBe(121000);
+    expect(payload.matricula).toBe('16-UZ-35');
+  });
+
+  it('viatura existente com estado alterado no Select: grava o novo estado', () => {
+    const payload = montarPayloadViatura(
+      { ...data, status: 'inativo' },
+      { ...nomes, isNew: false, statusAtual: 'disponivel', statusAlterado: true }
+    );
+    expect(payload.status).toBe('inativo');
+  });
+
+  it('Select tocado mas com o mesmo valor da BD: não reescreve o estado', () => {
+    const payload = montarPayloadViatura(
+      { ...data, status: 'disponivel' },
+      { ...nomes, isNew: false, statusAtual: 'disponivel', statusAlterado: true }
+    );
+    expect('status' in payload).toBe(false);
+  });
+
+  it('viatura nova leva sempre estado, com disponivel por omissão', () => {
+    expect(
+      montarPayloadViatura(
+        { ...data, status: '' },
+        { ...nomes, isNew: true, statusAtual: null, statusAlterado: false }
+      ).status
+    ).toBe('disponivel');
+    expect(
+      montarPayloadViatura(
+        { ...data, status: 'inativo' },
+        { ...nomes, isNew: true, statusAtual: null, statusAlterado: true }
+      ).status
+    ).toBe('inativo');
+  });
+
+  it('usa os nomes resolvidos dos catálogos e normaliza vazios para null', () => {
+    const payload = montarPayloadViatura(
+      { ...data, cor: '', grupo_id: '' },
+      { ...nomes, isNew: false, statusAtual: 'em_uso', statusAlterado: false }
+    );
+    expect(payload.marca).toBe('Renault');
+    expect(payload.combustivel).toBe('Diesel');
+    expect(payload.cor).toBeNull();
+    expect(payload.grupo_id).toBeNull();
   });
 });

@@ -42,7 +42,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { useConfirmacao } from '@/hooks/useConfirmacao';
 import { RECURSOS } from '@/utils/permissions';
-import { viaturaToFormValues, VIATURA_FK_FIELDS } from './viaturaFormValues';
+import { viaturaToFormValues, montarPayloadViatura, VIATURA_FK_FIELDS } from './viaturaFormValues';
 import { detectViaturaTipoFromFilename } from './viaturaBatchDetect';
 import { ViaturaFormIdentificacao } from './ViaturaFormIdentificacao';
 import { ViaturaFormVeiculo } from './ViaturaFormVeiculo';
@@ -186,35 +186,15 @@ export function ViaturaTabDados({ viatura, isNew, onSave, saving }: ViaturaTabDa
       viatura?.combustivel ||
       '';
 
-    const payload: Partial<Viatura> = {
-      matricula: data.matricula.toUpperCase(),
-      marca: marcaNome,
-      modelo: modeloNome,
-      marca_id: data.marca_id || null,
-      modelo_id: data.modelo_id || null,
-      combustivel_id: data.combustivel_id || null,
-      ano: data.ano ? parseInt(data.ano) : null,
-      cor: data.cor || null,
-      categoria: data.categoria || null,
-      combustivel: combustivelNome || null,
-      status: data.status || 'disponivel',
-      km_atual: data.km_atual ? parseInt(data.km_atual) : 0,
-      numero_motor: data.numero_motor || null,
-      numero_chassis: data.numero_chassis || null,
-      data_matricula: data.data_matricula || null,
-      observacoes: data.observacoes || null,
-      grupo_id: data.grupo_id || null,
-      is_slot: data.is_slot,
-      habilitada_tvde: data.habilitada_tvde,
-      estacao_id: data.estacao_id || null,
-      extintor_numero: data.extintor_numero || null,
-      extintor_validade: data.extintor_validade || null,
-      tipo_id: data.tipo_id || null,
-      proxima_manutencao_data: data.proxima_manutencao_data || null,
-      proxima_manutencao_km: data.proxima_manutencao_km
-        ? parseInt(data.proxima_manutencao_km)
-        : null,
-    };
+    const payload = montarPayloadViatura(data, {
+      isNew,
+      statusAtual: viatura?.status,
+      // Passar o formState subscreve dirtyFields; sem isso o proxy pode não o expor aqui.
+      statusAlterado: form.getFieldState('status', form.formState).isDirty,
+      marcaNome,
+      modeloNome,
+      combustivelNome,
+    });
 
     const ok = await onSave(payload);
     // Actualiza o baseline para o botão Guardar não ficar dirty após gravar.
