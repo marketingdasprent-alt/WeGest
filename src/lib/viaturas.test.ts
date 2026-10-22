@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import { deriveViaturaEstado, ESTADOS_EM_USO, statusAoGravarVenda } from './viaturas';
+import {
+  deriveViaturaEstado,
+  ESTADOS_EM_USO,
+  statusAoGravarVenda,
+  FILTRO_NAO_VENDIDA,
+} from './viaturas';
 
 const fontes = (...f: string[]) => new Set(f);
 
@@ -69,5 +74,11 @@ describe('statusAoGravarVenda — a ficha financeira só mexe no estado quando a
   it('deixa de ser vendida mas o estado é de operação: não mexe (é das triggers)', () => {
     expect(statusAoGravarVenda({ status: 'em_uso', is_vendida: true }, false)).toBeUndefined();
     expect(statusAoGravarVenda({ status: 'manutencao', is_vendida: true }, false)).toBeUndefined();
+  });
+});
+
+describe('FILTRO_NAO_VENDIDA — vendidas saem das listas pela marca, não pelo estado', () => {
+  it('exclui is_vendida e trata NULL como não vendida', () => {
+    expect(FILTRO_NAO_VENDIDA).toBe('is_vendida.is.null,is_vendida.eq.false');
   });
 });

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { FILTRO_NAO_VENDIDA } from '@/lib/viaturas';
 
 export interface ViaturaSubstituta {
   id: string;
@@ -29,7 +30,7 @@ export function useViaturasSubstitutas(options: UseViaturasSubstitutasOptions = 
         .eq('status', 'disponivel')
         // Booleanos nullable: NULL conta como "não". Vários .or() combinam-se com AND.
         .or('is_slot.is.null,is_slot.eq.false')
-        .or('is_vendida.is.null,is_vendida.eq.false');
+        .or(FILTRO_NAO_VENDIDA);
       if (excluirViaturaId) q = q.neq('id', excluirViaturaId);
 
       const { data, error } = await q.order('matricula');

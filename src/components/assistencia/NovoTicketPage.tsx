@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft, Search, Car, ChevronRight, Loader2, Wrench } from 'lucide-react';
 import { cn, matchesSearch } from '@/lib/utils';
+import { FILTRO_NAO_VENDIDA } from '@/lib/viaturas';
 
 interface Viatura {
   id: string;
@@ -84,6 +85,7 @@ export const NovoTicketPage: React.FC<Props> = ({ onClose, onSuccess }) => {
           .from('viaturas')
           .select('id, matricula, marca, modelo, status')
           .neq('status', 'vendida')
+          .or(FILTRO_NAO_VENDIDA)
           .order('matricula'),
         supabase
           .from('assistencia_categorias')

@@ -7,6 +7,7 @@ import { useOrgId } from '@/contexts/TenantContext';
 import { useToast } from '@/hooks/use-toast';
 import { useViaturasSubstitutas } from '@/hooks/useViaturasSubstitutas';
 import { marcarViaturaEmManutencao } from '@/lib/ticketEstadoViatura';
+import { FILTRO_NAO_VENDIDA } from '@/lib/viaturas';
 import {
   Card,
   CardContent,
@@ -138,6 +139,7 @@ export default function AssistenciaNova() {
           .from('viaturas')
           .select('id, matricula, marca, modelo, cor, ano, status, km_atual, combustivel')
           .neq('status', 'vendida')
+          .or(FILTRO_NAO_VENDIDA)
           .order('matricula'),
         supabase
           .from('assistencia_categorias')

@@ -187,3 +187,9 @@ export const statusAoGravarVenda = (
   const base = (viatura.status || '').toLowerCase();
   return base === 'inativo' || base === 'vendida' ? 'disponivel' : undefined;
 };
+
+/**
+ * Filtro PostgREST `.or()` para excluir vendidas. A venda vive em `is_vendida`
+ * (NULL conta como "não"); `status='vendida'` sozinho deixa passar as vendidas em 'inativo'.
+ */
+export const FILTRO_NAO_VENDIDA = 'is_vendida.is.null,is_vendida.eq.false';
