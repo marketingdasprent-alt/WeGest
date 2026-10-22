@@ -1,6 +1,21 @@
 import { describe, it, expect } from 'vitest';
 
-import { traduzirErroAuth, ERRO_AUTH_FALLBACK } from './erroAuth';
+import { traduzirErroAuth, ERRO_AUTH_FALLBACK, ehEmailSemConta } from './erroAuth';
+
+describe('ehEmailSemConta', () => {
+  it('reconhece o código do OTP para email sem conta', () => {
+    expect(ehEmailSemConta({ code: 'otp_disabled', message: 'x' })).toBe(true);
+  });
+
+  it('reconhece a mensagem quando o código não vem', () => {
+    expect(ehEmailSemConta(new Error('Signups not allowed for otp'))).toBe(true);
+  });
+
+  it('não engole os outros erros', () => {
+    expect(ehEmailSemConta(new Error('Email rate limit exceeded'))).toBe(false);
+    expect(ehEmailSemConta(null)).toBe(false);
+  });
+});
 
 describe('traduzirErroAuth', () => {
   it('traduz credenciais inválidas e sugere a recuperação', () => {
