@@ -51,10 +51,12 @@ function Harness({
   travado,
   contratoId,
   regime = 'tvde',
+  tarifaGravada = 'tarifa-gravada',
 }: {
   travado: boolean;
   contratoId?: string;
   regime?: string;
+  tarifaGravada?: string | null;
 }) {
   const form = useForm({ defaultValues: { regime, viatura_id: null, tarifa_id: null } });
   return (
@@ -67,6 +69,7 @@ function Harness({
         grupos={[]}
         estacoes={[]}
         travado={travado}
+        tarifaGravada={tarifaGravada}
         contratoId={contratoId}
       />
     </FormProvider>
@@ -115,6 +118,17 @@ describe('ContratoFormSecoes — contrato gravado', () => {
   it('contrato novo: nem a tarifa fica travada', () => {
     renderSecoes(false);
     expect(screen.getByRole('combobox').closest('fieldset[disabled]')).toBeNull();
+  });
+
+  // Contrato aberto sem tarifa (#486): obrigatória, sem preço para pedir ao
+  // supervisor e travada — nada se gravava, nem a troca de viatura.
+  it('contrato gravado sem tarifa: o seletor fica livre, o resto do bloco travado', () => {
+    render(<Harness travado tarifaGravada={null} />);
+    expect(screen.getByRole('combobox').closest('fieldset[disabled]')).toBeNull();
+    expect(screen.getAllByText('Tarifa & Faturação')).toHaveLength(1);
+    expect(
+      screen.getByText('Franquia, Caução & Quilometragem').closest('fieldset[disabled]')
+    ).not.toBeNull();
   });
 });
 
