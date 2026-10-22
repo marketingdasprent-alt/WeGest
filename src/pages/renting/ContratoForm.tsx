@@ -397,6 +397,7 @@ const ContratoForm = () => {
                       onCriarNovoCliente={() => setClienteDialogOpen(true)}
                       onCriarNovoMotorista={() => setMotoristaDialogOpen(true)}
                       travado={precoTravado}
+                      tarifaGravada={contrato?.tarifa_id ?? null}
                       proximaRenovacaoEm={contrato?.proxima_renovacao_em ?? null}
                       precoSemanaAcordado={contrato?.preco_semana_acordado ?? null}
                     />

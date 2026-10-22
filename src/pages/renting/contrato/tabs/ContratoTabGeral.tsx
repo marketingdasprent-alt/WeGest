@@ -23,6 +23,8 @@ interface ContratoTabGeralProps {
   onCriarNovoMotorista?: () => void;
   /** Contrato já aberto: bloqueia tudo menos a secção da Viatura. */
   travado?: boolean;
+  /** tarifa_id gravada no contrato; sem ela, a tarifa escolhe-se mesmo travado. */
+  tarifaGravada?: string | null;
   proximaRenovacaoEm?: string | null;
   precoSemanaAcordado?: number | null;
 }
@@ -47,6 +49,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
   onCriarNovoCliente,
   onCriarNovoMotorista,
   travado,
+  tarifaGravada,
   proximaRenovacaoEm,
   precoSemanaAcordado,
 }) => {
@@ -66,6 +69,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
       onCriarNovoCliente={onCriarNovoCliente}
       onCriarNovoMotorista={onCriarNovoMotorista}
       travado={travado}
+      tarifaGravada={tarifaGravada}
       proximaRenovacaoEm={proximaRenovacaoEm}
       precoSemanaAcordado={precoSemanaAcordado}
     />

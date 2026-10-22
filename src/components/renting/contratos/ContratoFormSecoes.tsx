@@ -67,6 +67,11 @@ interface ContratoFormSecoesProps {
    * franquia mudam por pedido ao supervisor; o resto do contrato edita-se.
    */
   travado?: boolean;
+  /**
+   * tarifa_id gravada no contrato. Sem ela não há preço para pedir ao supervisor
+   * e a tarifa é obrigatória: o seletor fica livre até se gravar uma.
+   */
+  tarifaGravada?: string | null;
   /** proxima_renovacao_em do contrato (edição) — mostrada na Recolha dos TVDE. */
   proximaRenovacaoEm?: string | null;
   /** TVDE: preço semanal negociado e aprovado (contrato gravado). NULL segue a tarifa. */
@@ -94,9 +99,14 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   onCriarNovoMotorista,
   contratoId,
   travado,
+  tarifaGravada = null,
   proximaRenovacaoEm,
   precoSemanaAcordado = null,
 }) => {
+  // Contratos abertos sem tarifa (#486 e outros 5 a 22-10) ficavam presos: a
+  // tarifa é obrigatória, o seletor travado, e não há preço para pedir alteração.
+  const tarifaLivre = !!travado && !tarifaGravada;
+
   // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
   // que partia os grids lá dentro. O cinzento vem dos próprios campos
   // (disabled:opacity-*) — não se escurece o bloco todo, que apagava labels
@@ -241,6 +251,60 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     }
   };
 
+  const seletorTarifa = (
+    <div className="mb-3">
+      <FormField
+        control={form.control}
+        name="tarifa_id"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
+            <Select value={field.value ?? ''} onValueChange={(v) => handleTarifaChange(v || null)}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      isTvde ? 'Selecionar tarifa TVDE...' : 'Selecionar tarifa Rent-a-Car...'
+                    }
+                  />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {tarifasDoRegime.length === 0 && (
+                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                    {modeloIdSel
+                      ? 'Nenhuma tarifa cobre o modelo desta viatura.'
+                      : isTvde
+                        ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
+                        : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
+                  </div>
+                )}
+                {tarifasDoRegime.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {modeloSemPreco && (
+        <Alert variant="destructive" className="mt-3">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Modelo sem preço nesta tarifa</AlertTitle>
+          <AlertDescription>
+            A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não tem preço
+            definido na tarifa selecionada. Define o preço deste modelo na tarifa ou escolhe outra
+            viatura/tarifa.
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="space-y-6">
@@ -268,68 +332,27 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
         onViaturaChange={onViaturaChange}
       />
 
+      {/* Um fieldset desactivado desactiva todos os descendentes: a tarifa livre
+          tem de ficar fora dele, não pode ser reactivada lá dentro. */}
+      {tarifaLivre && (
+        <div>
+          <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
+          {seletorTarifa}
+        </div>
+      )}
+
       <fieldset disabled={travado} className={blocoTravadoClass}>
         {/* Tarifa & Faturação — mesmo layout da reserva: escolha da tarifa,
           cartão de preços do modelo e caixa "Faturar ao Cliente". O preço em si
           não se edita aqui: escreve-se no cartão lateral (ResumoContrato), que
           escreve `valor_total_manual`. */}
         <div>
-          <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
-
-          <div className="mb-3">
-            <FormField
-              control={form.control}
-              name="tarifa_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{isTvde ? 'Tarifa TVDE' : 'Tarifa Rent-a-Car'}</FormLabel>
-                  <Select
-                    value={field.value ?? ''}
-                    onValueChange={(v) => handleTarifaChange(v || null)}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            isTvde ? 'Selecionar tarifa TVDE...' : 'Selecionar tarifa Rent-a-Car...'
-                          }
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {tarifasDoRegime.length === 0 && (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          {modeloIdSel
-                            ? 'Nenhuma tarifa cobre o modelo desta viatura.'
-                            : isTvde
-                              ? 'Nenhuma tarifa TVDE. Cria uma em Renting → Tarifas.'
-                              : 'Nenhuma tarifa Rent-a-Car. Cria uma em Renting → Tarifas.'}
-                        </div>
-                      )}
-                      {tarifasDoRegime.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {modeloSemPreco && (
-              <Alert variant="destructive" className="mt-3">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Modelo sem preço nesta tarifa</AlertTitle>
-                <AlertDescription>
-                  A viatura escolhida ({viaturaSelected?.marca} {viaturaSelected?.modelo}) não tem
-                  preço definido na tarifa selecionada. Define o preço deste modelo na tarifa ou
-                  escolhe outra viatura/tarifa.
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
+          {!tarifaLivre && (
+            <>
+              <SectionHeader icon={Coins} title="Tarifa & Faturação" accent="emerald" />
+              {seletorTarifa}
+            </>
+          )}
 
           {tarifaAtual ? (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
