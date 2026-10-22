@@ -474,6 +474,8 @@
     "src/docs/paginas/Limites.tsx",
     "src/docs/paginas/Recurso.tsx",
     "src/docs/paginas/Referencia.tsx",
-    "src/docs/paginas/Testes.tsx"
+    "src/docs/paginas/Testes.tsx",
+    "src/hooks/usePerfisOrg.ts",
+    "src/hooks/usePerfisOrg.test.ts"
   ]
 }

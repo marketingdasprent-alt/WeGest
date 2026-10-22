@@ -379,7 +379,8 @@ jobs:
             ticket_ativo_poe_viatura_em_manutencao \
             contrato_recusa_viatura_em_manutencao \
             fotos_da_viatura \
-            viatura_historico_estado
+            viatura_historico_estado \
+            perfis_org_nomes
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de
