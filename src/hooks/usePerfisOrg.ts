@@ -9,15 +9,6 @@ export interface PerfilOrg {
 // Tecto espelhado na função SQL: acima disto perfis_org devolve 0 linhas.
 export const MAX_IDS_POR_PEDIDO = 500;
 
-// A RPC perfis_org ainda não consta dos tipos gerados (regeneram-se depois de
-// aplicar a migração 20261021140000); cast localizado em vez de `any` solto.
-const db = supabase as unknown as {
-  rpc: (
-    fn: 'perfis_org',
-    args: { p_ids: string[] }
-  ) => PromiseLike<{ data: PerfilOrg[] | null; error: Error | null }>;
-};
-
 function dedupe(ids: readonly string[]): string[] {
   return [...new Set(ids.filter((id) => Boolean(id)))];
 }
@@ -38,7 +29,7 @@ export async function fetchPerfisOrg(ids: readonly string[]): Promise<PerfilOrg[
 
   const resultados = await Promise.all(
     lotes.map(async (lote) => {
-      const { data, error } = await db.rpc('perfis_org', { p_ids: lote });
+      const { data, error } = await supabase.rpc('perfis_org', { p_ids: lote });
       if (error) throw error;
       return data ?? [];
     })
