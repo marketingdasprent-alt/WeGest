@@ -9,7 +9,7 @@ import { useTenant } from '@/contexts/TenantContext';
 import { useModules } from '@/hooks/useModules';
 import { computeDefaultRoute } from '@/hooks/useDefaultRoute';
 import { getUnauthenticatedRoute } from '@/lib/native';
-import { ehContaDeClienteDoSite } from '@/lib/contaCliente';
+import { ehContaDeClienteDoSite, ehContaSemOrganizacao } from '@/lib/contaCliente';
 import { Loader2, Shield, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Modulo } from '@/types/modulo';
@@ -160,6 +160,28 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <p className="mb-4 text-muted-foreground">
             Esta conta é da área de cliente do site onde a criou. Entre por esse site para ver as
             suas reservas e faturas.
+          </p>
+          <Button onClick={() => void signOut()} className="auth-primary-button">
+            Sair
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Sessão válida mas sem empresa: sem isto ficava em /my-account sem nada, a
+  // pensar que o login tinha falhado (2026-10-22).
+  if (orgsCarregadas && ehContaSemOrganizacao(user, orgs.length)) {
+    return (
+      <div className="auth-screen auth-screen-safe">
+        <div className="auth-screen__background" aria-hidden="true" />
+        <div className="auth-screen__pattern" aria-hidden="true" />
+        <div className="relative z-10 max-w-md text-center">
+          <Shield className="mx-auto mb-4 h-12 w-12 text-primary" />
+          <h2 className="mb-2 text-xl font-bold text-foreground">Conta sem empresa</h2>
+          <p className="mb-4 text-muted-foreground">
+            A sua conta ainda não está associada a nenhuma empresa. Contacte o seu gestor para
+            concluir o registo.
           </p>
           <Button onClick={() => void signOut()} className="auth-primary-button">
             Sair

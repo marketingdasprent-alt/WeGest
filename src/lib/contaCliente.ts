@@ -12,3 +12,15 @@ export function ehContaDeClienteDoSite(
 ): boolean {
   return user?.user_metadata?.tipo_utilizador === 'cliente' && numeroDeOrganizacoes === 0;
 }
+
+/**
+ * Conta de equipa ou motorista sem nenhuma organização ativa (ex.: criada por
+ * magic link com um email desconhecido). Sem org não há rota para onde ir, e
+ * a pessoa ficava presa a seguir ao "Bem-vindo!".
+ */
+export function ehContaSemOrganizacao(
+  user: Pick<User, 'user_metadata'> | null | undefined,
+  numeroDeOrganizacoes: number
+): boolean {
+  return !!user && numeroDeOrganizacoes === 0 && !ehContaDeClienteDoSite(user, 0);
+}
