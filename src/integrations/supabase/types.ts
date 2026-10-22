@@ -16799,6 +16799,13 @@ export type Database = {
       org_por_codigo: { Args: { p_codigo: string }; Returns: Json }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
       org_sistema: { Args: never; Returns: string }
+      perfis_org: {
+        Args: { p_ids: string[] }
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
       pode_rever_documentos_motorista: { Args: never; Returns: boolean }
       primavera_jobs_claim_integracao: {
         Args: { p_integracao_id: string; p_max: number }
