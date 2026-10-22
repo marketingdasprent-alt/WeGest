@@ -161,11 +161,10 @@ async function main() {
     }
     if (/condi[çc][ãa]o de pagamento/i.test(causa)) {
       conclusoes.push(
-        'A API não deixa definir a condição de pagamento (nem no documento nem na ficha). ' +
-          'Clientes que já existem com CondPag funcionam; para os novos: pedir à AS Connect ' +
-          'que /ficha/cliente/inserir aceite CondPag, ou definir no Primavera a condição de ' +
-          'pagamento por omissão dos clientes novos. Para já, preencher à mão a do cliente ' +
-          `${codigo} e voltar a correr este diagnóstico.`
+        'O Primavera não ficou com a condição de pagamento do cliente. No DASPWSTEST o ' +
+          '/ficha/cliente/inserir grava-a (2026-10-22); confirmar com a AS Connect nesta ' +
+          `empresa. Para já, preencher à mão a do cliente ${codigo} e voltar a correr este ` +
+          'diagnóstico.'
       );
     }
   }
