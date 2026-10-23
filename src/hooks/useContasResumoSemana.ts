@@ -19,6 +19,12 @@ import { classificarMovimento } from '@shared/movimentosMotorista';
 import { construirLinhasLiquidoSemanal } from '@/components/administrativo/motorista-resumo/linhasLiquidoSemanal';
 import { normalizeName, isNameMatch } from '@/components/administrativo/motoristaNomeMatching';
 import { type MotoristaResumo } from '@/components/administrativo/contasResumoExports';
+import {
+  calcularRetencao,
+  levaCorteSeisPorCento,
+  taxasRetencaoDaFicha,
+  type TaxasRetencao,
+} from '@/components/administrativo/motorista-resumo/retencaoIrs';
 
 export function useContasResumoSemana(
   weekStart: Date,
@@ -67,8 +73,13 @@ export function useContasResumoSemana(
       const { data: todosMotoristas } = await supabase
         .from('motoristas_ativos')
         .select(
-          'id, nome, recibo_verde, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at, is_conta_frota'
+          'id, nome, recibo_verde, retencao_irs, retencao_iva_pct, retencao_irs_pct, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at, is_conta_frota'
         );
+
+      const retencaoPorId: Record<string, TaxasRetencao | null> = {};
+      (todosMotoristas || []).forEach((m) => {
+        retencaoPorId[m.id] = taxasRetencaoDaFicha(m);
+      });
 
       const uberIdMap: Record<string, string> = {};
       const boltIdMap: Record<string, string> = {};
@@ -725,8 +736,10 @@ export function useContasResumoSemana(
 
         const gorjetaBolt = m.motorista_id ? gorjetaBoltById[m.motorista_id] || 0 : 0;
         const gorjetaUber = m.gorjeta || 0;
+        const taxasRetencao = m.motorista_id ? (retencaoPorId[m.motorista_id] ?? null) : null;
+        const cortaSeis = levaCorteSeisPorCento(passaReciboVerde, !!taxasRetencao);
         const ajustarBase = (total: number, gorjetaPlataforma: number) =>
-          passaReciboVerde ? total : (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma;
+          cortaSeis ? (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma : total;
         const receita =
           ajustarBase(m.faturado_bolt, gorjetaBolt) +
           ajustarBase(m.faturado_uber, gorjetaUber) +
@@ -739,7 +752,7 @@ export function useContasResumoSemana(
         const caucaoValor = m.motorista_id ? caucaoByMotorista[m.motorista_id] || 0 : 0;
         const segurosValor = m.motorista_id ? segurosByMotorista[m.motorista_id] || 0 : 0;
         const slotValor = m.motorista_id ? slotByMotorista[m.motorista_id] || 0 : 0;
-        const liquido =
+        const totalLiquido =
           receita -
           combustivelValor -
           portagensValor -
@@ -749,6 +762,9 @@ export function useContasResumoSemana(
           caucaoValor -
           segurosValor -
           slotValor;
+        // Mesma conta do resumo individual (deriveResumoFinanceiro).
+        const retencao = taxasRetencao ? calcularRetencao(totalLiquido, taxasRetencao) : null;
+        const liquido = retencao ? retencao.totalAReceber : totalLiquido;
 
         return {
           driver_name: displayNameFinal,
@@ -763,6 +779,7 @@ export function useContasResumoSemana(
           viagens_bolt: m.viagens_bolt,
           viagens_uber: m.viagens_uber,
           recibo_verde: passaReciboVerde,
+          retencao,
           liquido,
           combustivel: combustivelValor,
           portagens: portagensValor,

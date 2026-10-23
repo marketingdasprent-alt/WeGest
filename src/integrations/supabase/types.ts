@@ -8353,6 +8353,9 @@ export type Database = {
           perfil_rascunho: boolean
           recibo_verde: boolean | null
           registo_criminal_url: string | null
+          retencao_irs: boolean
+          retencao_irs_pct: number
+          retencao_iva_pct: number
           seguro_valor_semanal: number | null
           slot_valor_semanal: number | null
           status_ativo: boolean | null
@@ -8408,6 +8411,9 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          retencao_irs?: boolean
+          retencao_irs_pct?: number
+          retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
@@ -8463,6 +8469,9 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          retencao_irs?: boolean
+          retencao_irs_pct?: number
+          retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null

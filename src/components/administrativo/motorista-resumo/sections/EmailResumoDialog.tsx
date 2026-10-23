@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { SlotPeriodo } from '../../MotoristaResumoDialog';
+import { percentagem, type RetencaoIrs } from '../retencaoIrs';
 
 interface EmailResumoDialogProps {
   open: boolean;
@@ -24,6 +25,8 @@ interface EmailResumoDialogProps {
   receitaAjustada: number;
   slotPeriodos: SlotPeriodo[];
   totalSlot: number;
+  /** Motorista com Retenção: linhas de IVA e IRS antes do líquido. */
+  retencao?: RetencaoIrs | null;
 }
 
 export function EmailResumoDialog({
@@ -42,6 +45,7 @@ export function EmailResumoDialog({
   receitaAjustada,
   slotPeriodos,
   totalSlot,
+  retencao = null,
 }: EmailResumoDialogProps) {
   const [emailTo, setEmailTo] = useState(defaultEmail || '');
   const [emailCC, setEmailCC] = useState('');
@@ -62,9 +66,16 @@ export function EmailResumoDialog({
           '\n'
         : '';
 
+    const retencaoDetalhe = retencao
+      ? `Total Líquido: ${fmt(retencao.totalLiquido)}\n` +
+        `IVA (${percentagem(retencao.taxaIva)}): ${fmt(retencao.iva)}\n` +
+        `Total Documento: ${fmt(retencao.totalDocumento)}\n` +
+        `IRS retido (${percentagem(retencao.taxaIrs)}): -${fmt(retencao.irs)}\n`
+      : '';
+
     const body =
       `Olá ${driverName},\n\nSegue o resumo financeiro do período ${format(dateRange.from, 'dd/MM/yyyy')} a ${format(dateRange.to, 'dd/MM/yyyy')}:\n\n` +
-      `Receitas: ${fmt(isImportado ? totalReceitas : receitaAjustada)}\nDespesas: ${fmt(totalDespesas)}\n${slotEmailDetalhe}Líquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
+      `Receitas: ${fmt(isImportado ? totalReceitas : receitaAjustada)}\nDespesas: ${fmt(totalDespesas)}\n${slotEmailDetalhe}${retencaoDetalhe}Líquido a Receber: ${fmt(liquido)}\n\nCumprimentos,\nEquipa WeGest`;
 
     const cc = emailCC.trim() ? `&cc=${encodeURIComponent(emailCC.trim())}` : '';
     window.open(

@@ -5,6 +5,10 @@ import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
 import { escapeHtml } from '@/lib/safeHtml';
+import {
+  levaCorteSeisPorCento,
+  type RetencaoIrs,
+} from '@/components/administrativo/motorista-resumo/retencaoIrs';
 
 export interface MotoristaResumo {
   _uid?: string;
@@ -20,6 +24,8 @@ export interface MotoristaResumo {
   viagens_bolt: number;
   viagens_uber: number;
   recibo_verde: boolean;
+  /** Linhas de IVA e IRS, só para motoristas com Retenção. */
+  retencao?: RetencaoIrs | null;
   liquido: number;
   combustivel: number;
   portagens: number;
@@ -129,9 +135,9 @@ export async function gerarRelatoriosIndividuaisPDF(params: {
         }
       }
 
-      const receitaAjustada = motorista.recibo_verde
-        ? motorista.total_faturado
-        : motorista.total_faturado / 1.06;
+      const receitaAjustada = levaCorteSeisPorCento(motorista.recibo_verde, !!motorista.retencao)
+        ? motorista.total_faturado / 1.06
+        : motorista.total_faturado;
       // Inclui os débitos automáticos do financeiro (motorista.outros_custos, do
       // motor de recorrências) além do legado motorista_custos_adicionais
       // (extraCosts). Não duplicam: após a migração para o motor de recorrências,
@@ -174,9 +180,13 @@ export async function gerarRelatoriosIndividuaisPDF(params: {
           total: totalDespesas,
         },
         resumo: {
-          totalAReceber: receitaAjustada - (motorista.recibo_verde ? 0 : 0),
-          ajuste: motorista.recibo_verde ? undefined : motorista.total_faturado - receitaAjustada,
+          totalAReceber: receitaAjustada,
+          ajuste:
+            receitaAjustada === motorista.total_faturado
+              ? undefined
+              : motorista.total_faturado - receitaAjustada,
           liquido: motorista.liquido,
+          retencao: motorista.retencao ?? null,
         },
         logoSrc,
       };

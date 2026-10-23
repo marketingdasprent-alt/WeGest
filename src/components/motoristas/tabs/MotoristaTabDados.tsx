@@ -40,6 +40,8 @@ const DOC_TYPE_KEY: Record<string, string> = {
   'Título de Residência': 'tr',
 };
 
+const TAXA_RETENCAO_MSG = 'A taxa tem de estar entre 0 e 100';
+
 const formSchema = z.object({
   nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   nif: z
@@ -89,6 +91,9 @@ const formSchema = z.object({
     message: YEAR_RANGE_MESSAGE,
   }),
   recibo_verde: z.boolean().default(true),
+  retencao_irs: z.boolean().default(false),
+  retencao_iva_pct: z.number().min(0, TAXA_RETENCAO_MSG).max(100, TAXA_RETENCAO_MSG).nullable(),
+  retencao_irs_pct: z.number().min(0, TAXA_RETENCAO_MSG).max(100, TAXA_RETENCAO_MSG).nullable(),
   is_slot: z.boolean().default(false),
   slot_valor_semanal: z.number().optional().nullable(),
   seguro_valor_semanal: z.number().optional().nullable(),
@@ -182,6 +187,9 @@ export function MotoristaTabDados({
       cartao_edp: '',
       data_contratacao: '',
       recibo_verde: true,
+      retencao_irs: false,
+      retencao_iva_pct: 23,
+      retencao_irs_pct: 23,
       is_slot: false,
       slot_valor_semanal: null,
       seguro_valor_semanal: null,
@@ -230,6 +238,9 @@ export function MotoristaTabDados({
       cartao_edp: motorista.cartao_edp || '',
       data_contratacao: motorista.data_contratacao || '',
       recibo_verde: motorista.recibo_verde ?? true,
+      retencao_irs: motorista.retencao_irs ?? false,
+      retencao_iva_pct: motorista.retencao_iva_pct ?? 23,
+      retencao_irs_pct: motorista.retencao_irs_pct ?? 23,
       is_slot: motorista.is_slot ?? false,
       slot_valor_semanal: motorista.slot_valor_semanal ?? null,
       seguro_valor_semanal: motorista.seguro_valor_semanal ?? null,
@@ -302,6 +313,10 @@ export function MotoristaTabDados({
         cartao_edp: data.cartao_edp || null,
         data_contratacao: data.data_contratacao || null,
         recibo_verde: data.recibo_verde,
+        retencao_irs: data.retencao_irs,
+        // Vazio volta aos 23% (o que o campo mostra como sugestão).
+        retencao_iva_pct: data.retencao_iva_pct ?? 23,
+        retencao_irs_pct: data.retencao_irs_pct ?? 23,
         is_slot: data.is_slot,
         slot_valor_semanal: data.is_slot ? data.slot_valor_semanal : null,
         seguro_valor_semanal: data.seguro_valor_semanal ?? null,
