@@ -36,6 +36,7 @@ import {
 import { filtrarSuplementaresAtivos } from '@/utils/document-template/filtrarSuplementaresAtivos';
 import { empresaDocData } from '@/config/empresas';
 import { resolveCartaoFrota } from '@/utils/document-template/resolveCartaoFrota';
+import { carregarColaboradorQueImprime } from '@/utils/document-template/colaboradorQueImprime';
 import { CidadeAssinaturaField } from '@/components/documentos/CidadeAssinaturaField';
 import { matchesSearch, cn } from '@/lib/utils';
 import { printPdf } from '@/lib/printPdf';
@@ -408,6 +409,8 @@ export const GenerateDocumentsDialog = ({
       // fonte anterior (motoristaData.cartao_bp/repsol/edp acima) para também
       // trazer validade/limite, vindos diretamente de cartoes_frota.
       const cartaoFrota = await resolveCartaoFrota(activeMotorista.id ?? null);
+      // Quem imprime assina pela empresa e rubrica as folhas (ticket #9).
+      const colaborador = await carregarColaboradorQueImprime();
 
       const dataAssinaturaEfetiva = dataAssinatura || activeMotorista.data_contratacao || today;
       const docParams = {
@@ -427,6 +430,8 @@ export const GenerateDocumentsDialog = ({
         cartao_frota_numero: cartaoFrota.numero,
         cartao_frota_validade: cartaoFrota.validade,
         cartao_frota_limite: cartaoFrota.limite,
+        colaborador_nome: colaborador.nome,
+        assinatura_colaborador: colaborador.assinatura,
         empresaData: empresa ? empresaDocData(empresa) : undefined,
       };
 

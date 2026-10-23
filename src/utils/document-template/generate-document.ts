@@ -12,6 +12,7 @@ import type {
 } from './types';
 import { replaceDynamicFields, loadImage, htmlToText } from './parser';
 import { renderHtmlBlock, type RenderHtmlBlockCtx } from './render-html-block';
+import { desenharRubricaNasFolhas, rubricaDoDocumento } from './rubrica';
 import {
   renderAnexoDanos,
   renderNumeroContrato,
@@ -249,6 +250,17 @@ export async function generateDocumentFromTemplate(params: GenerateDocumentParam
 
     const endPage = pdf.getNumberOfPages();
     const docTotalPages = endPage - startPage + 1;
+
+    const rubrica = rubricaDoDocumento(documentData);
+    if (rubrica) {
+      desenharRubricaNasFolhas(pdf, rubrica, {
+        startPage,
+        endPage,
+        pageWidth,
+        rightMargin,
+        topMargin,
+      });
+    }
     const usarFooterEmpresa = !!params.footerText && !hasLetterhead;
 
     for (let i = startPage; i <= endPage && !params.skipFooter; i++) {
