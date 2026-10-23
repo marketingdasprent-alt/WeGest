@@ -4,12 +4,16 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { GrupoPrevisto } from '@/lib/verComoGrupo';
 
 const m = vi.hoisted(() => ({
-  isAdmin: true,
+  podeVerComo: true,
   verComo: null as GrupoPrevisto | null,
 }));
 
 vi.mock('@/contexts/PermissionsContext', () => ({
-  usePermissionsContext: () => ({ isAdmin: m.isAdmin, verComo: m.verComo, loading: false }),
+  usePermissionsContext: () => ({
+    podeVerComo: m.podeVerComo,
+    verComo: m.verComo,
+    loading: false,
+  }),
 }));
 vi.mock('@/contexts/TenantContext', () => ({ useOrgId: () => 'org-a' }));
 vi.mock('@/hooks/useCargosPrevisiveis', () => ({
@@ -21,13 +25,13 @@ import { guardarVerComoGrupo, lerVerComoGrupo } from '@/lib/verComoGrupo';
 
 beforeEach(() => {
   localStorage.clear();
-  m.isAdmin = true;
+  m.podeVerComo = true;
   m.verComo = null;
 });
 
 describe('VerComoGrupo', () => {
-  it('não aparece a quem não é admin', () => {
-    m.isAdmin = false;
+  it('não aparece a quem não o pode usar (não admin, ou admin fora do Suporte em produção)', () => {
+    m.podeVerComo = false;
     const { container } = render(<VerComoGrupo onMudou={vi.fn()} />);
     expect(container.firstChild).toBeNull();
   });
@@ -40,8 +44,8 @@ describe('VerComoGrupo', () => {
     expect(screen.queryByRole('button', { name: /sair/i })).toBeNull();
   });
 
-  it('durante a pré-visualização (isAdmin=false) continua lá, diz o grupo e deixa sair', () => {
-    m.isAdmin = false;
+  it('durante a pré-visualização continua lá, diz o grupo e deixa sair', () => {
+    m.podeVerComo = false;
     m.verComo = { id: 'c-tvde', nome: 'Gestor TVDE' };
     guardarVerComoGrupo('org-a', 'c-tvde');
     const onMudou = vi.fn();

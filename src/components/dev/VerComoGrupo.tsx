@@ -21,15 +21,15 @@ interface VerComoGrupoProps {
   onMudou?: () => void;
 }
 
-/** Só em `pnpm dev`: o admin escolhe um grupo e a app passa a comportar-se como ele. */
+/** O admin escolhe um grupo e a app passa a comportar-se como ele (em produção só o Suporte). */
 export function VerComoGrupo({ onMudou = () => window.location.reload() }: VerComoGrupoProps) {
-  const { isAdmin, verComo, loading } = usePermissionsContext();
+  const { podeVerComo, verComo, loading } = usePermissionsContext();
   const orgId = useOrgId();
-  // Durante a pré-visualização isAdmin é false — o verComo é o que prova que és admin.
-  const adminReal = isAdmin || !!verComo;
-  const { data: cargos = [] } = useCargosPrevisiveis(orgId, adminReal);
+  // Durante a pré-visualização isAdmin é false; podeVerComo vem do grupo real da pessoa.
+  const pode = podeVerComo || !!verComo;
+  const { data: cargos = [] } = useCargosPrevisiveis(orgId, pode);
 
-  if (loading || !adminReal || !orgId) return null;
+  if (loading || !pode || !orgId) return null;
 
   const escolher = (valor: string) => {
     guardarVerComoGrupo(orgId, valor === EU ? null : valor);
