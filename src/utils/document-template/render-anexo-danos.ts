@@ -2,6 +2,7 @@ import type jsPDF from 'jspdf';
 import type { AnexoDanos, AnexoDanoItem, AnexoFotoItem, AnexoParteItem } from './types';
 import { loadImage } from './parser';
 import { LOCALIZACAO_LABELS, ESTADO_LABELS } from './labels';
+import { DANO_ESTADOS, getDanoEstado } from '@/utils/danoEstados';
 
 export interface AnexoDanosCtx {
   leftMargin: number;
@@ -24,13 +25,9 @@ const localizacaoLabels: Record<string, string> = {
   outro: 'Outro',
 };
 
-const estadoLabels: Record<string, string> = {
-  existente: 'Existente',
-  em_reparacao: 'Em reparação',
-  reparado: 'Reparado',
-  irreparavel: 'Irreparável',
-  pendente: 'Pendente',
-};
+const estadoLabels: Record<string, string> = Object.fromEntries(
+  [...DANO_ESTADOS, getDanoEstado('pendente')].map((e) => [e.value, e.label])
+);
 
 /**
  * Legenda por baixo de cada imagem.
