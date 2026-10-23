@@ -48,7 +48,11 @@ import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
 
 import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
-import { motivoTvdeSemPreco, precoSemanaNegociadoTvde } from '@/utils/precoContratoTvde';
+import {
+  motivoTvdeSemPreco,
+  precoSemanaNegociadoTvde,
+  tarifaCobreModelo,
+} from '@/utils/precoContratoTvde';
 
 import type {
   CoberturaFormItem,
@@ -765,7 +769,7 @@ export function useContratoForm(): UseContratoFormReturn {
             (p) => p.tarifa_id === tarifaSelId && p.modelo_id === via.modelo_id
           ) ?? null)
         : null;
-    const cobre = isTvdeReg ? linha?.preco_semana != null : linha?.preco_dia != null;
+    const cobre = tarifaCobreModelo(regime, linha);
     if (tarifaSelId && via.modelo_id && !cobre) {
       form.setValue('tarifa_id', null, { shouldDirty: true });
     }

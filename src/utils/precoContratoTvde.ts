@@ -31,6 +31,22 @@ export function motivoTvdeSemPreco(input: PrecoContratoTvdeInput): string | null
   return null;
 }
 
+interface LinhaPrecoModelo {
+  preco_semana?: number | null;
+  preco_dia?: number | null;
+}
+
+/**
+ * A tarifa tem preço para o modelo da viatura (semana no TVDE, dia no resto).
+ * A troca de viatura limpa a tarifa que falha isto, e então o seletor solta-se.
+ */
+export function tarifaCobreModelo(
+  regime: string | null | undefined,
+  linha: LinhaPrecoModelo | null | undefined
+): boolean {
+  return regime === 'tvde' ? linha?.preco_semana != null : linha?.preco_dia != null;
+}
+
 /** "Negociado 180 € · tabela 200 €" — a tabela só aparece quando difere. */
 export function textoPrecoSemanaTvde(
   acordado: number | null | undefined,

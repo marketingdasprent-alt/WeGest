@@ -33,7 +33,11 @@ import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields
 import { PedirAlteracaoContratoDialog } from './PedirAlteracaoContratoDialog';
 import { type TipoPedidoAlteracao } from '@/hooks/usePedidosTrocaKms';
 import { BotaoPedirAlteracao } from './BotaoPedirAlteracao';
-import { textoPrecoSemanaTvde } from '@/utils/precoContratoTvde';
+import {
+  precoSemanaNegociadoTvde,
+  tarifaCobreModelo,
+  textoPrecoSemanaTvde,
+} from '@/utils/precoContratoTvde';
 import type { ContratoFormValues } from './contratoForm.schema';
 import { SectionCliente } from './SectionCliente';
 import { SectionEmpresaEmissora } from './SectionEmpresaEmissora';
@@ -103,10 +107,6 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   proximaRenovacaoEm,
   precoSemanaAcordado = null,
 }) => {
-  // Contratos abertos sem tarifa (#486 e outros 5 a 22-10) ficavam presos: a
-  // tarifa é obrigatória, o seletor travado, e não há preço para pedir alteração.
-  const tarifaLivre = !!travado && !tarifaGravada;
-
   // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
   // que partia os grids lá dentro. O cinzento vem dos próprios campos
   // (disabled:opacity-*) — não se escurece o bloco todo, que apagava labels
@@ -123,11 +123,25 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     [viaturaId, viaturas]
   );
 
-  const { data: precosModelo = [] } = useRentingTarifaPrecosModelo();
+  const { data: precosModelo = [], isSuccess: precosCarregados } = useRentingTarifaPrecosModelo();
 
   const regime = form.watch('regime');
   const isTvde = regime === 'tvde';
   const modeloIdSel = viaturaSelected?.modelo_id ?? null;
+
+  // Troca para um modelo sem preço na tarifa gravada: o form limpa-a e a tarifa
+  // é obrigatória, por isso escolhe-se outra; travada, nada se gravava (ticket #29).
+  const gravadaSemPrecoParaViatura =
+    !!tarifaGravada &&
+    !!modeloIdSel &&
+    precosCarregados &&
+    !tarifaCobreModelo(
+      regime,
+      precosModelo.find((p) => p.tarifa_id === tarifaGravada && p.modelo_id === modeloIdSel)
+    );
+  // Contratos abertos sem tarifa (#486 e outros 5 a 22-10) ficavam presos pelo
+  // mesmo motivo: obrigatória, travada, e sem preço para pedir alteração.
+  const tarifaLivre = !!travado && (!tarifaGravada || gravadaSemPrecoParaViatura);
 
   // Tarifas do regime cujo preço cobre o modelo da viatura. O regime filtra
   // primeiro (TVDE só tipo='tvde'; Rent-a-Car só as não-TVDE); depois, se já há
@@ -231,6 +245,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   // negociado só porque o contrato acabou de carregar.
   const handleTarifaChange = (novoId: string | null) => {
     form.setValue('tarifa_id', novoId, { shouldDirty: true });
+    // O preço negociado e aprovado fica com o contrato, como na troca de viatura.
+    if (precoSemanaNegociadoTvde(regime, precoSemanaAcordado) != null) return;
 
     const tarifaNova = novoId ? (tarifas.find((t) => t.id === novoId) ?? null) : null;
     const linhaNova =
@@ -290,6 +306,14 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
           </FormItem>
         )}
       />
+
+      {travado && gravadaSemPrecoParaViatura && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          A tarifa {tarifas.find((t) => t.id === tarifaGravada)?.nome ?? 'do contrato'} não tem
+          preço para {viaturaSelected?.marca} {viaturaSelected?.modelo}. Escolhe uma tarifa que o
+          tenha ou define o preço em Renting → Tarifas.
+        </p>
+      )}
 
       {modeloSemPreco && (
         <Alert variant="destructive" className="mt-3">
