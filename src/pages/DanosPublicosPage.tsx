@@ -4,6 +4,7 @@ import { Loader2, TriangleAlert, Car } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
+import { getDanoEstadoLabel } from '@/utils/danoEstados';
 
 interface DanoPublico {
   id: string;
@@ -30,14 +31,6 @@ const LOCALIZACAO_LABEL: Record<string, string> = {
   motor: 'Motor',
   outro: 'Outro',
 };
-const ESTADO_LABEL: Record<string, string> = {
-  existente: 'Existente',
-  em_reparacao: 'Em reparação',
-  reparado: 'Reparado',
-  irreparavel: 'Irreparável',
-  pendente: 'Pendente',
-};
-
 const fmtData = (iso: string | null | undefined) => {
   if (!iso) return '—';
   const [y, m, d] = iso.split('T')[0].split('-');
@@ -128,7 +121,7 @@ const DanosPublicosPage = () => {
                   </div>
                   <p className="break-words text-muted-foreground">{d.descricao ?? '—'}</p>
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{ESTADO_LABEL[d.estado ?? ''] ?? d.estado ?? '—'}</span>
+                    <span>{getDanoEstadoLabel(d.estado)}</span>
                     <span>{fmtData(d.data_ocorrencia ?? d.data_registo)}</span>
                   </div>
                 </CardContent>
@@ -156,7 +149,7 @@ const DanosPublicosPage = () => {
                         {LOCALIZACAO_LABEL[d.localizacao ?? ''] ?? d.localizacao ?? '—'}
                       </td>
                       <td className="p-2">{d.descricao ?? '—'}</td>
-                      <td className="p-2">{ESTADO_LABEL[d.estado ?? ''] ?? d.estado ?? '—'}</td>
+                      <td className="p-2">{getDanoEstadoLabel(d.estado)}</td>
                       <td className="p-2">{fmtData(d.data_ocorrencia ?? d.data_registo)}</td>
                       <td className="p-2 text-right">
                         {d.valor != null ? `${Number(d.valor).toFixed(2)} €` : '—'}

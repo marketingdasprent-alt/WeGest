@@ -14,6 +14,8 @@ export interface TicketDano {
   localizacao: string | null;
   data_ocorrencia: string | null;
   created_at: string;
+  estado: string;
+  observacoes: string | null;
   categoria: { id: string; nome: string; cor: string | null } | null;
   fotos: TicketDanoFoto[];
 }
@@ -34,6 +36,8 @@ export function useTicketDanos(ticketId: string | undefined) {
           localizacao,
           data_ocorrencia,
           created_at,
+          estado,
+          observacoes,
           categoria:assistencia_categorias(id, nome, cor)
         `
         )
