@@ -69,6 +69,15 @@ function SaldoPendenteCell({
   );
 }
 
+/** Motorista com Retenção (IVA 23% + IRS 23%): o líquido já desconta o IRS retido. */
+function EtiquetaRetencao() {
+  return (
+    <span className="ml-2 rounded border border-purple-400/50 bg-purple-500/10 px-1.5 py-px text-[10px] font-medium text-purple-700 dark:text-purple-300">
+      Retenção
+    </span>
+  );
+}
+
 export function ContasResumoTabela({
   filteredResumos,
   pageItems,
@@ -230,6 +239,7 @@ export function ContasResumoTabela({
                       onClick={() => onRowClick(resumo)}
                     >
                       {resumo.driver_name}
+                      {resumo.retencao && <EtiquetaRetencao />}
                     </TableCell>
                     <TableCell className="text-right" onClick={() => onRowClick(resumo)}>
                       <span className="text-green-600 font-medium">
@@ -362,6 +372,7 @@ export function ContasResumoTabela({
                           )}
                         >
                           {resumo.driver_name}
+                          {resumo.retencao && <EtiquetaRetencao />}
                         </div>
                       </div>
                     </div>

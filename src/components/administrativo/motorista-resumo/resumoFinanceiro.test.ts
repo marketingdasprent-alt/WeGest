@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { deriveResumoFinanceiro, type ResumoFinanceiroInput } from './resumoFinanceiro';
+import { TAXAS_RETENCAO_OMISSAO } from './retencaoIrs';
 
 const base: ResumoFinanceiroInput = {
   isImportado: false,
@@ -118,5 +119,56 @@ describe('deriveResumoFinanceiro', () => {
       valoresSemanaAnterior: 25,
     });
     expect(r.liquido).toBeCloseTo(125, 2);
+  });
+});
+
+describe('deriveResumoFinanceiro — Retenção', () => {
+  // Folha da equipa, 2026-10-23: Uber 185,48 + Bolt 398,62, aluguer 175 +
+  // outros 91,10. Os 6% saem mesmo com o motorista marcado como verde.
+  const folha: ResumoFinanceiroInput = {
+    ...base,
+    reciboVerde: true,
+    retencao: TAXAS_RETENCAO_OMISSAO,
+    receitas: { bolt: 398.62, uber: 185.48, outras_receitas: 0 },
+    totalDespesas: 266.1,
+  };
+
+  it('tira os 6%, põe IVA, retém IRS e paga o Total líquido', () => {
+    const r = deriveResumoFinanceiro(folha);
+    expect(r.receitaAjustada).toBeCloseTo(551.04, 2);
+    expect(r.retencao).toEqual({
+      totalLiquido: 284.94,
+      taxaIva: 0.23,
+      iva: 65.54,
+      totalDocumento: 350.48,
+      taxaIrs: 0.23,
+      irs: 65.54,
+      totalAReceber: 284.94,
+    });
+    expect(r.liquido).toBeCloseTo(284.94, 2);
+  });
+
+  it('taxas da ficha diferentes de 23%: IRS 20% retido', () => {
+    const r = deriveResumoFinanceiro({ ...folha, retencao: { iva: 0.23, irs: 0.2 } });
+    expect(r.retencao?.iva).toBe(65.54);
+    expect(r.retencao?.irs).toBe(56.99);
+    expect(r.retencao?.totalDocumento).toBe(350.48);
+    expect(r.liquido).toBeCloseTo(293.49, 2);
+  });
+
+  it('o saldo da semana anterior soma-se depois, fora do IVA e do IRS', () => {
+    const r = deriveResumoFinanceiro({ ...folha, valoresSemanaAnterior: 10 });
+    expect(r.retencao?.totalLiquido).toBeCloseTo(284.94, 2);
+    expect(r.liquido).toBeCloseTo(294.94, 2);
+  });
+
+  it('sem Retenção não há linhas de IVA nem de IRS', () => {
+    expect(deriveResumoFinanceiro({ ...folha, retencao: null }).retencao).toBeNull();
+  });
+
+  it('recibo importado: o líquido vem fechado, sem Retenção por cima', () => {
+    const r = deriveResumoFinanceiro({ ...folha, isImportado: true, liquidoImportado: 200 });
+    expect(r.retencao).toBeNull();
+    expect(r.liquido).toBe(200);
   });
 });

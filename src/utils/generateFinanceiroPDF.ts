@@ -1,6 +1,10 @@
 ﻿import jsPDF from 'jspdf';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import {
+  percentagem,
+  type RetencaoIrs,
+} from '@/components/administrativo/motorista-resumo/retencaoIrs';
 
 interface FinanceiroPDFData {
   driver_name: string;
@@ -28,6 +32,8 @@ interface FinanceiroPDFData {
     totalAReceber: number;
     ajuste?: number;
     liquido: number;
+    /** Motorista com Retenção: linhas de IVA e IRS antes do valor final. */
+    retencao?: RetencaoIrs | null;
   };
   logoSrc?: string;
 }
@@ -184,8 +190,9 @@ export const generateFinanceiroPDF = async (
   yPos = Math.max(yPos, yPosDespesas) + 15;
 
   // 4. Resumo Final
+  const retencao = data.resumo.retencao ?? null;
   pdf.setFillColor(240, 249, 255); // Blue-50
-  pdf.rect(leftMargin, yPos, maxWidth, 25, 'F');
+  pdf.rect(leftMargin, yPos, maxWidth, retencao ? 55 : 25, 'F');
 
   yPos += 8;
   pdf.setFontSize(11);
@@ -203,6 +210,22 @@ export const generateFinanceiroPDF = async (
     pdf.text(`-${formatCurrency(data.resumo.ajuste)}`, leftMargin + maxWidth - 5, yPos, {
       align: 'right',
     });
+  }
+
+  if (retencao) {
+    const linhas: Array<[string, string]> = [
+      ['TOTAL LÍQUIDO:', formatCurrency(retencao.totalLiquido)],
+      [`IVA (${percentagem(retencao.taxaIva)}):`, formatCurrency(retencao.iva)],
+      ['TOTAL DOCUMENTO:', formatCurrency(retencao.totalDocumento)],
+      [`IRS RETIDO (${percentagem(retencao.taxaIrs)}):`, `-${formatCurrency(retencao.irs)}`],
+    ];
+    pdf.setFontSize(10);
+    pdf.setTextColor(0, 0, 0);
+    for (const [rotulo, valor] of linhas) {
+      yPos += 7;
+      pdf.text(rotulo, leftMargin + 5, yPos);
+      pdf.text(valor, leftMargin + maxWidth - 5, yPos, { align: 'right' });
+    }
   }
 
   yPos += 10;

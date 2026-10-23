@@ -20,6 +20,7 @@ import { ResumoActionBar } from './motorista-resumo/sections/ResumoActionBar';
 import { EmailResumoDialog } from './motorista-resumo/sections/EmailResumoDialog';
 import { useMotoristaResumoData } from './motorista-resumo/useMotoristaResumoData';
 import { deriveResumoFinanceiro } from './motorista-resumo/resumoFinanceiro';
+import type { RetencaoIrs, TaxasRetencao } from './motorista-resumo/retencaoIrs';
 import { generateResumoPrintHTML } from './motorista-resumo/generateResumoPrintHTML';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useOrgId } from '@/contexts/TenantContext';
@@ -53,6 +54,10 @@ export interface MotoristaResumoProps {
   viagens_bolt: number;
   viagens_uber: number;
   recibo_verde: boolean;
+  /** Da ficha (MotoristaRecibosSection): taxas de IVA e IRS de quem tem Retenção. */
+  retencao_taxas?: TaxasRetencao | null;
+  /** Da lista de Contas/Resumo: linhas de IVA e IRS já calculadas (null sem Retenção). */
+  retencao?: RetencaoIrs | null;
   liquido: number;
   gorjeta?: number;
   combustivel: number;
@@ -195,10 +200,15 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
 
   // Cálculo puro (testado em resumoFinanceiro.test.ts). A gorjeta entra uma
   // única vez, na receita ajustada — não voltar a somar no total a receber.
-  const { receitasExibidas, receitaAjustada, totalAReceber, liquido, gorjeta } =
+  const { receitasExibidas, receitaAjustada, totalAReceber, liquido, gorjeta, retencao } =
     deriveResumoFinanceiro({
       isImportado,
       reciboVerde: motorista?.recibo_verde ?? false,
+      retencao:
+        motorista?.retencao_taxas ??
+        (motorista?.retencao
+          ? { iva: motorista.retencao.taxaIva, irs: motorista.retencao.taxaIrs }
+          : null),
       receitas,
       gorjetaBolt,
       gorjetaUber,
@@ -286,6 +296,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       valoresSemanaAnterior,
       totalAReceber,
       liquido,
+      retencao,
     });
 
     const w = window.open('', '_blank');
@@ -324,6 +335,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         totalAReceber,
         ajuste: motorista.recibo_verde ? undefined : totalAReceber - liquido,
         liquido,
+        retencao,
       },
       logoSrc,
     });
@@ -476,6 +488,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
             motoristaId={motorista.motorista_id}
             gorjeta={gorjeta}
             showGorjeta={showGorjeta}
+            retencao={retencao}
           />
 
           <ResumoActionBar
@@ -505,6 +518,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
         receitaAjustada={receitaAjustada}
         slotPeriodos={slotPeriodos}
         totalSlot={totalSlot}
+        retencao={retencao}
       />
     </>
   );

@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { escapeHtml } from '@/lib/safeHtml';
 import type { SlotPeriodo } from '../MotoristaResumoDialog';
+import { percentagem, type RetencaoIrs } from './retencaoIrs';
 
 /* ───────── types ───────── */
 
@@ -55,6 +56,8 @@ export interface GenerateResumoPrintHTMLParams {
   valoresSemanaAnterior: number;
   totalAReceber: number;
   liquido: number;
+  /** Motorista com Retenção: linhas de IVA e IRS no resumo final. */
+  retencao?: RetencaoIrs | null;
 }
 
 /**
@@ -84,6 +87,7 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     valoresSemanaAnterior,
     totalAReceber,
     liquido,
+    retencao = null,
   } = params;
 
   const fmtEur = (v: number) =>
@@ -125,6 +129,20 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
     .join('');
 
   const ajusteRow = '';
+
+  const linhaRetencao = (rotulo: string, valor: string, cor = '#1f2937') =>
+    `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>${rotulo}</span><span style="color:${cor}">${valor}</span></div>`;
+  const retencaoRows = retencao
+    ? linhaRetencao('Total Líquido', fmtEur(retencao.totalLiquido)) +
+      linhaRetencao(`IVA (${percentagem(retencao.taxaIva)})`, fmtEur(retencao.iva)) +
+      linhaRetencao('Total Documento', fmtEur(retencao.totalDocumento)) +
+      linhaRetencao(
+        `IRS retido (${percentagem(retencao.taxaIrs)})`,
+        `-${fmtEur(retencao.irs)}`,
+        '#dc2626'
+      ) +
+      '<div style="border-top:1px solid #93c5fd;margin:6px 0"></div>'
+    : '';
 
   const slotHtml =
     slotPeriodos.length > 0
@@ -216,6 +234,7 @@ export function generateResumoPrintHTML(params: GenerateResumoPrintHTMLParams): 
         <div style="background:#eff6ff;padding:12px 14px">
           <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Valores a Transportar (Semana Anterior)</span><span style="color:#1d4ed8">${fmtEur(valoresSemanaAnterior)}</span></div>
           <div style="border-top:1px solid #93c5fd;margin:6px 0"></div>
+          ${retencaoRows}
           <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Total a Receber</span><span style="color:${totalAReceber >= 0 ? '#15803d' : '#dc2626'}">${fmtEur(totalAReceber)}</span></div>
           ${ajusteRow}
           <div style="background:#2563eb;margin:-12px -14px;margin-top:10px;padding:12px 14px;display:flex;justify-content:space-between">

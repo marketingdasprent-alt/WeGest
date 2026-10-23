@@ -349,7 +349,8 @@ jobs:
             saldo_pendente_igual_ao_resumo \
             bolt_viagens_sem_update_vazio \
             bolt_paga_pelo_ficheiro \
-            resumo_sem_identidade_usa_ficha
+            resumo_sem_identidade_usa_ficha \
+            extrato_retencao_corte_seis
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova

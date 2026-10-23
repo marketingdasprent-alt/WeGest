@@ -206,4 +206,54 @@ describe('ContasResumoTab — gravação do líquido semanal', () => {
     expect(lerResumos().map((r: any) => r.motorista_id)).toEqual(['m1']);
     expect(escritas['motorista_liquido_semanal'].map((l: any) => l.motorista_id)).toEqual(['m1']);
   });
+
+  // Retenção (2026-10-23): mesmo sendo verde, os ganhos levam os 6%, e o
+  // líquido gravado é o Total a receber (Total líquido + IVA − IRS, taxas da ficha).
+  it('motorista com Retenção: corte dos 6%, IVA e IRS, e grava o total a receber', async () => {
+    mockarTabelas({
+      motorista_resumo_semanal: [{ id: 'r1' }],
+      ...dadosBase,
+      motoristas_ativos: [{ ...dadosBase.motoristas_ativos[0], retencao_irs: true }],
+      bolt_resumos_semanais: [{ ...dadosBase.bolt_resumos_semanais[0], liquido_a_pagar: 318 }],
+    });
+    renderizar();
+
+    await waitFor(() => expect(escritas['motorista_liquido_semanal']).toBeDefined());
+
+    const [resumo] = lerResumos();
+    expect(resumo.retencao).toEqual({
+      totalLiquido: 300,
+      taxaIva: 0.23,
+      iva: 69,
+      totalDocumento: 369,
+      taxaIrs: 0.23,
+      irs: 69,
+      totalAReceber: 300,
+    });
+    expect(resumo.liquido).toBe(300);
+    expect(escritas['motorista_liquido_semanal'][0].liquido).toBe(300);
+  });
+
+  it('motorista com Retenção e taxas próprias na ficha (IVA 23%, IRS 25%)', async () => {
+    mockarTabelas({
+      motorista_resumo_semanal: [{ id: 'r1' }],
+      ...dadosBase,
+      motoristas_ativos: [
+        {
+          ...dadosBase.motoristas_ativos[0],
+          retencao_irs: true,
+          retencao_iva_pct: 23,
+          retencao_irs_pct: 25,
+        },
+      ],
+      bolt_resumos_semanais: [{ ...dadosBase.bolt_resumos_semanais[0], liquido_a_pagar: 318 }],
+    });
+    renderizar();
+
+    await waitFor(() => expect(escritas['motorista_liquido_semanal']).toBeDefined());
+
+    const [resumo] = lerResumos();
+    expect(resumo.retencao).toMatchObject({ iva: 69, irs: 75, totalAReceber: 294 });
+    expect(escritas['motorista_liquido_semanal'][0].liquido).toBe(294);
+  });
 });

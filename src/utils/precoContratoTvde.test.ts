@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { motivoTvdeSemPreco, precoSemanaNegociadoTvde } from './precoContratoTvde';
+import {
+  motivoTvdeSemPreco,
+  precoSemanaNegociadoTvde,
+  tarifaCobreModelo,
+} from './precoContratoTvde';
 
 const base = {
   regime: 'tvde',
@@ -56,5 +60,22 @@ describe('precoSemanaNegociadoTvde', () => {
   it('fora de TVDE nunca se aplica', () => {
     expect(precoSemanaNegociadoTvde('rent_a_car', 180)).toBeNull();
     expect(precoSemanaNegociadoTvde(null, 180)).toBeNull();
+  });
+});
+
+describe('tarifaCobreModelo', () => {
+  it('TVDE precisa do preço semanal do modelo', () => {
+    expect(tarifaCobreModelo('tvde', { preco_semana: 200 })).toBe(true);
+    expect(tarifaCobreModelo('tvde', { preco_semana: 0 })).toBe(true);
+    expect(tarifaCobreModelo('tvde', { preco_semana: null, preco_dia: 30 })).toBe(false);
+  });
+
+  it('Rent-a-Car precisa do preço diário', () => {
+    expect(tarifaCobreModelo('rent_a_car', { preco_dia: 30 })).toBe(true);
+    expect(tarifaCobreModelo('rent_a_car', { preco_semana: 200 })).toBe(false);
+  });
+
+  it('modelo sem linha na tarifa não está coberto', () => {
+    expect(tarifaCobreModelo('tvde', undefined)).toBe(false);
   });
 });

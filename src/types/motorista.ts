@@ -29,6 +29,11 @@ export type Motorista = {
   cidade_assinatura: string | null;
   status_ativo: boolean | null;
   recibo_verde: boolean | null;
+  /** Retenção: fatura-recibo com IVA e IRS retido pela empresa. */
+  retencao_irs?: boolean | null;
+  /** Taxas da Retenção em % (por omissão 23 e 23). */
+  retencao_iva_pct?: number | null;
+  retencao_irs_pct?: number | null;
   is_slot: boolean | null;
   slot_valor_semanal: number | null;
   seguro_valor_semanal: number | null;

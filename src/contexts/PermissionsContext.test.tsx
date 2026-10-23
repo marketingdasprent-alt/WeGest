@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 
 const m = vi.hoisted(() => ({
   isAdmin: true,
+  cargoPrincipal: 'Administrador',
+  adicionais: [] as { cargo_id: string; cargos: { nome: string } }[],
   consultas: [] as string[],
 }));
 
@@ -19,9 +21,11 @@ vi.mock('@/integrations/supabase/client', () => {
     switch (tabela) {
       case 'user_organizacoes':
         return {
-          data: { is_admin: m.isAdmin, cargo_id: 'c-admin', cargos: { nome: 'Administrador' } },
+          data: { is_admin: m.isAdmin, cargo_id: 'c-admin', cargos: { nome: m.cargoPrincipal } },
           error: null,
         };
+      case 'user_organizacoes_cargos':
+        return { data: m.adicionais, error: null };
       case 'profiles':
         return { data: { tipo_utilizador: 'colaborador' }, error: null };
       case 'cargos':
@@ -64,6 +68,7 @@ function Sonda() {
       <dd data-testid="cargo">{p.cargo}</dd>
       <dd data-testid="recursos">{p.recursos.join(',')}</dd>
       <dd data-testid="ver-como">{p.verComo?.nome ?? '—'}</dd>
+      <dd data-testid="pode-ver-como">{String(p.podeVerComo)}</dd>
     </dl>
   );
 }
@@ -78,6 +83,9 @@ const montar = () =>
 beforeEach(() => {
   localStorage.clear();
   m.isAdmin = true;
+  m.cargoPrincipal = 'Administrador';
+  m.adicionais = [];
+  vi.unstubAllEnvs();
   m.consultas.length = 0;
 });
 
@@ -107,5 +115,38 @@ describe('PermissionsContext — "Ver como grupo"', () => {
     await waitFor(() => expect(screen.getByTestId('admin').textContent).toContain('false'));
     expect(screen.getByTestId('ver-como').textContent).toContain('—');
     expect(m.consultas).not.toContain('cargos');
+  });
+});
+
+describe('PermissionsContext — "Ver como grupo" em produção', () => {
+  beforeEach(() => {
+    vi.stubEnv('DEV', false);
+  });
+
+  it('admin fora do Suporte: sem seletor e a escolha guardada não se aplica', async () => {
+    guardarVerComoGrupo('org-a', 'c-tvde');
+    montar();
+    await waitFor(() => expect(screen.getByTestId('admin').textContent).toContain('true'));
+    expect(screen.getByTestId('pode-ver-como').textContent).toBe('false');
+    expect(screen.getByTestId('ver-como').textContent).toContain('—');
+    expect(m.consultas).not.toContain('cargos');
+  });
+
+  it('admin com o Suporte como grupo principal: pode pré-visualizar', async () => {
+    m.cargoPrincipal = 'Suporte de TI (Admin)';
+    guardarVerComoGrupo('org-a', 'c-tvde');
+    montar();
+    await waitFor(() =>
+      expect(screen.getByTestId('ver-como').textContent).toContain('Gestor TVDE')
+    );
+    expect(screen.getByTestId('pode-ver-como').textContent).toBe('true');
+    expect(screen.getByTestId('admin').textContent).toContain('false');
+  });
+
+  it('admin com o Suporte como grupo adicional: pode pré-visualizar', async () => {
+    m.adicionais = [{ cargo_id: 'c-suporte', cargos: { nome: 'Suporte de TI (Admin)' } }];
+    montar();
+    await waitFor(() => expect(screen.getByTestId('pode-ver-como').textContent).toBe('true'));
+    expect(screen.getByTestId('admin').textContent).toContain('true');
   });
 });
