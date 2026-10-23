@@ -361,6 +361,7 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
+            rls_notificacoes_visibilidade \
             rls_anon_exposure \
             signup_nao_confia_na_metadata \
             signup_sem_ligacao_por_telefone \
