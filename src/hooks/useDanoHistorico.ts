@@ -32,15 +32,14 @@ export function descreverPassoDano(entrada: DanoHistoricoEntrada): string {
 }
 
 export async function fetchDanoHistorico(danoId: string): Promise<DanoHistoricoEntrada[]> {
-  // viatura_dano_historico ainda não está no types.ts (migração 20261023100000).
   const { data, error } = await supabase
-    .from('viatura_dano_historico' as never)
+    .from('viatura_dano_historico')
     .select('id, campo, valor_anterior, valor_novo, ator_id, criado_em')
     .eq('dano_id', danoId)
     .order('criado_em', { ascending: true });
   if (error) throw error;
 
-  const rows = (data ?? []) as unknown as DanoHistoricoRow[];
+  const rows = (data ?? []) as DanoHistoricoRow[];
   const perfis = await fetchPerfisOrg(
     rows.map((r) => r.ator_id).filter((id): id is string => !!id)
   );

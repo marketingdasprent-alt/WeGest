@@ -28,21 +28,16 @@ export interface TicketLigado {
   mensagens: TicketLigadoMensagem[];
 }
 
-// tickets_da_viatura_para_ligar ainda não está no types.ts (migração 20261023110000).
-type RpcSemTipos = (
-  fn: string,
-  params: Record<string, unknown>
-) => Promise<{ data: unknown; error: Error | null }>;
-
 export function numeroTicket(numero: number): string {
   return `#${String(numero).padStart(4, '0')}`;
 }
 
 export async function fetchTicketsDaViatura(viaturaId: string): Promise<TicketParaLigar[]> {
-  const rpc = supabase.rpc.bind(supabase) as unknown as RpcSemTipos;
-  const { data, error } = await rpc('tickets_da_viatura_para_ligar', { p_viatura_id: viaturaId });
+  const { data, error } = await supabase.rpc('tickets_da_viatura_para_ligar', {
+    p_viatura_id: viaturaId,
+  });
   if (error) throw error;
-  return (data ?? []) as TicketParaLigar[];
+  return data ?? [];
 }
 
 /** Ticket ligado a um dano e as suas mensagens. null se o RLS não o deixar ver. */

@@ -8353,6 +8353,9 @@ export type Database = {
           perfil_rascunho: boolean
           recibo_verde: boolean | null
           registo_criminal_url: string | null
+          retencao_irs: boolean
+          retencao_irs_pct: number
+          retencao_iva_pct: number
           seguro_valor_semanal: number | null
           slot_valor_semanal: number | null
           status_ativo: boolean | null
@@ -8408,6 +8411,9 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          retencao_irs?: boolean
+          retencao_irs_pct?: number
+          retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
@@ -8463,6 +8469,9 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          retencao_irs?: boolean
+          retencao_irs_pct?: number
+          retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
@@ -13886,6 +13895,47 @@ export type Database = {
           },
         ]
       }
+      viatura_dano_historico: {
+        Row: {
+          ator_id: string | null
+          campo: string
+          criado_em: string
+          dano_id: string
+          id: string
+          org_id: string
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          ator_id?: string | null
+          campo: string
+          criado_em?: string
+          dano_id: string
+          id?: string
+          org_id: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          ator_id?: string | null
+          campo?: string
+          criado_em?: string
+          dano_id?: string
+          id?: string
+          org_id?: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viatura_dano_historico_dano_id_fkey"
+            columns: ["dano_id"]
+            isOneToOne: false
+            referencedRelation: "viatura_danos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       viatura_danos: {
         Row: {
           categoria_id: string | null
@@ -16067,6 +16117,10 @@ export type Database = {
       }
       current_user_cargo: { Args: never; Returns: string }
       current_user_tem_cargo: { Args: { p_nomes: string[] }; Returns: boolean }
+      danos_ligados_visiveis_pela_assistencia: {
+        Args: never
+        Returns: string[]
+      }
       dashboard_resumo_plataformas: {
         Args: {
           p_org_id: string
@@ -17039,6 +17093,17 @@ export type Database = {
       }
       testar_regra_automacao: { Args: { p_rule_id: string }; Returns: Json }
       ticket_estados_ativos: { Args: never; Returns: string[] }
+      tickets_da_viatura_para_ligar: {
+        Args: { p_viatura_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          numero: number
+          status: string
+          titulo: string
+        }[]
+      }
+      tickets_ligados_visiveis_pela_frota: { Args: never; Returns: string[] }
       trocar_condutor: {
         Args: {
           p_contrato_id: string
