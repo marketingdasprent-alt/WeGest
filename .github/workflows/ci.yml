@@ -325,6 +325,7 @@ jobs:
             api_so_disponiveis \
             api_disponivel_desde_em_cache \
             api_reserva_com_matricula \
+            api_estado_sem_registo \
             conta_cliente \
             api_conta_candidatura
 
