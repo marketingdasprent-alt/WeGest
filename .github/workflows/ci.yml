@@ -383,7 +383,8 @@ jobs:
             fotos_da_viatura \
             viatura_historico_estado \
             perfis_org_nomes \
-            viatura_dano_historico
+            viatura_dano_historico \
+            dano_ligado_ao_ticket
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

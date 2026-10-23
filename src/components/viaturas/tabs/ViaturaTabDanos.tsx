@@ -42,6 +42,7 @@ import { DanoFotosGallery } from '../DanoFotosGallery';
 import { DanoCategoriaBadge } from '../DanoCategoriaBadge';
 import { DanoHistorico } from '../DanoHistorico';
 import { DanoObservacoes } from '../DanoObservacoes';
+import { DanoTicketLigado } from '../DanoTicketLigado';
 import { useDanoCategorias } from '@/hooks/useDanoCategorias';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
@@ -59,6 +60,7 @@ interface Dano {
   motorista_id: string | null;
   contrato_id: string | null;
   categoria_id: string | null;
+  ticket_id: string | null;
   categoria: { id: string; nome: string; cor: string | null } | null;
   motorista?: {
     id: string;
@@ -890,6 +892,13 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                         observacoes={dano.observacoes}
                         podeEditar={podeEditar}
                         onGuardado={loadDanos}
+                      />
+                      <DanoTicketLigado
+                        danoId={dano.id}
+                        viaturaId={viaturaId}
+                        ticketId={dano.ticket_id}
+                        podeEditar={podeEditar}
+                        onAlterado={loadDanos}
                       />
                       <DanoHistorico danoId={dano.id} />
 

@@ -38,7 +38,7 @@ CREATE POLICY vdh_select ON public.viatura_dano_historico
   FOR SELECT TO authenticated
   USING (
     org_id = public.get_current_org_id()
-    AND EXISTS (SELECT 1 FROM public.viatura_danos d WHERE d.id = dano_id)
+    AND EXISTS (SELECT 1 FROM public.viatura_danos d WHERE d.id = viatura_dano_historico.dano_id)
   );
 
 DROP POLICY IF EXISTS rls_org_isolation ON public.viatura_dano_historico;
