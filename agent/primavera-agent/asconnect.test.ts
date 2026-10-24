@@ -162,12 +162,11 @@ describe('emitir', () => {
     expect(r).toMatchObject({ doctype: 'FA', docnum: '68', serie: '2026', numero: 'FA 2026/68' });
   });
 
-  it('cliente novo: cria-o com código = NIF e grava a CondPag antes do documento', async () => {
+  it('cliente novo: cria-o com código = NIF já com a CondPag, sem atualizar a ficha', async () => {
     const { fn, chamadas } = fetchFalso({
       '/auth/gettoken': ['tok'],
       '/erp/query/tabledata': [{ Resultado: [], ...SUCESSO }],
       '/ficha/cliente/inserir': [{ CodCliente: '234567890', Adicionado: true, ...SUCESSO }],
-      '/ficha/cliente/atualizar': [{ CodCliente: '234567890', Atualizado: true, ...SUCESSO }],
       '/documentos/vendas/inserir': [DOC_OK],
     });
     await criarClienteAsConnect(cfgBase, fn).emitir(payload);
@@ -180,10 +179,10 @@ describe('emitir', () => {
       Pais: 'PT',
       PessoaSingular: true,
       Idioma: 'PT',
+      CondPag: '1',
     });
-    // O inserir ignora CondPag no servidor real; só o atualizar a grava.
-    const atualizar = chamadas.find((c) => c.url === '/ficha/cliente/atualizar')!.corpo;
-    expect(atualizar).toEqual({ Cliente: { Codigo: '234567890', CondPag: '1' } });
+    // O inserir grava a CondPag (provado no DASPWSTEST a 2026-10-22, FA 2026/51).
+    expect(chamadas.some((c) => c.url === '/ficha/cliente/atualizar')).toBe(false);
     expect(chamadas.at(-1)!.corpo.Documento.Entidade).toBe('234567890');
   });
 
