@@ -269,19 +269,20 @@ verify_jwt = true
 [functions.ti-ticket-submeter]
 verify_jwt = false
 
-# Leitura de um ticket de TI pelo token do próprio ticket (vai no email da
-# sugestão). Anónimo porque o autor pode não ter conta; devolve só aquele ticket.
+# Leitura de um ticket de TI pelo token do próprio ticket (vai no email de
+# confirmação). Anónimo porque o autor pode não ter conta; devolve só aquele ticket.
 [functions.ti-ticket-por-token]
 verify_jwt = false
 
-# Resposta do autor a uma sugestão de TI ("ajudou" / "não ajudou"). Anon porque
-# o autor pode não ter conta; autoriza pelo acesso_token do ticket.
-[functions.ti-sugestao-responder]
+# Mensagem no chat de um pedido de TI. Anónimo porque quem pediu pode não ter
+# conta: autoriza pelo acesso_token do pedido ou, com sessão, pela RLS do
+# próprio pedido; limite por pessoa e por pedido.
+[functions.ti-ticket-mensagem]
 verify_jwt = false
 
-# Aviso ao autor de um ticket de TI de que há sugestão. Iniciada sempre pela app
-# autenticada (o admin que escreve a sugestão) → exige JWT.
-[functions.ti-ticket-sugestao-email]
+# Confirmação a quem pediu, com o link da conversa. Exige JWT: quem chama é o
+# ti-ticket-submeter com a service role key.
+[functions.ti-ticket-confirmacao-email]
 verify_jwt = true
 
 # Aviso ao email de suporte da organização de que entrou um pedido novo. Exige
@@ -289,13 +290,6 @@ verify_jwt = true
 # pedido) e o ti-ticket-submeter, cuja service role key já é um JWT assinado
 # pelo projecto. Deixá-la a false abria um gatilho anónimo de envio de email.
 [functions.ti-ticket-novo-email]
-verify_jwt = true
-
-# Aviso ao suporte de que o autor respondeu "não ajudou" — o pedido regrediu e
-# volta a precisar de atenção. Exige JWT: quem chama é o ti-sugestao-responder
-# com a service_role key, que já é um JWT assinado pelo projecto. Deixá-la a
-# false abria um gatilho anónimo de envio de email.
-[functions.ti-sugestao-nao-ajudou-email]
 verify_jwt = true
 
 # Pede assinatura de um documento: guarda o PDF e a fotografia dos dados, cria
