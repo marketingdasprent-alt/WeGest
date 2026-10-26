@@ -11919,6 +11919,7 @@ export type Database = {
           criado_por_nome: string
           ficheiro_url: string
           id: string
+          mensagem_id: string | null
           mime_type: string | null
           nome: string
           org_id: string
@@ -11931,6 +11932,7 @@ export type Database = {
           criado_por_nome: string
           ficheiro_url: string
           id?: string
+          mensagem_id?: string | null
           mime_type?: string | null
           nome: string
           org_id: string
@@ -11943,6 +11945,7 @@ export type Database = {
           criado_por_nome?: string
           ficheiro_url?: string
           id?: string
+          mensagem_id?: string | null
           mime_type?: string | null
           nome?: string
           org_id?: string
@@ -11950,6 +11953,13 @@ export type Database = {
           ticket_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ti_ticket_anexos_mensagem_id_fkey"
+            columns: ["mensagem_id"]
+            isOneToOne: false
+            referencedRelation: "ti_ticket_mensagens"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ti_ticket_anexos_org_id_fkey"
             columns: ["org_id"]
@@ -11959,6 +11969,57 @@ export type Database = {
           },
           {
             foreignKeyName: "ti_ticket_anexos_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "ti_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_ticket_mensagens: {
+        Row: {
+          autor_tipo: string
+          created_at: string
+          criado_por: string | null
+          criado_por_nome: string
+          deleted_at: string | null
+          id: string
+          org_id: string
+          texto: string
+          ticket_id: string
+        }
+        Insert: {
+          autor_tipo: string
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome: string
+          deleted_at?: string | null
+          id?: string
+          org_id: string
+          texto?: string
+          ticket_id: string
+        }
+        Update: {
+          autor_tipo?: string
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome?: string
+          deleted_at?: string | null
+          id?: string
+          org_id?: string
+          texto?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_ticket_mensagens_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ti_ticket_mensagens_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "ti_tickets"
@@ -15177,6 +15238,30 @@ export type Database = {
           motorista_id_antes?: string | null
           plataforma?: string | null
           tabela?: string
+        }
+        Relationships: []
+      }
+      zz_templates_assinaturas_20261023: {
+        Row: {
+          guardado_em: string | null
+          id: string | null
+          nome: string | null
+          template_data: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          guardado_em?: string | null
+          id?: string | null
+          nome?: string | null
+          template_data?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          guardado_em?: string | null
+          id?: string | null
+          nome?: string | null
+          template_data?: Json | null
+          updated_at?: string | null
         }
         Relationships: []
       }

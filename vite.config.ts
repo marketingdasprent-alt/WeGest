@@ -137,8 +137,15 @@ export default defineConfig(({ mode }) => ({
         // /formulario/* vive em iframes no site de cada organização: o index.html
         // do precache traz o X-Frame-Options: DENY da raiz, e a partir da segunda
         // abertura o iframe ficava em branco. Vai sempre à rede, onde a Vercel
-        // responde sem esse cabeçalho só para esta rota (vercel.json).
-        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\/rent-a-car(\/|$)/, /^\/formulario\//],
+        // responde sem esse cabeçalho só para esta rota (vercel.json). O mesmo
+        // para o portal do motorista e o /login, embebidos no site da Década.
+        navigateFallbackDenylist: [
+          /^\/~oauth/,
+          /^\/api\/rent-a-car(\/|$)/,
+          /^\/formulario\//,
+          /^\/motorista\//,
+          /^\/login$/,
+        ],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Nota: o vite-plugin-pwa precacheia SEMPRE o manifest.webmanifest (não
         // tem interruptor, e `manifestTransforms` não chega às entradas que ele

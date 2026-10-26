@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as renderBase, screen, fireEvent, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 
 import { TiTicketFormulario } from './TiTicketFormulario';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,6 +20,9 @@ vi.mock('@/components/auth/TurnstileCaptcha', () => ({
     </button>
   ),
 }));
+
+// A confirmação leva um <Link> para a conversa.
+const render = (ui: ReactElement) => renderBase(<MemoryRouter>{ui}</MemoryRouter>);
 
 function preencher() {
   fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Bruno Paulo' } });
@@ -43,7 +48,7 @@ describe('TiTicketFormulario', () => {
 
   it('submete sem anexos quando nenhum é escolhido', async () => {
     (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { success: true, numero: 7, anexosFalhou: false },
+      data: { success: true, numero: 7, acesso_token: 'acc-7', anexosFalhou: false },
       error: null,
     });
 
@@ -59,8 +64,34 @@ describe('TiTicketFormulario', () => {
         email: 'bruno@exemplo.pt',
         descricao: 'O portátil não liga',
         anexos: [],
+        origem: window.location.origin,
       },
     });
+    expect(screen.getByRole('link', { name: 'Abrir a conversa' })).toHaveAttribute(
+      'href',
+      '/ti/ticket/acc-7'
+    );
+  });
+
+  it('com onSubmetido, entrega o token da conversa em vez de mostrar a confirmação', async () => {
+    (supabase.functions.invoke as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { success: true, numero: 12, acesso_token: 'acc-12', anexosFalhou: true },
+      error: null,
+    });
+    const onSubmetido = vi.fn();
+
+    render(<TiTicketFormulario token="tok-1" onSubmetido={onSubmetido} />);
+    preencher();
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar pedido' }));
+
+    await waitFor(() =>
+      expect(onSubmetido).toHaveBeenCalledWith({
+        numero: 12,
+        acessoToken: 'acc-12',
+        anexosFalhou: true,
+      })
+    );
+    expect(screen.queryByText('Pedido #12 registado')).toBeNull();
   });
 
   it('mostra o ficheiro escolhido na lista e permite removê-lo', () => {

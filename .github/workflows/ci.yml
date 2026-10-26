@@ -325,6 +325,7 @@ jobs:
             api_so_disponiveis \
             api_disponivel_desde_em_cache \
             api_reserva_com_matricula \
+            api_estado_sem_registo \
             conta_cliente \
             api_conta_candidatura
 
@@ -360,6 +361,7 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
+            rls_notificacoes_visibilidade \
             rls_anon_exposure \
             signup_nao_confia_na_metadata \
             signup_sem_ligacao_por_telefone \
@@ -385,7 +387,8 @@ jobs:
             viatura_historico_estado \
             perfis_org_nomes \
             viatura_dano_historico \
-            dano_ligado_ao_ticket
+            dano_ligado_ao_ticket \
+            ti_ticket_mensagens
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

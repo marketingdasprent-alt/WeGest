@@ -2,20 +2,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ESTADOS_POR_RESOLVER, proximoEstado, type EstadoTicket } from '@/lib/tiTicketEstados';
-import { ordenarSugestoes } from '@/lib/tiTicketContinuacao';
-
-export interface TiSugestao {
-  id: string;
-  texto: string;
-  util: boolean | null;
-  /** O que o autor escreveu ao recusar a sugestão. Nulo se não explicou. */
-  resposta_texto: string | null;
-  /** Quem escreveu a sugestão, em texto — ver a migração para o porquê. */
-  criado_por_nome: string | null;
-  created_at: string;
-  /** Quando o autor respondeu (resolveu / não resolveu). Nulo enquanto por responder. */
-  respondida_em: string | null;
-}
+import type { TiMensagem } from '@/lib/tiTicketChat';
 
 export interface TiAnexo {
   id: string;
@@ -26,6 +13,8 @@ export interface TiAnexo {
   /** Quem anexou — sempre preenchido, mesmo quando é o autor (sem conta). */
   criado_por_nome: string;
   created_at: string;
+  /** Nulo = anexado na submissão; senão, a mensagem do chat a que pertence. */
+  mensagem_id: string | null;
 }
 
 export interface TiTicket {
@@ -35,41 +24,61 @@ export interface TiTicket {
   autor_email: string;
   descricao: string;
   status: EstadoTicket;
+  /** Conta de quem pediu, quando tinha sessão. Decide de que lado da conversa se fala. */
+  criado_por: string | null;
   created_at: string;
   /** Empresa de onde veio o pedido. Nulo se a RLS não deixar ler a organização. */
   organizacao: { nome: string } | null;
   resolvido_por_nome: string | null;
   resolvido_em: string | null;
-  sugestoes: TiSugestao[];
-  /** Anexados no momento da submissão — ver ti-ticket-submeter. */
+  /** Última actividade (mensagem nova, mudança de estado). */
+  updated_at: string;
+  mensagens: TiMensagem[];
+  /** Da submissão (`mensagem_id` nulo) e do chat. */
   anexos: TiAnexo[];
 }
 
 const CHAVE = ['ti-tickets'];
 
 const SELECT_TICKET_COMPLETO =
-  'id, numero, autor_nome, autor_email, descricao, status, created_at,' +
+  'id, numero, autor_nome, autor_email, descricao, status, criado_por, created_at, updated_at,' +
   ' resolvido_por_nome, resolvido_em,' +
   ' organizacao:organizacoes(nome),' +
-  ' sugestoes:ti_ticket_sugestoes(id, texto, util, resposta_texto, criado_por_nome, created_at, respondida_em),' +
-  ' anexos:ti_ticket_anexos(id, nome, ficheiro_url, tamanho_bytes, mime_type, criado_por_nome, created_at)';
+  ' mensagens:ti_ticket_mensagens(id, autor_tipo, criado_por_nome, texto, created_at, deleted_at),' +
+  ' anexos:ti_ticket_anexos(id, mensagem_id, nome, ficheiro_url, tamanho_bytes, mime_type, criado_por_nome, created_at)';
 
-/** Ordena sugestões e anexos DENTRO de cada pedido pela ordem em que foram criados. */
-function normalizarTickets(data: TiTicket[] | null): TiTicket[] {
-  return (data ?? []).map((t) => ({
-    ...t,
-    sugestoes: ordenarSugestoes(t.sugestoes ?? []),
-    anexos: [...(t.anexos ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at)),
-  }));
+type TicketDaBd = Omit<TiTicket, 'mensagens'> & {
+  mensagens: (TiMensagem & { deleted_at: string | null })[] | null;
+};
+
+/** Conversa e anexos DENTRO de cada pedido pela ordem em que foram criados. */
+export function normalizarTickets(data: TicketDaBd[] | null): TiTicket[] {
+  const porData = <T extends { created_at: string }>(a: T, b: T) =>
+    a.created_at.localeCompare(b.created_at);
+  return (data ?? []).map((t) => {
+    const mensagens = (t.mensagens ?? [])
+      .filter((m) => !m.deleted_at)
+      .map(({ deleted_at: _apagada, ...m }) => m)
+      .sort(porData);
+    const visiveis = new Set(mensagens.map((m) => m.id));
+    return {
+      ...t,
+      mensagens,
+      // Anexos de uma mensagem apagada vão com ela.
+      anexos: (t.anexos ?? [])
+        .filter((a) => !a.mensagem_id || visiveis.has(a.mensagem_id))
+        .sort(porData),
+    };
+  });
 }
 
 /**
  * Nome de quem está a usar a aplicação, para creditar quem respondeu ou
  * resolveu.
  *
- * Nunca lança: falhar a leitura do perfil não pode impedir uma sugestão de ser
- * gravada nem um pedido de ser fechado. Sem nome, o cartão fica sem crédito —
- * mau, mas melhor do que perder o trabalho.
+ * Nunca lança: falhar a leitura do perfil não pode impedir um pedido de ser
+ * fechado. Sem nome, o cartão fica sem crédito — mau, mas melhor do que
+ * perder o trabalho.
  */
 async function nomeDaSessao(): Promise<string | null> {
   try {
@@ -101,7 +110,7 @@ export function useTiTickets(enabled = true) {
         .select(SELECT_TICKET_COMPLETO)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return normalizarTickets(data as TiTicket[] | null);
+      return normalizarTickets(data as TicketDaBd[] | null);
     },
   });
 }
@@ -130,7 +139,7 @@ export function useMeusTiTickets(enabled = true) {
         .eq('criado_por', uid)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return normalizarTickets(data as TiTicket[] | null);
+      return normalizarTickets(data as TicketDaBd[] | null);
     },
   });
 }
@@ -143,7 +152,7 @@ export function useMeusTiTickets(enabled = true) {
  * a lista cresce sem limite.
  *
  * A chave vive debaixo de `['ti-tickets']` de propósito — as invalidações que
- * já existem nas mutações apanham-na por prefixo, e uma sugestão enviada
+ * já existem nas mutações apanham-na por prefixo, e um pedido resolvido
  * corrige o número sem código novo.
  */
 export function useTiTicketsAbertos(enabled = true) {
@@ -182,55 +191,6 @@ export function useTiTicketsAbertos(enabled = true) {
   }, [enabled, qc]);
 
   return query;
-}
-
-export function useCriarSugestao() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ ticketId, texto }: { ticketId: string; texto: string }) => {
-      const { data: ticket, error: erroLer } = await (supabase as any)
-        .from('ti_tickets')
-        .select('status, org_id')
-        .eq('id', ticketId)
-        .single();
-      if (erroLer) throw erroLer;
-
-      const novo = proximoEstado(ticket.status as EstadoTicket, 'sugerir');
-      if (!novo) throw new Error('Este pedido já não aceita sugestões.');
-
-      const { data: user } = await supabase.auth.getUser();
-      const { error: erroIns } = await (supabase as any).from('ti_ticket_sugestoes').insert({
-        ticket_id: ticketId,
-        // O org_id vem do PEDIDO, não de quem escreve: quem faz suporte
-        // responde a pedidos de outras empresas, e uma sugestão com o org_id
-        // errado desaparecia da lista do próprio pedido.
-        org_id: ticket.org_id,
-        texto,
-        criado_por: user?.user?.id ?? null,
-        criado_por_nome: await nomeDaSessao(),
-      });
-      if (erroIns) throw erroIns;
-
-      const { error: erroUpd } = await (supabase as any)
-        .from('ti_tickets')
-        .update({ status: novo, updated_at: new Date().toISOString() })
-        .eq('id', ticketId);
-      if (erroUpd) throw erroUpd;
-
-      // O email é o último passo e NÃO desfaz o resto se falhar: a sugestão já
-      // está gravada e visível. Perder o trabalho do admin porque o SMTP não
-      // respondeu seria pior do que um email que não saiu.
-      // A origem vai no pedido porque cada organização corre no seu próprio
-      // domínio: um valor fixo do lado do servidor serviria uma e mandava as
-      // outras para o sítio errado. A função valida-a contra os domínios da
-      // plataforma antes de a meter no email.
-      const { error: erroEmail } = await supabase.functions.invoke('ti-ticket-sugestao-email', {
-        body: { ticket_id: ticketId, origem: window.location.origin },
-      });
-      return { emailFalhou: !!erroEmail };
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: CHAVE }),
-  });
 }
 
 export function useMarcarPresencial() {
