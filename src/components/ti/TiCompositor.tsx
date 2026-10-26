@@ -1,7 +1,8 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useState, type KeyboardEvent } from 'react';
 import { Loader2, Paperclip, SendHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { ficheirosColados } from '@/hooks/use-soltar-ficheiros';
 import { TI_ANEXO_MAX_FICHEIROS, validarListaFicheiros } from '@/lib/tiTicketAnexos';
 import { TI_MENSAGEM_MAX_CARACTERES } from '@/lib/tiTicketChat';
 
@@ -12,8 +13,16 @@ interface TiCompositorProps {
   placeholder?: string;
 }
 
-/** Enter envia, Shift+Enter muda de linha. */
-export function TiCompositor({ onEnviar, isPending, placeholder }: TiCompositorProps) {
+/** Para a conversa à volta entregar os ficheiros largados nela. */
+export interface TiCompositorHandle {
+  adicionar: (ficheiros: File[]) => void;
+}
+
+/** Enter envia, Shift+Enter muda de linha. Ctrl+V de um print ou ficheiro anexa-o. */
+export const TiCompositor = forwardRef<TiCompositorHandle, TiCompositorProps>(function TiCompositor(
+  { onEnviar, isPending, placeholder },
+  ref
+) {
   const [texto, setTexto] = useState('');
   const [ficheiros, setFicheiros] = useState<File[]>([]);
   const [erro, setErro] = useState<string | null>(null);
@@ -21,13 +30,16 @@ export function TiCompositor({ onEnviar, isPending, placeholder }: TiCompositorP
 
   const podeEnviar = !isPending && (!!texto.trim() || ficheiros.length > 0);
 
-  const escolher = (novos: FileList | null) => {
-    if (!novos?.length) return;
-    const lista = [...ficheiros, ...Array.from(novos)];
-    const erroValidacao = validarListaFicheiros(lista);
-    setErro(erroValidacao);
-    if (!erroValidacao) setFicheiros(lista);
+  const adicionar = (novos: File[]) => {
+    if (!novos.length) return;
+    setFicheiros((actuais) => {
+      const lista = [...actuais, ...novos];
+      const erroValidacao = validarListaFicheiros(lista);
+      setErro(erroValidacao);
+      return erroValidacao ? actuais : lista;
+    });
   };
+  useImperativeHandle(ref, () => ({ adicionar }), []);
 
   const enviar = async () => {
     if (!podeEnviar) return;
@@ -75,6 +87,7 @@ export function TiCompositor({ onEnviar, isPending, placeholder }: TiCompositorP
           size="icon"
           className="shrink-0"
           aria-label="Anexar ficheiro"
+          title="Anexar ficheiro (também pode arrastar ou colar)"
           disabled={isPending || ficheiros.length >= TI_ANEXO_MAX_FICHEIROS}
           onClick={() => input.current?.click()}
         >
@@ -87,7 +100,7 @@ export function TiCompositor({ onEnviar, isPending, placeholder }: TiCompositorP
           accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.txt"
           className="hidden"
           onChange={(e) => {
-            escolher(e.target.files);
+            adicionar(Array.from(e.target.files ?? []));
             e.target.value = '';
           }}
         />
@@ -95,6 +108,12 @@ export function TiCompositor({ onEnviar, isPending, placeholder }: TiCompositorP
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           onKeyDown={teclas}
+          onPaste={(e) => {
+            const colados = ficheirosColados(e.clipboardData);
+            if (!colados.length) return;
+            e.preventDefault();
+            adicionar(colados);
+          }}
           maxLength={TI_MENSAGEM_MAX_CARACTERES}
           placeholder={placeholder ?? 'Escrever mensagem…'}
           aria-label="Mensagem"
@@ -118,4 +137,4 @@ export function TiCompositor({ onEnviar, isPending, placeholder }: TiCompositorP
       </div>
     </div>
   );
-}
+});

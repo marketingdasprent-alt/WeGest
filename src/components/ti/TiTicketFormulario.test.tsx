@@ -187,4 +187,19 @@ describe('TiTicketFormulario', () => {
 
     await waitFor(() => expect(screen.getByText('Este link já não é válido.')).toBeInTheDocument());
   });
+
+  it('aceita anexos largados no formulário e prints colados na descrição', () => {
+    render(<TiTicketFormulario token="tok-1" />);
+    const pdf = new File(['x'], 'erro.pdf', { type: 'application/pdf' });
+    fireEvent.drop(screen.getByLabelText('Nome').closest('.relative') as HTMLElement, {
+      dataTransfer: { files: [pdf], types: ['Files'] },
+    });
+    expect(screen.getByText('erro.pdf')).toBeInTheDocument();
+
+    const print = new File(['x'], 'image.png', { type: 'image/png' });
+    fireEvent.paste(screen.getByLabelText('Qual é o problema?'), {
+      clipboardData: { files: [print], getData: () => '' },
+    });
+    expect(screen.getByText(/^print-\d{6}\.png$/)).toBeInTheDocument();
+  });
 });

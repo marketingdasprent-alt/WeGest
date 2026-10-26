@@ -1,11 +1,14 @@
+import { useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { LifeBuoy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TiAvisoResolvido } from '@/components/ti/TiAvisoResolvido';
-import { TiCompositor } from '@/components/ti/TiCompositor';
+import { TiCompositor, type TiCompositorHandle } from '@/components/ti/TiCompositor';
 import { TiConversaCabecalho } from '@/components/ti/TiConversaCabecalho';
 import { TiConversaThread } from '@/components/ti/TiConversaThread';
+import { TiLargarAqui } from '@/components/ti/TiLargarAqui';
+import { useSoltarFicheiros } from '@/hooks/use-soltar-ficheiros';
 import { useEnviarTiMensagem, useTiTicketPorToken } from '@/hooks/useTiTicketConversa';
 
 /**
@@ -17,6 +20,9 @@ export default function TicketTIAutor() {
   const { acessoToken } = useParams<{ acessoToken: string }>();
   const { data, isLoading, error } = useTiTicketPorToken(acessoToken);
   const enviar = useEnviarTiMensagem();
+  const compositor = useRef<TiCompositorHandle>(null);
+  const resolvido = data?.ticket.status === 'resolvido';
+  const soltar = useSoltarFicheiros((f) => compositor.current?.adicionar(f), !data || resolvido);
 
   // Um erro nunca se mistura com um pedido vazio: um link inválido não deve
   // parecer um pedido sem conteúdo.
@@ -30,7 +36,6 @@ export default function TicketTIAutor() {
   }
 
   const { ticket, mensagens, anexos } = data;
-  const resolvido = ticket.status === 'resolvido';
 
   const onEnviar = async (texto: string, ficheiros: File[]) => {
     try {
@@ -49,7 +54,11 @@ export default function TicketTIAutor() {
         <LifeBuoy className="h-4 w-4 text-primary" />
         Pedidos de informática
       </div>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-y border-border bg-card sm:rounded-xl sm:border">
+      <div
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-y border-border bg-card sm:rounded-xl sm:border"
+        {...soltar.zona}
+      >
+        <TiLargarAqui visivel={soltar.aArrastar} />
         <TiConversaCabecalho
           numero={ticket.numero}
           autorNome={ticket.autor_nome}
@@ -79,7 +88,7 @@ export default function TicketTIAutor() {
             Pedido resolvido. Se o problema voltou, faça um pedido novo.
           </p>
         ) : (
-          <TiCompositor onEnviar={onEnviar} isPending={enviar.isPending} />
+          <TiCompositor ref={compositor} onEnviar={onEnviar} isPending={enviar.isPending} />
         )}
       </div>
     </div>

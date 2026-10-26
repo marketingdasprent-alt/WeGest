@@ -84,4 +84,18 @@ describe('TiCaixaPedidos', () => {
     expect(screen.getByRole('button', { name: /Reabrir/ })).toBeInTheDocument();
     expect(screen.getByText(/Reabra-o para continuar/)).toBeInTheDocument();
   });
+
+  it('largar um ficheiro em cima da conversa anexa-o à mensagem', () => {
+    montar(true, [pedido({})], '/ti/tok?pedido=t1');
+    const conversa = screen.getByText('Pedido #31').closest('.relative') as HTMLElement;
+    const pdf = new File(['x'], 'erro.pdf', { type: 'application/pdf' });
+    const dataTransfer = { files: [pdf], types: ['Files'] };
+
+    fireEvent.dragEnter(conversa, { dataTransfer });
+    expect(screen.getByText('Largue aqui para anexar')).toBeInTheDocument();
+    fireEvent.drop(conversa, { dataTransfer });
+
+    expect(screen.queryByText('Largue aqui para anexar')).toBeNull();
+    expect(screen.getByText('erro.pdf')).toBeInTheDocument();
+  });
 });

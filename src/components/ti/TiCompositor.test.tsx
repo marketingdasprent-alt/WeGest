@@ -44,4 +44,14 @@ describe('TiCompositor', () => {
     expect(screen.getByText(/Tipo de ficheiro não suportado/)).toBeInTheDocument();
     expect(screen.queryByText('virus.exe')).toBeNull();
   });
+
+  it('colar um print na caixa anexa-o; colar texto não', () => {
+    const { caixa } = montar();
+    const print = new File(['x'], 'image.png', { type: 'image/png' });
+    fireEvent.paste(caixa, { clipboardData: { files: [print], getData: () => '' } });
+    expect(screen.getByText(/^print-\d{6}\.png$/)).toBeInTheDocument();
+
+    fireEvent.paste(caixa, { clipboardData: { files: [], getData: () => 'só texto' } });
+    expect(screen.getAllByRole('button', { name: /^Remover/ })).toHaveLength(1);
+  });
 });
