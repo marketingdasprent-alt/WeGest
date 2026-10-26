@@ -2,6 +2,7 @@ import type jsPDF from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 import { empresaDocData, empresaFooterText, type EmpresaConfig } from '@/config/empresas';
 import { resolveCartaoFrota } from './document-template/resolveCartaoFrota';
+import { carregarColaboradorQueImprime } from './document-template/colaboradorQueImprime';
 import { nivelEnergia, precisaEletrico } from './combustivel';
 
 import {
@@ -254,21 +255,8 @@ export const generateContratoPdf = async ({
     : Math.max(1, contrato.renovacao_intervalo_dias ?? 30);
   const duracaoMeses = Math.max(1, Math.round(diasContrato / 30));
 
-  let colaboradorNome = '';
-  let colaboradorAssinatura = '';
-  try {
-    const { data: auth } = await supabase.auth.getUser();
-    if (auth.user) {
-      const { data: perfil } = await supabase
-        .from('profiles')
-        .select('nome, assinatura_url')
-        .eq('id', auth.user.id)
-        .maybeSingle();
-      colaboradorNome = (perfil as { nome?: string } | null)?.nome ?? '';
-      colaboradorAssinatura =
-        (perfil as { assinatura_url?: string | null } | null)?.assinatura_url ?? '';
-    }
-  } catch {}
+  const { nome: colaboradorNome, assinatura: colaboradorAssinatura } =
+    await carregarColaboradorQueImprime();
 
   const estacaoIds = [contrato.estacao_entrega_id, contrato.estacao_recolha_id].filter(
     (id): id is string => !!id
