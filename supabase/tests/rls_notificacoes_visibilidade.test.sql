@@ -9,7 +9,7 @@
 -- ============================================================
 
 begin;
-select plan(12);
+select plan(14);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000009a00ff', 'bootstrap@rls-notificacoes.pt'),
@@ -142,6 +142,17 @@ select throws_ok(
   'não se insere notificação noutra organização'
 );
 
+-- e004 é do gestor, de hoje, mesmo tipo: o agrupamento (antes SECURITY DEFINER)
+-- fundia o INSERT nela por UPDATE e saltava a RLS. Ver a migração 20261026110000.
+select throws_ok(
+  $$insert into public.notificacoes (org_id, tipo, titulo, severidade, destinatario_id, mensagem)
+    values ('00000000-0000-0000-0000-0000009a0a00', 'cobranca_gerada', 'intrusa', 'normal',
+            '00000000-0000-0000-0000-0000009a0002', 'clique aqui')$$,
+  '42501',
+  null,
+  'não se escreve na notificação de um colega da mesma org por agrupamento'
+);
+
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000009a0005', true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000009a0005","role":"authenticated"}', true);
 select set_eq(
@@ -173,6 +184,12 @@ select is(
   'o delete do utilizador comum não apagou nenhuma notificação'
 );
 
+select is(
+  (select agrupadas::int from public.notificacoes where id = '00000000-0000-0000-0000-0000009ae004'),
+  1,
+  'a notificação do colega ficou intacta'
+);
+
 -- ── Sem sessão ─────────────────────────────────────────────
 
 -- Falha já no GRANT (anon não tem SELECT); rls_deny_anon é a segunda barreira.
@@ -189,7 +206,8 @@ reset role;
 
 -- ALTER POLICY só troca a expressão: tipo, papéis e comando ficam.
 select results_eq(
-  $$select policyname::text, permissive::text, roles::text, cmd::text
+  $$select policyname::text collate "default", permissive::text collate "default",
+           roles::text collate "default", cmd::text collate "default"
       from pg_policies
      where schemaname = 'public' and tablename = 'notificacoes'
      order by policyname$$,
