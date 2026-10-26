@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
@@ -285,10 +285,17 @@ function renderPage() {
 
 describe('AutomacaoPage', () => {
   beforeEach(() => {
+    // Os dados de teste são de 27-07-2026; com o relógio real, a 26-10 caíram
+    // fora da janela do histórico e dois testes começaram a falhar sozinhos.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-07-28T12:00:00Z') });
     vi.clearAllMocks();
     capturedUpdatePayload = null;
     mockRpc.mockResolvedValue({ data: null, error: null });
     canEdit.mockReturnValue(true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('a página abre no Editor visual e só tem duas vistas', async () => {
