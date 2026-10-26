@@ -1,13 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { toast } from 'sonner';
+import { useSoltarFicheiros } from '@/hooks/use-soltar-ficheiros';
 import type { TiTicket } from '@/hooks/useTiTickets';
 import { useEnviarTiMensagem, useTiAnexoUrls } from '@/hooks/useTiTicketConversa';
 import type { LadoConversa, TiAnexoVisivel } from '@/lib/tiTicketChat';
 import { TiAcoesGestao } from './TiAcoesGestao';
 import { TiAvisoResolvido } from './TiAvisoResolvido';
-import { TiCompositor } from './TiCompositor';
+import { TiCompositor, type TiCompositorHandle } from './TiCompositor';
 import { TiConversaCabecalho } from './TiConversaCabecalho';
 import { TiConversaThread } from './TiConversaThread';
+import { TiLargarAqui } from './TiLargarAqui';
 
 interface TiConversaPainelProps {
   ticket: TiTicket;
@@ -38,6 +40,9 @@ export function TiConversaPainel({
     [t.anexos, urls]
   );
   const resolvido = t.status === 'resolvido';
+  // Largar em qualquer parte da conversa anexa; sem isto o browser abria o ficheiro.
+  const compositor = useRef<TiCompositorHandle>(null);
+  const soltar = useSoltarFicheiros((f) => compositor.current?.adicionar(f), resolvido);
 
   const onEnviar = async (texto: string, ficheiros: File[]) => {
     try {
@@ -51,7 +56,8 @@ export function TiConversaPainel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col" {...soltar.zona}>
+      <TiLargarAqui visivel={soltar.aArrastar} />
       <TiConversaCabecalho
         numero={t.numero}
         autorNome={t.autor_nome}
@@ -88,6 +94,7 @@ export function TiConversaPainel({
         </p>
       ) : (
         <TiCompositor
+          ref={compositor}
           onEnviar={onEnviar}
           isPending={enviar.isPending}
           placeholder={meuLado === 'suporte' ? `Responder a ${t.autor_nome}…` : undefined}

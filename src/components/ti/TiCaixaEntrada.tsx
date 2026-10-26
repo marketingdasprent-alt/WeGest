@@ -93,7 +93,7 @@ export function TiCaixaEntrada({
             </SelectContent>
           </Select>
         )}
-        <div className="flex gap-1 overflow-x-auto" role="tablist">
+        <div className="flex flex-wrap gap-1" role="tablist">
           {SEPARADORES.filter((s) => gestao || !s.soGestao).map((s) => (
             <button
               key={s.valor}
@@ -102,7 +102,7 @@ export function TiCaixaEntrada({
               aria-selected={separador === s.valor}
               onClick={() => setSeparador(s.valor)}
               className={cn(
-                'flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
+                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
                 separador === s.valor
                   ? 'bg-primary/15 text-primary'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'

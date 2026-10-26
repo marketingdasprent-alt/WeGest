@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CheckCircle2, Loader2, Paperclip, X } from 'lucide-react';
+import { useSoltarFicheiros } from '@/hooks/use-soltar-ficheiros';
 import { TurnstileCaptcha } from '@/components/auth/TurnstileCaptcha';
+import { TiLargarAqui } from './TiLargarAqui';
 import { turnstileSiteKey } from '@/lib/turnstile';
 import {
   TI_ANEXO_MAX_FICHEIROS,
@@ -42,7 +44,7 @@ export function TiTicketFormulario({ token, onSubmetido, embutido }: TiTicketFor
   const [captchaVersao, setCaptchaVersao] = useState(0);
   const captchaEmFalta = !!turnstileSiteKey() && !captchaToken;
 
-  const escolherFicheiros = (novos: FileList | null) => {
+  const escolherFicheiros = (novos: FileList | File[] | null) => {
     if (!novos || novos.length === 0) return;
     const lista = [...ficheiros, ...Array.from(novos)];
     const erroValidacao = validarListaFicheiros(lista);
@@ -53,6 +55,8 @@ export function TiTicketFormulario({ token, onSubmetido, embutido }: TiTicketFor
     setErro(null);
     setFicheiros(lista);
   };
+
+  const soltar = useSoltarFicheiros(escolherFicheiros);
 
   const removerFicheiro = (indice: number) => {
     setFicheiros((atual) => atual.filter((_, i) => i !== indice));
@@ -129,7 +133,11 @@ export function TiTicketFormulario({ token, onSubmetido, embutido }: TiTicketFor
   }
 
   return (
-    <Moldura className={embutido ? 'space-y-4' : 'space-y-4 p-6'}>
+    <Moldura
+      className={embutido ? 'relative space-y-4' : 'relative space-y-4 p-6'}
+      {...soltar.zona}
+    >
+      <TiLargarAqui visivel={soltar.aArrastar} />
       <div className="space-y-2">
         <Label htmlFor="ti-nome">Nome</Label>
         <Input id="ti-nome" value={nome} onChange={(e) => setNome(e.target.value)} />
@@ -153,12 +161,13 @@ export function TiTicketFormulario({ token, onSubmetido, embutido }: TiTicketFor
           rows={5}
           value={descricao}
           onChange={(e) => setDescricao(e.target.value)}
+          onPaste={soltar.onPaste}
         />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="ti-anexos">Anexos (opcional)</Label>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border px-3 py-3">
           <Button
             type="button"
             variant="outline"
@@ -170,6 +179,9 @@ export function TiTicketFormulario({ token, onSubmetido, embutido }: TiTicketFor
             <Paperclip className="h-4 w-4" />
             Anexar ficheiro
           </Button>
+          <span className="text-xs text-muted-foreground">
+            ou arraste para aqui, ou cole um print (Ctrl+V) na descrição
+          </span>
           <input
             id="ti-anexos"
             type="file"
