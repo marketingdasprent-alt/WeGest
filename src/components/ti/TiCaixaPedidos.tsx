@@ -60,7 +60,7 @@ export function TiCaixaPedidos({ gestao, uid, token }: TiCaixaPedidosProps) {
         <div className="ml-auto">{token && <TiNovoPedidoDialog token={token} />}</div>
       </header>
 
-      <div className="grid min-h-0 flex-1 overflow-hidden border-y border-border bg-card lg:grid-cols-[minmax(300px,380px)_1fr] lg:rounded-xl lg:border">
+      <div className="grid min-h-0 flex-1 overflow-hidden border-y border-border bg-card lg:grid-cols-[380px_1fr] xl:grid-cols-[400px_1fr] lg:rounded-xl lg:border">
         <aside
           className={cn('min-h-0 border-border lg:border-r', selecionado && 'hidden lg:block')}
         >
