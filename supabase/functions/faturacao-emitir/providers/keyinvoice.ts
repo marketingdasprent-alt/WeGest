@@ -14,6 +14,7 @@ import type {
 } from '../types.ts';
 import { EmissaoAmbiguaError } from '../types.ts';
 import { precoParaProvider } from '../../_shared/faturacao/totais.ts';
+import { corpoInsertReceipt } from '../../_shared/faturacao/recibo.ts';
 
 const env = (k: string) => Deno.env.get(k);
 
@@ -229,25 +230,12 @@ export const keyInvoiceProvider: FaturacaoProvider = {
         0
       );
       method = 'insertReceipt';
-      // Série do PRÓPRIO recibo (settings.docseries.RC), o mesmo nome de campo que
-      // setReceiptVoid usa para identificar um recibo. Sem ela o KeyInvoice escolhe
-      // a série "por omissão" da conta, que numa conta como a da Dasp Rent Sul não
-      // existe ("Série de documento inválida"). Nunca foi emitido um RC até 30-09-2026,
-      // por isso o nome do parâmetro está por confirmar contra a API: se recusar,
-      // a falha fica em failed_jobs com a mensagem exacta.
-      const rcSeries = r.docseries.RC;
-      doc = {
-        ...(rcSeries ? { DocSeries: String(rcSeries) } : {}),
-        DocLines: [
-          {
-            DocType: String(input.documentoOriginal.doctype),
-            DocSeries: String(input.documentoOriginal.serie),
-            DocNum: String(input.documentoOriginal.docnum),
-            SettleValue: String(settleValue),
-          },
-        ],
-        ...clienteFields,
-      };
+      doc = corpoInsertReceipt(
+        r.docseries.RC as string | undefined,
+        input.documentoOriginal,
+        settleValue,
+        clienteFields
+      );
     } else {
       const taxMap = await buildTaxMap(r.endpoint, sid);
       const docLines = input.itens.map((it) => {
