@@ -93,7 +93,12 @@ export function TiCaixaEntrada({
             </SelectContent>
           </Select>
         )}
-        <div className="flex flex-wrap gap-1" role="tablist">
+        {/* Uma linha só, sem barra visível: em ecrãs muito estreitos ainda
+            desliza, mas a coluna da lista tem largura para os quatro. */}
+        <div
+          className="flex gap-0.5 overflow-x-auto rounded-lg bg-muted/60 p-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          role="tablist"
+        >
           {SEPARADORES.filter((s) => gestao || !s.soGestao).map((s) => (
             <button
               key={s.valor}
@@ -102,14 +107,21 @@ export function TiCaixaEntrada({
               aria-selected={separador === s.valor}
               onClick={() => setSeparador(s.valor)}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                'flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1.5 text-xs font-medium transition-colors',
                 separador === s.valor
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
               {s.rotulo}
-              <span className="tabular-nums opacity-70">{contagens[s.valor]}</span>
+              <span
+                className={cn(
+                  'tabular-nums',
+                  separador === s.valor ? 'text-primary' : 'text-muted-foreground/70'
+                )}
+              >
+                {contagens[s.valor]}
+              </span>
             </button>
           ))}
         </div>
