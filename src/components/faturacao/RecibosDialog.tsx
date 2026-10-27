@@ -2,14 +2,10 @@
  * Diálogo "Fazer recibo" — regista um pagamento (liquidação) sobre uma
  * fatura/cobrança em aberto. O recibo gera um crédito na conta-corrente
  * (trigger fn_recibo_posta_movimento); se liquidar o saldo todo, a cobrança
- * passa a 'paga'.
- *
- * NOTA: a emissão do documento fiscal Recibo (RC) no provider configurado é
- * adicionada na fase seguinte; por agora o recibo é registo interno de conta-corrente.
+ * passa a 'paga'. O Recibo (RC) fiscal é emitido primeiro — ver registarRecibo.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, Receipt } from 'lucide-react';
 import {
@@ -33,8 +29,11 @@ import {
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS } from '@/components/administrativo/faturacao';
-import { emitirDocumento, baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
-import { semCodigo } from '@/types/codigoPorOrg';
+import { baixarDocumentoPdf } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS } from '@/lib/faturacaoFalha';
+import { registarRecibo } from '@/lib/recibos';
+import { ErroRecibo, explicarErroRecibo, type ErroReciboExplicado } from '@/lib/reciboErro';
+import { ErroReciboAviso } from '@/components/faturacao/ErroReciboAviso';
 
 /** Cobrança/fatura em aberto que um recibo pode liquidar. */
 export interface ReciboCobrancaAlvo {
@@ -78,6 +77,7 @@ export function RecibosDialog({
   const [data, setData] = useState<string>(hojeISO());
   const [obs, setObs] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [falha, setFalha] = useState<ErroReciboExplicado | null>(null);
 
   const elegiveis = useMemo(() => cobrancas.filter((c) => c.saldoPagar > 0.005), [cobrancas]);
   const cobranca = useMemo(
@@ -95,12 +95,14 @@ export function RecibosDialog({
     setMetodo('transferencia');
     setData(hojeISO());
     setObs('');
+    setFalha(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, preselectId]);
 
   // Quando muda a cobrança escolhida, propõe o saldo por liquidar.
   useEffect(() => {
     if (cobranca) setValor(String(round2(cobranca.saldoPagar)));
+    setFalha(null);
   }, [cobranca]);
 
   const valorNum = round2(parseFloat(valor.replace(',', '.')) || 0);
@@ -122,99 +124,26 @@ export function RecibosDialog({
       return;
     }
     setSubmitting(true);
+    setFalha(null);
     try {
-      const descricao =
-        obs.trim() ||
-        `Liquidação de ${cobranca.documento_externo_ref || cobranca.descricao || 'fatura'}`;
-
-      // Os dois lados do merge são precisos: a main passou a atribuir o
-      // código pela BD (helper semCodigo), e esta branch precisa do id
-      // devolvido para escrever o nº do documento fiscal no recibo (abaixo).
-      const { data: reciboInserido, error } = await supabase
-        .from('recibos')
-        .insert(
-          semCodigo<'recibos'>({
-            org_id: orgId,
-            entidade_id: cobranca.destinatario_id,
-            contrato_id: cobranca.contrato_id,
-            valor: valorNum,
-            data_recibo: data,
-            metodo,
-            observacoes: descricao,
-            referencia: cobranca.id,
-            estado: 'ativo',
-          })
-        )
-        .select('id')
-        .single();
-      if (error) throw error;
-
-      // Liquidação total → marca a cobrança como paga.
-      if (liquidaTotal) {
-        await supabase
-          .from('contrato_cobrancas')
-          .update({ estado: 'paga', pago_em: new Date().toISOString() })
-          .eq('id', cobranca.id)
-          .eq('estado', 'emitida');
-      }
-
-      // Documento fiscal Recibo (RC) no provider — só se a fatura original também
-      // tem documento fiscal e o RC estiver configurado. Caso contrário, fica só interno.
-      if (cobranca.documento_externo_ref) {
+      const recibo = await registarRecibo(orgId, cobranca, {
+        valor: valorNum,
+        metodo,
+        data,
+        observacoes: obs,
+      });
+      if (recibo.invoice) {
         try {
-          const { data: cli } = await supabase
-            .from('clientes')
-            .select('nome, nif, email, morada, codigo_postal, localidade')
-            .eq('id', cobranca.destinatario_id)
-            .maybeSingle();
-          const res = await emitirDocumento({
-            tipo: 'RC',
-            cliente: clienteRowToFatura(cli, cobranca.destinatario_nome),
-            itens: [
-              {
-                descricao: `Recibo de ${cobranca.documento_externo_ref}`,
-                quantidade: 1,
-                preco_unitario: valorNum,
-                taxa_iva: 0,
-              },
-            ],
-            contrato_id: cobranca.contrato_id ?? undefined,
-            cobranca_id: cobranca.id,
-            documento_referencia: cobranca.documento_externo_ref,
-            referencia_externa: cobranca.documento_externo_ref,
-            observacoes: descricao,
-          });
-          // Write-back do nº real emitido no provider (mesmo padrão de
-          // useFaturacao.ts/NotaCreditoDialog.tsx/acordoPagamento.ts) — sem
-          // isto, documento_externo_ref fica sempre null e a UI não sabe
-          // distinguir este recibo de outros da mesma cobrança/parcelamento.
-          const fullDocNumber = res.provider?.FullDocNumber ?? res.invoice?.numero ?? null;
-          if (fullDocNumber && reciboInserido?.id) {
-            const { error: reciboRefErr } = await supabase
-              .from('recibos')
-              .update({ documento_externo_ref: fullDocNumber })
-              .eq('id', reciboInserido.id)
-              .is('documento_externo_ref', null);
-            if (reciboRefErr) {
-              console.warn('Falha (não crítica) a gravar documento_externo_ref:', reciboRefErr);
-            }
-          }
-          if (res.invoice) {
-            try {
-              await baixarDocumentoPdf(res.invoice);
-            } catch {
-              /* download best-effort */
-            }
-          }
-          if (res.warning) toast.warning(res.warning);
-        } catch (rcErr: any) {
-          // RC não configurado/falhou — o recibo interno fica registado na mesma.
-          console.warn('Recibo fiscal (RC) não emitido:', rcErr?.message);
+          await baixarDocumentoPdf(recibo.invoice);
+        } catch {
+          /* download best-effort */
         }
       }
+      if (recibo.aviso) toast.warning(recibo.aviso, { duration: DURACAO_AVISO_FALHA_MS });
 
       toast.success(`Recibo de ${formatCurrency(valorNum)} registado.`);
       qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['faturas-por-liquidar'] });
       if (cobranca.contrato_id) {
         qc.invalidateQueries({ queryKey: ['contrato-cobrancas', cobranca.contrato_id] });
       } else {
@@ -222,9 +151,9 @@ export function RecibosDialog({
       }
       onEmitido();
       onOpenChange(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Erro ao registar recibo:', e);
-      toast.error(`Erro ao registar recibo: ${e?.message ?? 'tente novamente'}`);
+      setFalha(e instanceof ErroRecibo ? e.explicacao : explicarErroRecibo(e, 'gravar'));
     } finally {
       setSubmitting(false);
     }
@@ -345,6 +274,7 @@ export function RecibosDialog({
                   : 'Liquidação parcial — a fatura mantém saldo em aberto.'}
               </p>
             )}
+            {falha && <ErroReciboAviso erro={falha} />}
           </div>
         )}
 
@@ -354,7 +284,12 @@ export function RecibosDialog({
           </Button>
           <Button
             onClick={handleEmitir}
-            disabled={submitting || !!erro || elegiveis.length === 0}
+            disabled={
+              submitting ||
+              !!erro ||
+              elegiveis.length === 0 ||
+              (falha !== null && !falha.podeTentarDeNovo)
+            }
             className="gap-2"
           >
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
