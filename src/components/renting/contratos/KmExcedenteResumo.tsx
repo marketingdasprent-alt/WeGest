@@ -2,15 +2,18 @@ import { Gauge } from 'lucide-react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
-import type { KmExcedente } from '@/utils/kmExcedente';
+import { destinoKmExtra, type KmExcedente } from '@/utils/kmExcedente';
 
 interface KmExcedenteResumoProps {
-  /** null = não há como calcular (sem km de saída ou km a descer). */
+  /** null = não há como calcular (km de saída em falta ou a 0, ou km a descer). */
   calculo: KmExcedente | null;
   /** null = km ilimitados. */
   kmsIncluidos: number | null;
   kmAdicionalValor: number | null;
+  regime: string | null;
+  faturado: boolean;
   cobrar: boolean;
   onCobrarChange: (cobrar: boolean) => void;
   temMotorista: boolean;
@@ -20,6 +23,8 @@ export const KmExcedenteResumo: React.FC<KmExcedenteResumoProps> = ({
   calculo,
   kmsIncluidos,
   kmAdicionalValor,
+  regime,
+  faturado,
   cobrar,
   onCobrarChange,
   temMotorista,
@@ -30,7 +35,7 @@ export const KmExcedenteResumo: React.FC<KmExcedenteResumoProps> = ({
     return (
       <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         <Gauge className="h-3.5 w-3.5 shrink-0" />
-        Sem km de saída válido neste contrato — os km extra não são calculados.
+        Sem km de saída registado neste contrato — os km extra não são calculados.
       </p>
     );
   }
@@ -44,6 +49,8 @@ export const KmExcedenteResumo: React.FC<KmExcedenteResumoProps> = ({
       </p>
     );
   }
+
+  const destino = destinoKmExtra({ regime, temMotorista, faturado });
 
   return (
     <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 space-y-3 dark:border-amber-900/50 dark:bg-amber-950/20">
@@ -72,10 +79,15 @@ export const KmExcedenteResumo: React.FC<KmExcedenteResumoProps> = ({
         />
         <Label htmlFor="cobrar-km-extra" className="cursor-pointer font-normal leading-snug">
           Cobrar km extra
-          <span className="block text-xs text-muted-foreground">
-            {temMotorista
-              ? 'Fica nos extras do contrato e como débito pendente do motorista.'
-              : 'Fica nos extras do contrato.'}
+          <span
+            className={cn(
+              'block text-xs',
+              destino.faturarAParte
+                ? 'font-medium text-amber-800 dark:text-amber-300'
+                : 'text-muted-foreground'
+            )}
+          >
+            {destino.texto}
           </span>
         </Label>
       </div>

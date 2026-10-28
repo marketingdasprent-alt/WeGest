@@ -283,7 +283,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       const { data } = await supabase
         .from('contratos_renting')
         .select(
-          'viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida, cidade_assinatura, kms_incluidos, km_adicional_valor'
+          'viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida, cidade_assinatura, kms_incluidos, km_adicional_valor, regime, estado_financeiro'
         )
         .eq('id', contratoId)
         .maybeSingle();
@@ -302,6 +302,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         cidadeAssinatura: null as string | null,
         kmsIncluidos: null as number | null,
         kmAdicionalValor: null as number | null,
+        regime: null as string | null,
+        faturado: false,
       };
       if (!data) return empty;
 
@@ -396,6 +398,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         cidadeAssinatura: (data.cidade_assinatura as string | null) ?? null,
         kmsIncluidos: data.kms_incluidos ?? null,
         kmAdicionalValor: data.km_adicional_valor ?? null,
+        regime: data.regime ?? null,
+        faturado: data.estado_financeiro === 'facturado',
       };
     },
   });
@@ -991,6 +995,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       calculo={kmExcedente}
                       kmsIncluidos={contexto?.kmsIncluidos ?? null}
                       kmAdicionalValor={contexto?.kmAdicionalValor ?? null}
+                      regime={contexto?.regime ?? null}
+                      faturado={contexto?.faturado ?? false}
                       cobrar={cobrarKmExcedente}
                       onCobrarChange={setCobrarKmExcedente}
                       temMotorista={temMotorista}

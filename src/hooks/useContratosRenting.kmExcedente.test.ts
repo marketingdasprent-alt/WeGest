@@ -5,11 +5,7 @@ import type { ReactNode } from 'react';
 import React from 'react';
 
 import { supabase } from '@/integrations/supabase/client';
-import {
-  linhaDebitoKmExcedente,
-  useFecharContrato,
-  type FecharContratoArgs,
-} from './useContratosRenting';
+import { useFecharContrato, type FecharContratoArgs } from './useContratosRenting';
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
@@ -47,12 +43,8 @@ function setupSupabase(rpcResult: SupabaseResult) {
   return { chains, rpc: client.rpc as ReturnType<typeof vi.fn> };
 }
 
-const comExcedente = {
-  data: { km_percorridos: 2500, km_excedente: 500, valor: 62.5 },
-  error: null,
-};
-const semExcedente = {
-  data: { km_percorridos: 1500, km_excedente: 0, valor: 0 },
+const previsao = {
+  data: { km_percorridos: 2500, km_excedente: 500, valor_previsto: 62.5 },
   error: null,
 };
 
@@ -82,79 +74,44 @@ const fechar = async (a: FecharContratoArgs) => {
   });
 };
 
-describe('linhaDebitoKmExcedente', () => {
-  it('débito pendente com o contrato e os km na descrição', () => {
-    expect(
-      linhaDebitoKmExcedente({
-        motoristaId: 'mot-1',
-        contratoCodigo: 77,
-        kmExcedente: 500,
-        valor: 62.5,
-        dataMovimento: '2026-10-28',
-      })
-    ).toEqual({
-      motorista_id: 'mot-1',
-      tipo: 'debito',
-      categoria: 'outro',
-      descricao: 'Km extra no fecho do contrato #77 (500 km)',
-      valor: 62.5,
-      data_movimento: '2026-10-28',
-      status: 'pendente',
-    });
-  });
-});
-
 describe('useFecharContrato — km extra', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('com excedente → lança na BD e debita o motorista', async () => {
-    const { chains, rpc } = setupSupabase(comExcedente);
+  // Quem lança é o trigger ao fechar, pelo canal do regime; o cliente só
+  // regista a escolha — debitar aqui cobrava o TVDE duas vezes.
+  it('regista a escolha na BD e não debita nada do lado do cliente', async () => {
+    const { chains, rpc } = setupSupabase(previsao);
     await fechar(args());
 
     expect(rpc).toHaveBeenCalledWith('lancar_km_excedente_fecho', {
       p_contrato_id: 'c1',
       p_cobrar: true,
     });
-    expect(chains.motorista_financeiro.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ motorista_id: 'mot-1', tipo: 'debito', valor: 62.5 })
-    );
-  });
-
-  // A conta usa o km_entrada que a BD já tem: tem de vir depois de o gravar.
-  it('lança depois de gravar o km de entrada', async () => {
-    const { chains, rpc } = setupSupabase(comExcedente);
-    await fechar(args());
-
-    const kmGravado = chains.contratos_renting.update.mock.invocationCallOrder[0];
-    expect(rpc.mock.invocationCallOrder[0]).toBeGreaterThan(kmGravado);
-  });
-
-  it('dentro do limite → nenhum débito', async () => {
-    const { chains } = setupSupabase(semExcedente);
-    await fechar(args());
     expect(chains.motorista_financeiro).toBeUndefined();
   });
 
-  it('gestor perdoa → p_cobrar=false e nenhum débito', async () => {
-    const { chains, rpc } = setupSupabase(semExcedente);
+  it('gestor perdoa → p_cobrar=false', async () => {
+    const { rpc } = setupSupabase(previsao);
     await fechar(args({ cobrarKmExcedente: false }));
-
     expect(rpc).toHaveBeenCalledWith('lancar_km_excedente_fecho', {
       p_contrato_id: 'c1',
       p_cobrar: false,
     });
-    expect(chains.motorista_financeiro).toBeUndefined();
   });
 
-  it('sem motorista → fica só a linha no contrato', async () => {
-    const { chains, rpc } = setupSupabase(comExcedente);
-    await fechar(args({ motoristaId: null }));
+  // A escolha tem de estar gravada antes do update que fecha (é ele que dispara o trigger).
+  it('regista a escolha depois do km e antes de fechar', async () => {
+    const { chains, rpc } = setupSupabase(previsao);
+    await fechar(args());
 
-    expect(rpc).toHaveBeenCalled();
-    expect(chains.motorista_financeiro).toBeUndefined();
+    const updates = chains.contratos_renting.update.mock;
+    const fecho = updates.calls.findIndex(([p]) => p.estado_operacional === 'fechado');
+    const ordemRpc = rpc.mock.invocationCallOrder[0];
+    expect(ordemRpc).toBeGreaterThan(updates.invocationCallOrder[0]);
+    expect(ordemRpc).toBeLessThan(updates.invocationCallOrder[fecho]);
   });
 
-  it('erro no cálculo → o contrato não fecha', async () => {
+  it('erro a registar a escolha → o contrato não fecha', async () => {
     const { chains } = setupSupabase({ data: null, error: { message: 'Sem permissão.' } });
     const result = renderFecho();
     await act(async () => {
@@ -166,8 +123,8 @@ describe('useFecharContrato — km extra', () => {
     );
   });
 
-  it('sem recolha → não calcula km extra', async () => {
-    const { rpc } = setupSupabase(semExcedente);
+  it('sem recolha → não mexe nos km extra', async () => {
+    const { rpc } = setupSupabase(previsao);
     await fechar(args({ recolha: undefined }));
     expect(rpc).not.toHaveBeenCalled();
   });
