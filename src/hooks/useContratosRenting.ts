@@ -406,6 +406,34 @@ export interface FecharContratoArgs {
   /** Trata o fecho como definitivo mesmo sem `recolha` — usado pelo fecho
    *  simplificado de viaturas slot. */
   fecharAgora?: boolean;
+  /** false quando o gestor perdoa os km extra. Só conta com `recolha`. */
+  cobrarKmExcedente?: boolean;
+}
+
+/** O que lancar_km_excedente_fecho devolve. */
+export interface KmExcedenteLancado {
+  km_percorridos: number | null;
+  km_excedente: number;
+  valor: number;
+}
+
+/** Débito ao motorista pelos km extra, ao lado da linha nos extras do contrato. */
+export function linhaDebitoKmExcedente(ctx: {
+  motoristaId: string;
+  contratoCodigo: number;
+  kmExcedente: number;
+  valor: number;
+  dataMovimento: string;
+}) {
+  return {
+    motorista_id: ctx.motoristaId,
+    tipo: 'debito' as const,
+    categoria: 'outro',
+    descricao: `Km extra no fecho do contrato #${ctx.contratoCodigo} (${ctx.kmExcedente} km)`,
+    valor: ctx.valor,
+    data_movimento: ctx.dataMovimento,
+    status: 'pendente',
+  };
 }
 
 type DanoDoFecho = NonNullable<FecharContratoRecolhaInfo['danos']>[number];
@@ -484,6 +512,7 @@ export function useFecharContrato() {
       recolha,
       marcarDuaDevolvida,
       fecharAgora,
+      cobrarKmExcedente = true,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -512,6 +541,8 @@ export function useFecharContrato() {
       // no fim se marca o contrato como fechado e se cria o evento. Ao
       // contrário, um erro nos danos (FK do #764) deixava o contrato fechado
       // sem danos e um evento novo por cada tentativa: 9 duplicados.
+
+      let kmExcedente: KmExcedenteLancado | null = null;
 
       // Mesmas colunas km_entrada/combustivel_entrada que a Recolha via QR usa,
       // para a Folha de Danos ler o valor certo seja qual for o caminho.
@@ -589,6 +620,15 @@ export function useFecharContrato() {
             }
           }
         }
+
+        // Depois do km_entrada gravado: a BD faz a conta com os valores dela e
+        // substitui a linha de uma tentativa anterior.
+        const { data: kmRes, error: errKmExc } = await supabase.rpc('lancar_km_excedente_fecho', {
+          p_contrato_id: contratoId,
+          p_cobrar: cobrarKmExcedente,
+        });
+        if (errKmExc) throw errKmExc;
+        kmExcedente = kmRes as unknown as KmExcedenteLancado;
       }
 
       // Fecha sempre para 'fechado', com ou sem `recolha` já registada — antes,
@@ -672,6 +712,19 @@ export function useFecharContrato() {
         if (errFin) throw errFin;
       }
 
+      if (kmExcedente && kmExcedente.valor > 0 && motoristaId) {
+        const { error: errKmFin } = await supabase.from('motorista_financeiro').insert(
+          linhaDebitoKmExcedente({
+            motoristaId,
+            contratoCodigo,
+            kmExcedente: kmExcedente.km_excedente,
+            valor: kmExcedente.valor,
+            dataMovimento: new Date().toISOString().split('T')[0],
+          })
+        );
+        if (errKmFin) throw errKmFin;
+      }
+
       // O motorista não muda de estado aqui (ver migração 20260907170000) —
       // fechar o contrato não é decidir se ele fica activo.
       return { fechouAgora: !!recolha || !!fecharAgora };
@@ -681,6 +734,7 @@ export function useFecharContrato() {
       invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['motoristas'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      qc.invalidateQueries({ queryKey: ['renting', 'contrato-extras'] });
       toast(resolveFechoContratoToast(fechouAgora));
     },
     onError: (error: unknown) => {

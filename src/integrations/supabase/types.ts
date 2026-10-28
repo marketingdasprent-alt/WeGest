@@ -16744,6 +16744,10 @@ export type Database = {
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
       is_suporte_ti_decada: { Args: never; Returns: boolean }
+      lancar_km_excedente_fecho: {
+        Args: { p_cobrar?: boolean; p_contrato_id: string }
+        Returns: Json
+      }
       lead_respostas_legiveis: {
         Args: { p_observacoes: string; p_sem_formacao_tvde?: boolean }
         Returns: string
