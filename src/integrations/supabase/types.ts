@@ -4459,6 +4459,7 @@ export type Database = {
           cobertura_id: string | null
           cobertura_nome: string | null
           cobertura_preco_dia: number | null
+          cobrar_km_excedente: boolean
           codigo: number
           combustivel_entrada: string | null
           combustivel_saida: string | null
@@ -4493,6 +4494,7 @@ export type Database = {
           is_longa_duracao: boolean
           km_adicional_valor: number | null
           km_entrada: number | null
+          km_excedente_avaliado_em: string | null
           km_saida: number | null
           kms_incluidos: number | null
           local_entrega: string | null
@@ -4540,6 +4542,7 @@ export type Database = {
           cobertura_id?: string | null
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
+          cobrar_km_excedente?: boolean
           codigo: number
           combustivel_entrada?: string | null
           combustivel_saida?: string | null
@@ -4574,6 +4577,7 @@ export type Database = {
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
           km_entrada?: number | null
+          km_excedente_avaliado_em?: string | null
           km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
@@ -4621,6 +4625,7 @@ export type Database = {
           cobertura_id?: string | null
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
+          cobrar_km_excedente?: boolean
           codigo?: number
           combustivel_entrada?: string | null
           combustivel_saida?: string | null
@@ -4655,6 +4660,7 @@ export type Database = {
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
           km_entrada?: number | null
+          km_excedente_avaliado_em?: string | null
           km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
@@ -16744,6 +16750,27 @@ export type Database = {
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
       is_suporte_ti_decada: { Args: never; Returns: boolean }
+      km_excedente_calcular: {
+        Args: {
+          p_c: Database["public"]["Tables"]["contratos_renting"]["Row"]
+          p_km_fim: number
+          p_km_inicio: number
+        }
+        Returns: {
+          km_excedente: number
+          km_percorridos: number
+          valor: number
+        }[]
+      }
+      km_excedente_cobrar: {
+        Args: {
+          p_c: Database["public"]["Tables"]["contratos_renting"]["Row"]
+          p_km_fim: number
+          p_km_inicio: number
+          p_momento: string
+        }
+        Returns: Json
+      }
       lancar_km_excedente_fecho: {
         Args: { p_cobrar?: boolean; p_contrato_id: string }
         Returns: Json
