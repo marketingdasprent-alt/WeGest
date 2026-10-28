@@ -1,6 +1,33 @@
 import { describe, it, expect } from 'vitest';
 
-import { calcularKmExcedente } from './kmExcedente';
+import { calcularKmExcedente, destinoKmExtra } from './kmExcedente';
+
+describe('destinoKmExtra', () => {
+  it('TVDE com motorista vai para a conta-corrente', () => {
+    expect(destinoKmExtra({ regime: 'tvde', temMotorista: true, faturado: false })).toEqual({
+      texto: 'Fica como débito pendente na conta-corrente do motorista.',
+      faturarAParte: false,
+    });
+  });
+
+  it('rent-a-car por faturar entra na fatura do contrato', () => {
+    const d = destinoKmExtra({ regime: 'rent_a_car', temMotorista: false, faturado: false });
+    expect(d.texto).toContain('entra na fatura');
+    expect(d.faturarAParte).toBe(false);
+  });
+
+  it('rent-a-car já faturado avisa para faturar à parte', () => {
+    expect(
+      destinoKmExtra({ regime: 'rent_a_car', temMotorista: true, faturado: true }).faturarAParte
+    ).toBe(true);
+  });
+
+  it('TVDE sem motorista cai nos extras do contrato', () => {
+    expect(
+      destinoKmExtra({ regime: 'tvde', temMotorista: false, faturado: false }).texto
+    ).toContain('extras do contrato');
+  });
+});
 
 const base = { kmSaida: 10000, kmsIncluidos: 2000, kmAdicionalValor: 0.125 };
 
@@ -35,6 +62,7 @@ describe('calcularKmExcedente', () => {
 
   it('sem km de saída, sem km de entrada ou com o km a descer não há conta', () => {
     expect(calcularKmExcedente({ ...base, kmSaida: null, kmEntrada: 12500 })).toBeNull();
+    expect(calcularKmExcedente({ ...base, kmSaida: 0, kmEntrada: 112408 })).toBeNull();
     expect(calcularKmExcedente({ ...base, kmEntrada: null })).toBeNull();
     expect(calcularKmExcedente({ ...base, kmEntrada: Number.NaN })).toBeNull();
     expect(calcularKmExcedente({ ...base, kmEntrada: 9000 })).toBeNull();
