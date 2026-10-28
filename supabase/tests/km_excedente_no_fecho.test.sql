@@ -87,7 +87,7 @@ select ('00000000-0000-0000-0000-0000000ec00' || n)::uuid, '00000000-0000-0000-0
        ('00000000-0000-0000-0000-0000000ec40' || n)::uuid, '00000000-0000-0000-0000-0000000ef001',
        ('00000000-0000-0000-0000-0000000ee00' || n)::uuid, 'KM-0' || n || '-AA',
        '2026-10-01T10:00:00Z', case when regime = 'tvde' then null else '2026-10-31T10:00:00Z'::timestamptz end,
-       estado::contrato_estado_operacional_enum, 'pendente', regime, 23, false,
+       estado::contrato_estado_operacional_enum, 'pendente', regime::contrato_regime_enum, 23, false,
        2000, valor_km, km_saida, 12500, '00000000-0000-0000-0000-0000000ea101'
   from (values
     (1, 'rent_a_car', 0.125, 10000, 'em_curso'),  -- R1: rent-a-car, 500 km × 0,125 = 62,50 €
