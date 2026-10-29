@@ -46,12 +46,14 @@ const uuid = (description?: string): Esquema => ({ type: 'string', format: 'uuid
 const Preco: Esquema = {
   type: 'object',
   description:
-    'Euros com 2 casas; iva em percentagem. Os preços no WeGest já incluem IVA: com_iva é o ' +
-    'valor da tarifa e sem_iva a decomposição, com_iva / (1 + iva / 100).',
+    'Euros com 2 casas; iva em percentagem. A diária da tarifa é sem IVA: preco_dia e ' +
+    'aluguer trazem-na em sem_iva e com_iva soma-lhe o IVA. Franquia, caução, km a mais, ' +
+    'coberturas e extras já incluem IVA: com_iva é o valor da tarifa e sem_iva a ' +
+    'decomposição, com_iva / (1 + iva / 100).',
   required: ['sem_iva', 'com_iva', 'iva'],
   properties: {
-    sem_iva: { type: 'number', description: 'Valor sem IVA, decomposto de com_iva.' },
-    com_iva: { type: 'number', description: 'Valor com IVA: o preço da tarifa, tal como está.' },
+    sem_iva: { type: 'number', description: 'Valor sem IVA.' },
+    com_iva: { type: 'number', description: 'Valor com IVA: o que o cliente paga.' },
     iva: { type: 'number', description: 'Taxa de IVA em percentagem.' },
   },
   example: EX_PRECO,
@@ -117,7 +119,10 @@ const CartaoModelo: Esquema = {
       'Foto do modelo, carregada no WeGest (link público e fixo; muda quando a foto é ' +
         'substituída). null se o modelo não tiver foto.'
     ),
-    preco_dia: { ...Preco, description: 'Preço por dia na tarifa do site.' },
+    preco_dia: {
+      ...Preco,
+      description: 'Preço por dia na tarifa do site: sem_iva é o da tarifa, com_iva soma o IVA.',
+    },
     frota: { type: 'integer', description: 'Viaturas deste modelo na frota de aluguer.' },
   },
   example: EX_CARTAO_MODELO,
@@ -414,8 +419,9 @@ export const OPENAPI: Record<string, unknown> = {
       'catálogo de aluguer semanal TVDE e as candidaturas de motoristas (/tvde), e as ' +
       'reservas e faturas de quem entrou no site com a sua conta (/conta). ' +
       'Chave no cabeçalho X-API-Key, só a partir do backend do site. Datas ISO 8601 com fuso. ' +
-      'Dinheiro em euros com 2 casas, sempre sem e com IVA; o preço da tarifa já inclui IVA ' +
-      '(é o com_iva) e nunca se soma IVA por cima. ' +
+      'Dinheiro em euros com 2 casas, sempre sem e com IVA; mostre ao cliente o com_iva. ' +
+      'A diária da tarifa é sem IVA e a API soma-lhe o IVA; franquia, caução, km a mais, ' +
+      'coberturas e extras já incluem IVA. ' +
       'Erros sempre no envelope { "erro": { "codigo", "mensagem" } }. ' +
       'A ip_whitelist de uma chave só é fiável em chamadas directas a ' +
       'https://hkqzzxgeedsmjnhyquke.supabase.co/functions/v1/api-rent-a-car/v1 (servidor "directo"); ' +

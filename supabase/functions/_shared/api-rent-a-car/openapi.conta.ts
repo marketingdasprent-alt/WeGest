@@ -34,7 +34,7 @@ export const EX_RESERVA_CONTA = {
   modelo: { marca: EX_MODELO.marca, modelo: EX_MODELO.modelo },
   matricula: 'AA-00-BB',
   estacoes: { entrega: EX_LOCALIZACAO.nome, recolha: 'Porto' },
-  total: { sem_iva: 85.37, com_iva: 105, iva: 23 },
+  total: { sem_iva: 105, com_iva: 129.15, iva: 23 },
   pode_cancelar: false,
 };
 

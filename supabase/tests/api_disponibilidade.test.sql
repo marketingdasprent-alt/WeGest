@@ -125,21 +125,22 @@ select ok(exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-00
 select ok(not exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-0000000d0e07'), 'viatura inactiva não conta');
 select ok(not exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-0000000d0e08'), 'viatura vendida antes do início não conta');
 select ok(not exists (select 1 from l where viatura_id = '00000000-0000-0000-0000-0000000d0e09'), 'viatura vendida durante o período não conta');
-select is((select r->'modelos'->0->'cotacao'->'aluguer'->>'com_iva' from d), '105.00', '3 × 35,00 da tarifa, já com IVA');
-select is((select r->'modelos'->0->'cotacao'->'aluguer'->>'sem_iva' from d), '85.37', 'sem IVA decomposto a 23%');
+select is((select r->'modelos'->0->'cotacao'->'aluguer'->>'com_iva' from d), '129.15', '3 × 35,00 da tarifa (s/IVA) + 23 %');
+select is((select r->'modelos'->0->'cotacao'->'aluguer'->>'sem_iva' from d), '105.00', 'sem IVA é a diária da tarifa × 3');
 select is(jsonb_array_length(public.api_disponibilidade('00000000-0000-0000-0000-0000000d0a00', (select inicio from p), (select fim from p),
   '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0102')->'modelos'), 0, 'filtro por categoria');
 
--- cotação: aluguer 105 + cobertura 36 + cadeira 2×5×3 = 30 + limpeza 20 → 191,00 com IVA (já na tarifa)
+-- cotação: aluguer 105 + IVA = 129,15 + cobertura 36 + cadeira 2×5×3 = 30 + limpeza 20 → 215,15 com IVA
+-- (diária da tarifa sem IVA; cobertura e extras já com IVA, 20261029100000)
 create temp table c as select public.api_cotacao('00000000-0000-0000-0000-0000000d0a00', '00000000-0000-0000-0000-0000000d0d01',
   (select inicio from p), (select fim from p), '00000000-0000-0000-0000-0000000d0301', '00000000-0000-0000-0000-0000000d0302',
   '[{"extra_id":"00000000-0000-0000-0000-0000000d0401","quantidade":2},{"extra_id":"00000000-0000-0000-0000-0000000d0402","quantidade":1}]'::jsonb,
   '00000000-0000-0000-0000-0000000d0501') as r;
 grant select on c to public;
 select is((select jsonb_array_length(r->'linhas') from c), 4, 'aluguer, cobertura e dois extras');
-select is((select r->'subtotal'->>'com_iva' from c), '191.00', 'total com IVA é a soma da tarifa, sem IVA por cima');
-select is((select r->'subtotal'->>'sem_iva' from c), '155.28', 'subtotal sem IVA decomposto do total');
-select is((select sum((x->'total'->>'com_iva')::numeric) from c, jsonb_array_elements(c.r->'linhas') x), 191.00::numeric,
+select is((select r->'subtotal'->>'com_iva' from c), '215.15', 'total com IVA: aluguer + IVA, cobertura e extras como estão');
+select is((select r->'subtotal'->>'sem_iva' from c), '174.92', 'subtotal sem IVA decomposto do total');
+select is((select sum((x->'total'->>'com_iva')::numeric) from c, jsonb_array_elements(c.r->'linhas') x), 215.15::numeric,
   'subtotal.com_iva é igual à soma dos com_iva das linhas');
 select is((select r->'franquia'->>'sem_iva' from c), '0.00', 'a cobertura escolhida substitui a franquia do modelo');
 
