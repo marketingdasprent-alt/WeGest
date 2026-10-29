@@ -36,6 +36,7 @@ import { pt } from 'date-fns/locale';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { matchesSearch } from '@/lib/utils';
 import { usePagination } from '@/hooks/usePagination';
+import { fetchPerfisOrg } from '@/hooks/usePerfisOrg';
 import { TablePagination } from '@/components/ui/TablePagination';
 
 import type { TicketEnriched as Ticket, TicketCategoria as Categoria } from '@/types/ticket';
@@ -184,7 +185,7 @@ const Assistencia = () => {
       ] as string[];
       const allUserIds = [...new Set([...criadorIds, ...atribuidoIds])];
 
-      const [viaturasRes, motoristasRes, categoriasRes, usersRes] = await Promise.all([
+      const [viaturasRes, motoristasRes, categoriasRes, perfis] = await Promise.all([
         viaturaIds.length > 0
           ? supabase.from('viaturas').select('id, matricula, marca, modelo').in('id', viaturaIds)
           : Promise.resolve({ data: [] }),
@@ -194,18 +195,18 @@ const Assistencia = () => {
         categoriaIds.length > 0
           ? supabase.from('assistencia_categorias').select('id, nome, cor').in('id', categoriaIds)
           : Promise.resolve({ data: [] }),
-        allUserIds.length > 0
-          ? supabase.from('profiles').select('id, nome').in('id', allUserIds)
-          : Promise.resolve({ data: [] }),
+        // Não ler profiles: a RLS só mostra colegas a quem tem calendario_ver_gestores,
+        // e os cargos de assistência ficavam com "Criado por: Desconhecido".
+        fetchPerfisOrg(allUserIds),
       ]);
 
       const viaturasMap = new Map((viaturasRes.data || []).map((v) => [v.id, v]));
       const motoristasMap = new Map((motoristasRes.data || []).map((m) => [m.id, m]));
       const categoriasMap = new Map((categoriasRes.data || []).map((c) => [c.id, c]));
-      const usersMap = new Map((usersRes.data || []).map((p) => [p.id, p]));
+      const usersMap = new Map(perfis.map((p) => [p.id, p]));
 
       // Build unique creators list for filter
-      const uniqueCriadores = (usersRes.data || []).filter((u) => criadorIds.includes(u.id));
+      const uniqueCriadores = perfis.filter((u) => criadorIds.includes(u.id));
       setCriadores(uniqueCriadores);
 
       const enrichedTickets = (ticketsData || []).map((ticket) => ({

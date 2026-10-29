@@ -406,6 +406,8 @@ export interface FecharContratoArgs {
   /** Trata o fecho como definitivo mesmo sem `recolha` — usado pelo fecho
    *  simplificado de viaturas slot. */
   fecharAgora?: boolean;
+  /** false quando o gestor perdoa os km extra. Só conta com `recolha`. */
+  cobrarKmExcedente?: boolean;
 }
 
 type DanoDoFecho = NonNullable<FecharContratoRecolhaInfo['danos']>[number];
@@ -484,6 +486,7 @@ export function useFecharContrato() {
       recolha,
       marcarDuaDevolvida,
       fecharAgora,
+      cobrarKmExcedente = true,
     }: FecharContratoArgs): Promise<{ fechouAgora: boolean }> => {
       const { data: estacao, error: errEstacao } = await supabase
         .from('estacoes')
@@ -589,6 +592,14 @@ export function useFecharContrato() {
             }
           }
         }
+
+        // Só regista a escolha do gestor: os km extra lança-os o trigger ao
+        // fechar, pelo canal do regime (rent-a-car extras, TVDE conta-corrente).
+        const { error: errKmExc } = await supabase.rpc('lancar_km_excedente_fecho', {
+          p_contrato_id: contratoId,
+          p_cobrar: cobrarKmExcedente,
+        });
+        if (errKmExc) throw errKmExc;
       }
 
       // Fecha sempre para 'fechado', com ou sem `recolha` já registada — antes,
@@ -681,6 +692,7 @@ export function useFecharContrato() {
       invalidarOcupacaoViaturas(qc);
       qc.invalidateQueries({ queryKey: ['motoristas'] });
       qc.invalidateQueries({ queryKey: ['calendario', 'eventos-pendentes-renting'] });
+      qc.invalidateQueries({ queryKey: ['renting', 'contrato-extras'] });
       toast(resolveFechoContratoToast(fechouAgora));
     },
     onError: (error: unknown) => {

@@ -147,7 +147,7 @@ interface Integracao {
   ativo: boolean;
   plataforma: string;
   robot_target_platform: string | null;
-  /** 'oauth' = API oficial da Bolt. Muda o que este ficheiro pode escrever. */
+  /** 'oauth' = API oficial da Bolt: o ficheiro substitui os ganhos dela, com confirmação. */
   auth_mode: string | null;
 }
 
@@ -187,9 +187,9 @@ export const ImportarDadosWizard: React.FC<ImportarDadosWizardProps> = ({
   // Confirmação explícita exigida quando já existe importação nesta conta+semana
   // (evita reimportar/importar na conta errada sem querer).
   const [confirmarReimport, setConfirmarReimport] = useState(false);
-  // Idem, quando a conta Bolt está ligada à API oficial: o ficheiro entra na
-  // mesma (é o único que traz campanhas), mas quem manda nas viagens e no
-  // líquido é a API — e isso tem de ser dito antes, não descoberto depois.
+  // Idem, quando a conta Bolt está ligada à API oficial: paga-se pelo ficheiro,
+  // por isso os ganhos dele substituem os da API (20261021100000). Um ficheiro
+  // da semana errada muda o que se paga, daí a confirmação.
   const [confirmarSobreApi, setConfirmarSobreApi] = useState(false);
 
   // Última importação por conta (carregado quando entra no passo 2)
@@ -725,8 +725,8 @@ const PassoConta: React.FC<{
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-center gap-1.5 font-semibold leading-tight">
                     {i.company_name || i.nome}
-                    {/* Onde a API oficial manda, o ficheiro entra só com os
-                        extras. Melhor saber-se aqui do que no passo 4. */}
+                    {/* Conta com API oficial: o ficheiro substitui os ganhos
+                        da API. Melhor saber-se aqui do que no passo 4. */}
                     {contaViaApiOficial(i) && (
                       <span className="rounded border border-red-500/40 bg-red-500/10 px-1.5 py-px text-[10px] font-medium text-red-700 dark:text-red-300">
                         API oficial
@@ -1003,14 +1003,12 @@ const PassoFicheiro: React.FC<{
             <div className="text-red-700 dark:text-red-300">
               <p className="font-semibold">Esta conta está ligada à API oficial da Bolt.</p>
               <p className="mt-1">
-                As viagens, os ganhos brutos e o líquido desta semana vêm da API — o ficheiro{' '}
-                <strong>não os substitui</strong>. Do CSV entra só o que a API não devolve:
-                campanhas, reembolsos de despesas, IVA e as métricas do portal (pontuação, taxa de
-                aceitação, tempo online).
+                Os ganhos que se pagam são os do ficheiro. Ao importar, os ganhos brutos, as
+                comissões e o líquido desta semana passam a ser <strong>os do ficheiro</strong>, em
+                vez dos da API.
               </p>
               <p className="mt-1">
-                Se o ficheiro trouxer valores de viagens diferentes dos da API, os da API é que
-                ficam.
+                Confirme que o ficheiro é desta conta e desta semana antes de importar.
               </p>
             </div>
           </div>
@@ -1021,7 +1019,7 @@ const PassoFicheiro: React.FC<{
               onChange={(e) => setConfirmarSobreApi(e.target.checked)}
               className="h-4 w-4 accent-red-600"
             />
-            Percebi — quero importar na mesma (campanhas e extras).
+            Confirmo: este ficheiro é desta conta e desta semana.
           </label>
         </div>
       )}

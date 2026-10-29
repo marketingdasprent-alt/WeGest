@@ -510,6 +510,11 @@ const WebAppRoutes = () => {
                 </ProtectedRoute>
               }
             />
+            {/* "Por liquidar" passou a separador da Faturação. */}
+            <Route
+              path="/administrativo/por-liquidar"
+              element={<Navigate to="/administrativo/faturacao" replace />}
+            />
             <Route
               path="/calendario"
               element={

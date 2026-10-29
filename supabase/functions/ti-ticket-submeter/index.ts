@@ -41,10 +41,15 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
   try {
-    const { token, nome, email, descricao, anexos, captcha_token } = await readBoundedObject(
-      req,
-      21 * 1024 * 1024
-    );
+    const {
+      token,
+      nome,
+      email,
+      descricao,
+      anexos,
+      captcha_token,
+      origem: origemDoLink,
+    } = await readBoundedObject(req, 21 * 1024 * 1024);
 
     if (!token) return json({ success: false, error: 'Link inválido.' }, 400);
     if (typeof nome !== 'string' || !nome.trim())
@@ -141,7 +146,7 @@ Deno.serve(async (req) => {
         descricao: descricao.trim(),
         criado_por: criadoPor,
       })
-      .select('id, numero')
+      .select('id, numero, acesso_token')
       .single();
 
     if (error) throw error;
@@ -194,18 +199,30 @@ Deno.serve(async (req) => {
     // O invoke devolve o erro em `error` em vez de o lançar — sem verificar o
     // valor devolvido, uma falha do aviso passava calada; o try/catch fica na
     // mesma para o que rebenta antes de haver resposta.
-    try {
-      const { error: emailError } = await sb.functions.invoke('ti-ticket-novo-email', {
-        body: { ticket_id: ticket.id },
-      });
-      if (emailError) {
-        console.error('ti-ticket-submeter: aviso ao suporte não saiu:', emailError);
+    // A confirmação a quem pediu segue a mesma regra: leva o link da conversa,
+    // mas o pedido já existe e a página já o abre sem ela.
+    const avisos = [
+      { funcao: 'ti-ticket-novo-email', body: { ticket_id: ticket.id } },
+      {
+        funcao: 'ti-ticket-confirmacao-email',
+        body: { ticket_id: ticket.id, origem: origemDoLink },
+      },
+    ];
+    for (const aviso of avisos) {
+      try {
+        const { error: emailError } = await sb.functions.invoke(aviso.funcao, { body: aviso.body });
+        if (emailError) console.error(`ti-ticket-submeter: ${aviso.funcao} falhou:`, emailError);
+      } catch (emailError) {
+        console.error(`ti-ticket-submeter: ${aviso.funcao} falhou:`, emailError);
       }
-    } catch (emailError) {
-      console.error('ti-ticket-submeter: aviso ao suporte não saiu:', emailError);
     }
 
-    return json({ success: true, numero: ticket.numero, anexosFalhou });
+    return json({
+      success: true,
+      numero: ticket.numero,
+      acesso_token: ticket.acesso_token,
+      anexosFalhou,
+    });
   } catch (e) {
     if (e instanceof RequestBodyError) return json({ success: false, error: e.message }, e.status);
     console.error('ti-ticket-submeter:', e);

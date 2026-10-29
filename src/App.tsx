@@ -19,10 +19,10 @@ import { NotificacoesPopup } from '@/components/notificacoes/NotificacoesPopup';
 import { OnboardingColaboradorDialog } from '@/components/onboarding/OnboardingColaboradorDialog';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
-// Só no `pnpm dev`: na build o ramo é `null` e o seletor nem chega ao bundle.
-const VerComoGrupo = import.meta.env.DEV
-  ? lazy(() => import('@/components/dev/VerComoGrupo').then((m) => ({ default: m.VerComoGrupo })))
-  : null;
+// Fica fora do bundle principal; o próprio seletor só aparece a quem o pode usar.
+const VerComoGrupo = lazy(() =>
+  import('@/components/dev/VerComoGrupo').then((m) => ({ default: m.VerComoGrupo }))
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,11 +74,9 @@ const App = () => {
                           <WebAppRoutes />
                           <NotificacoesPopup />
                           <OnboardingColaboradorDialog />
-                          {VerComoGrupo && (
-                            <Suspense fallback={null}>
-                              <VerComoGrupo />
-                            </Suspense>
-                          )}
+                          <Suspense fallback={null}>
+                            <VerComoGrupo />
+                          </Suspense>
                         </>
                       )}
                     </NotificacoesProvider>

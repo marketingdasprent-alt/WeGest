@@ -30,4 +30,10 @@ describe('service worker e o formulário incorporável', () => {
     const denylist = config.match(/navigateFallbackDenylist:\s*\[([^\]]*)\]/)?.[1] ?? '';
     expect(denylist).toContain('/^\\/formulario\\//');
   });
+
+  it('o portal do motorista e o /login também vão sempre à rede (embebidos no site da Década)', () => {
+    const denylist = config.match(/navigateFallbackDenylist:\s*\[([^\]]*)\]/)?.[1] ?? '';
+    expect(denylist).toContain('/^\\/motorista\\//');
+    expect(denylist).toContain('/^\\/login$/');
+  });
 });

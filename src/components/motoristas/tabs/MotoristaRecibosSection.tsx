@@ -46,6 +46,11 @@ import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { MotoristaResumoDialog } from '@/components/administrativo/MotoristaResumoDialog';
+import {
+  calcularRetencao,
+  levaCorteSeisPorCento,
+  taxasRetencaoDaFicha,
+} from '@/components/administrativo/motorista-resumo/retencaoIrs';
 import { buildSlotPeriodos } from '@/components/administrativo/motorista-resumo/slotPeriodos';
 import {
   periodosDeContratos,
@@ -431,6 +436,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
 
       // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
       const passesReciboVerde = motorista.recibo_verde ?? true;
+      const taxasRetencao = taxasRetencaoDaFicha(motorista);
 
       // Fonte única: bolt_resumos_semanais.liquido_a_pagar — o mesmo campo que
       // o ecrã de resumos e o painel do motorista mostram.
@@ -438,16 +444,19 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       const faturadoPlataformas = uberTotal + boltTotal;
       const totalFaturadoReal = faturadoPlataformas + extraCredits;
 
-      const receitaLiquidaPlataformas = passesReciboVerde
-        ? faturadoPlataformas
-        : faturadoPlataformas / 1.06;
+      const receitaLiquidaPlataformas = levaCorteSeisPorCento(passesReciboVerde, !!taxasRetencao)
+        ? faturadoPlataformas / 1.06
+        : faturadoPlataformas;
 
       const totalAluguer = fixedRent;
       const totalOutrosCustos = finOutros + extraCostsTotal;
       const receitaTotalFinal = receitaLiquidaPlataformas + extraCredits;
       const custosTotal =
         totalAluguer + fuelTotal + finReparacoes + finCaucao + finSeguros + totalOutrosCustos;
-      const liquidoFinal = receitaTotalFinal - custosTotal;
+      const totalLiquido = receitaTotalFinal - custosTotal;
+      const liquidoFinal = taxasRetencao
+        ? calcularRetencao(totalLiquido, taxasRetencao).totalAReceber
+        : totalLiquido;
 
       setResumoSemanal({
         faturadoBolt: boltTotal,
@@ -1116,6 +1125,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           viagens_bolt: 0,
           viagens_uber: 0,
           recibo_verde: motorista.recibo_verde ?? true,
+          retencao_taxas: taxasRetencaoDaFicha(motorista),
           liquido: resumoSemanal.liquido,
           combustivel: resumoSemanal.combustivel,
           portagens: resumoSemanal.portagens,

@@ -8,6 +8,25 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
+    "src/lib/reciboErro.ts",
+    "src/lib/reciboErro.test.ts",
+    "src/lib/recibos.ts",
+    "src/lib/recibos.test.ts",
+    "src/lib/exportarFaturasPorLiquidar.ts",
+    "src/hooks/useFaturasPorLiquidar.ts",
+    "src/hooks/useFaturasPorLiquidar.test.ts",
+    "src/hooks/useRegistarRecibosLote.ts",
+    "src/components/faturacao/ErroReciboAviso.tsx",
+    "src/components/administrativo/por-liquidar/FaturasPorLiquidarTab.tsx",
+    "src/components/administrativo/por-liquidar/FaturasPorLiquidarTabela.tsx",
+    "src/components/administrativo/por-liquidar/PorLiquidarStats.tsx",
+    "src/components/administrativo/por-liquidar/PorLiquidarToolbar.tsx",
+    "src/utils/periodoPorLiquidar.ts",
+    "src/utils/periodoPorLiquidar.test.ts",
+    "src/utils/numeroDocumento.ts",
+    "src/components/administrativo/por-liquidar/FaturasPorLiquidarTabela.test.tsx",
+    "src/components/administrativo/por-liquidar/RegistarRecibosLoteDialog.tsx",
+    "src/components/administrativo/por-liquidar/ResultadoRecibosLote.tsx",
     "src/docs/paginas/ContasDeCliente.tsx",
     "src/lib/contaCliente.ts",
     "src/lib/contaCliente.test.ts",
@@ -365,6 +384,12 @@
     "src/lib/verComoGrupo.ts",
     "src/lib/viaturas.test.ts",
     "src/lib/viaturas.ts",
+    "src/lib/ticketEstadoViatura.ts",
+    "src/lib/ticketEstadoViatura.test.ts",
+    "src/hooks/useViaturasSubstitutas.ts",
+    "src/hooks/useViaturasSubstitutas.test.ts",
+    "src/components/viaturas/tabs/viaturaFormValues.ts",
+    "src/components/viaturas/tabs/viaturaFormValues.test.ts",
     "src/pages/DanosPublicosPage.tsx",
     "src/pages/QuadroLive.tsx",
     "src/pages/Realize.tsx",
@@ -474,6 +499,8 @@
     "src/docs/paginas/Limites.tsx",
     "src/docs/paginas/Recurso.tsx",
     "src/docs/paginas/Referencia.tsx",
-    "src/docs/paginas/Testes.tsx"
+    "src/docs/paginas/Testes.tsx",
+    "src/hooks/usePerfisOrg.ts",
+    "src/hooks/usePerfisOrg.test.ts"
   ]
 }

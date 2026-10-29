@@ -2,12 +2,24 @@ import { supabase } from '@/integrations/supabase/client';
 
 /**
  * "Ver como grupo": o admin pré-visualiza a app com as permissões de um grupo.
- * Só existe no `pnpm dev` — na build de produção `import.meta.env.DEV` é `false`
- * e o código sai. Muda só o ecrã: a BD continua a responder como a um admin.
+ * Muda só o ecrã: a BD continua a responder como a um admin.
  */
-export const VER_COMO_DISPONIVEL = import.meta.env.DEV;
-
 const CHAVE = 'wegest:ver-como-grupo';
+
+interface QuemPedeVerComo {
+  isAdmin: boolean;
+  /** Nomes de todos os grupos da pessoa (principal e adicionais). */
+  grupos: (string | null | undefined)[];
+}
+
+/** Em dev qualquer admin; em produção só admins do grupo de Suporte. */
+export function podeUsarVerComo(
+  { isAdmin, grupos }: QuemPedeVerComo,
+  dev: boolean = import.meta.env.DEV
+): boolean {
+  if (!isAdmin) return false;
+  return dev || grupos.some((g) => !!g && /suporte/i.test(g));
+}
 
 export interface GrupoPrevisto {
   id: string;
@@ -21,7 +33,6 @@ interface Escolha {
 
 /** Grupo escolhido para a org activa (os ids de grupo são por org). */
 export function lerVerComoGrupo(orgId: string): string | null {
-  if (!VER_COMO_DISPONIVEL) return null;
   try {
     const escolha = JSON.parse(localStorage.getItem(CHAVE) ?? 'null') as Escolha | null;
     return escolha?.orgId === orgId && typeof escolha.cargoId === 'string' ? escolha.cargoId : null;

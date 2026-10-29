@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
-import { carregarGrupoPrevisto, type GrupoPrevisto } from '@/lib/verComoGrupo';
+import { carregarGrupoPrevisto, podeUsarVerComo, type GrupoPrevisto } from '@/lib/verComoGrupo';
 import { idsDosGrupos, somarPermissoes } from '@/utils/gruposDoUtilizador';
 
 export type AppRole = 'admin' | 'gestor_tvde' | 'gestor_comercial' | 'colaborador';
@@ -28,8 +28,10 @@ interface PermissionsContextType extends PermissionsState {
   hasAccessToResource: (recurso: string) => boolean;
   canEdit: (recurso: string) => boolean;
   refreshPermissions: () => Promise<void>;
-  /** Só em `pnpm dev`: grupo que o admin está a pré-visualizar ("Ver como grupo"). */
+  /** Grupo que o admin está a pré-visualizar ("Ver como grupo"). */
   verComo: GrupoPrevisto | null;
+  /** Pode usar o "Ver como grupo" (admin; em produção só do grupo de Suporte). */
+  podeVerComo: boolean;
 }
 
 const DEFAULT_STATE: PermissionsState = {
@@ -59,6 +61,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const [state, setState] = useState<PermissionsState>(DEFAULT_STATE);
   const [verComo, setVerComo] = useState<GrupoPrevisto | null>(null);
+  const [podeVerComo, setPodeVerComo] = useState(false);
 
   const fetchPermissions = useCallback(async () => {
     const currentFetchId = ++fetchIdRef.current;
@@ -68,6 +71,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (!user || !orgId) {
       lastFetchedUserIdRef.current = null;
       setVerComo(null);
+      setPodeVerComo(false);
       setState({ ...DEFAULT_STATE, loading: false, initialized: true });
       return;
     }
@@ -88,6 +92,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
           console.error('[PermissionsContext] Sem membership na org ativa:', membershipError);
           lastFetchedUserIdRef.current = user.id;
           setVerComo(null);
+          setPodeVerComo(false);
           setState({ ...DEFAULT_STATE, loading: false, initialized: true });
         }
         return;
@@ -110,9 +115,27 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
       }
       if (currentFetchId !== fetchIdRef.current) return;
 
-      // "Ver como grupo" (só dev): o admin passa a ter as permissões do grupo escolhido.
-      const previsto =
-        import.meta.env.DEV && membership.is_admin ? await carregarGrupoPrevisto(orgId) : null;
+      // Grupos adicionais da mesma pessoa. Se a leitura falhar fica só o principal,
+      // que é o comportamento de quem nunca teve mais do que um.
+      const { data: extras } = await supabase
+        .from('user_organizacoes_cargos')
+        .select('cargo_id, cargos(nome)')
+        .eq('user_id', user.id)
+        .eq('org_id', orgId);
+      if (currentFetchId !== fetchIdRef.current) return;
+      const adicionaisReais = (extras ?? []).map((e) => ({
+        cargo_id: e.cargo_id,
+        nome: (e.cargos as { nome?: string } | null)?.nome ?? null,
+      }));
+      const cargoReal = (membership as { cargos?: { nome?: string } | null }).cargos?.nome ?? null;
+
+      // "Ver como grupo": o admin passa a ter as permissões do grupo escolhido.
+      const podeVerComoAgora = podeUsarVerComo({
+        isAdmin: !!membership.is_admin,
+        grupos: [cargoReal, ...adicionaisReais.map((a) => a.nome)],
+      });
+      setPodeVerComo(podeVerComoAgora);
+      const previsto = podeVerComoAgora ? await carregarGrupoPrevisto(orgId) : null;
       if (currentFetchId !== fetchIdRef.current) return;
       setVerComo(previsto);
       if (previsto) tipoUtilizador = 'colaborador';
@@ -120,28 +143,11 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const profile = {
         is_admin: previsto ? false : (membership.is_admin as boolean),
         cargo_id: previsto?.id ?? (membership.cargo_id as string | null) ?? null,
-        cargo:
-          previsto?.nome ??
-          (membership as { cargos?: { nome?: string } | null }).cargos?.nome ??
-          null,
+        cargo: previsto?.nome ?? cargoReal,
         tipo_utilizador: tipoUtilizador,
       };
-
-      // Grupos adicionais da mesma pessoa. Se a leitura falhar fica só o principal,
-      // que é o comportamento de quem nunca teve mais do que um.
-      let adicionais: { cargo_id: string; nome: string | null }[] = [];
-      if (!previsto) {
-        const { data: extras } = await supabase
-          .from('user_organizacoes_cargos')
-          .select('cargo_id, cargos(nome)')
-          .eq('user_id', user.id)
-          .eq('org_id', orgId);
-        adicionais = (extras ?? []).map((e) => ({
-          cargo_id: e.cargo_id,
-          nome: (e.cargos as { nome?: string } | null)?.nome ?? null,
-        }));
-        if (currentFetchId !== fetchIdRef.current) return;
-      }
+      // Na pré-visualização a pessoa tem só o grupo escolhido.
+      const adicionais = previsto ? [] : adicionaisReais;
       const cargoIds = idsDosGrupos(
         profile.cargo_id,
         adicionais.map((a) => a.cargo_id)
@@ -295,6 +301,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         canEdit,
         refreshPermissions: fetchPermissions,
         verComo,
+        podeVerComo,
       }}
     >
       {children}

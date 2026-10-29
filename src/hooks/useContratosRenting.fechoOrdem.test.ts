@@ -38,6 +38,10 @@ function montarSupabase(porTabela: Record<string, Resultado>) {
     if (!chains[t]) chains[t] = chain(ordem, t, porTabela[t] ?? { data: null, error: null });
     return chains[t];
   });
+  // Km extra: coberto em useContratosRenting.kmExcedente.test.ts.
+  (supabase as unknown as { rpc: unknown }).rpc = vi
+    .fn()
+    .mockResolvedValue({ data: { km_percorridos: 0, km_excedente: 0, valor: 0 }, error: null });
   (supabase as unknown as { auth: { getSession: unknown } }).auth.getSession = vi
     .fn()
     .mockResolvedValue({ data: { session: { user: { id: 'user-1' } } } });

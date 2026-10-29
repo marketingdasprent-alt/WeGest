@@ -49,6 +49,8 @@ import { useRascunho } from '@/hooks/useRascunho';
 import { pastaRascunhoDanos } from '@/lib/fotosDano';
 import { useFecharContrato } from '@/hooks/useContratosRenting';
 import { computeFechoRapidoDefaults } from './fecharContratoDefaults';
+import { KmExcedenteResumo } from './KmExcedenteResumo';
+import { calcularKmExcedente } from '@/utils/kmExcedente';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -217,6 +219,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
   // Danos encontrados na recolha. Entidade própria (descrição, onde, quanto),
   // não uma legenda de foto — o valor é o que chega à conta do motorista.
   const [novosDanos, setNovosDanos] = useState<NovoDano[]>([]);
+  // O gestor pode perdoar os km extra (ex.: oferta comercial).
+  const [cobrarKmExcedente, setCobrarKmExcedente] = useState(true);
 
   // Rascunho da recolha por contrato (IndexedDB, o mesmo hook do calendário).
   // Um erro a fechar, um refresh ou o telemóvel a matar a página deixavam de
@@ -279,7 +283,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       const { data } = await supabase
         .from('contratos_renting')
         .select(
-          'viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida, cidade_assinatura'
+          'viatura_id, emissor_id, cliente_id, km_saida, combustivel_saida, cidade_assinatura, kms_incluidos, km_adicional_valor, regime, estado_financeiro'
         )
         .eq('id', contratoId)
         .maybeSingle();
@@ -296,6 +300,10 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         // nenhum: usa o que já está, e fica vazia (como sempre foi) só quando
         // o contrato nunca gerou documento algum.
         cidadeAssinatura: null as string | null,
+        kmsIncluidos: null as number | null,
+        kmAdicionalValor: null as number | null,
+        regime: null as string | null,
+        faturado: false,
       };
       if (!data) return empty;
 
@@ -388,8 +396,19 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         kmSaida: (data.km_saida as number | null) ?? null,
         combustivelSaida: (data.combustivel_saida as string | null) ?? null,
         cidadeAssinatura: (data.cidade_assinatura as string | null) ?? null,
+        kmsIncluidos: data.kms_incluidos ?? null,
+        kmAdicionalValor: data.km_adicional_valor ?? null,
+        regime: data.regime ?? null,
+        faturado: data.estado_financeiro === 'facturado',
       };
     },
+  });
+
+  const kmExcedente = calcularKmExcedente({
+    kmSaida: contexto?.kmSaida,
+    kmEntrada: km.trim() ? Number(km) : null,
+    kmsIncluidos: contexto?.kmsIncluidos,
+    kmAdicionalValor: contexto?.kmAdicionalValor,
   });
 
   // Pré-preenche o KM de entrada com o KM de saída já registado no contrato —
@@ -407,6 +426,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     setCombustivel('');
     setNivelEletrico('');
     setDuaDevolvido(false);
+    setCobrarKmExcedente(true);
     // Só os object URLs são nossos; as miniaturas assinadas do bucket não se revogam.
     novosDanos.forEach((d) =>
       d.files.forEach((f) => f.preview?.startsWith('blob:') && URL.revokeObjectURL(f.preview))
@@ -627,6 +647,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
       // Se o motorista tinha levado a DUA original e o gestor confirma a
       // devolução, regista dua_devolvida_em no contrato (fecha o ciclo do aviso).
       marcarDuaDevolvida: !viaturaEhSlot && duaOriginalComMotorista && duaDevolvido,
+      cobrarKmExcedente,
       // Slot não tem recolha física a capturar, mas o fecho é sempre
       // definitivo — toast "Contrato fechado", não "Recolha agendada".
       fecharAgora: viaturaEhSlot,
@@ -970,6 +991,16 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
 
                 {registarAgora && (
                   <div className="mt-3 space-y-3">
+                    <KmExcedenteResumo
+                      calculo={kmExcedente}
+                      kmsIncluidos={contexto?.kmsIncluidos ?? null}
+                      kmAdicionalValor={contexto?.kmAdicionalValor ?? null}
+                      regime={contexto?.regime ?? null}
+                      faturado={contexto?.faturado ?? false}
+                      cobrar={cobrarKmExcedente}
+                      onCobrarChange={setCobrarKmExcedente}
+                      temMotorista={temMotorista}
+                    />
                     <div className="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50">
                       <AssinaturasHandoverSection
                         ref={assinaturasRef}

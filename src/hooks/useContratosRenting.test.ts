@@ -55,8 +55,19 @@ function chainable(result: SupabaseResult = { data: null, error: null }) {
 
 /** Configura o mock global do supabase com resultados por tabela.
  *  Retorna o mapa de chains para inspecção nos testes. */
-function setupSupabase(tableResults: Record<string, SupabaseResult> = {}) {
+function setupSupabase(
+  tableResults: Record<string, SupabaseResult> = {},
+  rpcResult: SupabaseResult = {
+    data: { km_percorridos: 0, km_excedente: 0, valor: 0 },
+    error: null,
+  }
+) {
   const chains: Record<string, ReturnType<typeof chainable>> = {};
+
+  // rpc — lancar_km_excedente_fecho, chamado em qualquer fecho com recolha
+  (supabase as unknown as { rpc: ReturnType<typeof vi.fn> }).rpc = vi
+    .fn()
+    .mockResolvedValue(rpcResult);
 
   (supabase as unknown as { from: ReturnType<typeof vi.fn> }).from = vi
     .fn()

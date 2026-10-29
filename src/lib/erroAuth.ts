@@ -35,3 +35,10 @@ export function traduzirErroAuth(error: unknown, fallback = ERRO_AUTH_FALLBACK):
 
   return original || fallback;
 }
+
+/** OTP com `shouldCreateUser: false` para um email que não tem conta. */
+export function ehEmailSemConta(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === 'otp_disabled') return true;
+  return errorMessage(error, '').toLowerCase().includes('signups not allowed for otp');
+}

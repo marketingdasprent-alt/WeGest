@@ -4459,6 +4459,7 @@ export type Database = {
           cobertura_id: string | null
           cobertura_nome: string | null
           cobertura_preco_dia: number | null
+          cobrar_km_excedente: boolean
           codigo: number
           combustivel_entrada: string | null
           combustivel_saida: string | null
@@ -4493,6 +4494,7 @@ export type Database = {
           is_longa_duracao: boolean
           km_adicional_valor: number | null
           km_entrada: number | null
+          km_excedente_avaliado_em: string | null
           km_saida: number | null
           kms_incluidos: number | null
           local_entrega: string | null
@@ -4540,6 +4542,7 @@ export type Database = {
           cobertura_id?: string | null
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
+          cobrar_km_excedente?: boolean
           codigo: number
           combustivel_entrada?: string | null
           combustivel_saida?: string | null
@@ -4574,6 +4577,7 @@ export type Database = {
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
           km_entrada?: number | null
+          km_excedente_avaliado_em?: string | null
           km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
@@ -4621,6 +4625,7 @@ export type Database = {
           cobertura_id?: string | null
           cobertura_nome?: string | null
           cobertura_preco_dia?: number | null
+          cobrar_km_excedente?: boolean
           codigo?: number
           combustivel_entrada?: string | null
           combustivel_saida?: string | null
@@ -4655,6 +4660,7 @@ export type Database = {
           is_longa_duracao?: boolean
           km_adicional_valor?: number | null
           km_entrada?: number | null
+          km_excedente_avaliado_em?: string | null
           km_saida?: number | null
           kms_incluidos?: number | null
           local_entrega?: string | null
@@ -8353,6 +8359,9 @@ export type Database = {
           perfil_rascunho: boolean
           recibo_verde: boolean | null
           registo_criminal_url: string | null
+          retencao_irs: boolean
+          retencao_irs_pct: number
+          retencao_iva_pct: number
           seguro_valor_semanal: number | null
           slot_valor_semanal: number | null
           status_ativo: boolean | null
@@ -8408,6 +8417,9 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          retencao_irs?: boolean
+          retencao_irs_pct?: number
+          retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
@@ -8463,6 +8475,9 @@ export type Database = {
           perfil_rascunho?: boolean
           recibo_verde?: boolean | null
           registo_criminal_url?: string | null
+          retencao_irs?: boolean
+          retencao_irs_pct?: number
+          retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
@@ -11910,6 +11925,7 @@ export type Database = {
           criado_por_nome: string
           ficheiro_url: string
           id: string
+          mensagem_id: string | null
           mime_type: string | null
           nome: string
           org_id: string
@@ -11922,6 +11938,7 @@ export type Database = {
           criado_por_nome: string
           ficheiro_url: string
           id?: string
+          mensagem_id?: string | null
           mime_type?: string | null
           nome: string
           org_id: string
@@ -11934,6 +11951,7 @@ export type Database = {
           criado_por_nome?: string
           ficheiro_url?: string
           id?: string
+          mensagem_id?: string | null
           mime_type?: string | null
           nome?: string
           org_id?: string
@@ -11941,6 +11959,13 @@ export type Database = {
           ticket_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ti_ticket_anexos_mensagem_id_fkey"
+            columns: ["mensagem_id"]
+            isOneToOne: false
+            referencedRelation: "ti_ticket_mensagens"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ti_ticket_anexos_org_id_fkey"
             columns: ["org_id"]
@@ -11950,6 +11975,57 @@ export type Database = {
           },
           {
             foreignKeyName: "ti_ticket_anexos_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "ti_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ti_ticket_mensagens: {
+        Row: {
+          autor_tipo: string
+          created_at: string
+          criado_por: string | null
+          criado_por_nome: string
+          deleted_at: string | null
+          id: string
+          org_id: string
+          texto: string
+          ticket_id: string
+        }
+        Insert: {
+          autor_tipo: string
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome: string
+          deleted_at?: string | null
+          id?: string
+          org_id: string
+          texto?: string
+          ticket_id: string
+        }
+        Update: {
+          autor_tipo?: string
+          created_at?: string
+          criado_por?: string | null
+          criado_por_nome?: string
+          deleted_at?: string | null
+          id?: string
+          org_id?: string
+          texto?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ti_ticket_mensagens_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ti_ticket_mensagens_ticket_id_fkey"
             columns: ["ticket_id"]
             isOneToOne: false
             referencedRelation: "ti_tickets"
@@ -13886,6 +13962,47 @@ export type Database = {
           },
         ]
       }
+      viatura_dano_historico: {
+        Row: {
+          ator_id: string | null
+          campo: string
+          criado_em: string
+          dano_id: string
+          id: string
+          org_id: string
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          ator_id?: string | null
+          campo: string
+          criado_em?: string
+          dano_id: string
+          id?: string
+          org_id: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          ator_id?: string | null
+          campo?: string
+          criado_em?: string
+          dano_id?: string
+          id?: string
+          org_id?: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viatura_dano_historico_dano_id_fkey"
+            columns: ["dano_id"]
+            isOneToOne: false
+            referencedRelation: "viatura_danos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       viatura_danos: {
         Row: {
           categoria_id: string | null
@@ -15130,6 +15247,30 @@ export type Database = {
         }
         Relationships: []
       }
+      zz_templates_assinaturas_20261023: {
+        Row: {
+          guardado_em: string | null
+          id: string | null
+          nome: string | null
+          template_data: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          guardado_em?: string | null
+          id?: string | null
+          nome?: string | null
+          template_data?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          guardado_em?: string | null
+          id?: string | null
+          nome?: string | null
+          template_data?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       zz_transferencia_urbango_20261015: {
         Row: {
           created_at: string | null
@@ -16067,6 +16208,10 @@ export type Database = {
       }
       current_user_cargo: { Args: never; Returns: string }
       current_user_tem_cargo: { Args: { p_nomes: string[] }; Returns: boolean }
+      danos_ligados_visiveis_pela_assistencia: {
+        Args: never
+        Returns: string[]
+      }
       dashboard_resumo_plataformas: {
         Args: {
           p_org_id: string
@@ -16605,6 +16750,31 @@ export type Database = {
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
       is_suporte_ti_decada: { Args: never; Returns: boolean }
+      km_excedente_calcular: {
+        Args: {
+          p_c: Database["public"]["Tables"]["contratos_renting"]["Row"]
+          p_km_fim: number
+          p_km_inicio: number
+        }
+        Returns: {
+          km_excedente: number
+          km_percorridos: number
+          valor: number
+        }[]
+      }
+      km_excedente_cobrar: {
+        Args: {
+          p_c: Database["public"]["Tables"]["contratos_renting"]["Row"]
+          p_km_fim: number
+          p_km_inicio: number
+          p_momento: string
+        }
+        Returns: Json
+      }
+      lancar_km_excedente_fecho: {
+        Args: { p_cobrar?: boolean; p_contrato_id: string }
+        Returns: Json
+      }
       lead_respostas_legiveis: {
         Args: { p_observacoes: string; p_sem_formacao_tvde?: boolean }
         Returns: string
@@ -16799,6 +16969,13 @@ export type Database = {
       org_por_codigo: { Args: { p_codigo: string }; Returns: Json }
       org_privacidade_por_gestor: { Args: never; Returns: boolean }
       org_sistema: { Args: never; Returns: string }
+      perfis_org: {
+        Args: { p_ids: string[] }
+        Returns: {
+          id: string
+          nome: string
+        }[]
+      }
       pode_rever_documentos_motorista: { Args: never; Returns: boolean }
       primavera_jobs_claim_integracao: {
         Args: { p_integracao_id: string; p_max: number }
@@ -17032,6 +17209,17 @@ export type Database = {
       }
       testar_regra_automacao: { Args: { p_rule_id: string }; Returns: Json }
       ticket_estados_ativos: { Args: never; Returns: string[] }
+      tickets_da_viatura_para_ligar: {
+        Args: { p_viatura_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          numero: number
+          status: string
+          titulo: string
+        }[]
+      }
+      tickets_ligados_visiveis_pela_frota: { Args: never; Returns: string[] }
       trocar_condutor: {
         Args: {
           p_contrato_id: string

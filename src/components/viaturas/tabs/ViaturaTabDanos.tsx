@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRascunho } from '@/hooks/useRascunho';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,9 +40,13 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DanoFotosGallery } from '../DanoFotosGallery';
 import { DanoCategoriaBadge } from '../DanoCategoriaBadge';
+import { DanoHistorico } from '../DanoHistorico';
+import { DanoObservacoes } from '../DanoObservacoes';
+import { DanoTicketLigado } from '../DanoTicketLigado';
 import { useDanoCategorias } from '@/hooks/useDanoCategorias';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
+import { DANO_ESTADOS, getDanoEstado } from '@/utils/danoEstados';
 
 interface Dano {
   id: string;
@@ -55,6 +60,7 @@ interface Dano {
   motorista_id: string | null;
   contrato_id: string | null;
   categoria_id: string | null;
+  ticket_id: string | null;
   categoria: { id: string; nome: string; cor: string | null } | null;
   motorista?: {
     id: string;
@@ -92,31 +98,9 @@ const LOCALIZACOES = [
   { value: 'outro', label: 'Outro' },
 ];
 
-const ESTADOS = [
-  {
-    value: 'existente',
-    label: 'Existente',
-    color: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
-  },
-  {
-    value: 'em_reparacao',
-    label: 'Em Reparação',
-    color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  },
-  {
-    value: 'reparado',
-    label: 'Reparado',
-    color: 'bg-green-500/10 text-green-500 border-green-500/20',
-  },
-  {
-    value: 'irreparavel',
-    label: 'Irreparável',
-    color: 'bg-destructive/10 text-destructive border-destructive/20',
-  },
-];
-
 export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) {
   const { canEdit } = usePermissions();
+  const queryClient = useQueryClient();
   const podeEditar = canEdit(RECURSOS.VIATURAS_EDITAR);
   const [danos, setDanos] = useState<Dano[]>([]);
   const [motoristas, setMotoristas] = useState<MotoristaOption[]>([]);
@@ -429,6 +413,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
 
       if (error) throw error;
       toast.success('Estado atualizado!');
+      queryClient.invalidateQueries({ queryKey: ['dano-historico', danoId] });
       loadDanos();
     } catch (error) {
       console.error('Erro ao atualizar estado:', error);
@@ -486,7 +471,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
     void limparRascunho();
     setDescricao('');
     setLocalizacao('');
-    setEstado('pendente');
+    setEstado('existente');
     setObservacoes('');
     setValor('');
     setValorCobrado('');
@@ -498,10 +483,6 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
     previewUrls.forEach((url) => URL.revokeObjectURL(url));
     setFotosTemp([]);
     setPreviewUrls([]);
-  };
-
-  const getEstadoConfig = (estado: string) => {
-    return ESTADOS.find((e) => e.value === estado) || ESTADOS[0];
   };
 
   const formatCurrency = (value: number) => {
@@ -579,7 +560,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {ESTADOS.map((est) => (
+                        {DANO_ESTADOS.map((est) => (
                           <SelectItem key={est.value} value={est.value}>
                             {est.label}
                           </SelectItem>
@@ -803,7 +784,7 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                   Danos Manuais
                 </h4>
                 {danos.map((dano) => {
-                  const estadoConfig = getEstadoConfig(dano.estado);
+                  const estadoConfig = getDanoEstado(dano.estado);
                   const locLabel = LOCALIZACOES.find((l) => l.value === dano.localizacao)?.label;
                   const dataDisplay = dano.data_ocorrencia || dano.created_at;
 
@@ -880,13 +861,13 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                             value={dano.estado}
                             onValueChange={(v) => handleUpdateEstado(dano.id, v)}
                           >
-                            <SelectTrigger className="w-[140px]">
+                            <SelectTrigger className="w-[180px]">
                               <Badge variant="outline" className={estadoConfig.color}>
                                 {estadoConfig.label}
                               </Badge>
                             </SelectTrigger>
                             <SelectContent>
-                              {ESTADOS.map((est) => (
+                              {DANO_ESTADOS.map((est) => (
                                 <SelectItem key={est.value} value={est.value}>
                                   {est.label}
                                 </SelectItem>
@@ -906,11 +887,20 @@ export function ViaturaTabDanos({ viaturaId, matricula }: ViaturaTabDanosProps) 
                         </div>
                       </div>
 
-                      {dano.observacoes && (
-                        <p className="text-sm text-muted-foreground bg-muted/50 rounded p-2">
-                          {dano.observacoes}
-                        </p>
-                      )}
+                      <DanoObservacoes
+                        danoId={dano.id}
+                        observacoes={dano.observacoes}
+                        podeEditar={podeEditar}
+                        onGuardado={loadDanos}
+                      />
+                      <DanoTicketLigado
+                        danoId={dano.id}
+                        viaturaId={viaturaId}
+                        ticketId={dano.ticket_id}
+                        podeEditar={podeEditar}
+                        onAlterado={loadDanos}
+                      />
+                      <DanoHistorico danoId={dano.id} />
 
                       <DanoFotosGallery
                         danoId={dano.id}

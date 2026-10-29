@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Eye, EyeOff, Loader2, ShieldCheck, Building2 } from 'lucide-react';
 import { getEmailRedirectUrl, getResetPasswordRedirectUrl } from '@/lib/native';
-import { traduzirErroAuth } from '@/lib/erroAuth';
+import { ehEmailSemConta, traduzirErroAuth } from '@/lib/erroAuth';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 
 const ORG_KEY = 'wegest_last_org';
@@ -190,14 +190,19 @@ const Login = () => {
         email,
         options: {
           emailRedirectTo: getEmailRedirectUrl(defaultRoute || '/crm'),
+          // Por omissão o OTP cria a conta se o email não existir — nascia sem
+          // empresa e a pessoa ficava presa depois do login (2026-10-22).
+          shouldCreateUser: false,
         },
       });
 
-      if (error) throw error;
+      // Email sem conta responde como os outros, para não revelar que contas existem.
+      if (error && !ehEmailSemConta(error)) throw error;
 
       toast({
         title: 'Link enviado',
-        description: 'Verifique o seu email para entrar sem palavra-passe.',
+        description:
+          'Se existir uma conta com este email, receberá um link para entrar sem palavra-passe.',
       });
     } catch (error: any) {
       console.error('Magic link error:', error);

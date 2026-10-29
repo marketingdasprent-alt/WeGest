@@ -5,14 +5,16 @@ import { pt } from 'date-fns/locale';
 import { useTicketDanos } from '@/hooks/useTicketDanos';
 import { DanoCategoriaBadge } from '@/components/viaturas/DanoCategoriaBadge';
 import { DanoFotosGallery } from '@/components/viaturas/DanoFotosGallery';
+import { DanoHistorico } from '@/components/viaturas/DanoHistorico';
+import { Badge } from '@/components/ui/badge';
+import { getDanoEstado } from '@/utils/danoEstados';
 
 interface TicketDanosCardProps {
   ticketId: string;
 }
 
-/** Danos ligados a este ticket (viatura_danos.ticket_id), read-only — hoje
- * só visíveis na aba de Danos da Viatura, sem ligação ao ticket. Não
- * renderiza nada se o ticket não tiver danos ligados. */
+/** Danos ligados a este ticket (viatura_danos.ticket_id), read-only: estado, observações e
+ * histórico do processo, tal como a frota os regista. Não renderiza nada sem danos ligados. */
 export function TicketDanosCard({ ticketId }: TicketDanosCardProps) {
   const { data: danos, isLoading } = useTicketDanos(ticketId);
 
@@ -40,19 +42,30 @@ export function TicketDanosCard({ ticketId }: TicketDanosCardProps) {
           <div key={dano.id} className="border rounded-lg p-3 space-y-2">
             <div className="flex items-start justify-between gap-2">
               <p className="text-sm font-medium">{dano.descricao}</p>
-              <DanoCategoriaBadge categoria={dano.categoria} />
+              <div className="flex flex-wrap justify-end gap-1">
+                <DanoCategoriaBadge categoria={dano.categoria} />
+                <Badge variant="outline" className={getDanoEstado(dano.estado).color}>
+                  {getDanoEstado(dano.estado).label}
+                </Badge>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
               {format(new Date(dano.data_ocorrencia || dano.created_at), "d 'de' MMMM 'de' yyyy", {
                 locale: pt,
               })}
             </p>
+            {dano.observacoes && (
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground bg-muted/50 rounded p-2">
+                {dano.observacoes}
+              </p>
+            )}
             <DanoFotosGallery
               danoId={dano.id}
               fotos={dano.fotos}
               onFotosChange={() => {}}
               readonly
             />
+            <DanoHistorico danoId={dano.id} />
           </div>
         ))}
       </CardContent>

@@ -17,6 +17,7 @@ import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { DanoFotosGallery } from '@/components/viaturas/DanoFotosGallery';
 import { DanoCategoriaBadge } from '@/components/viaturas/DanoCategoriaBadge';
+import { DANO_ESTADOS, getDanoEstado } from '@/utils/danoEstados';
 import type { Motorista } from '@/pages/Motoristas';
 
 interface Dano {
@@ -48,28 +49,11 @@ interface MotoristaTabDanosProps {
   motorista: Motorista;
 }
 
-const ESTADOS = [
+// 'pendente' fica no filtro: o resumo "Pendente" deste separador conta por ele.
+const FILTROS_ESTADO = [
   { value: 'todos', label: 'Todos os Estados' },
-  {
-    value: 'pendente',
-    label: 'Pendente',
-    color: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
-  },
-  {
-    value: 'em_reparacao',
-    label: 'Em Reparação',
-    color: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  },
-  {
-    value: 'reparado',
-    label: 'Reparado',
-    color: 'bg-green-500/10 text-green-600 border-green-500/20',
-  },
-  {
-    value: 'irreparavel',
-    label: 'Irreparável',
-    color: 'bg-destructive/10 text-destructive border-destructive/20',
-  },
+  getDanoEstado('pendente'),
+  ...DANO_ESTADOS,
 ];
 
 const LOCALIZACOES: Record<string, string> = {
@@ -169,10 +153,6 @@ export function MotoristaTabDanos({ motorista }: MotoristaTabDanosProps) {
     }).format(value);
   }
 
-  function getEstadoConfig(estado: string) {
-    return ESTADOS.find((e) => e.value === estado) || ESTADOS[1];
-  }
-
   const danosFiltrados =
     filtroEstado === 'todos' ? danos : danos.filter((d) => d.estado === filtroEstado);
 
@@ -228,7 +208,7 @@ export function MotoristaTabDanos({ motorista }: MotoristaTabDanosProps) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ESTADOS.map((estado) => (
+              {FILTROS_ESTADO.map((estado) => (
                 <SelectItem key={estado.value} value={estado.value}>
                   {estado.label}
                 </SelectItem>
@@ -251,7 +231,7 @@ export function MotoristaTabDanos({ motorista }: MotoristaTabDanosProps) {
         ) : (
           <div className="space-y-4">
             {danosFiltrados.map((dano) => {
-              const estadoConfig = getEstadoConfig(dano.estado);
+              const estadoConfig = getDanoEstado(dano.estado);
               const dataDisplay = dano.data_ocorrencia || dano.data_registo;
 
               return (

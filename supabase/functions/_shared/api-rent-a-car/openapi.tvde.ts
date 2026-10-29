@@ -361,9 +361,9 @@ export function caminhosTvde(a: Ajudas): Record<string, Esquema> {
           'Modelos com viaturas que podem fazer TVDE e preço por semana na tarifa TVDE do site. ' +
           'Só os que têm uma viatura livre hoje, sem nada marcado depois: o aluguer é de longa ' +
           'duração, por isso não se mostra o que só fica livre mais tarde. ' +
-          'Dinheiro com o IVA do TVDE (6% por omissão), não o de rent-a-car. Como no ' +
-          'rent-a-car, os valores da tarifa TVDE já incluem IVA: são o com_iva, e o sem_iva ' +
-          'é a decomposição.',
+          'Dinheiro com o IVA do TVDE (6% por omissão), não o de rent-a-car. Ao contrário da ' +
+          'diária de rent-a-car, os valores da tarifa TVDE já incluem IVA: são o com_iva, e o ' +
+          'sem_iva é a decomposição.',
         tags: ['TVDE'],
         'x-permissao': LER_TVDE,
         responses: {

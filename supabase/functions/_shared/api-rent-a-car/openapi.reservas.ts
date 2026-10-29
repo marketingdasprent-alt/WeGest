@@ -26,7 +26,7 @@ export const EX_CLIENTE_RESERVA = {
   pais: 'Portugal',
 };
 export const EX_CARTA = { numero: 'L-1234567', validade: '2030-01-01', pais: 'Portugal' };
-// Só o aluguer (3 dias × 35 € = 105 € com IVA), sem extras nem cobertura.
+// Só o aluguer (3 dias × 35 € = 105 € + IVA = 129,15 €), sem extras nem cobertura.
 export const EX_RESERVA_PEDIDO = {
   modelo_id: EX_MODELO.id,
   inicio: EX_INICIO,
@@ -37,7 +37,7 @@ export const EX_RESERVA_PEDIDO = {
   cobertura_id: null,
   cliente: EX_CLIENTE_RESERVA,
   carta_conducao: EX_CARTA,
-  total_esperado: 105,
+  total_esperado: 129.15,
   referencia_externa: 'site-2026-000123',
   mensagem: 'Chego no voo TP1234 às 9h40.',
 };
@@ -52,7 +52,7 @@ export const EX_RESERVA = {
     entrega: { id: EX_LOCALIZACAO.id, nome: EX_LOCALIZACAO.nome },
     recolha: { id: EX_LOCALIZACAO_RECOLHA_ID, nome: 'Porto' },
   },
-  total: { sem_iva: 85.37, com_iva: 105, iva: 23 },
+  total: { sem_iva: 105, com_iva: 129.15, iva: 23 },
   criada_em: '2026-10-03T14:05:00Z',
 };
 

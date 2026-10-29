@@ -325,6 +325,8 @@ jobs:
             api_so_disponiveis \
             api_disponivel_desde_em_cache \
             api_reserva_com_matricula \
+            api_estado_sem_registo \
+            api_livres_contrato_em_curso_e_em_uso \
             conta_cliente \
             api_conta_candidatura
 
@@ -347,7 +349,10 @@ jobs:
             id_de_plataforma_fica_na_ultima_ficha \
             associar_plataforma_conta_de_outro \
             saldo_pendente_igual_ao_resumo \
-            bolt_viagens_sem_update_vazio
+            bolt_viagens_sem_update_vazio \
+            bolt_paga_pelo_ficheiro \
+            resumo_sem_identidade_usa_ficha \
+            extrato_retencao_corte_seis
 
       # ── Gate 4: isolamento e exposição ────────────────────────────────
       # Estes dois são estruturais: falham para QUALQUER tabela ou função nova
@@ -357,6 +362,7 @@ jobs:
         run: |
           bash scripts/pgtap-suite.sh "Segurança e multi-tenancy" \
             rls_org_isolation \
+            rls_notificacoes_visibilidade \
             rls_anon_exposure \
             signup_nao_confia_na_metadata \
             signup_sem_ligacao_por_telefone \
@@ -379,7 +385,12 @@ jobs:
             ticket_ativo_poe_viatura_em_manutencao \
             contrato_recusa_viatura_em_manutencao \
             fotos_da_viatura \
-            viatura_historico_estado
+            viatura_historico_estado \
+            perfis_org_nomes \
+            viatura_dano_historico \
+            dano_ligado_ao_ticket \
+            ti_ticket_mensagens \
+            km_excedente_no_fecho
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

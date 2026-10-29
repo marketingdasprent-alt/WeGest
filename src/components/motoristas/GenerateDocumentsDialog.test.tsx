@@ -144,6 +144,12 @@ vi.mock('@/utils/generateDocumentFromTemplate', () => ({
 
 vi.mock('@/lib/printPdf', () => ({ printPdf: vi.fn() }));
 
+vi.mock('@/utils/document-template/colaboradorQueImprime', () => ({
+  carregarColaboradorQueImprime: vi
+    .fn()
+    .mockResolvedValue({ nome: 'Ana Gestora', assinatura: 'data:image/png;base64,ASSINATURA' }),
+}));
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), warning: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
@@ -151,6 +157,7 @@ vi.mock('sonner', () => ({
 // ── Imports (após mocks) ─────────────────────────────────────────────────────
 
 import { GenerateDocumentsDialog } from './GenerateDocumentsDialog';
+import { generateDocumentFromTemplate } from '@/utils/generateDocumentFromTemplate';
 
 const motorista = {
   id: 'mot-1',
@@ -205,5 +212,24 @@ describe('GenerateDocumentsDialog — PDF combinado', () => {
     // primeiro nem herdar uma folha em branco.
     expect(pdf.paginas[1]).toContain('tpl-2');
     expect(pdf.paginas.length).toBe(2);
+  });
+
+  // Ticket #9: impressos daqui, os documentos saíam sem a assinatura de quem
+  // imprime (e por isso também sem rubrica nas folhas).
+  it('envia a assinatura e o nome de quem imprime para todos os documentos', async () => {
+    abrirDialogo();
+    await waitFor(() => {
+      expect(screen.getByText('2 documento(s) selecionado(s)')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+
+    await waitFor(() => expect(generateDocumentFromTemplate).toHaveBeenCalledTimes(2));
+    for (const [params] of vi.mocked(generateDocumentFromTemplate).mock.calls) {
+      expect(params.documentData).toMatchObject({
+        colaborador_nome: 'Ana Gestora',
+        assinatura_colaborador: 'data:image/png;base64,ASSINATURA',
+      });
+    }
   });
 });

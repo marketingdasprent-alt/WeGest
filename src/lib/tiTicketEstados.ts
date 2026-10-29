@@ -1,10 +1,8 @@
 /**
  * Estados de um ticket de TI e as passagens permitidas entre eles.
  *
- * Vive aqui, numa função pura, porque a edge function `ti-sugestao-responder` e a UI
- * precisam da mesma regra. Escrita em cada um deles, a regra "não ajudou
- * volta ao admin" divergiria — e já aconteceu neste repo: duas cópias da mesma
- * regra de composição de PDFs produziram dois bugs (61e9e12, 8424214).
+ * `com_sugestao` vem do tempo das sugestões (antes do chat): já ninguém o
+ * escreve, mas há pedidos antigos nesse estado.
  */
 export type EstadoTicket = 'aberto' | 'com_sugestao' | 'nao_resolvido' | 'presencial' | 'resolvido';
 
@@ -60,7 +58,7 @@ export const ESTADO_TICKET_ROTULO: Record<
 > = {
   aberto: { rotulo: 'Aberto', variante: 'default' },
   com_sugestao: { rotulo: 'À espera de resposta', variante: 'secondary' },
-  nao_resolvido: { rotulo: 'A sugestão não resolveu', variante: 'destructive' },
+  nao_resolvido: { rotulo: 'Precisa de atenção', variante: 'destructive' },
   presencial: { rotulo: 'A resolver presencialmente', variante: 'default' },
   resolvido: { rotulo: 'Resolvido', variante: 'secondary' },
 };

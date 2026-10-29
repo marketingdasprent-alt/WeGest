@@ -22,11 +22,11 @@ vi.mock('@/integrations/supabase/client', () => {
 });
 
 import {
-  VER_COMO_DISPONIVEL,
   carregarGrupoPrevisto,
   cargoPrevisivel,
   guardarVerComoGrupo,
   lerVerComoGrupo,
+  podeUsarVerComo,
 } from './verComoGrupo';
 
 beforeEach(() => {
@@ -35,11 +35,33 @@ beforeEach(() => {
   m.resposta = { data: null, error: null };
 });
 
-describe('escolha guardada', () => {
-  it('só existe em dev (a build de produção não a tem)', () => {
-    expect(VER_COMO_DISPONIVEL).toBe(import.meta.env.DEV);
+describe('podeUsarVerComo', () => {
+  const PRODUCAO = false;
+
+  it('em produção só o admin do grupo de Suporte', () => {
+    expect(podeUsarVerComo({ isAdmin: true, grupos: ['Suporte de TI (Admin)'] }, PRODUCAO)).toBe(
+      true
+    );
+    expect(podeUsarVerComo({ isAdmin: true, grupos: ['Administrador'] }, PRODUCAO)).toBe(false);
   });
 
+  it('em produção conta também o Suporte como grupo adicional', () => {
+    expect(
+      podeUsarVerComo({ isAdmin: true, grupos: ['Gestor TVDE', null, 'Suporte'] }, PRODUCAO)
+    ).toBe(true);
+  });
+
+  it('quem não é admin nunca, nem sendo do Suporte', () => {
+    expect(podeUsarVerComo({ isAdmin: false, grupos: ['Suporte de TI'] }, PRODUCAO)).toBe(false);
+    expect(podeUsarVerComo({ isAdmin: false, grupos: ['Suporte de TI'] }, true)).toBe(false);
+  });
+
+  it('em dev qualquer admin', () => {
+    expect(podeUsarVerComo({ isAdmin: true, grupos: ['Administrador'] }, true)).toBe(true);
+  });
+});
+
+describe('escolha guardada', () => {
   it('fica guardada por org — noutra org não se aplica', () => {
     guardarVerComoGrupo('org-a', 'cargo-tvde');
     expect(lerVerComoGrupo('org-a')).toBe('cargo-tvde');

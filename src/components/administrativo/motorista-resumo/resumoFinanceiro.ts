@@ -1,6 +1,15 @@
+import {
+  calcularRetencao,
+  levaCorteSeisPorCento,
+  type RetencaoIrs,
+  type TaxasRetencao,
+} from './retencaoIrs';
+
 export interface ResumoFinanceiroInput {
   isImportado: boolean;
   reciboVerde: boolean;
+  /** Taxas de IVA e IRS do motorista com Retenção; null/omisso = sem Retenção. */
+  retencao?: TaxasRetencao | null;
   receitas: { bolt: number; uber: number; outras_receitas: number };
   gorjetaBolt: number;
   gorjetaUber: number;
@@ -17,12 +26,15 @@ export interface ResumoFinanceiroResult {
   receitaAjustada: number;
   totalAReceber: number;
   liquido: number;
+  /** Linhas de IVA e IRS, só para motoristas com Retenção. */
+  retencao: RetencaoIrs | null;
 }
 
 export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFinanceiroResult {
   const {
     isImportado,
     reciboVerde,
+    retencao = null,
     receitas,
     gorjetaBolt,
     gorjetaUber,
@@ -38,10 +50,10 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
   const totalReceitas = receitas.bolt + receitas.uber + receitas.outras_receitas;
 
   // Os 6% só incidem sobre a base; a gorjeta já está faturada e não é dividida.
-  const semReciboVerde = !isImportado && !reciboVerde;
+  const cortaSeis = !isImportado && levaCorteSeisPorCento(reciboVerde, !!retencao);
 
   const ajustarBase = (total: number, gorjetaPlataforma: number) =>
-    semReciboVerde ? (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma : total;
+    cortaSeis ? (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma : total;
 
   const boltExibido = ajustarBase(receitas.bolt, gBolt);
   const uberExibido = ajustarBase(receitas.uber, gUber);
@@ -57,10 +69,16 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
     ? totalReceitas
     : boltExibido + uberExibido + receitas.outras_receitas;
 
+  // IVA e IRS só sobre o serviço desta semana; o saldo anterior soma-se depois.
+  const contasRetencao =
+    !isImportado && retencao ? calcularRetencao(receitaAjustada - totalDespesas, retencao) : null;
+
   // A gorjeta já integra `receitaAjustada`; somá-la aqui duplicaria o valor.
   const totalAReceber = isImportado
     ? liquidoImportado
-    : receitaAjustada - totalDespesas + valoresSemanaAnterior;
+    : contasRetencao
+      ? contasRetencao.totalAReceber + valoresSemanaAnterior
+      : receitaAjustada - totalDespesas + valoresSemanaAnterior;
 
   const liquido = isImportado ? liquidoImportado : totalAReceber;
 
@@ -71,5 +89,6 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
     receitaAjustada,
     totalAReceber,
     liquido,
+    retencao: contasRetencao,
   };
 }

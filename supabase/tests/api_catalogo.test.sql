@@ -72,12 +72,12 @@ select is((select count(*)::int from public.api_modelos('00000000-0000-0000-0000
 
 -- jsonb dos endpoints
 select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')), 1, 'api_modelos devolve 1');
-select is(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'com_iva', '35.00', 'preço com IVA no cartão é o da tarifa');
-select is(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'sem_iva', '28.46', 'preço sem IVA no cartão é o da tarifa decomposto');
+select is(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'com_iva', '43.05', 'preço com IVA no cartão é a diária s/IVA da tarifa + 23 %');
+select is(public.api_modelos('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia'->>'sem_iva', '35.00', 'preço sem IVA no cartão é a diária da tarifa (20261029100000)');
 select is(jsonb_array_length(public.api_modelos('00000000-0000-0000-0000-0000000c0a00', null, 'comercial')), 0, 'filtro por tipo comercial dá 0');
 select is(jsonb_array_length(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')), 1, 'só categorias com modelos publicáveis');
 select is(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')->0->>'modelos', '1', 'categoria conta os modelos');
-select is(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia_desde'->>'com_iva', '35.00', 'preço desde da categoria é o da tarifa');
+select is(public.api_categorias('00000000-0000-0000-0000-0000000c0a00')->0->'preco_dia_desde'->>'com_iva', '43.05', 'preço desde da categoria é a diária s/IVA + 23 %');
 select is(jsonb_array_length(public.api_localizacoes('00000000-0000-0000-0000-0000000c0a00')), 1, 'só estações activas');
 select is(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'tarifa'->'caucao'->>'com_iva', '300.00', 'detalhe traz a caução da tarifa como com_iva');
 select is(public.api_modelo('00000000-0000-0000-0000-0000000c0a00', '00000000-0000-0000-0000-0000000c0d01')->'tarifa'->'caucao'->>'sem_iva', '243.90', 'caução sem IVA decomposta');

@@ -10,6 +10,38 @@ interface EstadoConfiguracaoSectionProps {
   control: Control;
 }
 
+interface TaxaRetencaoFieldProps {
+  control: Control;
+  name: 'retencao_iva_pct' | 'retencao_irs_pct';
+  label: string;
+}
+
+function TaxaRetencaoField({ control, name, label }: TaxaRetencaoFieldProps) {
+  return (
+    <FormField
+      control={control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel className="text-xs">{label}</FormLabel>
+          <FormControl>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="23"
+              value={field.value ?? ''}
+              onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
 export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSectionProps) {
   return (
     <SectionCard
@@ -32,6 +64,29 @@ export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSection
               <FormControl>
                 <Switch checked={field.value} onCheckedChange={field.onChange} />
               </FormControl>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name="retencao_irs"
+          render={({ field }) => (
+            <FormItem className="rounded-lg border p-3 space-y-1">
+              <div className="flex flex-row items-center justify-between">
+                <FormLabel className="text-sm">Retenção (IVA + IRS)</FormLabel>
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Passa fatura-recibo com IVA e a empresa retém o IRS. Os ganhos levam o corte dos 6%.
+              </p>
+              {field.value && (
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <TaxaRetencaoField control={control} name="retencao_iva_pct" label="IVA (%)" />
+                  <TaxaRetencaoField control={control} name="retencao_irs_pct" label="IRS (%)" />
+                </div>
+              )}
             </FormItem>
           )}
         />

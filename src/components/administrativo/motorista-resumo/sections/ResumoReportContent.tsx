@@ -4,6 +4,7 @@ import { Loader2, TrendingUp, TrendingDown, Calculator } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { SlotMensalidadeCard } from '../../SlotMensalidadeCard';
 import type { SlotPeriodo } from '../../MotoristaResumoDialog';
+import { percentagem, type RetencaoIrs } from '../retencaoIrs';
 
 /* ───────── helper Row ───────── */
 function Row({
@@ -72,6 +73,8 @@ interface ResumoReportContentProps {
   gorjeta?: number;
   /** Linha Gorjeta — dados sensíveis, só para admins da org dona dos dados. */
   showGorjeta?: boolean;
+  /** Motorista com Retenção: linhas de IVA e IRS no resumo final. */
+  retencao?: RetencaoIrs | null;
 }
 
 export function ResumoReportContent({
@@ -96,6 +99,7 @@ export function ResumoReportContent({
   motoristaId,
   gorjeta = 0,
   showGorjeta = false,
+  retencao = null,
 }: ResumoReportContentProps) {
   return (
     <div
@@ -359,6 +363,19 @@ export function ResumoReportContent({
             colored="text-blue-700 dark:text-blue-300"
           />
           <Separator className="bg-blue-200 dark:bg-blue-800" />
+          {retencao && (
+            <>
+              <Row label="Total Líquido" value={fmt(retencao.totalLiquido)} />
+              <Row label={`IVA (${percentagem(retencao.taxaIva)})`} value={fmt(retencao.iva)} />
+              <Row label="Total Documento" value={fmt(retencao.totalDocumento)} />
+              <Row
+                label={`IRS retido (${percentagem(retencao.taxaIrs)})`}
+                value={`-${fmt(retencao.irs)}`}
+                colored="text-red-700 dark:text-red-300"
+              />
+              <Separator className="bg-blue-200 dark:bg-blue-800" />
+            </>
+          )}
           <Row
             label="Total a Receber"
             value={fmt(totalAReceber)}

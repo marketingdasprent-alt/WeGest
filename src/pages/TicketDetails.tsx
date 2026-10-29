@@ -16,6 +16,7 @@ import { TicketChat } from '@/components/assistencia/ticket/TicketChat';
 import { useTicket } from '@/hooks/useTicket';
 import { useTicketMessages } from '@/hooks/useTicketMessages';
 import { useTicketClosure } from '@/hooks/useTicketClosure';
+import { useViaturasSubstitutas } from '@/hooks/useViaturasSubstitutas';
 import {
   TicketAccessPanel,
   type TicketAccessPanelRef,
@@ -166,9 +167,12 @@ const TicketDetails = () => {
   // Substituta
   const [viaturaSubstituta, setViaturaSubstituta] = useState<Viatura | null>(null);
   const [showSubstituteModal, setShowSubstituteModal] = useState(false);
-  const [viaturasDisponiveis, setViaturasDisponiveis] = useState<Viatura[]>([]);
   const [substituteSearch, setSubstituteSearch] = useState('');
   const [assigningSubstitute, setAssigningSubstitute] = useState(false);
+  const { data: viaturasSubstitutas } = useViaturasSubstitutas({
+    excluirViaturaId: ticket?.viatura_id,
+    enabled: showSubstituteModal,
+  });
 
   // Decisões de fecho
   const [closureDecisao, setClosureDecisao] = useState<'motorista' | 'empresa' | 'aberto' | null>(
@@ -260,48 +264,32 @@ const TicketDetails = () => {
   };
 
   const handleAceitarTicket = async () => {
-    if (!ticket || !viatura) return;
+    if (!ticket) return;
     try {
+      // Pôr a viatura em manutenção é da trigger da BD ao passar a em_andamento
+      // (e só quando o estado o permite — inativo/vendida ficam como estão).
       const { error: statusError } = await supabase
         .from('assistencia_tickets')
         .update({ status: 'em_andamento' })
         .eq('id', ticket.id);
       if (statusError) throw statusError;
 
-      const { error: viaturaError } = await supabase
-        .from('viaturas')
-        .update({ status: 'manutencao' })
-        .eq('id', viatura.id);
-      if (viaturaError) throw viaturaError;
-
       const { error: mensagemError } = await supabase.from('assistencia_mensagens').insert({
         ticket_id: ticket.id,
         autor_id: user?.id,
-        mensagem: 'Ticket aceite. Viatura colocada em manutenção.',
+        mensagem: 'Ticket aceite. Reparação em andamento.',
         tipo: 'status_change',
       });
       if (mensagemError) throw mensagemError;
 
-      toast({ title: 'Ticket aceite', description: 'Viatura colocada em manutenção.' });
+      toast({ title: 'Ticket aceite', description: 'Reparação em andamento.' });
       refreshAll();
     } catch (error: any) {
       toast({ title: 'Erro', description: error.message, variant: 'destructive' });
     }
   };
 
-  const handleAbrirSubstitutaModal = async () => {
-    setShowSubstituteModal(true);
-    await fetchViaturasDisponiveis();
-  };
-
-  const fetchViaturasDisponiveis = async () => {
-    const { data } = await supabase
-      .from('viaturas')
-      .select('id, matricula, marca, modelo, km_atual')
-      .eq('status', 'disponivel')
-      .order('matricula');
-    setViaturasDisponiveis(data || []);
-  };
+  const handleAbrirSubstitutaModal = () => setShowSubstituteModal(true);
 
   const handleAtribuirSubstituta = async (viaturaId: string) => {
     if (!ticket || !motorista) return;
@@ -458,7 +446,7 @@ const TicketDetails = () => {
       <TicketSubstitutaModal
         open={showSubstituteModal}
         onOpenChange={setShowSubstituteModal}
-        viaturasDisponiveis={viaturasDisponiveis}
+        viaturasDisponiveis={viaturasSubstitutas ?? []}
         search={substituteSearch}
         onSearchChange={setSubstituteSearch}
         assigning={assigningSubstitute}
