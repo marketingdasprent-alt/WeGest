@@ -1,14 +1,21 @@
-import { Gauge } from 'lucide-react';
+import { AlertTriangle, Gauge } from 'lucide-react';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { formatCurrency, formatNumber } from '@/utils/formatters';
-import { destinoKmExtra, type KmExcedente } from '@/utils/kmExcedente';
+import {
+  destinoKmExtra,
+  kmAbaixoDaSaida,
+  motivoSemCalculo,
+  type KmExcedente,
+} from '@/utils/kmExcedente';
 
 interface KmExcedenteResumoProps {
   /** null = não há como calcular (km de saída em falta ou a 0, ou km a descer). */
   calculo: KmExcedente | null;
+  kmSaida: number | null;
+  kmEntrada: number | null;
   /** null = km ilimitados. */
   kmsIncluidos: number | null;
   kmAdicionalValor: number | null;
@@ -21,6 +28,8 @@ interface KmExcedenteResumoProps {
 
 export const KmExcedenteResumo: React.FC<KmExcedenteResumoProps> = ({
   calculo,
+  kmSaida,
+  kmEntrada,
   kmsIncluidos,
   kmAdicionalValor,
   regime,
@@ -29,13 +38,29 @@ export const KmExcedenteResumo: React.FC<KmExcedenteResumoProps> = ({
   onCobrarChange,
   temMotorista,
 }) => {
+  // Antes do "km ilimitados": um km mal escrito bloqueia o fecho em qualquer contrato.
+  if (kmAbaixoDaSaida(kmSaida, kmEntrada)) {
+    return (
+      <div
+        role="alert"
+        className="rounded-xl border border-destructive/50 bg-destructive/10 p-4 flex items-start gap-3"
+      >
+        <AlertTriangle className="h-5 w-5 shrink-0 text-destructive mt-0.5" />
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-destructive">Km de entrada errado</p>
+          <p className="text-sm">{motivoSemCalculo(kmSaida, kmEntrada)}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (kmsIncluidos == null) return null;
 
   if (!calculo) {
     return (
       <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         <Gauge className="h-3.5 w-3.5 shrink-0" />
-        Sem km de saída registado neste contrato — os km extra não são calculados.
+        {motivoSemCalculo(kmSaida, kmEntrada)}
       </p>
     );
   }

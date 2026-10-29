@@ -365,6 +365,10 @@ export function useUpdateContratoRenting() {
  *  contrato, sem passar pelo fluxo separado de QR/Calendário. */
 export interface FecharContratoRecolhaInfo {
   km: string;
+  /** Km de saída corrigido pelo gestor no fecho, quando o gravado tinha um erro
+   *  (ex.: 977785 em vez de 97785). Grava-se antes de fechar, para os km extra
+   *  já saírem com ele. */
+  kmSaidaCorrigido?: number;
   combustivel: string;
   /** Carga da bateria ("73%") nos eléctricos/híbridos. Vai para
    *  contratos_renting.eletricidade_entrada, a par do combustivel_entrada. */
@@ -524,6 +528,7 @@ export function useFecharContrato() {
           .from('contratos_renting')
           .update({
             km_entrada: Number.isNaN(kmNum) ? null : kmNum,
+            ...(recolha.kmSaidaCorrigido != null ? { km_saida: recolha.kmSaidaCorrigido } : {}),
             combustivel_entrada: recolha.combustivel,
             ...(recolha.eletricidade ? { eletricidade_entrada: recolha.eletricidade } : {}),
           })

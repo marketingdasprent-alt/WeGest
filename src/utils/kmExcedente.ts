@@ -34,6 +34,40 @@ export function destinoKmExtra(ctx: {
   return { texto: 'Fica nos extras do contrato e entra na fatura.', faturarAParte: false };
 }
 
+/** Km de saída escrito pelo gestor no fecho. null = não está a corrigir ou ainda não é um km. */
+export function lerKmSaidaCorrigido(texto: string | null): number | null {
+  if (texto == null || !texto.trim()) return null;
+  const n = Number(texto);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** Km de entrada abaixo do de saída: km mal escrito, o fecho não avança. */
+export function kmAbaixoDaSaida(
+  kmSaida: number | null | undefined,
+  kmEntrada: number | null | undefined
+): boolean {
+  if (!kmSaida || kmSaida < 0 || kmEntrada == null || Number.isNaN(kmEntrada)) return false;
+  return kmEntrada < kmSaida;
+}
+
+/**
+ * Porque é que não há conta, quando calcularKmExcedente devolve null. O km a
+ * descer é quase sempre um km mal escrito — dizer só "sem km de saída"
+ * escondia-o (#20 da Premium Ride, 29-10).
+ */
+export function motivoSemCalculo(
+  kmSaida: number | null | undefined,
+  kmEntrada: number | null | undefined
+): string {
+  if (!kmSaida || kmSaida < 0) {
+    return 'Sem km de saída registado neste contrato — os km extra não são calculados.';
+  }
+  if (kmAbaixoDaSaida(kmSaida, kmEntrada) && kmEntrada != null) {
+    return `O km de entrada (${kmEntrada.toLocaleString('pt-PT')}) é menor que o km com que a viatura saiu (${kmSaida.toLocaleString('pt-PT')}). Corrige o km de entrada — ou o de saída, se for esse o errado — para poder fechar o contrato.`;
+  }
+  return 'Indica o km de entrada para calcular os km extra.';
+}
+
 export interface KmExcedente {
   kmPercorridos: number;
   kmExcedente: number;

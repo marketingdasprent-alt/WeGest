@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowRightLeft,
   Calendar,
   CalendarClock,
@@ -50,7 +51,8 @@ import { pastaRascunhoDanos } from '@/lib/fotosDano';
 import { useFecharContrato } from '@/hooks/useContratosRenting';
 import { computeFechoRapidoDefaults } from './fecharContratoDefaults';
 import { KmExcedenteResumo } from './KmExcedenteResumo';
-import { calcularKmExcedente } from '@/utils/kmExcedente';
+import { KmSaidaCorrecao } from './KmSaidaCorrecao';
+import { calcularKmExcedente, kmAbaixoDaSaida, lerKmSaidaCorrigido } from '@/utils/kmExcedente';
 import { useEstacoes } from '@/hooks/useEstacoes';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -404,12 +406,19 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     },
   });
 
+  const kmEntrada = km.trim() ? Number(km) : null;
+  // null = o gestor não está a corrigir o km de saída gravado no contrato.
+  const [kmSaidaCorrigidoTexto, setKmSaidaCorrigidoTexto] = useState<string | null>(null);
+  const kmSaidaCorrigido = lerKmSaidaCorrigido(kmSaidaCorrigidoTexto);
+  const kmSaida = kmSaidaCorrigido ?? contexto?.kmSaida ?? null;
   const kmExcedente = calcularKmExcedente({
-    kmSaida: contexto?.kmSaida,
-    kmEntrada: km.trim() ? Number(km) : null,
+    kmSaida,
+    kmEntrada,
     kmsIncluidos: contexto?.kmsIncluidos,
     kmAdicionalValor: contexto?.kmAdicionalValor,
   });
+  // Km abaixo do de saída é km mal escrito (#20): não deixa fechar até corrigir.
+  const kmErrado = !viaturaEhSlot && registarAgora && kmAbaixoDaSaida(kmSaida, kmEntrada);
 
   // Pré-preenche o KM de entrada com o KM de saída já registado no contrato —
   // evita pedir um valor que o sistema já tem; o utilizador só o edita se o
@@ -427,6 +436,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
     setNivelEletrico('');
     setDuaDevolvido(false);
     setCobrarKmExcedente(true);
+    setKmSaidaCorrigidoTexto(null);
     // Só os object URLs são nossos; as miniaturas assinadas do bucket não se revogam.
     novosDanos.forEach((d) =>
       d.files.forEach((f) => f.preview?.startsWith('blob:') && URL.revokeObjectURL(f.preview))
@@ -513,7 +523,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         observacoesMomento: motivo,
         km_entrada: km,
         combustivel_entrada: combustivel,
-        km_saida: contexto?.kmSaida?.toString() ?? '',
+        km_saida: kmSaida?.toString() ?? '',
         combustivel_saida: contexto?.combustivelSaida ?? '',
         ...(fotosMomento ? { fotosMomento } : {}),
         action: modo === 'print' ? 'print' : 'download',
@@ -586,6 +596,10 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         toast.error('Indica o KM actual para registar a recolha.');
         return;
       }
+      if (kmErrado) {
+        toast.error('O km de entrada é menor que o km de saída do contrato. Corrige o km.');
+        return;
+      }
       // Cada tipo exige o SEU nível — pedir depósito a um eléctrico era o que
       // acontecia antes, e não havia forma de registar a carga da bateria.
       if (mostraCombustivel && !combustivel) {
@@ -629,6 +643,7 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
         !viaturaEhSlot && registarAgora
           ? {
               km,
+              kmSaidaCorrigido: kmSaidaCorrigido ?? undefined,
               combustivel,
               eletricidade: nivelEletrico || undefined,
               danos: novosDanos
@@ -993,6 +1008,8 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                   <div className="mt-3 space-y-3">
                     <KmExcedenteResumo
                       calculo={kmExcedente}
+                      kmSaida={kmSaida}
+                      kmEntrada={kmEntrada}
                       kmsIncluidos={contexto?.kmsIncluidos ?? null}
                       kmAdicionalValor={contexto?.kmAdicionalValor ?? null}
                       regime={contexto?.regime ?? null}
@@ -1000,6 +1017,12 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
                       cobrar={cobrarKmExcedente}
                       onCobrarChange={setCobrarKmExcedente}
                       temMotorista={temMotorista}
+                    />
+                    <KmSaidaCorrecao
+                      kmSaidaGravado={contexto?.kmSaida ?? null}
+                      valor={kmSaidaCorrigidoTexto}
+                      onChange={setKmSaidaCorrigidoTexto}
+                      podeCorrigir={kmErrado}
                     />
                     <div className="pt-2 border-t border-emerald-200/70 dark:border-emerald-800/50">
                       <AssinaturasHandoverSection
@@ -1051,6 +1074,12 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
               Confirma primeiro que o DUA foi devolvido (acima) para poder fechar.
             </p>
           )}
+          {kmErrado && (
+            <p className="flex items-center gap-1.5 text-sm font-medium text-destructive mr-auto">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Km de entrada menor que o de saída: corrige o km para poder fechar.
+            </p>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -1062,8 +1091,14 @@ export const FecharContratoDialog: React.FC<FecharContratoDialogProps> = ({
           <Button
             type="button"
             variant={fechaImediatamente ? 'destructive' : 'default'}
-            disabled={isPending || exigeDua}
-            title={exigeDua ? 'Confirma primeiro que o DUA foi devolvido' : undefined}
+            disabled={isPending || exigeDua || kmErrado}
+            title={
+              exigeDua
+                ? 'Confirma primeiro que o DUA foi devolvido'
+                : kmErrado
+                  ? 'Corrige o km de entrada'
+                  : undefined
+            }
             onClick={form.handleSubmit(onSubmit)}
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}

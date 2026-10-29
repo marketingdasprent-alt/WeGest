@@ -1,6 +1,63 @@
 import { describe, it, expect } from 'vitest';
 
-import { calcularKmExcedente, destinoKmExtra } from './kmExcedente';
+import {
+  calcularKmExcedente,
+  destinoKmExtra,
+  kmAbaixoDaSaida,
+  lerKmSaidaCorrigido,
+  motivoSemCalculo,
+} from './kmExcedente';
+
+describe('lerKmSaidaCorrigido', () => {
+  it('km inteiro e positivo passa', () => {
+    expect(lerKmSaidaCorrigido('97785')).toBe(97785);
+  });
+
+  it('a não corrigir, vazio ou inválido dá null', () => {
+    expect(lerKmSaidaCorrigido(null)).toBeNull();
+    expect(lerKmSaidaCorrigido('  ')).toBeNull();
+    expect(lerKmSaidaCorrigido('0')).toBeNull();
+    expect(lerKmSaidaCorrigido('-5')).toBeNull();
+    expect(lerKmSaidaCorrigido('12,5')).toBeNull();
+    expect(lerKmSaidaCorrigido('abc')).toBeNull();
+  });
+});
+
+describe('kmAbaixoDaSaida', () => {
+  it('km de entrada menor que o de saída bloqueia', () => {
+    expect(kmAbaixoDaSaida(135035, 124679)).toBe(true);
+  });
+
+  it('igual ou acima não bloqueia', () => {
+    expect(kmAbaixoDaSaida(135035, 135035)).toBe(false);
+    expect(kmAbaixoDaSaida(135035, 136000)).toBe(false);
+  });
+
+  it('sem km de saída ou sem km de entrada não bloqueia', () => {
+    expect(kmAbaixoDaSaida(null, 100)).toBe(false);
+    expect(kmAbaixoDaSaida(0, 100)).toBe(false);
+    expect(kmAbaixoDaSaida(135035, null)).toBe(false);
+    expect(kmAbaixoDaSaida(135035, Number.NaN)).toBe(false);
+  });
+});
+
+describe('motivoSemCalculo', () => {
+  it('sem km de saída diz isso', () => {
+    expect(motivoSemCalculo(0, 12500)).toContain('Sem km de saída');
+    expect(motivoSemCalculo(null, 12500)).toContain('Sem km de saída');
+  });
+
+  it('km de entrada abaixo do de saída mostra os dois números', () => {
+    const m = motivoSemCalculo(135035, 124679);
+    expect(m).toContain('menor que o km com que a viatura saiu');
+    expect(m).toContain('124');
+    expect(m).toContain('135');
+  });
+
+  it('sem km de entrada pede-o', () => {
+    expect(motivoSemCalculo(10000, null)).toContain('Indica o km de entrada');
+  });
+});
 
 describe('destinoKmExtra', () => {
   it('TVDE com motorista vai para a conta-corrente', () => {
