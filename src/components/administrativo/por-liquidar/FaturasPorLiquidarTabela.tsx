@@ -29,8 +29,8 @@ const LinhaFatura: React.FC<LinhaFaturaProps> = ({ f, marcada, aAbrir, onToggle,
   return (
     <li
       className={cn(
-        'grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-4 px-4 py-3 sm:grid-cols-[auto_8rem_minmax(0,1fr)_auto_auto]',
-        marcada && 'bg-primary/10'
+        'grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-4 rounded-md px-4 py-2.5 transition-colors sm:grid-cols-[auto_7rem_minmax(0,1fr)_auto_auto]',
+        marcada ? 'bg-primary/15' : 'hover:bg-muted/40'
       )}
     >
       <Checkbox
@@ -39,14 +39,14 @@ const LinhaFatura: React.FC<LinhaFaturaProps> = ({ f, marcada, aAbrir, onToggle,
         onCheckedChange={onToggle}
       />
       <div className="leading-tight">
-        <p className="font-medium tabular-nums">{numeroCurto(f.documento_externo_ref)}</p>
-        <p className="text-xs text-muted-foreground">{formatDate(f.emitidaEm)}</p>
+        <p className="text-base font-medium tabular-nums">{numeroCurto(f.documento_externo_ref)}</p>
+        <p className="text-sm text-muted-foreground">{formatDate(f.emitidaEm)}</p>
       </div>
       <p className="hidden truncate text-sm text-muted-foreground sm:block">{f.descricao ?? ''}</p>
       <div className="text-right leading-tight">
-        <p className="font-semibold tabular-nums">{formatCurrency(f.saldoPagar)}</p>
+        <p className="text-lg font-semibold tabular-nums">{formatCurrency(f.saldoPagar)}</p>
         {abatido > 0 && (
-          <p className="text-xs text-muted-foreground tabular-nums">
+          <p className="text-sm text-muted-foreground tabular-nums">
             de {formatCurrency(f.valorTotal)} · já abatido {formatCurrency(abatido)}
           </p>
         )}
@@ -55,7 +55,7 @@ const LinhaFatura: React.FC<LinhaFaturaProps> = ({ f, marcada, aAbrir, onToggle,
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5"
+          className="w-16 justify-start gap-1.5"
           aria-label={`Ver PDF de ${f.documento_externo_ref}`}
           disabled={aAbrir}
           onClick={onVerPdf}
@@ -64,7 +64,7 @@ const LinhaFatura: React.FC<LinhaFaturaProps> = ({ f, marcada, aAbrir, onToggle,
           PDF
         </Button>
       ) : (
-        <span />
+        <span className="w-16" />
       )}
     </li>
   );
@@ -78,12 +78,12 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
   onVerPdf,
   pdfAAbrir,
 }) => (
-  <div className="space-y-4">
+  <div className="space-y-3">
     {grupos.map((g) => {
       const marcadas = g.faturas.filter((f) => selecionadas.has(f.id)).length;
       return (
-        <section key={g.clienteId} className="overflow-hidden rounded-lg bg-card">
-          <header className="flex items-center gap-4 bg-muted/50 px-4 py-3">
+        <section key={g.clienteId} className="rounded-lg bg-card p-2">
+          <header className="flex items-center gap-4 px-4 pb-2 pt-3">
             <Checkbox
               aria-label={`Escolher todas as faturas de ${g.clienteNome}`}
               checked={
@@ -92,14 +92,18 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
               onCheckedChange={() => onToggleCliente(g)}
             />
             <div className="min-w-0 flex-1">
-              <h3 className="truncate font-semibold">{g.clienteNome}</h3>
-              <p className="text-xs text-muted-foreground">
+              <h3 className="line-clamp-2 text-base font-semibold">{g.clienteNome}</h3>
+              <p className="text-sm text-muted-foreground">
                 {g.faturas.length} {g.faturas.length === 1 ? 'fatura' : 'faturas'} por liquidar
               </p>
             </div>
-            <p className="text-lg font-bold tabular-nums">{formatCurrency(g.totalPendente)}</p>
+            <p className="text-lg font-bold tabular-nums sm:text-xl">
+              {formatCurrency(g.totalPendente)}
+            </p>
+            {/* Mesma largura do botão PDF das linhas: o total fica na coluna dos valores. */}
+            <span className="hidden w-16 shrink-0 sm:block" aria-hidden />
           </header>
-          <ul className="divide-y divide-border/50">
+          <ul>
             {g.faturas.map((f) => (
               <LinhaFatura
                 key={f.id}

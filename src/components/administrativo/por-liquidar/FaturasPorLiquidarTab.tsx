@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { toast } from 'sonner';
-import { FileSpreadsheet, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Loader2 } from 'lucide-react';
 import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 import {
   agruparPorCliente,
@@ -15,8 +13,8 @@ import { abrirDocumentoPdf } from '@/lib/faturacao';
 import { errorMessage } from '@/utils/errorMessage';
 import { exportarFaturasPorLiquidar } from '@/lib/exportarFaturasPorLiquidar';
 import { matchesSearch } from '@/lib/utils';
-import { formatCurrency } from '@/utils/formatters';
 import { BarraSelecaoPagamento } from './BarraSelecaoPagamento';
+import { CabecalhoPorLiquidar } from './CabecalhoPorLiquidar';
 import { FaturasPorLiquidarTabela } from './FaturasPorLiquidarTabela';
 import { RegistarRecibosLoteDialog } from './RegistarRecibosLoteDialog';
 
@@ -82,31 +80,24 @@ export function FaturasPorLiquidarTab() {
   const totalEscolhido = escolhidas.reduce((t, f) => t + f.saldoPagar, 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="space-y-1 text-xs text-muted-foreground">
-          De
-          <Input type="date" value={de} onChange={(e) => setDe(e.target.value)} className="h-9" />
-        </label>
-        <label className="space-y-1 text-xs text-muted-foreground">
-          Até
-          <Input type="date" value={ate} onChange={(e) => setAte(e.target.value)} className="h-9" />
-        </label>
-        <Input
-          placeholder="Pesquisar cliente..."
-          value={pesquisa}
-          onChange={(e) => setPesquisa(e.target.value)}
-          className="h-9 w-56"
-        />
-        <Button
-          variant="outline"
-          className="ml-auto h-9 gap-2"
-          disabled={grupos.length === 0}
-          onClick={() => exportarFaturasPorLiquidar(grupos, de, ate)}
-        >
-          <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
-        </Button>
-      </div>
+    // Largura limitada: num ecrã largo o valor ficava a mil píxeis do nome.
+    <div className="max-w-6xl space-y-6">
+      <CabecalhoPorLiquidar
+        de={de}
+        ate={ate}
+        onPeriodoChange={(novoDe, novoAte) => {
+          setDe(novoDe);
+          setAte(novoAte);
+        }}
+        pesquisa={pesquisa}
+        onPesquisaChange={setPesquisa}
+        onExportar={() => exportarFaturasPorLiquidar(grupos, de, ate)}
+        resumo={
+          isLoading || error
+            ? null
+            : { total: totalPendente, clientes: grupos.length, faturas: nFaturas }
+        }
+      />
 
       {isLoading ? (
         <Loader2 className="mx-auto my-10 h-6 w-6 animate-spin text-muted-foreground" />
@@ -120,16 +111,6 @@ export function FaturasPorLiquidarTab() {
         </p>
       ) : (
         <>
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalPendente)}</p>
-            <p className="text-muted-foreground">
-              por liquidar · {grupos.length} {grupos.length === 1 ? 'cliente' : 'clientes'} ·{' '}
-              {nFaturas} {nFaturas === 1 ? 'fatura' : 'faturas'}
-            </p>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Escolha as faturas que o cliente pagou e carregue em Registar pagamento.
-          </p>
           <FaturasPorLiquidarTabela
             grupos={grupos}
             selecionadas={selecionadas}
