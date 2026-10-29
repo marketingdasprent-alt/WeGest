@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Banknote, FileSpreadsheet, Receipt } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 import {
   agruparPorCliente,
@@ -13,9 +15,9 @@ import { abrirDocumentoPdf } from '@/lib/faturacao';
 import { errorMessage } from '@/utils/errorMessage';
 import { exportarFaturasPorLiquidar } from '@/lib/exportarFaturasPorLiquidar';
 import { matchesSearch } from '@/lib/utils';
-import { BarraSelecaoPagamento } from './BarraSelecaoPagamento';
-import { CabecalhoPorLiquidar } from './CabecalhoPorLiquidar';
 import { FaturasPorLiquidarTabela } from './FaturasPorLiquidarTabela';
+import { PorLiquidarStats } from './PorLiquidarStats';
+import { PorLiquidarToolbar } from './PorLiquidarToolbar';
 import { RegistarRecibosLoteDialog } from './RegistarRecibosLoteDialog';
 
 export function FaturasPorLiquidarTab() {
@@ -80,9 +82,33 @@ export function FaturasPorLiquidarTab() {
   const totalEscolhido = escolhidas.reduce((t, f) => t + f.saldoPagar, 0);
 
   return (
-    // Largura limitada: num ecrã largo o valor ficava a mil píxeis do nome.
-    <div className="max-w-6xl space-y-6">
-      <CabecalhoPorLiquidar
+    <div className="space-y-4">
+      <StickyPageHeader
+        title="Por liquidar"
+        description="Faturas de rent-a-car ainda por pagar, por cliente"
+        icon={Receipt}
+      >
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            disabled={grupos.length === 0}
+            onClick={() => exportarFaturasPorLiquidar(grupos, de, ate)}
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" /> Exportar Excel
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            disabled={escolhidas.length === 0}
+            onClick={() => setLoteAberto(true)}
+          >
+            <Banknote className="mr-2 h-4 w-4" /> Registar pagamento ({escolhidas.length})
+          </Button>
+        </div>
+      </StickyPageHeader>
+
+      {/* Linha própria: dentro do cabeçalho os filtros ficavam a flutuar ao lado dos botões. */}
+      <PorLiquidarToolbar
         de={de}
         ate={ate}
         onPeriodoChange={(novoDe, novoAte) => {
@@ -91,41 +117,37 @@ export function FaturasPorLiquidarTab() {
         }}
         pesquisa={pesquisa}
         onPesquisaChange={setPesquisa}
-        onExportar={() => exportarFaturasPorLiquidar(grupos, de, ate)}
-        resumo={
-          isLoading || error
-            ? null
-            : { total: totalPendente, clientes: grupos.length, faturas: nFaturas }
-        }
+        totalCount={nFaturas}
       />
 
-      {isLoading ? (
-        <Loader2 className="mx-auto my-10 h-6 w-6 animate-spin text-muted-foreground" />
-      ) : error ? (
+      <PorLiquidarStats
+        total={totalPendente}
+        clientes={grupos.length}
+        faturas={nFaturas}
+        escolhidas={escolhidas.length}
+        totalEscolhido={totalEscolhido}
+        maisAntiga={grupos
+          .flatMap((g) => g.faturas)
+          .reduce<
+            string | null
+          >((min, f) => (f.emitidaEm && (!min || f.emitidaEm < min) ? f.emitidaEm : min), null)}
+        loading={isLoading}
+      />
+
+      {error ? (
         <p className="text-sm text-destructive">
           Não foi possível carregar as faturas: {error.message}
         </p>
-      ) : grupos.length === 0 ? (
-        <p className="py-10 text-center text-muted-foreground">
-          Nenhuma fatura por liquidar neste período.
-        </p>
       ) : (
-        <>
-          <FaturasPorLiquidarTabela
-            grupos={grupos}
-            selecionadas={selecionadas}
-            onToggleFatura={handleToggleFatura}
-            onToggleCliente={handleToggleCliente}
-            onVerPdf={handleVerPdf}
-            pdfAAbrir={pdfAAbrir}
-          />
-          <BarraSelecaoPagamento
-            quantas={escolhidas.length}
-            total={totalEscolhido}
-            onLimpar={() => setSelecionadas(new Set())}
-            onRegistarPagamento={() => setLoteAberto(true)}
-          />
-        </>
+        <FaturasPorLiquidarTabela
+          grupos={grupos}
+          loading={isLoading}
+          selecionadas={selecionadas}
+          onToggleFatura={handleToggleFatura}
+          onToggleCliente={handleToggleCliente}
+          onVerPdf={handleVerPdf}
+          pdfAAbrir={pdfAAbrir}
+        />
       )}
 
       <RegistarRecibosLoteDialog
