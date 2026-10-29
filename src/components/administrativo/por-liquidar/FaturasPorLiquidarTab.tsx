@@ -1,12 +1,19 @@
 import { useMemo, useState } from 'react';
 import { format, startOfMonth } from 'date-fns';
-import { FileSpreadsheet, Loader2, Receipt } from 'lucide-react';
+import { toast } from 'sonner';
+import { Banknote, FileSpreadsheet, Loader2, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SectionCard } from '@/components/ui/section-card';
 import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
-import { agruparPorCliente, useFaturasPorLiquidar } from '@/hooks/useFaturasPorLiquidar';
-import type { ClienteComFaturas } from '@/hooks/useFaturasPorLiquidar';
+import {
+  agruparPorCliente,
+  carregarFaturaDaCobranca,
+  useFaturasPorLiquidar,
+} from '@/hooks/useFaturasPorLiquidar';
+import type { ClienteComFaturas, FaturaPorLiquidar } from '@/hooks/useFaturasPorLiquidar';
+import { abrirDocumentoPdf } from '@/lib/faturacao';
+import { errorMessage } from '@/utils/errorMessage';
 import { exportarFaturasPorLiquidar } from '@/lib/exportarFaturasPorLiquidar';
 import { matchesSearch } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
@@ -23,6 +30,7 @@ export function FaturasPorLiquidarTab() {
   const [pesquisa, setPesquisa] = useEstadoPersistido('porLiquidar.pesquisa', '');
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set());
   const [loteAberto, setLoteAberto] = useState(false);
+  const [pdfAAbrir, setPdfAAbrir] = useState<string | null>(null);
 
   const { data: faturas, isLoading, error } = useFaturasPorLiquidar({ de, ate });
 
@@ -49,6 +57,26 @@ export function FaturasPorLiquidarTab() {
       g.faturas.map((f) => f.id),
       !g.faturas.every((f) => selecionadas.has(f.id))
     );
+
+  const handleVerPdf = async (f: FaturaPorLiquidar) => {
+    // A janela abre já, no clique: depois de um await o browser bloqueia-a.
+    const janela = window.open('', '_blank');
+    setPdfAAbrir(f.id);
+    try {
+      const invoice = await carregarFaturaDaCobranca(f.id);
+      if (!invoice) {
+        janela?.close();
+        toast.error(`A fatura ${f.documento_externo_ref} não tem documento guardado no WeGest.`);
+        return;
+      }
+      await abrirDocumentoPdf(invoice, janela);
+    } catch (e: unknown) {
+      janela?.close();
+      toast.error(`Não foi possível abrir o PDF: ${errorMessage(e, 'indisponível')}`);
+    } finally {
+      setPdfAAbrir(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -93,7 +121,7 @@ export function FaturasPorLiquidarTab() {
               disabled={escolhidas.length === 0}
               onClick={() => setLoteAberto(true)}
             >
-              <Receipt className="h-4 w-4" /> Registar recibos ({escolhidas.length})
+              <Banknote className="h-4 w-4" /> Registar pagamento ({escolhidas.length})
             </Button>
           </div>
         }
@@ -114,6 +142,8 @@ export function FaturasPorLiquidarTab() {
             selecionadas={selecionadas}
             onToggleFatura={handleToggleFatura}
             onToggleCliente={handleToggleCliente}
+            onVerPdf={handleVerPdf}
+            pdfAAbrir={pdfAAbrir}
           />
         )}
       </SectionCard>

@@ -87,11 +87,11 @@ export const RegistarRecibosLoteDialog: React.FC<RegistarRecibosLoteDialogProps>
         <DialogHeader className="px-6 pt-4 pb-4 border-b bg-card shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            Registar recibos
+            Registar pagamento
           </DialogTitle>
           <DialogDescription>
-            Um recibo por fatura, pelo valor todo em aberto. Para pagamentos parciais use “Fazer
-            recibo” na Faturação.
+            Indique como e quando foi pago. A seguir é feito um recibo por fatura, pelo valor todo
+            em aberto. Para pagamentos parciais use “Fazer recibo” no separador Movimentos.
           </DialogDescription>
         </DialogHeader>
 

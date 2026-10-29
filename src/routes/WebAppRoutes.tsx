@@ -73,7 +73,6 @@ const CartoesFlotaPage = lazy(() => import('@/pages/administrativo/CartoesFlotaP
 const DispositivosObePage = lazy(() => import('@/pages/administrativo/DispositivosObePage'));
 const FaturacaoPage = lazy(() => import('@/pages/administrativo/FaturacaoPage'));
 const DividasPage = lazy(() => import('@/pages/administrativo/DividasPage'));
-const FaturasPorLiquidarPage = lazy(() => import('@/pages/administrativo/FaturasPorLiquidarPage'));
 const Instalar = lazy(() => import('@/pages/Instalar'));
 const Calendario = lazy(() => import('@/pages/Calendario'));
 const Marketing = lazy(() => import('@/pages/Marketing'));
@@ -511,15 +510,10 @@ const WebAppRoutes = () => {
                 </ProtectedRoute>
               }
             />
+            {/* "Por liquidar" passou a separador da Faturação. */}
             <Route
               path="/administrativo/por-liquidar"
-              element={
-                <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
-                  <DashboardLayout>
-                    <FaturasPorLiquidarPage />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
+              element={<Navigate to="/administrativo/faturacao" replace />}
             />
             <Route
               path="/calendario"

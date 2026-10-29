@@ -1,4 +1,6 @@
 import { Fragment } from 'react';
+import { FileText, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -9,13 +11,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import type { ClienteComFaturas } from '@/hooks/useFaturasPorLiquidar';
+import type { ClienteComFaturas, FaturaPorLiquidar } from '@/hooks/useFaturasPorLiquidar';
 
 interface FaturasPorLiquidarTabelaProps {
   grupos: ClienteComFaturas[];
   selecionadas: Set<string>;
   onToggleFatura: (id: string) => void;
   onToggleCliente: (grupo: ClienteComFaturas) => void;
+  onVerPdf: (fatura: FaturaPorLiquidar) => void;
+  /** Fatura cujo PDF está a abrir. */
+  pdfAAbrir: string | null;
 }
 
 export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> = ({
@@ -23,6 +28,8 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
   selecionadas,
   onToggleFatura,
   onToggleCliente,
+  onVerPdf,
+  pdfAAbrir,
 }) => {
   const totalGeral = grupos.reduce((s, g) => s + g.totalPendente, 0);
 
@@ -37,6 +44,7 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
           <TableHead className="text-right">Valor Total</TableHead>
           <TableHead className="text-right">Liquidado</TableHead>
           <TableHead className="text-right">Pendente</TableHead>
+          <TableHead className="w-10" />
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -60,6 +68,7 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
                 <TableCell className="text-right font-semibold tabular-nums">
                   {formatCurrency(g.totalPendente)}
                 </TableCell>
+                <TableCell />
               </TableRow>
               {g.faturas.map((f) => (
                 <TableRow key={f.id}>
@@ -86,6 +95,25 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
                   <TableCell className="text-right font-medium tabular-nums">
                     {formatCurrency(f.saldoPagar)}
                   </TableCell>
+                  <TableCell>
+                    {f.documento_externo_ref && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        title="Ver PDF da fatura"
+                        aria-label={`Ver PDF de ${f.documento_externo_ref}`}
+                        disabled={pdfAAbrir === f.id}
+                        onClick={() => onVerPdf(f)}
+                      >
+                        {pdfAAbrir === f.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <FileText className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </Fragment>
@@ -98,6 +126,7 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
           <TableCell className="text-right font-bold tabular-nums">
             {formatCurrency(totalGeral)}
           </TableCell>
+          <TableCell />
         </TableRow>
       </TableBody>
     </Table>

@@ -24,7 +24,6 @@ import {
   CreditCard,
   Wifi,
   Banknote,
-  Receipt,
   HandCoins,
   Gauge,
   ExternalLink,
@@ -175,12 +174,6 @@ export const MENU_ITEMS: MenuItem[] = [
         label: 'Faturação',
         url: '/administrativo/faturacao',
         icon: Banknote,
-        recurso: 'financeiro_recibos',
-      },
-      {
-        label: 'Por liquidar',
-        url: '/administrativo/por-liquidar',
-        icon: Receipt,
         recurso: 'financeiro_recibos',
       },
       {

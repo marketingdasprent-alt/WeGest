@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { CobrancaParaRecibo } from '@/lib/recibos';
+import type { InvoiceMetadata } from '@/types/faturacao';
 
 export interface FaturaPorLiquidar extends CobrancaParaRecibo {
   valorTotal: number;
@@ -159,6 +160,23 @@ export async function carregarFaturasPorLiquidar(
       (n) => Number(n.valor)
     )
   );
+}
+
+/** O documento fiscal (FT/FR) de uma cobrança, para abrir o PDF; null se não tiver. */
+export async function carregarFaturaDaCobranca(
+  cobrancaId: string
+): Promise<InvoiceMetadata | null> {
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('*')
+    .eq('cobranca_id', cobrancaId)
+    .in('tipo', ['FT', 'FR'])
+    .eq('status', 'emitida')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as InvoiceMetadata | null) ?? null;
 }
 
 export function useFaturasPorLiquidar(filtro: FiltroPorLiquidar) {
