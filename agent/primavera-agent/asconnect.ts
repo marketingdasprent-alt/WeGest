@@ -377,7 +377,7 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     const existente = campoSemMaiusculas(linhas[0], campo_codigo);
     if (existente !== undefined && existente !== null && String(existente).trim()) {
       const codigo = String(existente).trim();
-      // Um timeout no inserir do cliente pode tê-lo deixado criado sem CondPag. Só se repara
+      // Um cliente antigo pode ter ficado sem CondPag. Só se repara
       // com a coluna presente e vazia: sem ela não se sabe e não se mexe num cliente real.
       const condPag = campoSemMaiusculas(linhas[0], 'CondPag');
       if (condPag === null || (typeof condPag === 'string' && !condPag.trim())) {
@@ -400,6 +400,8 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
         ...(pais === 'PT' ? { Idioma: 'PT' } : {}),
         Pais: pais,
         ...(singular !== undefined ? { PessoaSingular: singular } : {}),
+        // Sem ela a fatura é recusada; o documento vai buscá-la à ficha (DASPWSTEST, 2026-10-22).
+        CondPag: cfg.condicao_pagamento,
       },
     })) as { CodCliente?: string; Estado?: { Mensagem?: string } };
     if (!estadoEhSucesso(d?.Estado?.Mensagem)) {
@@ -407,13 +409,10 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
         `Primavera recusou criar o cliente ${nif}: ${d?.Estado?.Mensagem ?? 'sem Estado'}`
       );
     }
-    const codigo = String(d.CodCliente || nif);
-    await gravarCondPag(codigo);
-    return codigo;
+    return String(d.CodCliente || nif);
   }
 
-  // O inserir do cliente ignora CondPag (confirmado no DASPWSTEST a 2026-10-13) e sem ela a
-  // fatura é recusada; o atualizar aceita-a.
+  // Repara clientes que ficaram sem CondPag (criados antes de o inserir a levar).
   async function gravarCondPag(codigo: string): Promise<void> {
     const a = (await pedido('PUT', '/ficha/cliente/atualizar', {
       Cliente: { Codigo: codigo, CondPag: cfg.condicao_pagamento },

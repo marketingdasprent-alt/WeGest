@@ -72,8 +72,9 @@ propósito, para nunca aplicar a taxa errada num documento fiscal.
 1. Procura o cliente pelo NIF em `clientes.tabela`, com e sem o prefixo do
    país (o Primavera guarda os estrangeiros como `BR258209887`).
 2. Se não existir, cria-o em `/ficha/cliente/inserir` com **código = NIF** e
-   grava a `condicao_pagamento` com `/ficha/cliente/atualizar` (o inserir
-   ignora-a e, sem ela, o Primavera recusa a fatura).
+   a `condicao_pagamento` (sem ela o Primavera recusa a fatura). Um cliente
+   que já exista sem condição de pagamento é corrigido com
+   `/ficha/cliente/atualizar`.
 3. Insere o documento em `/documentos/vendas/inserir` com o `TipoDocumento`
    configurado, o código do cliente como `Entidade` e uma linha por item.
 
