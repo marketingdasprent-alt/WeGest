@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
 import { format, startOfMonth } from 'date-fns';
 import { toast } from 'sonner';
-import { Banknote, FileSpreadsheet, Loader2, Receipt } from 'lucide-react';
+import { FileSpreadsheet, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { SectionCard } from '@/components/ui/section-card';
 import { useEstadoPersistido } from '@/hooks/useEstadoPersistido';
 import {
   agruparPorCliente,
@@ -17,6 +16,7 @@ import { errorMessage } from '@/utils/errorMessage';
 import { exportarFaturasPorLiquidar } from '@/lib/exportarFaturasPorLiquidar';
 import { matchesSearch } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
+import { BarraSelecaoPagamento } from './BarraSelecaoPagamento';
 import { FaturasPorLiquidarTabela } from './FaturasPorLiquidarTabela';
 import { RegistarRecibosLoteDialog } from './RegistarRecibosLoteDialog';
 
@@ -78,6 +78,9 @@ export function FaturasPorLiquidarTab() {
     }
   };
 
+  const nFaturas = grupos.reduce((n, g) => n + g.faturas.length, 0);
+  const totalEscolhido = escolhidas.reduce((t, f) => t + f.saldoPagar, 0);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
@@ -95,48 +98,38 @@ export function FaturasPorLiquidarTab() {
           onChange={(e) => setPesquisa(e.target.value)}
           className="h-9 w-56"
         />
-        <div className="ml-auto rounded-lg border bg-card px-4 py-2 text-right">
-          <p className="text-xs text-muted-foreground">Total por liquidar</p>
-          <p className="text-xl font-bold tabular-nums">{formatCurrency(totalPendente)}</p>
-        </div>
+        <Button
+          variant="outline"
+          className="ml-auto h-9 gap-2"
+          disabled={grupos.length === 0}
+          onClick={() => exportarFaturasPorLiquidar(grupos, de, ate)}
+        >
+          <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
+        </Button>
       </div>
 
-      <SectionCard
-        icon={<Receipt className="h-4 w-4" />}
-        title="Faturas por liquidar"
-        action={
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={grupos.length === 0}
-              onClick={() => exportarFaturasPorLiquidar(grupos, de, ate)}
-            >
-              <FileSpreadsheet className="h-4 w-4" /> Excel
-            </Button>
-            <Button
-              size="sm"
-              className="gap-2"
-              disabled={escolhidas.length === 0}
-              onClick={() => setLoteAberto(true)}
-            >
-              <Banknote className="h-4 w-4" /> Registar pagamento ({escolhidas.length})
-            </Button>
+      {isLoading ? (
+        <Loader2 className="mx-auto my-10 h-6 w-6 animate-spin text-muted-foreground" />
+      ) : error ? (
+        <p className="text-sm text-destructive">
+          Não foi possível carregar as faturas: {error.message}
+        </p>
+      ) : grupos.length === 0 ? (
+        <p className="py-10 text-center text-muted-foreground">
+          Nenhuma fatura por liquidar neste período.
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="text-3xl font-bold tabular-nums">{formatCurrency(totalPendente)}</p>
+            <p className="text-muted-foreground">
+              por liquidar · {grupos.length} {grupos.length === 1 ? 'cliente' : 'clientes'} ·{' '}
+              {nFaturas} {nFaturas === 1 ? 'fatura' : 'faturas'}
+            </p>
           </div>
-        }
-      >
-        {isLoading ? (
-          <Loader2 className="mx-auto my-6 h-5 w-5 animate-spin text-muted-foreground" />
-        ) : error ? (
-          <p className="text-sm text-destructive">
-            Não foi possível carregar as faturas: {error.message}
-          </p>
-        ) : grupos.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nenhuma fatura por liquidar neste período.
+            Escolha as faturas que o cliente pagou e carregue em Registar pagamento.
           </p>
-        ) : (
           <FaturasPorLiquidarTabela
             grupos={grupos}
             selecionadas={selecionadas}
@@ -145,8 +138,14 @@ export function FaturasPorLiquidarTab() {
             onVerPdf={handleVerPdf}
             pdfAAbrir={pdfAAbrir}
           />
-        )}
-      </SectionCard>
+          <BarraSelecaoPagamento
+            quantas={escolhidas.length}
+            total={totalEscolhido}
+            onLimpar={() => setSelecionadas(new Set())}
+            onRegistarPagamento={() => setLoteAberto(true)}
+          />
+        </>
+      )}
 
       <RegistarRecibosLoteDialog
         open={loteAberto}
