@@ -123,6 +123,28 @@ describe('useFecharContrato — km extra', () => {
     );
   });
 
+  // Vai no update do km, antes do que fecha: o trigger calcula com o valor certo.
+  it('km de saída corrigido grava-se antes de fechar', async () => {
+    const { chains } = setupSupabase(previsao);
+    await fechar(
+      args({ recolha: { km: '98500', kmSaidaCorrigido: 97785, combustivel: 'meio', fotos: [] } })
+    );
+
+    const updates = chains.contratos_renting.update.mock;
+    const correcao = updates.calls.findIndex(([p]) => p.km_saida === 97785);
+    const fecho = updates.calls.findIndex(([p]) => p.estado_operacional === 'fechado');
+    expect(updates.calls[correcao][0]).toMatchObject({ km_entrada: 98500 });
+    expect(correcao).toBeLessThan(fecho);
+  });
+
+  it('sem correcção não toca no km de saída', async () => {
+    const { chains } = setupSupabase(previsao);
+    await fechar(args());
+    for (const [p] of chains.contratos_renting.update.mock.calls) {
+      expect(p).not.toHaveProperty('km_saida');
+    }
+  });
+
   it('sem recolha → não mexe nos km extra', async () => {
     const { rpc } = setupSupabase(previsao);
     await fechar(args({ recolha: undefined }));
