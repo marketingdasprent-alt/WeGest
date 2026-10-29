@@ -87,8 +87,8 @@ grant select, insert on res to public;
 create temp view rid as select nome, (r->>'id')::uuid as id, (r->>'codigo')::bigint as codigo from res;
 grant select on rid to public;
 
-select is((select total from tot where modelo_id = '00000000-0000-0000-0000-00000a7c0d01'), 105.00::numeric,
-  'fixture: cotação do Clio = 3 dias x 35');
+select is((select total from tot where modelo_id = '00000000-0000-0000-0000-00000a7c0d01'), 129.15::numeric,
+  'fixture: cotação do Clio = 3 dias x 35 + IVA');
 
 -- ── 1. Escolha da viatura ───────────────────────────────────────────────────
 select is(public.api_escolher_viatura('00000000-0000-0000-0000-00000a7c0a00', '00000000-0000-0000-0000-00000a7c0d01',

@@ -1,7 +1,8 @@
 // Exemplos da especificação OpenAPI (e, por ela, do site docs.wegest.pt).
 // Dados plausíveis de uma organização de rent-a-car em Leiria, nunca dados reais
 // de clientes. Ids inventados; dinheiro sempre { sem_iva, com_iva, iva } com
-// IVA a 23% e 2 casas. Os preços do WeGest já trazem IVA: o valor é o com_iva.
+// IVA a 23% e 2 casas. A diária da tarifa é sem IVA e soma-se o IVA; franquia,
+// caução, km a mais, coberturas e extras já trazem IVA e decompõem-se.
 
 const preco = (comIva: number) => ({
   sem_iva: Math.round((comIva / 1.23) * 100) / 100,
@@ -9,7 +10,13 @@ const preco = (comIva: number) => ({
   iva: 23,
 });
 
-export const EX_PRECO = preco(35);
+const precoSemIva = (semIva: number) => ({
+  sem_iva: semIva,
+  com_iva: Math.round(semIva * 1.23 * 100) / 100,
+  iva: 23,
+});
+
+export const EX_PRECO = precoSemIva(35);
 
 // Foto do modelo, carregada na aba Modelos: link público e fixo.
 export const EX_FOTO_MODELO =
@@ -126,7 +133,7 @@ export const EX_MODELO_DISPONIVEL = {
   cotacao: {
     dias: 3,
     preco_dia: EX_PRECO,
-    aluguer: preco(105),
+    aluguer: precoSemIva(105),
     franquia: EX_MODELO_DETALHE.tarifa.franquia,
     caucao: EX_MODELO_DETALHE.tarifa.caucao,
     km_incluidos: EX_MODELO_DETALHE.tarifa.km_incluidos,
@@ -155,11 +162,11 @@ export const EX_LINHA_COTACAO = {
   descricao: 'Renault Clio ou similar',
   quantidade: 3,
   preco_unitario: EX_PRECO,
-  total: preco(105),
+  total: precoSemIva(105),
 };
 
-// Aluguer 105 + cobertura 3 × 12 = 36 + cadeira 2 × 5 × 3 dias = 30 + limpeza 20 = 191,00 com IVA.
-// O sem_iva do subtotal decompõe-se do total (155,28), não da soma das linhas (155,29).
+// Aluguer 105 + IVA = 129,15 + cobertura 3 × 12 = 36 + cadeira 2 × 5 × 3 dias = 30 +
+// limpeza 20 = 215,15 com IVA. O sem_iva do subtotal decompõe-se do total.
 export const EX_COTACAO = {
   periodo: EX_PERIODO,
   modelo: { id: EX_MODELO.id, marca: EX_MODELO.marca, modelo: EX_MODELO.modelo },
@@ -187,7 +194,7 @@ export const EX_COTACAO = {
       total: preco(20),
     },
   ],
-  subtotal: preco(191),
+  subtotal: preco(215.15),
   franquia: EX_COBERTURA.franquia,
   caucao: EX_MODELO_DETALHE.tarifa.caucao,
   km_incluidos: EX_MODELO_DETALHE.tarifa.km_incluidos,

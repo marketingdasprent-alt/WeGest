@@ -101,16 +101,22 @@ Deno.test('ERRO_INTERNO 503 documentado e presente em todas as operações com c
 
 Deno.test('os exemplos de dinheiro seguem a regra { sem_iva, com_iva, iva } com IVA a 23%', () => {
   const p = comp.schemas.Preco.example;
-  // O preço da tarifa já traz IVA: 35 € são o com_iva, nunca 43,05 €.
-  assertEquals(p, { sem_iva: 28.46, com_iva: 35, iva: 23 });
-  assertEquals(Math.round((p.com_iva / (1 + p.iva / 100)) * 100) / 100, p.sem_iva);
+  // A diária da tarifa é sem IVA: 35 € são o sem_iva e o cliente paga 43,05 €.
+  assertEquals(p, { sem_iva: 35, com_iva: 43.05, iva: 23 });
+  assertEquals(Math.round(p.sem_iva * (1 + p.iva / 100) * 100) / 100, p.com_iva);
+  assert(/diária da tarifa é sem IVA/.test(comp.schemas.Preco.description));
   assert(/já incluem IVA/.test(comp.schemas.Preco.description));
 });
 
-Deno.test('o total com IVA da cotação é a soma dos preços da tarifa, sem IVA por cima', () => {
+Deno.test('o total com IVA da cotação soma o IVA à diária e não às coberturas nem extras', () => {
+  const [aluguer, ...resto] = EX_COTACAO.linhas;
+  assertEquals(aluguer.total, { sem_iva: 105, com_iva: 129.15, iva: 23 });
+  for (const l of resto) {
+    assertEquals(Math.round((l.total.com_iva / 1.23) * 100) / 100, l.total.sem_iva, l.descricao);
+  }
   const soma = EX_COTACAO.linhas.reduce((t, l) => t + l.total.com_iva, 0);
   assertEquals(EX_COTACAO.subtotal.com_iva, soma);
-  assertEquals(EX_COTACAO.subtotal, { sem_iva: 155.28, com_iva: 191, iva: 23 });
+  assertEquals(EX_COTACAO.subtotal, { sem_iva: 174.92, com_iva: 215.15, iva: 23 });
   assertEquals(EX_RESERVA_PEDIDO.total_esperado, EX_RESERVA.total.com_iva);
 });
 
