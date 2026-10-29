@@ -1,16 +1,9 @@
-import { Fragment } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { numeroCurto } from '@/utils/numeroDocumento';
 import type { ClienteComFaturas, FaturaPorLiquidar } from '@/hooks/useFaturasPorLiquidar';
 
 interface FaturasPorLiquidarTabelaProps {
@@ -23,6 +16,60 @@ interface FaturasPorLiquidarTabelaProps {
   pdfAAbrir: string | null;
 }
 
+interface LinhaFaturaProps {
+  f: FaturaPorLiquidar;
+  marcada: boolean;
+  aAbrir: boolean;
+  onToggle: () => void;
+  onVerPdf: () => void;
+}
+
+const LinhaFatura: React.FC<LinhaFaturaProps> = ({ f, marcada, aAbrir, onToggle, onVerPdf }) => {
+  const abatido = f.pago + f.creditado;
+  return (
+    <li
+      className={cn(
+        'grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-x-4 px-4 py-3 sm:grid-cols-[auto_8rem_minmax(0,1fr)_auto_auto]',
+        marcada && 'bg-primary/10'
+      )}
+    >
+      <Checkbox
+        aria-label={`Escolher ${numeroCurto(f.documento_externo_ref)}`}
+        checked={marcada}
+        onCheckedChange={onToggle}
+      />
+      <div className="leading-tight">
+        <p className="font-medium tabular-nums">{numeroCurto(f.documento_externo_ref)}</p>
+        <p className="text-xs text-muted-foreground">{formatDate(f.emitidaEm)}</p>
+      </div>
+      <p className="hidden truncate text-sm text-muted-foreground sm:block">{f.descricao ?? ''}</p>
+      <div className="text-right leading-tight">
+        <p className="font-semibold tabular-nums">{formatCurrency(f.saldoPagar)}</p>
+        {abatido > 0 && (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            de {formatCurrency(f.valorTotal)} · já abatido {formatCurrency(abatido)}
+          </p>
+        )}
+      </div>
+      {f.documento_externo_ref ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          aria-label={`Ver PDF de ${f.documento_externo_ref}`}
+          disabled={aAbrir}
+          onClick={onVerPdf}
+        >
+          {aAbrir ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+          PDF
+        </Button>
+      ) : (
+        <span />
+      )}
+    </li>
+  );
+};
+
 export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> = ({
   grupos,
   selecionadas,
@@ -30,105 +77,42 @@ export const FaturasPorLiquidarTabela: React.FC<FaturasPorLiquidarTabelaProps> =
   onToggleCliente,
   onVerPdf,
   pdfAAbrir,
-}) => {
-  const totalGeral = grupos.reduce((s, g) => s + g.totalPendente, 0);
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-8" />
-          <TableHead>Data</TableHead>
-          <TableHead>Nº Doc.</TableHead>
-          <TableHead>Descrição</TableHead>
-          <TableHead className="text-right">Valor Total</TableHead>
-          <TableHead className="text-right">Liquidado</TableHead>
-          <TableHead className="text-right">Pendente</TableHead>
-          <TableHead className="w-10" />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {grupos.map((g) => {
-          const marcadas = g.faturas.filter((f) => selecionadas.has(f.id)).length;
-          return (
-            <Fragment key={g.clienteId}>
-              <TableRow className="bg-muted/60 hover:bg-muted/60">
-                <TableCell>
-                  <Checkbox
-                    aria-label={`Escolher todas as faturas de ${g.clienteNome}`}
-                    checked={
-                      marcadas === g.faturas.length ? true : marcadas > 0 ? 'indeterminate' : false
-                    }
-                    onCheckedChange={() => onToggleCliente(g)}
-                  />
-                </TableCell>
-                <TableCell colSpan={5} className="font-semibold">
-                  {g.clienteNome}
-                </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">
-                  {formatCurrency(g.totalPendente)}
-                </TableCell>
-                <TableCell />
-              </TableRow>
-              {g.faturas.map((f) => (
-                <TableRow key={f.id}>
-                  <TableCell>
-                    <Checkbox
-                      aria-label={`Escolher ${f.documento_externo_ref ?? 'fatura'}`}
-                      checked={selecionadas.has(f.id)}
-                      onCheckedChange={() => onToggleFatura(f.id)}
-                    />
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap">{formatDate(f.emitidaEm)}</TableCell>
-                  <TableCell className="whitespace-nowrap font-mono text-xs">
-                    {f.documento_externo_ref ?? 'Sem documento fiscal'}
-                  </TableCell>
-                  <TableCell className="max-w-[260px] truncate text-muted-foreground">
-                    {f.descricao ?? '—'}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCurrency(f.valorTotal)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {formatCurrency(f.pago + f.creditado)}
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {formatCurrency(f.saldoPagar)}
-                  </TableCell>
-                  <TableCell>
-                    {f.documento_externo_ref && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        title="Ver PDF da fatura"
-                        aria-label={`Ver PDF de ${f.documento_externo_ref}`}
-                        disabled={pdfAAbrir === f.id}
-                        onClick={() => onVerPdf(f)}
-                      >
-                        {pdfAAbrir === f.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <FileText className="h-4 w-4" />
-                        )}
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </Fragment>
-          );
-        })}
-        <TableRow className="bg-foreground text-background hover:bg-foreground">
-          <TableCell colSpan={6} className="font-semibold">
-            Total
-          </TableCell>
-          <TableCell className="text-right font-bold tabular-nums">
-            {formatCurrency(totalGeral)}
-          </TableCell>
-          <TableCell />
-        </TableRow>
-      </TableBody>
-    </Table>
-  );
-};
+}) => (
+  <div className="space-y-4">
+    {grupos.map((g) => {
+      const marcadas = g.faturas.filter((f) => selecionadas.has(f.id)).length;
+      return (
+        <section key={g.clienteId} className="overflow-hidden rounded-lg bg-card">
+          <header className="flex items-center gap-4 bg-muted/50 px-4 py-3">
+            <Checkbox
+              aria-label={`Escolher todas as faturas de ${g.clienteNome}`}
+              checked={
+                marcadas === g.faturas.length ? true : marcadas > 0 ? 'indeterminate' : false
+              }
+              onCheckedChange={() => onToggleCliente(g)}
+            />
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate font-semibold">{g.clienteNome}</h3>
+              <p className="text-xs text-muted-foreground">
+                {g.faturas.length} {g.faturas.length === 1 ? 'fatura' : 'faturas'} por liquidar
+              </p>
+            </div>
+            <p className="text-lg font-bold tabular-nums">{formatCurrency(g.totalPendente)}</p>
+          </header>
+          <ul className="divide-y divide-border/50">
+            {g.faturas.map((f) => (
+              <LinhaFatura
+                key={f.id}
+                f={f}
+                marcada={selecionadas.has(f.id)}
+                aAbrir={pdfAAbrir === f.id}
+                onToggle={() => onToggleFatura(f.id)}
+                onVerPdf={() => onVerPdf(f)}
+              />
+            ))}
+          </ul>
+        </section>
+      );
+    })}
+  </div>
+);
