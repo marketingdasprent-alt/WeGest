@@ -11,7 +11,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { numeroCurto } from '@/utils/numeroDocumento';
 import type { ClienteComFaturas, FaturaPorLiquidar } from '@/hooks/useFaturasPorLiquidar';
@@ -27,9 +26,9 @@ interface FaturasPorLiquidarTabelaProps {
   pdfAAbrir: string | null;
 }
 
-const COLS = 7;
+const COLS = 8;
 
-/** Tabela no padrão de FaturacaoTabela, agrupada por cliente como o mapa do KeyInvoice. */
+/** Mesmo desenho do mapa "Faturas não liquidadas / Cliente" do KeyInvoice: cliente, faturas, total. */
 export function FaturasPorLiquidarTabela({
   grupos,
   loading,
@@ -49,6 +48,7 @@ export function FaturasPorLiquidarTabela({
             <TableHead className="whitespace-nowrap">Data</TableHead>
             <TableHead>Descritivo</TableHead>
             <TableHead className="whitespace-nowrap text-right">Valor Total</TableHead>
+            <TableHead className="whitespace-nowrap text-right">Liquidado</TableHead>
             <TableHead className="whitespace-nowrap text-right">Pendente</TableHead>
             <TableHead className="w-20" />
           </TableRow>
@@ -73,32 +73,29 @@ export function FaturasPorLiquidarTabela({
           ) : (
             grupos.map((g) => {
               const marcadas = g.faturas.filter((f) => selecionadas.has(f.id)).length;
+              const totalValor = g.faturas.reduce((t, f) => t + f.valorTotal, 0);
+              const totalLiquidado = g.faturas.reduce((t, f) => t + f.pago + f.creditado, 0);
               return (
                 <Fragment key={g.clienteId}>
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableCell>
                       <Checkbox
                         aria-label={`Escolher todas as faturas de ${g.clienteNome}`}
-                        checked={
-                          marcadas === g.faturas.length
-                            ? true
-                            : marcadas > 0
-                              ? 'indeterminate'
-                              : false
-                        }
+                        // O Checkbox do ui desenha 'indeterminate' com o mesmo visto de "todas";
+                        // escolha parcial lê-se no "N escolhidas" ao lado do nome.
+                        checked={marcadas === g.faturas.length}
                         onCheckedChange={() => onToggleCliente(g)}
                       />
                     </TableCell>
-                    <TableCell colSpan={4} className="font-semibold">
-                      {g.clienteNome}
-                      <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        {g.faturas.length} {g.faturas.length === 1 ? 'fatura' : 'faturas'}
+                    <TableCell colSpan={COLS - 1}>
+                      <span className="font-semibold">{g.clienteNome}</span>
+                      <span className="ml-2 text-sm text-muted-foreground">
+                        ({g.faturas.length} {g.faturas.length === 1 ? 'fatura' : 'faturas'}
+                        {marcadas > 0 &&
+                          `, ${marcadas} ${marcadas === 1 ? 'escolhida' : 'escolhidas'}`}
+                        )
                       </span>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-right font-semibold">
-                      {formatCurrency(g.totalPendente)}
-                    </TableCell>
-                    <TableCell />
                   </TableRow>
                   {g.faturas.map((f) => (
                     <TableRow
@@ -131,17 +128,10 @@ export function FaturasPorLiquidarTabela({
                       <TableCell className="whitespace-nowrap text-right">
                         {formatCurrency(f.valorTotal)}
                       </TableCell>
-                      <TableCell
-                        className={cn(
-                          'whitespace-nowrap text-right font-medium',
-                          f.saldoPagar < f.valorTotal && 'text-amber-600 dark:text-amber-400'
-                        )}
-                        title={
-                          f.saldoPagar < f.valorTotal
-                            ? `Já abatido ${formatCurrency(f.pago + f.creditado)}`
-                            : undefined
-                        }
-                      >
+                      <TableCell className="whitespace-nowrap text-right text-muted-foreground">
+                        {formatCurrency(f.pago + f.creditado)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-right">
                         {formatCurrency(f.saldoPagar)}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -165,6 +155,22 @@ export function FaturasPorLiquidarTabela({
                       </TableCell>
                     </TableRow>
                   ))}
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell />
+                    <TableCell colSpan={3} className="font-semibold text-sky-600 dark:text-sky-400">
+                      Total
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right font-semibold text-sky-600 dark:text-sky-400">
+                      {formatCurrency(totalValor)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right font-semibold text-sky-600 dark:text-sky-400">
+                      {formatCurrency(totalLiquidado)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-right font-semibold text-sky-600 dark:text-sky-400">
+                      {formatCurrency(g.totalPendente)}
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
                 </Fragment>
               );
             })

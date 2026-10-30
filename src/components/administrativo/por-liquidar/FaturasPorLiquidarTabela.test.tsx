@@ -42,6 +42,27 @@ const renderTabela = (extra: Partial<React.ComponentProps<typeof FaturasPorLiqui
   );
 
 describe('FaturasPorLiquidarTabela', () => {
+  it('fecha cada cliente com a linha de total, como o mapa do KeyInvoice', () => {
+    renderTabela();
+    expect(screen.getByText('Total')).toBeTruthy();
+    expect(screen.queryByText('Total Ana')).toBeNull();
+    expect(screen.getByText('67/94')).toBeTruthy();
+  });
+
+  it('com só algumas faturas escolhidas, o cliente não aparece marcado', () => {
+    renderTabela({ selecionadas: new Set(['a']) });
+    const caixa = screen.getByRole('checkbox', { name: 'Escolher todas as faturas de Ana' });
+    expect(caixa.getAttribute('data-state')).toBe('unchecked');
+    expect(screen.getByText(/1 escolhida/)).toBeTruthy();
+  });
+
+  it('a caixa do cliente escolhe as faturas todas dele', () => {
+    const onToggleCliente = vi.fn();
+    renderTabela({ onToggleCliente });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Escolher todas as faturas de Ana' }));
+    expect(onToggleCliente).toHaveBeenCalledWith(grupos[0]);
+  });
+
   it('PDF só nas faturas com documento fiscal, e abre a fatura certa', () => {
     const onVerPdf = vi.fn();
     renderTabela({ onVerPdf });
