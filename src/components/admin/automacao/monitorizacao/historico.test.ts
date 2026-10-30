@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { consolidarHistorico, filtrarHistorico } from './historico';
+import { consolidarHistorico, filtrarHistorico, filtroDoUrl } from './historico';
 import type { AutomacaoTimelineItem } from '@/hooks/automacao/useAutomacaoStats';
 import type { AutomationRunPendente, FailedJob } from '@/hooks/automacao/useAutomationQueueOps';
 
@@ -199,5 +199,18 @@ describe('filtrarHistorico', () => {
     expect(filtrarHistorico(linhas, 'erro').every((l) => l.estado === 'erro')).toBe(true);
     expect(filtrarHistorico(linhas, 'sucesso')).toHaveLength(1);
     expect(filtrarHistorico(linhas, 'pendente')).toHaveLength(1);
+  });
+});
+
+describe('filtroDoUrl', () => {
+  it('aceita os estados conhecidos', () => {
+    expect(filtroDoUrl('erro')).toBe('erro');
+    expect(filtroDoUrl('sucesso')).toBe('sucesso');
+    expect(filtroDoUrl('pendente')).toBe('pendente');
+  });
+
+  it('valor ausente ou desconhecido mostra todos', () => {
+    expect(filtroDoUrl(null)).toBe('todos');
+    expect(filtroDoUrl('falhou')).toBe('todos');
   });
 });

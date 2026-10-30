@@ -272,13 +272,16 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+import { MemoryRouter } from 'react-router-dom';
 import AutomacaoPage from './AutomacaoPage';
 
-function renderPage() {
+function renderPage(url = '/admin/automacao') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <AutomacaoPage />
+      <MemoryRouter initialEntries={[url]}>
+        <AutomacaoPage />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -373,6 +376,20 @@ describe('AutomacaoPage', () => {
     });
     // "Regra de Teste" é uma execução concluída; ao filtrar por Erro sai da tabela.
     fireEvent.click(screen.getByRole('button', { name: /^Erro/ }));
+    expect(screen.queryByText('Regra de Teste')).toBeNull();
+  });
+
+  it('o link da notificação de falha abre a Monitorização já filtrada por Erro', async () => {
+    renderPage('/admin/automacao?tab=monitorizacao&estado=erro');
+
+    expect(screen.getByRole('tab', { name: 'Monitorização' })).toHaveAttribute(
+      'data-state',
+      'active'
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Ver detalhes/i })).toBeTruthy();
+    });
+    // Execução concluída: fica de fora porque o filtro já vem do URL.
     expect(screen.queryByText('Regra de Teste')).toBeNull();
   });
 

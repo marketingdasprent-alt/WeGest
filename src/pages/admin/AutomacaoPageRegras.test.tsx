@@ -273,13 +273,16 @@ vi.mock('@/integrations/supabase/client', () => ({
   },
 }));
 
+import { MemoryRouter } from 'react-router-dom';
 import AutomacaoPage from './AutomacaoPage';
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <AutomacaoPage />
+      <MemoryRouter>
+        <AutomacaoPage />
+      </MemoryRouter>
     </QueryClientProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { StickyPageHeader } from '@/components/ui/StickyPageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Bot } from 'lucide-react';
@@ -8,7 +8,19 @@ import { EditorAutomacaoProvider } from '@/components/admin/automacao/builder/Ed
 import { BarraAccoes } from '@/components/admin/automacao/builder/BarraAccoes';
 
 function Conteudo() {
-  const [tab, setTab] = useState('editor');
+  // A aba vive no URL para a notificação de falha abrir directamente a Monitorização.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'monitorizacao' ? 'monitorizacao' : 'editor';
+  const setTab = (valor: string) =>
+    setSearchParams(
+      (atual) => {
+        const proximo = new URLSearchParams(atual);
+        if (valor === 'editor') proximo.delete('tab');
+        else proximo.set('tab', valor);
+        return proximo;
+      },
+      { replace: true }
+    );
 
   return (
     // `fullBleed` define a altura do canvas e remove o espaçamento padrão;
