@@ -24,7 +24,9 @@ import { cn } from '@/lib/utils';
 import { useSlotCobrancasMensais, type SlotCobranca } from '@/hooks/useSlotCobrancasMensais';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
-import { clienteRowToFatura, baixarPdfEmSegundoPlano } from '@/lib/faturacao';
+import { carregarClienteParaFatura, baixarPdfEmSegundoPlano } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
+import { errorMessage } from '@/utils/errorMessage';
 import type { ItemFatura } from '@/types/faturacao';
 
 const ESTADO_CLASS: Record<string, string> = {
@@ -78,11 +80,7 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
   async function emitirFatura(c: SlotCobranca) {
     setBusyId(c.id);
     try {
-      const { data: cli } = await supabase
-        .from('clientes')
-        .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', c.destinatario_id)
-        .single();
+      const cliente = await carregarClienteParaFatura(c.destinatario_id, c.destinatario_nome);
       const itens: ItemFatura[] = [
         {
           descricao: c.descricao ?? 'Mensalidade de slot',
@@ -96,7 +94,7 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
       const res = await emitirMut.mutateAsync({
         payload: {
           tipo: 'FR',
-          cliente: clienteRowToFatura(cli, c.destinatario_nome),
+          cliente,
           itens,
           cobranca_id: c.id,
           integracao_id: escolhido.integracaoId ?? undefined,
@@ -110,8 +108,13 @@ export function SlotMensalidadeCard({ motoristaId }: { motoristaId?: string }) {
       invalidate();
       // Depois do sucesso e sem esperar: o PDF do Primavera pode levar dezenas de segundos.
       baixarPdfEmSegundoPlano(res.invoice, (m) => toast.warning(m));
-    } catch (e: any) {
-      toast.error(`Falha a emitir fatura: ${e?.message ?? 'tente novamente'}`);
+    } catch (e: unknown) {
+      // 'unknown': o documento pode existir; o texto genérico convidava a reemitir.
+      if ((e as { classe?: unknown })?.classe === 'unknown') {
+        toast.error(mensagemFalhaEmissao(e), { duration: DURACAO_AVISO_FALHA_MS });
+      } else {
+        toast.error(`Falha a emitir fatura: ${errorMessage(e, 'tente novamente')}`);
+      }
     } finally {
       setBusyId(null);
     }

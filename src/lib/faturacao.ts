@@ -5,6 +5,7 @@
  * que despacha para o software de faturação configurado por organização (a
  * chave vive na config da org, nunca no browser). O browser só invoca a função.
  */
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type {
   ClienteFatura,
@@ -48,6 +49,32 @@ export function clienteRowToFatura(
 
 const FN = 'faturacao-emitir';
 
+const CAMPOS_CLIENTE_FATURA = 'nome, nif, email, morada, codigo_postal, localidade';
+
+/**
+ * Lê a ficha do cliente para o cabeçalho fiscal. Falha alto se a leitura der erro
+ * ou a ficha não existir: seguir sem ela emitia como "Consumidor Final" sem NIF.
+ */
+export async function carregarClienteParaFatura(
+  clienteId: string,
+  fallbackNome?: string
+): Promise<ClienteFatura> {
+  const { data, error } = await supabase
+    .from('clientes')
+    .select(CAMPOS_CLIENTE_FATURA)
+    .eq('id', clienteId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(
+      `Não foi possível ler a ficha do cliente para a fatura: ${error.message || 'erro desconhecido'}. Nada foi emitido.`
+    );
+  }
+  if (!data) {
+    throw new Error('Ficha de cliente não encontrada: não é possível emitir o documento fiscal.');
+  }
+  return clienteRowToFatura(data, fallbackNome);
+}
+
 /** Emite um documento (FT / FR / NC / RC) no provider configurado. A função grava em `invoices`. */
 /**
  * Cabeçalho fiscal de uma cobrança já criada: os dados do documento saem da
@@ -65,20 +92,38 @@ export async function carregarCobrancaParaEmitir(cobrancaId: string) {
     .single();
   if (error || !cobranca) throw error ?? new Error('Cobrança não encontrada.');
 
-  const { data: cli } = await supabase
-    .from('clientes')
-    .select('nome, nif, email, morada, codigo_postal, localidade')
-    .eq('id', cobranca.destinatario_id)
-    .single();
+  const cliente = await carregarClienteParaFatura(
+    cobranca.destinatario_id,
+    cobranca.destinatario_nome
+  );
+  return { cobranca, cliente };
+}
 
-  return { cobranca, cliente: clienteRowToFatura(cli, cobranca.destinatario_nome) };
+type ClasseFalha = 'known_failed' | 'unknown';
+
+// Recusados antes de a função correr (auth/gateway/método): nada foi emitido.
+const STATUS_NAO_CORREU = [401, 403, 404, 405];
+
+/** Classe de um erro do `invoke`; na dúvida `unknown`, que nunca convida a reemitir. */
+async function classeDoErroDoInvoke(error: unknown): Promise<ClasseFalha> {
+  if (!(error instanceof FunctionsHttpError)) return 'unknown';
+  const resposta = error.context as Response | undefined;
+  const corpo = (await resposta?.json?.().catch(() => null)) as { classe?: unknown } | null;
+  if (corpo?.classe === 'known_failed' || corpo?.classe === 'unknown') return corpo.classe;
+  return STATUS_NAO_CORREU.includes(resposta?.status ?? 0) ? 'known_failed' : 'unknown';
 }
 
 export async function emitirDocumento(payload: CreateFaturaPayload): Promise<EmitResult> {
   const { data, error } = await supabase.functions.invoke<EmitResult>(FN, {
     body: { action: 'emit', ...payload },
   });
-  if (error) throw new Error(error.message || 'Falha a contactar o serviço de faturação');
+  if (error) {
+    // Falha de transporte/5xx: o pedido pode ter chegado e criado o documento, por isso só
+    // um 401/403/404/405 ou uma `classe` no corpo diz que nada correu.
+    const falha = new Error(error.message || 'Falha a contactar o serviço de faturação');
+    (falha as Error & { classe?: string }).classe = await classeDoErroDoInvoke(error);
+    throw falha;
+  }
   if (!data?.success) {
     const err = new Error(data?.error || 'Falha ao emitir documento fiscal');
     // `classe` (known_failed | unknown) vem da edge function e distingue se é

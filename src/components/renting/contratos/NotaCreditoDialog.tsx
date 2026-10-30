@@ -17,7 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
-import { emitirDocumento, baixarDocumentoPdf, clienteRowToFatura } from '@/lib/faturacao';
+import { emitirDocumento, baixarDocumentoPdf, carregarClienteParaFatura } from '@/lib/faturacao';
+import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { semCodigo } from '@/types/codigoPorOrg';
@@ -104,6 +105,11 @@ export function NotaCreditoDialog({
     }
     setSubmitting(true);
     try {
+      // Antes de gravar: se a ficha não lê, falha sem deixar a nota de crédito registada.
+      const cliente = cobranca.documento_externo_ref
+        ? await carregarClienteParaFatura(cobranca.destinatario_id, cobranca.destinatario_nome)
+        : null;
+
       // ── Fase 1 — registar a nota de crédito (trigger posta o crédito) ────
       // contrato_id é preenchido pelo trigger a partir da cobrança (pode ser uma
       // cobrança de reserva, sem contrato) — por isso não o enviamos aqui.
@@ -136,23 +142,17 @@ export function NotaCreditoDialog({
         qc.invalidateQueries({ queryKey: ['reserva-notas-credito'] });
       }
 
-      // Dados do cliente para o cabeçalho (best-effort).
-      const { data: cli } = await supabase
-        .from('clientes')
-        .select('nome, nif, email, morada, codigo_postal, localidade, cidade')
-        .eq('id', cobranca.destinatario_id)
-        .maybeSingle();
-
       const base = round2(valorNum / (1 + taxaIva / 100));
       const iva = round2(valorNum - base);
 
       // ── Fase 2 — emitir a NC no provider se a fatura original também o for ─
       let emitiuFiscal = false;
-      if (cobranca.documento_externo_ref) {
+      let falhaAvisada = false;
+      if (cliente) {
         try {
           const res = await emitirDocumento({
             tipo: 'NC',
-            cliente: clienteRowToFatura(cli, cobranca.destinatario_nome),
+            cliente,
             itens: [
               {
                 descricao: `Crédito sobre ${docOriginal} — ${motivo.trim()}`,
@@ -194,16 +194,20 @@ export function NotaCreditoDialog({
           );
           if (res.warning) toast.warning(res.warning);
           qc.invalidateQueries({ queryKey: ['invoices-by-contrato', cobranca.contrato_id] });
-        } catch (kiErr: any) {
+        } catch (kiErr: unknown) {
           console.error('Falha a emitir a nota de crédito no provider:', kiErr);
-          toast.warning(`Não foi possível emitir a nota de crédito no ${providerLabel}.`);
+          falhaAvisada = true;
+          toast.warning(mensagemFalhaEmissao(kiErr, 'nota_credito'), {
+            duration: DURACAO_AVISO_FALHA_MS,
+          });
         }
       }
 
       // Sem emissão no provider NÃO há nota de crédito: um documento que
       // credita imposto é acto de software certificado. O WeGest regista o
       // crédito na conta-corrente e diz que o documento falta — não desenha um.
-      if (!emitiuFiscal) {
+      // Se a falha já foi avisada com a classe certa, o texto fixo abaixo mandava reemitir às cegas.
+      if (!emitiuFiscal && !falhaAvisada) {
         toast.warning(
           `Crédito de ${formatCurrency(valorNum)} registado na conta-corrente, mas a nota de crédito ` +
             'NÃO foi emitida. Reemita-a na lista de documentos — até lá não existe documento para o cliente.'
