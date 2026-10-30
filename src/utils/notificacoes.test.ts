@@ -75,6 +75,11 @@ describe('notificacaoLink', () => {
     expect(notificacaoLink(n)).toBe('/renting/contratos/c-1');
   });
 
+  it('sistema_job_falhou abre o histórico de erros, mesmo com o link genérico do motor', () => {
+    const n = fixture({ tipo: 'sistema_job_falhou', link: '/admin/automacao' });
+    expect(notificacaoLink(n)).toBe('/admin/automacao?tab=monitorizacao&estado=erro');
+  });
+
   it('sistema_limite_email_atingido usa o link já preenchido pelo motor', () => {
     const n = fixture({ tipo: 'sistema_limite_email_atingido', link: '/admin/automacao' });
     expect(notificacaoLink(n)).toBe('/admin/automacao');

@@ -43,6 +43,8 @@ interface DestinoNotificacao {
   label: string;
   rota: string;
   especificaPor?: 'viatura_id' | 'candidatura_id';
+  /** A rota daqui vale mais do que o `link` gravado pelo motor. */
+  ignoraLinkDoMotor?: boolean;
 }
 
 const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
@@ -124,7 +126,13 @@ const DESTINOS: Record<TipoNotificacao, DestinoNotificacao> = {
   // ── Sistema e segurança ─────────────────────────────────────────────────
   seguranca_login_suspeito: { label: 'Ver utilizadores', rota: '/admin/settings' },
   utilizador_criado: { label: 'Ver utilizadores', rota: '/admin/settings' },
-  sistema_job_falhou: { label: 'Ver falhas', rota: '/admin/automacao' },
+  // O motor grava só '/admin/automacao', que abre no editor; o erro está no
+  // histórico da Monitorização. Vale também para as notificações já gravadas.
+  sistema_job_falhou: {
+    label: 'Ver falhas',
+    rota: '/admin/automacao?tab=monitorizacao&estado=erro',
+    ignoraLinkDoMotor: true,
+  },
   sistema_limite_email_atingido: { label: 'Ver automações', rota: '/admin/automacao' },
 };
 
@@ -139,9 +147,10 @@ function destinoDe(n: Notificacao): DestinoNotificacao {
 }
 
 export const notificacaoLink = (n: Notificacao): string => {
-  if (n.link) return n.link;
-
   const destino = destinoDe(n);
+
+  if (destino.ignoraLinkDoMotor) return destino.rota;
+  if (n.link) return n.link;
 
   if (destino.especificaPor === 'viatura_id' && n.viatura_id) {
     return `${destino.rota}/${n.viatura_id}`;

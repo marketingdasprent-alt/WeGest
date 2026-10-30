@@ -122,6 +122,11 @@ export function consolidarHistorico(
   return linhas.sort((a, b) => b.quando.localeCompare(a.quando));
 }
 
+/** O `?estado=` do URL é texto livre: só os estados conhecidos filtram. */
+export function filtroDoUrl(valor: string | null): EstadoHistorico | 'todos' {
+  return valor === 'sucesso' || valor === 'pendente' || valor === 'erro' ? valor : 'todos';
+}
+
 export function filtrarHistorico(
   linhas: LinhaHistorico[],
   estado: EstadoHistorico | 'todos'

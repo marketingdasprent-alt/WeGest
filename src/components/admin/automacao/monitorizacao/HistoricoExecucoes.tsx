@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ import { DetalheFalhaSheet } from './DetalheFalhaSheet';
 import {
   consolidarHistorico,
   filtrarHistorico,
+  filtroDoUrl,
   type EstadoHistorico,
   type LinhaHistorico,
 } from './historico';
@@ -56,7 +58,18 @@ export function HistoricoExecucoes() {
   const retry = useRetryFailedJob();
   const ignorar = useIgnorarFailedJob();
 
-  const [filtro, setFiltro] = useState<EstadoHistorico | 'todos'>('todos');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filtro = filtroDoUrl(searchParams.get('estado'));
+  const setFiltro = (valor: EstadoHistorico | 'todos') =>
+    setSearchParams(
+      (atual) => {
+        const proximo = new URLSearchParams(atual);
+        if (valor === 'todos') proximo.delete('estado');
+        else proximo.set('estado', valor);
+        return proximo;
+      },
+      { replace: true }
+    );
   const [runAberto, setRunAberto] = useState<string | null>(null);
   const [falhaAberta, setFalhaAberta] = useState<LinhaHistorico | null>(null);
 
