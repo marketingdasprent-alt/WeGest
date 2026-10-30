@@ -96,6 +96,44 @@ export function formatPhoneNumber(countryCode: string, number: string): string {
   return `${dial} ${cleanNumber}`;
 }
 
+function maxDigitos(countryCode: string): number {
+  if (countryCode === 'PT') return 9;
+  if (countryCode === 'BR') return 11;
+  return 15;
+}
+
+// O preenchimento automático e o colar trazem o indicativo ("+351 912 345 678",
+// "00351…", "351912345678"). Cortado aos 9 dígitos, o indicativo entrava no número
+// e perdiam-se os últimos três (leads "+351 351…", Out/2026).
+export function lerNumeroDigitado(
+  inputValue: string,
+  countryCode: string
+): { countryCode: string; number: string } {
+  const raw = inputValue.trim();
+  let digits = raw.replace(/\D/g, '');
+  let pais = countryCode;
+
+  if (/^(\+|00)/.test(raw)) {
+    const internacional = raw.startsWith('00') ? digits.slice(2) : digits;
+    const atual = COUNTRIES.find((c) => c.code === countryCode);
+    const porTamanho = [...COUNTRIES].sort((a, b) => b.dial.length - a.dial.length);
+    const encontrado = [atual, ...porTamanho].find(
+      (c) => c && internacional.startsWith(c.dial.slice(1))
+    );
+    if (encontrado) {
+      pais = encontrado.code;
+      digits = internacional.slice(encontrado.dial.length - 1);
+    }
+  } else {
+    const dial = (COUNTRIES.find((c) => c.code === countryCode)?.dial ?? '+351').slice(1);
+    if (digits.length > maxDigitos(countryCode) && digits.startsWith(dial)) {
+      digits = digits.slice(dial.length);
+    }
+  }
+
+  return { countryCode: pais, number: digits.slice(0, maxDigitos(pais)) };
+}
+
 // Format number for display (with spaces)
 function formatDisplayNumber(number: string, countryCode: string): string {
   const digits = number.replace(/\D/g, '');
@@ -177,17 +215,8 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
     };
 
     const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const inputValue = e.target.value;
-      const digits = inputValue.replace(/\D/g, '');
-
-      // Limit based on country
-      let maxDigits = 15; // Default max
-      if (countryCode === 'PT') maxDigits = 9;
-      if (countryCode === 'BR') maxDigits = 11;
-
-      const limitedDigits = digits.slice(0, maxDigits);
-      const newValue = limitedDigits ? `${selectedCountry.dial} ${limitedDigits}` : '';
-      onChange(newValue);
+      const lido = lerNumeroDigitado(e.target.value, countryCode);
+      onChange(formatPhoneNumber(lido.countryCode, lido.number));
     };
 
     return (
@@ -241,6 +270,7 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
           ref={ref}
           id={id}
           type="tel"
+          autoComplete="tel"
           value={displayNumber}
           onChange={handleNumberChange}
           onBlur={onBlur}
