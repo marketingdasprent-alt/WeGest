@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { fromMock, emitirMock, chamadas, respostas } = vi.hoisted(() => {
+const { fromMock, emitirMock, clienteMock, chamadas, respostas } = vi.hoisted(() => {
   const chamadas: { tabela: string; metodo: string; args: unknown[] }[] = [];
   const respostas: Record<string, { data: unknown; error: unknown }> = {};
   // Cadeia mínima do supabase-js: cada método regista-se e devolve a cadeia;
@@ -20,13 +20,13 @@ const { fromMock, emitirMock, chamadas, respostas } = vi.hoisted(() => {
       resposta().then(ok, ko);
     return cadeia;
   });
-  return { fromMock, emitirMock: vi.fn(), chamadas, respostas };
+  return { fromMock, emitirMock: vi.fn(), clienteMock: vi.fn(), chamadas, respostas };
 });
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: fromMock } }));
 vi.mock('@/lib/faturacao', () => ({
   emitirDocumento: emitirMock,
-  clienteRowToFatura: (_row: unknown, nome: string) => ({ nome }),
+  carregarClienteParaFatura: clienteMock,
 }));
 
 import { registarRecibo, registarRecibosEmLote, type CobrancaParaRecibo } from './recibos';
@@ -53,6 +53,8 @@ describe('registarRecibo', () => {
     for (const k of Object.keys(respostas)) delete respostas[k];
     respostas.recibos = { data: { id: 'rec-1' }, error: null };
     emitirMock.mockReset();
+    clienteMock.mockReset();
+    clienteMock.mockImplementation(async (_id: string, nome: string) => ({ nome }));
     emitirMock.mockResolvedValue({
       success: true,
       provider: { FullDocNumber: '9 70/1' },
@@ -86,6 +88,17 @@ describe('registarRecibo', () => {
     expect(erro.explicacao.titulo).toContain('menos por pagar');
     expect(inserido()).toBeUndefined();
     expect(marcouPaga()).toBe(false);
+  });
+
+  it('se a ficha do cliente não lê, não emite nem grava nada', async () => {
+    clienteMock.mockRejectedValue(new Error('Ficha de cliente não encontrada'));
+
+    const erro = await registarRecibo('org-1', cobranca(), pagamento).catch((e) => e);
+
+    expect(erro).toBeInstanceOf(ErroRecibo);
+    expect(erro.explicacao.detalhe).toContain('Ficha de cliente não encontrada');
+    expect(emitirMock).not.toHaveBeenCalled();
+    expect(inserido()).toBeUndefined();
   });
 
   it('se o WeGest falha depois do KeyInvoice aceitar, proíbe tentar de novo', async () => {

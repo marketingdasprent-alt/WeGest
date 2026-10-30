@@ -55,12 +55,10 @@ const REGRAS: Regra[] = [
     titulo: 'O WeGest não conseguiu entrar no KeyInvoice.',
     oQueFazer: 'Peça a um administrador para verificar a ligação em Integrações → Faturação.',
   },
-  {
-    padrao: /failed to fetch|networkerror|non-2xx|falha a contactar|timeout/i,
-    titulo: 'Sem ligação ao serviço de faturação.',
-    oQueFazer: 'Verifique a internet e tente de novo dentro de alguns minutos.',
-  },
 ];
+
+// Sem `classe` (perdida pelo caminho) estas mensagens são transporte: o pedido pode ter chegado.
+const PADRAO_TRANSPORTE = /failed to fetch|networkerror|non-2xx|falha a contactar|timeout/i;
 
 function classeDoErro(erro: unknown): string | undefined {
   if (typeof erro !== 'object' || erro === null) return undefined;
@@ -97,7 +95,10 @@ export function explicarErroRecibo(
   }
 
   // O pedido pode ter chegado ao KeyInvoice sem resposta: repetir arrisca um recibo duplicado.
-  if (classeDoErro(erro) === 'unknown') {
+  if (
+    classeDoErro(erro) === 'unknown' ||
+    (!classeDoErro(erro) && PADRAO_TRANSPORTE.test(detalhe))
+  ) {
     return {
       titulo: 'Não se sabe se o recibo foi criado no KeyInvoice.',
       oQueFazer:

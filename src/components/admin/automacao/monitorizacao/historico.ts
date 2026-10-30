@@ -68,7 +68,8 @@ export function consolidarHistorico(
     if (falhaLigada) falhasJaUsadas.add(falhaLigada.id);
 
     return {
-      id: `evento-${item.event_id}`,
+      // Um evento dispara várias regras (um run cada): só o par é único.
+      id: `evento-${item.event_id}-${item.run_id ?? 'sem-run'}`,
       // A falha registada vale mais do que o estado derivado: só chega a
       // failed_jobs o que esgotou as tentativas.
       estado: falhaLigada ? 'erro' : estadoDoItem(item),

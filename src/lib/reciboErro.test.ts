@@ -23,7 +23,6 @@ describe('explicarErroRecibo', () => {
     ],
     ['Não foi possível criar/obter o cliente (NIF 123): erro', 'dados do cliente'],
     ['KeyInvoice authenticate falhou: sem Sid', 'não conseguiu entrar'],
-    ['Edge Function returned a non-2xx status code', 'Sem ligação'],
   ])('traduz "%s"', (msg, esperado) => {
     expect(explicarErroRecibo(new Error(msg), 'keyinvoice').titulo).toContain(esperado);
   });
@@ -39,6 +38,25 @@ describe('explicarErroRecibo', () => {
       comClasse('insertReceipt: falha de transporte — timeout', 'unknown'),
       'keyinvoice'
     );
+    expect(e.titulo).toContain('Não se sabe');
+    expect(e.podeTentarDeNovo).toBe(false);
+  });
+
+  it('falha de transporte (classe unknown) num recibo proíbe repetir', () => {
+    const e = explicarErroRecibo(
+      comClasse('Falha a contactar o serviço de faturação', 'unknown'),
+      'keyinvoice'
+    );
+    expect(e.titulo).toBe('Não se sabe se o recibo foi criado no KeyInvoice.');
+    expect(e.podeTentarDeNovo).toBe(false);
+  });
+
+  it.each([
+    'Failed to fetch',
+    'Edge Function returned a non-2xx status code',
+    'Falha a contactar o serviço de faturação',
+  ])('sem classe, "%s" é transporte: trata como incerto e proíbe repetir', (msg) => {
+    const e = explicarErroRecibo(new Error(msg), 'keyinvoice');
     expect(e.titulo).toContain('Não se sabe');
     expect(e.podeTentarDeNovo).toBe(false);
   });
