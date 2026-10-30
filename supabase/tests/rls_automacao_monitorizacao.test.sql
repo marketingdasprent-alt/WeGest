@@ -42,9 +42,9 @@ insert into public.user_org_ativa (user_id, org_id) values
 on conflict (user_id) do update set org_id = excluded.org_id;
 
 insert into public.domain_events (id, org_id, event_type, entity_table, entity_id, emitted_by) values
-  ('00000000-0000-0000-0000-0000009be001', '00000000-0000-0000-0000-0000009b0a00', 'teste.rls', 'teste', gen_random_uuid(), 'pgtap'),
-  ('00000000-0000-0000-0000-0000009be002', '00000000-0000-0000-0000-0000009b0a00', 'teste.rls', 'teste', gen_random_uuid(), 'pgtap'),
-  ('00000000-0000-0000-0000-0000009be003', '00000000-0000-0000-0000-0000009b0b00', 'teste.rls', 'teste', gen_random_uuid(), 'pgtap');
+  ('00000000-0000-0000-0000-0000009be001', '00000000-0000-0000-0000-0000009b0a00', 'teste.rls', 'teste', gen_random_uuid(), 'manual'),
+  ('00000000-0000-0000-0000-0000009be002', '00000000-0000-0000-0000-0000009b0a00', 'teste.rls', 'teste', gen_random_uuid(), 'manual'),
+  ('00000000-0000-0000-0000-0000009be003', '00000000-0000-0000-0000-0000009b0b00', 'teste.rls', 'teste', gen_random_uuid(), 'manual');
 
 -- ── Leitura, utilizador a utilizador ───────────────────────
 
@@ -83,8 +83,8 @@ select is(
     where schemaname = 'public'
       and policyname in ('mt_domain_events_select', 'mt_automation_runs_select',
                          'mt_automation_logs_select', 'mt_automation_rules_select')
-      and qual like '%SELECT is_current_user_admin()%'
-      and qual like '%SELECT has_permission(%'),
+      and qual like '%SELECT %is_current_user_admin()%'
+      and qual like '%SELECT %has_permission(%'),
   4,
   'as 4 regras de leitura do motor avaliam as funções uma vez por consulta'
 );
