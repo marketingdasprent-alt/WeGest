@@ -26,10 +26,11 @@ dist-ssr
 .vercel
 
 # Environment variables e segredos — cobre variantes (.env.staging, .env.test…),
-# chaves privadas e ficheiros de credenciais de fornecedores. Só o exemplo entra.
+# chaves privadas e ficheiros de credenciais de fornecedores. Só entram o exemplo e o .env.production (configuração pública do Supabase).
 .env
 .env.*
 !.env.example
+!.env.production
 *.pem
 *.key
 *.p12
@@ -40,7 +41,7 @@ secrets*.json
 secrets*.yml
 
 # Agente Primavera: a configuração tem as credenciais do AS Connect e o
-# executável compilado tem 79 MB. Só o exemplo entra.
+# executável compilado tem 79 MB. Só entram o exemplo e o .env.production (configuração pública do Supabase).
 agent/primavera-agent/primavera-agent.config.json
 agent/primavera-agent/*.exe
 secrets*.yaml
