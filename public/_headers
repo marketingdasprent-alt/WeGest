@@ -1,0 +1,41 @@
+# Cloudflare Pages: os mesmos cabeçalhos do vercel.json. As regras somam-se por ordem;
+# "! Nome" tira um cabeçalho posto por uma regra anterior (formulário, motorista e login
+# podem abrir dentro de iframes, o resto não).
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), geolocation=(self), microphone=()
+  Content-Security-Policy-Report-Only: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.wegest.pt https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://www.facebook.com https://*.facebook.com; frame-src https://www.googletagmanager.com https://realize.dasprent.pt https://challenges.cloudflare.com
+
+/formulario/*
+  ! X-Frame-Options
+  ! Permissions-Policy
+  ! Content-Security-Policy-Report-Only
+  Content-Security-Policy: frame-ancestors *
+
+/motorista/*
+  ! X-Frame-Options
+  ! Content-Security-Policy-Report-Only
+  Content-Security-Policy: frame-ancestors 'self' https://www.decadaousada.pt https://decadaousada.pt
+  Content-Security-Policy-Report-Only: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self' https://www.decadaousada.pt https://decadaousada.pt; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.wegest.pt https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://www.facebook.com https://*.facebook.com; frame-src https://www.googletagmanager.com https://realize.dasprent.pt https://challenges.cloudflare.com
+
+/login
+  ! X-Frame-Options
+  ! Content-Security-Policy-Report-Only
+  Content-Security-Policy: frame-ancestors 'self' https://www.decadaousada.pt https://decadaousada.pt
+  Content-Security-Policy-Report-Only: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self' https://www.decadaousada.pt https://decadaousada.pt; form-action 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://api.wegest.pt https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://www.facebook.com https://*.facebook.com; frame-src https://www.googletagmanager.com https://realize.dasprent.pt https://challenges.cloudflare.com
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+/workbox-*
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
