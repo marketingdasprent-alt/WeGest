@@ -171,4 +171,18 @@ describe('deriveResumoFinanceiro — Retenção', () => {
     expect(r.retencao).toBeNull();
     expect(r.liquido).toBe(200);
   });
+
+  it('Açores sem recibo: mesma conta com ÷1,04 em vez de ÷1,06', () => {
+    const r = deriveResumoFinanceiro({
+      ...base,
+      reciboVerde: false,
+      corteSemRecibo: 0.04,
+      receitas: { bolt: 109, uber: 208, outras_receitas: 0 },
+      gorjetaBolt: 5,
+      gorjetaUber: 0,
+    });
+    // (109 - 5) / 1,04 + 5 = 105; 208 / 1,04 = 200.
+    expect(r.receitaAjustada).toBeCloseTo(305, 2);
+    expect(r.receitasExibidas.bolt).toBeCloseTo(109, 2);
+  });
 });

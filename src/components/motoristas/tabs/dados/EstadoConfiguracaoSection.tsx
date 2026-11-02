@@ -5,6 +5,7 @@ import { SectionCard } from '@/components/ui/section-card';
 import { cn } from '@/lib/utils';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
+import { CorteSemReciboField } from './CorteSemReciboField';
 import { MotoristaSlotField } from './MotoristaSlotField';
 
 interface EstadoConfiguracaoSectionProps {
@@ -80,7 +81,8 @@ export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSection
                 </FormControl>
               </div>
               <p className="text-xs text-muted-foreground">
-                Passa fatura-recibo com IVA e a empresa retém o IRS. Os ganhos levam o corte dos 6%.
+                Passa fatura-recibo com IVA e a empresa retém o IRS. Os ganhos levam o corte sem
+                recibo.
               </p>
               {field.value && (
                 <div className="grid grid-cols-2 gap-3 pt-2">
@@ -91,6 +93,7 @@ export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSection
             </FormItem>
           )}
         />
+        <CorteSemReciboField control={control} />
         <MotoristaSlotField control={control} />
         <FormField
           control={control}

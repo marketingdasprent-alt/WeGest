@@ -8331,6 +8331,7 @@ export type Database = {
           codigo_postal: string | null
           comprovativo_iban_url: string | null
           comprovativo_morada_url: string | null
+          corte_sem_recibo_pct: number
           created_at: string | null
           data_contratacao: string | null
           data_renovacao_contratacao: string | null
@@ -8390,6 +8391,7 @@ export type Database = {
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
           comprovativo_morada_url?: string | null
+          corte_sem_recibo_pct?: number
           created_at?: string | null
           data_contratacao?: string | null
           data_renovacao_contratacao?: string | null
@@ -8449,6 +8451,7 @@ export type Database = {
           codigo_postal?: string | null
           comprovativo_iban_url?: string | null
           comprovativo_morada_url?: string | null
+          corte_sem_recibo_pct?: number
           created_at?: string | null
           data_contratacao?: string | null
           data_renovacao_contratacao?: string | null

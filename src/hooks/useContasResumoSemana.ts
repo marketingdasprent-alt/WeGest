@@ -22,7 +22,8 @@ import { normalizeName, isNameMatch } from '@/components/administrativo/motorist
 import { type MotoristaResumo } from '@/components/administrativo/contasResumoExports';
 import {
   calcularRetencao,
-  levaCorteSeisPorCento,
+  corteSemReciboDaFicha,
+  divisorCorte,
   taxasRetencaoDaFicha,
   type TaxasRetencao,
 } from '@/components/administrativo/motorista-resumo/retencaoIrs';
@@ -74,12 +75,14 @@ export function useContasResumoSemana(
       const { data: todosMotoristas } = await supabase
         .from('motoristas_ativos')
         .select(
-          'id, nome, recibo_verde, retencao_irs, retencao_iva_pct, retencao_irs_pct, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at, is_conta_frota'
+          'id, nome, recibo_verde, retencao_irs, retencao_iva_pct, retencao_irs_pct, corte_sem_recibo_pct, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at, is_conta_frota'
         );
 
       const retencaoPorId: Record<string, TaxasRetencao | null> = {};
+      const cortePorId: Record<string, number> = {};
       (todosMotoristas || []).forEach((m) => {
         retencaoPorId[m.id] = taxasRetencaoDaFicha(m);
+        cortePorId[m.id] = corteSemReciboDaFicha(m);
       });
 
       const uberIdMap: Record<string, string> = {};
@@ -699,9 +702,10 @@ export function useContasResumoSemana(
         const gorjetaBolt = m.motorista_id ? gorjetaBoltById[m.motorista_id] || 0 : 0;
         const gorjetaUber = m.gorjeta || 0;
         const taxasRetencao = m.motorista_id ? (retencaoPorId[m.motorista_id] ?? null) : null;
-        const cortaSeis = levaCorteSeisPorCento(passaReciboVerde, !!taxasRetencao);
+        const corteSemRecibo = m.motorista_id ? cortePorId[m.motorista_id] : undefined;
+        const divisor = divisorCorte(passaReciboVerde, !!taxasRetencao, corteSemRecibo);
         const ajustarBase = (total: number, gorjetaPlataforma: number) =>
-          cortaSeis ? (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma : total;
+          (total - gorjetaPlataforma) / divisor + gorjetaPlataforma;
         const receita =
           ajustarBase(m.faturado_bolt, gorjetaBolt) +
           ajustarBase(m.faturado_uber, gorjetaUber) +
@@ -741,6 +745,7 @@ export function useContasResumoSemana(
           viagens_bolt: m.viagens_bolt,
           viagens_uber: m.viagens_uber,
           recibo_verde: passaReciboVerde,
+          corte_sem_recibo: corteSemRecibo,
           retencao,
           liquido,
           combustivel: combustivelValor,
