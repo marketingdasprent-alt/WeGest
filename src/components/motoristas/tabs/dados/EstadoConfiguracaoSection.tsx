@@ -5,6 +5,7 @@ import { SectionCard } from '@/components/ui/section-card';
 import { cn } from '@/lib/utils';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import type { Control } from 'react-hook-form';
+import { MotoristaSlotField } from './MotoristaSlotField';
 
 interface EstadoConfiguracaoSectionProps {
   control: Control;
@@ -90,44 +91,7 @@ export function EstadoConfiguracaoSection({ control }: EstadoConfiguracaoSection
             </FormItem>
           )}
         />
-        <FormField
-          control={control}
-          name="is_slot"
-          render={({ field }) => (
-            <FormItem className="rounded-lg border p-3 space-y-2">
-              <div className="flex flex-row items-center justify-between">
-                <FormLabel className="text-sm">Motorista SLOT</FormLabel>
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-              </div>
-              {field.value && (
-                <FormField
-                  control={control}
-                  name="slot_valor_semanal"
-                  render={({ field: valorField }) => (
-                    <FormItem>
-                      <FormLabel>Valor Mensal (€)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Ex: 400.00"
-                          value={valorField.value ?? ''}
-                          onChange={(e) =>
-                            valorField.onChange(e.target.value ? parseFloat(e.target.value) : null)
-                          }
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-            </FormItem>
-          )}
-        />
+        <MotoristaSlotField control={control} />
         <FormField
           control={control}
           name="seguro_valor_semanal"

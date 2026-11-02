@@ -96,6 +96,7 @@ const formSchema = z.object({
   retencao_irs_pct: z.number().min(0, TAXA_RETENCAO_MSG).max(100, TAXA_RETENCAO_MSG).nullable(),
   is_slot: z.boolean().default(false),
   slot_valor_semanal: z.number().optional().nullable(),
+  slot_semana_cobranca: z.number().int().min(1).max(4).default(1),
   seguro_valor_semanal: z.number().optional().nullable(),
   status_ativo: z.boolean().default(true),
   observacoes: z.string().optional(),
@@ -192,6 +193,7 @@ export function MotoristaTabDados({
       retencao_irs_pct: 23,
       is_slot: false,
       slot_valor_semanal: null,
+      slot_semana_cobranca: 1,
       seguro_valor_semanal: null,
       status_ativo: true,
       observacoes: '',
@@ -243,6 +245,7 @@ export function MotoristaTabDados({
       retencao_irs_pct: motorista.retencao_irs_pct ?? 23,
       is_slot: motorista.is_slot ?? false,
       slot_valor_semanal: motorista.slot_valor_semanal ?? null,
+      slot_semana_cobranca: motorista.slot_semana_cobranca ?? 1,
       seguro_valor_semanal: motorista.seguro_valor_semanal ?? null,
       status_ativo: motorista.status_ativo ?? true,
       observacoes: motorista.observacoes || '',
@@ -319,6 +322,7 @@ export function MotoristaTabDados({
         retencao_irs_pct: data.retencao_irs_pct ?? 23,
         is_slot: data.is_slot,
         slot_valor_semanal: data.is_slot ? data.slot_valor_semanal : null,
+        slot_semana_cobranca: data.slot_semana_cobranca ?? 1,
         seguro_valor_semanal: data.seguro_valor_semanal ?? null,
         // status_ativo fica de fora: gravar a ficha não é decidir se o
         // motorista está activo. O form guarda o valor de quando abriu (ou
