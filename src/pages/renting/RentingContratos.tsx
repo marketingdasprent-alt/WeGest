@@ -124,11 +124,12 @@ const RentingContratos = () => {
   }, [clientes]);
 
   const condutorInfoByContratoId = useMemo(() => {
-    const m = new Map<string, { nome: string; nif: string }>();
+    const m = new Map<string, { nome: string; nif: string; inativo: boolean }>();
     condutoresPrincipais.forEach((c) => {
       m.set(c.contratoId, {
         nome: c.nome ?? '',
         nif: c.nif ?? '',
+        inativo: c.motoristaInativo,
       });
     });
     return m;
@@ -146,6 +147,11 @@ const RentingContratos = () => {
 
   const getCondutorNome = useCallback(
     (contratoId: string) => condutorInfoByContratoId.get(contratoId)?.nome || '—',
+    [condutorInfoByContratoId]
+  );
+
+  const isMotoristaInativo = useCallback(
+    (contratoId: string) => condutorInfoByContratoId.get(contratoId)?.inativo ?? false,
     [condutorInfoByContratoId]
   );
 
@@ -313,6 +319,7 @@ const RentingContratos = () => {
         contratos={contratosVisiveis}
         getClienteNome={getClienteNome}
         getCondutorNome={getCondutorNome}
+        isMotoristaInativo={isMotoristaInativo}
       />
 
       <ExpiradosSemRenovacaoBanner

@@ -3,6 +3,11 @@ import { supabase } from '@/integrations/supabase/client';
 import type { TablesInsert } from '@/integrations/supabase/types';
 import type { ContratoCondutor } from '@/types/contratoRenting';
 import type { CondutorFormItem } from '@/types/reserva';
+import {
+  nomesMotoristasInativos,
+  type CondutorComEstado,
+  type ContratoEmCurso,
+} from '@/lib/avisosMotoristaInativo';
 
 const QUERY_KEY_BASE = ['renting', 'contrato-condutores'] as const;
 
@@ -19,6 +24,8 @@ export interface CondutorPrincipalInfo {
   nome: string | null;
   /** NIF/contribuinte do condutor principal, para a pesquisa da lista. */
   nif: string | null;
+  /** Motorista principal já inativado — o contrato devia ser fechado, não renovado. */
+  motoristaInativo: boolean;
 }
 
 /**
@@ -34,20 +41,67 @@ export function useContratoCondutoresPrincipais() {
     queryFn: async (): Promise<CondutorPrincipalInfo[]> => {
       const { data, error } = await supabase
         .from('contrato_condutores')
-        .select('contrato_id, motoristas_ativos(nome, nif), clientes(nome, nif)')
+        .select('contrato_id, motoristas_ativos(nome, nif, status_ativo), clientes(nome, nif)')
         .eq('is_principal', true)
         .is('data_fim', null);
       if (error) throw error;
       return (data ?? []).map((c) => {
-        const motorista = c.motoristas_ativos as unknown as PessoaNomeNif | null;
+        const motorista = c.motoristas_ativos as unknown as
+          | (PessoaNomeNif & { status_ativo: boolean | null })
+          | null;
         const cliente = c.clientes as unknown as PessoaNomeNif | null;
         return {
           contratoId: c.contrato_id as string,
           nome: motorista?.nome ?? cliente?.nome ?? null,
           nif: motorista?.nif ?? cliente?.nif ?? null,
+          motoristaInativo: motorista?.status_ativo === false,
         };
       });
     },
+    staleTime: 30_000,
+  });
+}
+
+/** Nomes dos motoristas inativos entre os condutores atuais do contrato. */
+export function useMotoristasInativosDoContrato(contratoId: string | null | undefined) {
+  return useQuery({
+    queryKey: [...QUERY_KEY_BASE, contratoId ?? null, 'inativos'],
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase
+        .from('contrato_condutores')
+        .select('motoristas_ativos(nome, status_ativo)')
+        .eq('contrato_id', contratoId as string)
+        .is('data_fim', null)
+        .not('motorista_id', 'is', null);
+      if (error) throw error;
+      return nomesMotoristasInativos(
+        (data ?? []).map((c) => c.motoristas_ativos as unknown as CondutorComEstado)
+      );
+    },
+    enabled: !!contratoId,
+    staleTime: 30_000,
+  });
+}
+
+/** Contratos em curso onde o motorista é condutor — para avisar antes de o inativar. */
+export function useContratosEmCursoDoMotorista(
+  motoristaId: string | null | undefined,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: [...QUERY_KEY_BASE, 'em-curso-do-motorista', motoristaId ?? null],
+    queryFn: async (): Promise<ContratoEmCurso[]> => {
+      const { data, error } = await supabase
+        .from('contrato_condutores')
+        .select('contratos_renting!inner(codigo, matricula, estado_operacional, deleted_at)')
+        .eq('motorista_id', motoristaId as string)
+        .is('data_fim', null)
+        .eq('contratos_renting.estado_operacional', 'em_curso')
+        .is('contratos_renting.deleted_at', null);
+      if (error) throw error;
+      return (data ?? []).map((c) => c.contratos_renting as unknown as ContratoEmCurso);
+    },
+    enabled: enabled && !!motoristaId,
     staleTime: 30_000,
   });
 }

@@ -20,9 +20,16 @@ interface Props {
   contratos: ContratoRenting[];
   getClienteNome: (id: string | null | undefined) => string;
   getCondutorNome: (contratoId: string) => string;
+  /** Condutor principal já inativo — retirar do contrato em vez de renovar. */
+  isMotoristaInativo?: (contratoId: string) => boolean;
 }
 
-export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }: Props) {
+export function RenovacoesBanner({
+  contratos,
+  getClienteNome,
+  getCondutorNome,
+  isMotoristaInativo,
+}: Props) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -109,6 +116,11 @@ export function RenovacoesBanner({ contratos, getClienteNome, getCondutorNome }:
                         {getCondutorNome(c.id) !== '—'
                           ? getCondutorNome(c.id)
                           : getClienteNome(c.cliente_id)}
+                        {isMotoristaInativo?.(c.id) && (
+                          <span className="ml-1.5 font-medium text-destructive">
+                            · Motorista inativo
+                          </span>
+                        )}
                       </p>
                     </div>
                     <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">
