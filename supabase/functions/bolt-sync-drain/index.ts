@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
 import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
+import { falhaPassageira, voltaATentar } from '../_shared/bolt/falhaPassageira.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,6 +23,7 @@ interface LinhaFila {
   formula_id: string | null;
   fase: string | null;
   semana_inicio: string | null;
+  tentativas: number | null;
 }
 
 Deno.serve(async (req) => {
@@ -73,6 +75,30 @@ Deno.serve(async (req) => {
       if (error) console.error(`[bolt-sync-drain] falha a fechar ${id}: ${error.message}`);
     };
 
+    // Falha da infra (função não arrancou, 5xx, rede): volta à fila em vez de
+    // deixar a semana por sincronizar.
+    const repetirOuFalhar = async (
+      linha: LinhaFila,
+      httpStatus: number | null,
+      dados: unknown,
+      erro: string
+    ) => {
+      if (falhaPassageira(httpStatus, dados) && voltaATentar(linha.tentativas)) {
+        const { error } = await supabase
+          .from('bolt_sync_queue')
+          .update({
+            status: 'pending',
+            started_at: null,
+            tentativas: (linha.tentativas ?? 0) + 1,
+            error_message: erro,
+          })
+          .eq('id', linha.id);
+        if (!error) return;
+        console.error(`[bolt-sync-drain] falha a repor ${linha.id}: ${error.message}`);
+      }
+      await fechar(linha.id, 'failed', dados, erro);
+    };
+
     const resultados = await Promise.all(
       linhas.map(async (linha) => {
         try {
@@ -114,9 +140,9 @@ Deno.serve(async (req) => {
           const dados = await resposta.json().catch(() => null);
 
           if (!resposta.ok || dados?.success === false) {
-            await fechar(
-              linha.id,
-              'failed',
+            await repetirOuFalhar(
+              linha,
+              resposta.status,
               dados,
               dados?.error || dados?.message || `HTTP ${resposta.status}`
             );
@@ -137,7 +163,7 @@ Deno.serve(async (req) => {
           return { id: linha.id, ok: true };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          await fechar(linha.id, 'failed', null, msg);
+          await repetirOuFalhar(linha, null, null, msg);
           return { id: linha.id, ok: false };
         }
       })
