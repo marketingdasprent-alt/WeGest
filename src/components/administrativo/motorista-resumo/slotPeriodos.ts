@@ -34,9 +34,21 @@ interface CandidatoDoDia {
  * ordem de leitura da BD ("último a ler ganha" já custou dinheiro 3x aqui).
  */
 function venceODia(candidato: CandidatoDoDia, actual: CandidatoDoDia): boolean {
-  if (candidato.viaturaId === actual.viaturaId) return false;
+  // Também no mesmo carro: numa renovação o preço novo vale desde o seu início.
   if (candidato.inicio !== actual.inicio) return candidato.inicio > actual.inicio;
+  if (candidato.viaturaId === actual.viaturaId) return false;
   return candidato.viaturaId < actual.viaturaId;
+}
+
+/** Renovação: outro período do mesmo carro já o tinha nesse dia, ninguém o levantou. */
+function continuaNoMesmoCarro(mv: ViaturaPeriodoInput, todos: ViaturaPeriodoInput[]): boolean {
+  return todos.some(
+    (outro) =>
+      outro !== mv &&
+      outro.viatura_id === mv.viatura_id &&
+      outro.data_inicio < mv.data_inicio &&
+      (outro.data_fim === null || outro.data_fim >= mv.data_inicio)
+  );
 }
 
 /**
@@ -77,7 +89,9 @@ export function buildSlotPeriodos(
     // O dia em que o motorista LEVANTA o carro não é cobrado a ninguém: a
     // contagem começa no dia seguinte. Numa troca a meio da semana, a semana
     // fecha em 6 dias e não em 7 — é intencional, o dia da troca é dele.
-    const primeiroDiaCobravel = addDays(parseISO(mv.data_inicio), 1);
+    const primeiroDiaCobravel = continuaNoMesmoCarro(mv, viaturasPeriodoData)
+      ? parseISO(mv.data_inicio)
+      : addDays(parseISO(mv.data_inicio), 1);
     const periodStart = max([primeiroDiaCobravel, weekStart]);
     const periodEnd = mv.data_fim ? min([parseISO(mv.data_fim), weekEnd]) : weekEnd;
     if (periodStart > periodEnd) return;
@@ -96,15 +110,18 @@ export function buildSlotPeriodos(
     }
   });
 
+  // Por carro E preço: uma renovação com outro preço é outra linha, não o
+  // preço do primeiro contrato aplicado à semana toda.
   const porViatura = new Map<string, { matricula: string; taxaDiaria: number; dias: string[] }>();
   for (const [dia, dono] of donoDoDia) {
-    const entry = porViatura.get(dono.viaturaId) ?? {
+    const chave = `${dono.viaturaId}|${dono.taxaDiaria}`;
+    const entry = porViatura.get(chave) ?? {
       matricula: dono.matricula,
       taxaDiaria: dono.taxaDiaria,
       dias: [],
     };
     entry.dias.push(dia);
-    porViatura.set(dono.viaturaId, entry);
+    porViatura.set(chave, entry);
   }
 
   return (

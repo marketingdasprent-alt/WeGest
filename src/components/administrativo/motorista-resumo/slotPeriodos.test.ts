@@ -216,3 +216,47 @@ describe('buildSlotPeriodos — um dia, um dono', () => {
     expect(custo).toBeCloseTo(180, 6);
   });
 });
+
+// Renovação do contrato no MESMO carro com outro preço (02/11/2026): a
+// semana inteira saía ao preço do contrato antigo (175 em vez de 165).
+describe('buildSlotPeriodos — renovação no mesmo carro', () => {
+  const periodo = (inicio: string, fim: string | null, preco: number): ViaturaPeriodoInput => ({
+    viatura_id: 'v-bo27',
+    data_inicio: inicio,
+    data_fim: fim,
+    preco_semana: preco,
+    viaturas: null,
+  });
+  const total = (p: ReturnType<typeof buildSlotPeriodos>) => p.reduce((s, x) => s + x.custo, 0);
+
+  it('o preço novo vale desde o dia da renovação, sem dia livre', () => {
+    const linhas = [periodo('2026-10-06', '2026-10-26', 175), periodo('2026-10-26', null, 165)];
+    const umaOrdem = buildSlotPeriodos(linhas, ...semana('2026-10-26', '2026-11-01'), new Map());
+    const outraOrdem = buildSlotPeriodos(
+      [...linhas].reverse(),
+      ...semana('2026-10-26', '2026-11-01'),
+      new Map()
+    );
+    expect(total(umaOrdem)).toBeCloseTo(165, 2);
+    expect(umaOrdem.reduce((s, x) => s + x.dias, 0)).toBe(7);
+    expect(outraOrdem).toEqual(umaOrdem);
+  });
+
+  it('duas renovações na mesma semana somam cada dia ao seu preço', () => {
+    const linhas = [
+      periodo('2026-09-30', '2026-10-26', 275),
+      periodo('2026-10-26', '2026-10-30', 250),
+      periodo('2026-10-30', null, 250),
+    ];
+    const p = buildSlotPeriodos(linhas, ...semana('2026-10-26', '2026-11-01'), new Map());
+    expect(total(p)).toBeCloseTo(250, 2);
+  });
+
+  it('renovação a meio da semana com outro preço dá duas linhas', () => {
+    const linhas = [periodo('2026-09-01', '2026-10-29', 175), periodo('2026-10-29', null, 140)];
+    const p = buildSlotPeriodos(linhas, ...semana('2026-10-26', '2026-11-01'), new Map());
+    expect(p).toHaveLength(2);
+    // 26, 27, 28 a 175; 29 a 01 a 140.
+    expect(total(p)).toBeCloseTo((175 / 7) * 3 + (140 / 7) * 4, 2);
+  });
+});
