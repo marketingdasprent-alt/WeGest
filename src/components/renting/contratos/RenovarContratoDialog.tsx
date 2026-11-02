@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDate } from '@/utils/formatters';
 import { useRenovarContrato } from '@/hooks/useContratosRenting';
+import { useMotoristasInativosDoContrato } from '@/hooks/useContratoCondutores';
 import {
   janelaRenovacaoTvde,
   proximaDataRenovacao,
@@ -38,6 +39,9 @@ const parseKm = (v: string): number | null => {
 export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
   const navigate = useNavigate();
   const renovarMut = useRenovarContrato();
+  const { data: motoristasInativos = [] } = useMotoristasInativosDoContrato(
+    open ? contrato.id : null
+  );
 
   // Odómetro atual da viatura — fallback para o km inicial quando o contrato
   // que fecha ainda não tem km de saída registado (1.ª renovação).
@@ -177,6 +181,24 @@ export function RenovarContratoDialog({ open, onOpenChange, contrato }: Props) {
                   {formatDate(novoPeriodo.inicio)} → {formatDate(novoPeriodo.fim)}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Renovar leva os condutores para a nova versão — um motorista que já
+              saiu continuaria com a viatura e o aluguer a contar. */}
+          {motoristasInativos.length > 0 && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive"
+            >
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <p className="text-xs">
+                <strong>{motoristasInativos.join(', ')}</strong>{' '}
+                {motoristasInativos.length === 1 ? 'está inativo' : 'estão inativos'} e{' '}
+                {motoristasInativos.length === 1 ? 'continua' : 'continuam'} como condutor neste
+                contrato. Se entregou a viatura, retira-o do contrato (ou fecha-o) em vez de renovar
+                — senão o aluguer continua a contar-lhe.
+              </p>
             </div>
           )}
 

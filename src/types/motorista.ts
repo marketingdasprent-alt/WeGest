@@ -34,8 +34,12 @@ export type Motorista = {
   /** Taxas da Retenção em % (por omissão 23 e 23). */
   retencao_iva_pct?: number | null;
   retencao_irs_pct?: number | null;
+  /** Corte de quem não passa recibo, em %: 6 no continente, 4 nos Açores. */
+  corte_sem_recibo_pct?: number | null;
   is_slot: boolean | null;
   slot_valor_semanal: number | null;
+  /** 1ª a 4ª segunda-feira do mês em que a mensalidade de slot é lançada. */
+  slot_semana_cobranca?: number | null;
   seguro_valor_semanal: number | null;
   cartao_frota: string | null;
   cartao_bp: string | null;

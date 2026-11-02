@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
 import { escapeHtml } from '@/lib/safeHtml';
 import {
-  levaCorteSeisPorCento,
+  divisorCorte,
   type RetencaoIrs,
 } from '@/components/administrativo/motorista-resumo/retencaoIrs';
 
@@ -24,6 +24,8 @@ export interface MotoristaResumo {
   viagens_bolt: number;
   viagens_uber: number;
   recibo_verde: boolean;
+  /** Corte sem recibo da ficha, em fração (0.06 continente, 0.04 Açores). */
+  corte_sem_recibo?: number;
   /** Linhas de IVA e IRS, só para motoristas com Retenção. */
   retencao?: RetencaoIrs | null;
   liquido: number;
@@ -135,9 +137,9 @@ export async function gerarRelatoriosIndividuaisPDF(params: {
         }
       }
 
-      const receitaAjustada = levaCorteSeisPorCento(motorista.recibo_verde, !!motorista.retencao)
-        ? motorista.total_faturado / 1.06
-        : motorista.total_faturado;
+      const receitaAjustada =
+        motorista.total_faturado /
+        divisorCorte(motorista.recibo_verde, !!motorista.retencao, motorista.corte_sem_recibo);
       // Inclui os débitos automáticos do financeiro (motorista.outros_custos, do
       // motor de recorrências) além do legado motorista_custos_adicionais
       // (extraCosts). Não duplicam: após a migração para o motor de recorrências,

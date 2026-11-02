@@ -54,6 +54,8 @@ export interface MotoristaResumoProps {
   viagens_bolt: number;
   viagens_uber: number;
   recibo_verde: boolean;
+  /** Corte sem recibo em fração (0.06 continente, 0.04 Açores); omisso = 6%. */
+  corte_sem_recibo?: number;
   /** Da ficha (MotoristaRecibosSection): taxas de IVA e IRS de quem tem Retenção. */
   retencao_taxas?: TaxasRetencao | null;
   /** Da lista de Contas/Resumo: linhas de IVA e IRS já calculadas (null sem Retenção). */
@@ -204,6 +206,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     deriveResumoFinanceiro({
       isImportado,
       reciboVerde: motorista?.recibo_verde ?? false,
+      corteSemRecibo: motorista?.corte_sem_recibo,
       retencao:
         motorista?.retencao_taxas ??
         (motorista?.retencao

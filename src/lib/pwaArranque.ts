@@ -46,6 +46,24 @@ export async function desligarPwa(janela: Window = window): Promise<void> {
   }
 }
 
+/**
+ * SW a controlar a página sem o index.html no precache: cada navegação o vai
+ * buscar à rede, o Cloudflare responde 308 para `/` e o browser rejeita a
+ * resposta redirigida (ERR_FAILED). Tira-se o SW; o próximo arranque reinstala-o.
+ */
+export async function repararPrecache(janela: Window = window): Promise<boolean> {
+  const sw = janela.navigator.serviceWorker;
+  if (!sw?.controller || !('caches' in janela)) return false;
+  const nomes = (await janela.caches.keys()).filter((n) => n.startsWith('workbox-precache'));
+  for (const nome of nomes) {
+    const pedidos = await (await janela.caches.open(nome)).keys();
+    if (pedidos.some((p) => new URL(p.url).pathname === '/index.html')) return false;
+  }
+  const registos = await sw.getRegistrations();
+  await Promise.all(registos.map((r) => r.unregister()));
+  return true;
+}
+
 /** Decide e faz: regista o service worker na web, desliga-o na docs, nada no nativo. */
 export function arrancarPwa({
   nativo,
@@ -64,6 +82,7 @@ export function arrancarPwa({
     return 'docs';
   }
 
+  void repararPrecache(janela);
   const actualizar = registerSW({
     onNeedRefresh() {
       janela.__swUpdate = () => actualizar(true);

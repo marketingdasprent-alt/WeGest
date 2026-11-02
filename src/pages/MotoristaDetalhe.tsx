@@ -31,6 +31,7 @@ import { MotoristaTabRecibos } from '@/components/motoristas/tabs/MotoristaTabRe
 import { MotoristaTabViaturas } from '@/components/motoristas/tabs/MotoristaTabViaturas';
 import { MotoristaTabContratos } from '@/components/motoristas/tabs/MotoristaTabContratos';
 import { MotoristaTabDanos } from '@/components/motoristas/tabs/MotoristaTabDanos';
+import { AvisoContratosEmCurso } from '@/components/motoristas/AvisoContratosEmCurso';
 import type { Motorista } from '@/pages/Motoristas';
 import { supabase } from '@/integrations/supabase/client';
 import { filtroDataFimViva } from '@/utils/associacaoViatura';
@@ -435,6 +436,9 @@ export default function MotoristaDetalhe() {
               <strong>{motorista.nome}</strong>?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {motorista.status_ativo && isStatusDialogOpen && (
+            <AvisoContratosEmCurso motoristaId={motorista.id} />
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isTogglingStatus}>Cancelar</AlertDialogCancel>
             <AlertDialogAction

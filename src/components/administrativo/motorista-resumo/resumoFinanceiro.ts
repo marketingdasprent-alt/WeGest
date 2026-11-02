@@ -1,6 +1,6 @@
 import {
   calcularRetencao,
-  levaCorteSeisPorCento,
+  divisorCorte,
   type RetencaoIrs,
   type TaxasRetencao,
 } from './retencaoIrs';
@@ -8,6 +8,8 @@ import {
 export interface ResumoFinanceiroInput {
   isImportado: boolean;
   reciboVerde: boolean;
+  /** Corte sem recibo em fração (0.06 continente, 0.04 Açores); omisso = 6%. */
+  corteSemRecibo?: number;
   /** Taxas de IVA e IRS do motorista com Retenção; null/omisso = sem Retenção. */
   retencao?: TaxasRetencao | null;
   receitas: { bolt: number; uber: number; outras_receitas: number };
@@ -34,6 +36,7 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
   const {
     isImportado,
     reciboVerde,
+    corteSemRecibo,
     retencao = null,
     receitas,
     gorjetaBolt,
@@ -50,10 +53,10 @@ export function deriveResumoFinanceiro(input: ResumoFinanceiroInput): ResumoFina
   const totalReceitas = receitas.bolt + receitas.uber + receitas.outras_receitas;
 
   // Os 6% só incidem sobre a base; a gorjeta já está faturada e não é dividida.
-  const cortaSeis = !isImportado && levaCorteSeisPorCento(reciboVerde, !!retencao);
+  const divisor = isImportado ? 1 : divisorCorte(reciboVerde, !!retencao, corteSemRecibo);
 
   const ajustarBase = (total: number, gorjetaPlataforma: number) =>
-    cortaSeis ? (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma : total;
+    (total - gorjetaPlataforma) / divisor + gorjetaPlataforma;
 
   const boltExibido = ajustarBase(receitas.bolt, gBolt);
   const uberExibido = ajustarBase(receitas.uber, gUber);

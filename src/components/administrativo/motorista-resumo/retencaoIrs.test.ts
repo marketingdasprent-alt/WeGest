@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   calcularRetencao,
+  corteSemReciboDaFicha,
+  divisorCorte,
   levaCorteSeisPorCento,
   percentagem,
   taxasRetencaoDaFicha,
@@ -79,6 +81,22 @@ describe('levaCorteSeisPorCento', () => {
     expect(levaCorteSeisPorCento(false, false)).toBe(true);
     expect(levaCorteSeisPorCento(true, true)).toBe(true);
     expect(levaCorteSeisPorCento(false, true)).toBe(true);
+  });
+});
+
+describe('corte sem recibo: continente 6%, Açores 4%', () => {
+  it('lê a taxa da ficha e cai nos 6% quando não está preenchida', () => {
+    expect(corteSemReciboDaFicha({ corte_sem_recibo_pct: 4 })).toBe(0.04);
+    expect(corteSemReciboDaFicha({ corte_sem_recibo_pct: '4.00' })).toBe(0.04);
+    expect(corteSemReciboDaFicha({ corte_sem_recibo_pct: null })).toBe(0.06);
+    expect(corteSemReciboDaFicha({})).toBe(0.06);
+  });
+
+  it('divide por 1,04 nos Açores, 1,06 no continente e 1 a quem passa recibo', () => {
+    expect(divisorCorte(false, false, 0.04)).toBeCloseTo(1.04, 10);
+    expect(divisorCorte(false, false)).toBeCloseTo(1.06, 10);
+    expect(divisorCorte(true, true, 0.04)).toBeCloseTo(1.04, 10);
+    expect(divisorCorte(true, false, 0.04)).toBe(1);
   });
 });
 

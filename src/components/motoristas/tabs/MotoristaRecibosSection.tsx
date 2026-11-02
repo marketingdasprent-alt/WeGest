@@ -48,7 +48,8 @@ import { RECURSOS } from '@/utils/permissions';
 import { MotoristaResumoDialog } from '@/components/administrativo/MotoristaResumoDialog';
 import {
   calcularRetencao,
-  levaCorteSeisPorCento,
+  corteSemReciboDaFicha,
+  divisorCorte,
   taxasRetencaoDaFicha,
 } from '@/components/administrativo/motorista-resumo/retencaoIrs';
 import { buildSlotPeriodos } from '@/components/administrativo/motorista-resumo/slotPeriodos';
@@ -444,9 +445,9 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       const faturadoPlataformas = uberTotal + boltTotal;
       const totalFaturadoReal = faturadoPlataformas + extraCredits;
 
-      const receitaLiquidaPlataformas = levaCorteSeisPorCento(passesReciboVerde, !!taxasRetencao)
-        ? faturadoPlataformas / 1.06
-        : faturadoPlataformas;
+      const receitaLiquidaPlataformas =
+        faturadoPlataformas /
+        divisorCorte(passesReciboVerde, !!taxasRetencao, corteSemReciboDaFicha(motorista));
 
       const totalAluguer = fixedRent;
       const totalOutrosCustos = finOutros + extraCostsTotal;
@@ -1125,6 +1126,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           viagens_bolt: 0,
           viagens_uber: 0,
           recibo_verde: motorista.recibo_verde ?? true,
+          corte_sem_recibo: corteSemReciboDaFicha(motorista),
           retencao_taxas: taxasRetencaoDaFicha(motorista),
           liquido: resumoSemanal.liquido,
           combustivel: resumoSemanal.combustivel,

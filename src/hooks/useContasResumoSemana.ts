@@ -17,11 +17,13 @@ import {
 } from '@/components/administrativo/motorista-resumo/tvdeModeloPreco';
 import { classificarMovimento } from '@shared/movimentosMotorista';
 import { construirLinhasLiquidoSemanal } from '@/components/administrativo/motorista-resumo/linhasLiquidoSemanal';
+import { motoristasComCustos } from '@/components/administrativo/motorista-resumo/motoristasComCustos';
 import { normalizeName, isNameMatch } from '@/components/administrativo/motoristaNomeMatching';
 import { type MotoristaResumo } from '@/components/administrativo/contasResumoExports';
 import {
   calcularRetencao,
-  levaCorteSeisPorCento,
+  corteSemReciboDaFicha,
+  divisorCorte,
   taxasRetencaoDaFicha,
   type TaxasRetencao,
 } from '@/components/administrativo/motorista-resumo/retencaoIrs';
@@ -73,12 +75,14 @@ export function useContasResumoSemana(
       const { data: todosMotoristas } = await supabase
         .from('motoristas_ativos')
         .select(
-          'id, nome, recibo_verde, retencao_irs, retencao_iva_pct, retencao_irs_pct, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at, is_conta_frota'
+          'id, nome, recibo_verde, retencao_irs, retencao_iva_pct, retencao_irs_pct, corte_sem_recibo_pct, uber_uuid, bolt_id, gestor_responsavel, data_contratacao, status_ativo, desativado_em, created_at, is_conta_frota'
         );
 
       const retencaoPorId: Record<string, TaxasRetencao | null> = {};
+      const cortePorId: Record<string, number> = {};
       (todosMotoristas || []).forEach((m) => {
         retencaoPorId[m.id] = taxasRetencaoDaFicha(m);
+        cortePorId[m.id] = corteSemReciboDaFicha(m);
       });
 
       const uberIdMap: Record<string, string> = {};
@@ -606,71 +610,32 @@ export function useContasResumoSemana(
         agrupado[key].gorjeta = (agrupado[key].gorjeta || 0) + (uberData.gorjeta || 0);
       });
 
-      for (const [motoristaId, totalFuel] of Object.entries(combustivelByMotorista)) {
-        if (!agrupado[motoristaId] && totalFuel > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
+      // Outros custos contam somados, como antes (um crédito pode anular um débito).
+      const outrosCustosByMotorista: Record<string, number> = {};
+      for (const mapa of [adhocByMotorista, caucaoByMotorista, segurosByMotorista]) {
+        for (const [id, valor] of Object.entries(mapa)) {
+          outrosCustosByMotorista[id] = (outrosCustosByMotorista[id] || 0) + valor;
         }
       }
 
-      for (const [motoristaId, totalRep] of Object.entries(reparacoesByMotorista)) {
-        if (!agrupado[motoristaId] && totalRep > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
-        }
-      }
-
-      const custosDoMotorista = (id: string) =>
-        (adhocByMotorista[id] || 0) + (caucaoByMotorista[id] || 0) + (segurosByMotorista[id] || 0);
-
-      for (const motoristaId of new Set([
-        ...Object.keys(adhocByMotorista),
-        ...Object.keys(caucaoByMotorista),
-        ...Object.keys(segurosByMotorista),
+      for (const motoristaId of motoristasComCustos([
+        combustivelByMotorista,
+        reparacoesByMotorista,
+        outrosCustosByMotorista,
+        slotByMotorista,
+        aluguerByMotorista,
+        portagensByMotorista,
       ])) {
-        if (!agrupado[motoristaId] && custosDoMotorista(motoristaId) > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
-        }
-      }
-
-      for (const [motoristaId, totalSlotMotorista] of Object.entries(slotByMotorista)) {
-        if (!agrupado[motoristaId] && totalSlotMotorista > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
-        }
+        if (agrupado[motoristaId]) continue;
+        agrupado[motoristaId] = {
+          motorista_id: motoristaId,
+          driver_name: motoristaById.get(motoristaId)?.nome || 'Desconhecido',
+          driver_uuid: '',
+          faturado_bolt: 0,
+          faturado_uber: 0,
+          viagens_bolt: 0,
+          viagens_uber: 0,
+        };
       }
 
       const fundir = (alvoKey: string, dupKey: string) => {
@@ -737,9 +702,10 @@ export function useContasResumoSemana(
         const gorjetaBolt = m.motorista_id ? gorjetaBoltById[m.motorista_id] || 0 : 0;
         const gorjetaUber = m.gorjeta || 0;
         const taxasRetencao = m.motorista_id ? (retencaoPorId[m.motorista_id] ?? null) : null;
-        const cortaSeis = levaCorteSeisPorCento(passaReciboVerde, !!taxasRetencao);
+        const corteSemRecibo = m.motorista_id ? cortePorId[m.motorista_id] : undefined;
+        const divisor = divisorCorte(passaReciboVerde, !!taxasRetencao, corteSemRecibo);
         const ajustarBase = (total: number, gorjetaPlataforma: number) =>
-          cortaSeis ? (total - gorjetaPlataforma) / 1.06 + gorjetaPlataforma : total;
+          (total - gorjetaPlataforma) / divisor + gorjetaPlataforma;
         const receita =
           ajustarBase(m.faturado_bolt, gorjetaBolt) +
           ajustarBase(m.faturado_uber, gorjetaUber) +
@@ -779,6 +745,7 @@ export function useContasResumoSemana(
           viagens_bolt: m.viagens_bolt,
           viagens_uber: m.viagens_uber,
           recibo_verde: passaReciboVerde,
+          corte_sem_recibo: corteSemRecibo,
           retencao,
           liquido,
           combustivel: combustivelValor,
