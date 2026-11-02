@@ -17,6 +17,7 @@ import {
 } from '@/components/administrativo/motorista-resumo/tvdeModeloPreco';
 import { classificarMovimento } from '@shared/movimentosMotorista';
 import { construirLinhasLiquidoSemanal } from '@/components/administrativo/motorista-resumo/linhasLiquidoSemanal';
+import { motoristasComCustos } from '@/components/administrativo/motorista-resumo/motoristasComCustos';
 import { normalizeName, isNameMatch } from '@/components/administrativo/motoristaNomeMatching';
 import { type MotoristaResumo } from '@/components/administrativo/contasResumoExports';
 import {
@@ -606,71 +607,32 @@ export function useContasResumoSemana(
         agrupado[key].gorjeta = (agrupado[key].gorjeta || 0) + (uberData.gorjeta || 0);
       });
 
-      for (const [motoristaId, totalFuel] of Object.entries(combustivelByMotorista)) {
-        if (!agrupado[motoristaId] && totalFuel > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
+      // Outros custos contam somados, como antes (um crédito pode anular um débito).
+      const outrosCustosByMotorista: Record<string, number> = {};
+      for (const mapa of [adhocByMotorista, caucaoByMotorista, segurosByMotorista]) {
+        for (const [id, valor] of Object.entries(mapa)) {
+          outrosCustosByMotorista[id] = (outrosCustosByMotorista[id] || 0) + valor;
         }
       }
 
-      for (const [motoristaId, totalRep] of Object.entries(reparacoesByMotorista)) {
-        if (!agrupado[motoristaId] && totalRep > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
-        }
-      }
-
-      const custosDoMotorista = (id: string) =>
-        (adhocByMotorista[id] || 0) + (caucaoByMotorista[id] || 0) + (segurosByMotorista[id] || 0);
-
-      for (const motoristaId of new Set([
-        ...Object.keys(adhocByMotorista),
-        ...Object.keys(caucaoByMotorista),
-        ...Object.keys(segurosByMotorista),
+      for (const motoristaId of motoristasComCustos([
+        combustivelByMotorista,
+        reparacoesByMotorista,
+        outrosCustosByMotorista,
+        slotByMotorista,
+        aluguerByMotorista,
+        portagensByMotorista,
       ])) {
-        if (!agrupado[motoristaId] && custosDoMotorista(motoristaId) > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
-        }
-      }
-
-      for (const [motoristaId, totalSlotMotorista] of Object.entries(slotByMotorista)) {
-        if (!agrupado[motoristaId] && totalSlotMotorista > 0) {
-          const motData = motoristaById.get(motoristaId);
-          agrupado[motoristaId] = {
-            motorista_id: motoristaId,
-            driver_name: motData?.nome || 'Desconhecido',
-            driver_uuid: '',
-            faturado_bolt: 0,
-            faturado_uber: 0,
-            viagens_bolt: 0,
-            viagens_uber: 0,
-          };
-        }
+        if (agrupado[motoristaId]) continue;
+        agrupado[motoristaId] = {
+          motorista_id: motoristaId,
+          driver_name: motoristaById.get(motoristaId)?.nome || 'Desconhecido',
+          driver_uuid: '',
+          faturado_bolt: 0,
+          faturado_uber: 0,
+          viagens_bolt: 0,
+          viagens_uber: 0,
+        };
       }
 
       const fundir = (alvoKey: string, dupKey: string) => {
