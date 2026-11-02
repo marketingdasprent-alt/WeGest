@@ -8363,6 +8363,7 @@ export type Database = {
           retencao_irs_pct: number
           retencao_iva_pct: number
           seguro_valor_semanal: number | null
+          slot_semana_cobranca: number
           slot_valor_semanal: number | null
           status_ativo: boolean | null
           telefone: string | null
@@ -8421,6 +8422,7 @@ export type Database = {
           retencao_irs_pct?: number
           retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
+          slot_semana_cobranca?: number
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
           telefone?: string | null
@@ -8479,6 +8481,7 @@ export type Database = {
           retencao_irs_pct?: number
           retencao_iva_pct?: number
           seguro_valor_semanal?: number | null
+          slot_semana_cobranca?: number
           slot_valor_semanal?: number | null
           status_ativo?: boolean | null
           telefone?: string | null
@@ -9500,6 +9503,7 @@ export type Database = {
           morada: string | null
           nif: string | null
           nome: string
+          slot_mensal_automatico: boolean
           telefone: string | null
           updated_at: string
         }
@@ -9516,6 +9520,7 @@ export type Database = {
           morada?: string | null
           nif?: string | null
           nome: string
+          slot_mensal_automatico?: boolean
           telefone?: string | null
           updated_at?: string
         }
@@ -9532,6 +9537,7 @@ export type Database = {
           morada?: string | null
           nif?: string | null
           nome?: string
+          slot_mensal_automatico?: boolean
           telefone?: string | null
           updated_at?: string
         }
@@ -16537,6 +16543,10 @@ export type Database = {
       }
       gerar_seguros_semanais: {
         Args: { p_semanas_a_frente?: number }
+        Returns: number
+      }
+      gerar_slot_mensal_motoristas: {
+        Args: { p_data?: string }
         Returns: number
       }
       gerar_token_danos: {
