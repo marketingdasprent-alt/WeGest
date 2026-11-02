@@ -22,6 +22,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { normalizeFirstLast, isCompanyName } from './motoristaNomeMatching';
 import { contarInativosEscondidos, inativoVisivelNoResumo } from '@/utils/motoristasInativosResumo';
+import { entraNosNegativos } from '@/utils/saldoNegativoResumo';
 import { useContasResumoSemana } from '@/hooks/useContasResumoSemana';
 import { useCombustivelSemDono } from '@/hooks/useCombustivelSemDono';
 import { CombustivelSemDonoAviso } from './CombustivelSemDonoAviso';
@@ -326,14 +327,16 @@ export function ContasResumoTab() {
       if (searchTerm && !matchesSearch(r.driver_name, searchTerm)) return false;
       if (filterRecibo === 'verde' && !r.recibo_verde) return false;
       if (filterRecibo === 'nao_verde' && r.recibo_verde) return false;
-      if (filterSaldo === 'negativos') {
-        if (r.liquido >= 0) return false;
-        if (r.total_faturado === 0) return false;
-        if (r.motorista_id && dataContratacaoMap[r.motorista_id]) {
-          const dc = new Date(dataContratacaoMap[r.motorista_id]);
-          if (dc >= weekStart && dc <= weekEnd) return false;
-        }
-      }
+      if (
+        filterSaldo === 'negativos' &&
+        !entraNosNegativos(
+          r,
+          r.motorista_id ? dataContratacaoMap[r.motorista_id] : undefined,
+          weekStart,
+          weekEnd
+        )
+      )
+        return false;
       if (filterSaldo === 'positivos' && r.liquido < 0) return false;
       if (filterGestor !== 'todos') {
         const gestor = r.motorista_id ? gestorMap[r.motorista_id] || '' : '';
