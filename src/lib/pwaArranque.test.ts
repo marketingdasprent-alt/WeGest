@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EVENTO_VERSAO_NOVA, arrancarPwa, desligarPwa, usaServiceWorker } from './pwaArranque';
+import {
+  EVENTO_VERSAO_NOVA,
+  arrancarPwa,
+  desligarPwa,
+  repararPrecache,
+  usaServiceWorker,
+} from './pwaArranque';
 
 /** Janela falsa com o que o arranque usa: SW, caches, document e eventos. */
 function janelaFalsa() {
@@ -79,5 +85,44 @@ describe('desligarPwa', () => {
     const documento = document.implementation.createHTMLDocument('x');
     const janela = { document: documento, navigator: {} } as unknown as Window;
     await expect(desligarPwa(janela)).resolves.toBeUndefined();
+  });
+});
+
+describe('repararPrecache', () => {
+  function janelaComPrecache(urls: string[], controlado = true) {
+    const unregister = vi.fn(async () => true);
+    const janela = {
+      navigator: {
+        serviceWorker: {
+          controller: controlado ? {} : null,
+          getRegistrations: vi.fn(async () => [{ unregister }]),
+        },
+      },
+      caches: {
+        keys: vi.fn(async () => ['workbox-precache-v2-https://wegest.pt/', 'images-cache']),
+        open: vi.fn(async () => ({ keys: async () => urls.map((url) => ({ url })) })),
+      },
+    } as unknown as Window;
+    return { janela, unregister };
+  }
+
+  it('tira o SW quando o precache perdeu o index.html (caso do botão Atualizar)', async () => {
+    const { janela, unregister } = janelaComPrecache([]);
+    await expect(repararPrecache(janela)).resolves.toBe(true);
+    expect(unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it('deixa o SW em paz com o index.html no precache', async () => {
+    const { janela, unregister } = janelaComPrecache([
+      'https://wegest.pt/index.html?__WB_REVISION__=abc',
+    ]);
+    await expect(repararPrecache(janela)).resolves.toBe(false);
+    expect(unregister).not.toHaveBeenCalled();
+  });
+
+  it('sem SW a controlar (primeira instalação) não mexe', async () => {
+    const { janela, unregister } = janelaComPrecache([], false);
+    await expect(repararPrecache(janela)).resolves.toBe(false);
+    expect(unregister).not.toHaveBeenCalled();
   });
 });
