@@ -1,5 +1,5 @@
 -- ============================================================
--- Notas de crédito ligadas à fatura que corrigem (20261102170000)
+-- Notas de crédito ligadas à fatura que corrigem (20261102200000)
 -- ============================================================
 -- O teto das NC soma o que já foi creditado contra cada fatura. O backfill das NC
 -- antigas só liga por cobrança quando a cobrança tem UMA fatura (FT/FR) na mesma
