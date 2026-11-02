@@ -38,11 +38,9 @@ export function UpdateNotification() {
       <Button
         size="sm"
         onClick={async () => {
+          // Não apagar caches aqui: levava o precache do SW novo, e cada
+          // navegação seguinte caía com ERR_FAILED (ver repararPrecache).
           await window.__swUpdate?.();
-          if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map((k) => caches.delete(k)));
-          }
           window.location.reload();
         }}
         className="shrink-0 gap-1.5"
