@@ -70,3 +70,25 @@ export const percentagem = (taxa: number) =>
 export function levaCorteSeisPorCento(reciboVerde: boolean, retencao: boolean): boolean {
   return !reciboVerde || retencao;
 }
+
+/** Corte de quem não passa recibo: 6% no continente; nos Açores a ficha diz 4%. */
+export const CORTE_SEM_RECIBO_OMISSAO = 0.06;
+
+/** Taxa do corte da ficha (corte_sem_recibo_pct, em %), em fração. */
+export function corteSemReciboDaFicha(ficha: {
+  corte_sem_recibo_pct?: number | string | null;
+}): number {
+  const pct = Number(ficha.corte_sem_recibo_pct);
+  return ficha.corte_sem_recibo_pct == null || !Number.isFinite(pct)
+    ? CORTE_SEM_RECIBO_OMISSAO
+    : pct / 100;
+}
+
+/** Por quanto se dividem os ganhos das plataformas: 1 sem corte, 1,06 ou 1,04 com ele. */
+export function divisorCorte(
+  reciboVerde: boolean,
+  retencao: boolean,
+  corte: number = CORTE_SEM_RECIBO_OMISSAO
+): number {
+  return levaCorteSeisPorCento(reciboVerde, retencao) ? 1 + corte : 1;
+}
