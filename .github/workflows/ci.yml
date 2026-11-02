@@ -391,7 +391,8 @@ jobs:
             dano_ligado_ao_ticket \
             ti_ticket_mensagens \
             km_excedente_no_fecho \
-            rls_automacao_monitorizacao
+            rls_automacao_monitorizacao \
+            invoices_documento_referencia
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

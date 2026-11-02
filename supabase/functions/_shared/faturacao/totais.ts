@@ -12,6 +12,8 @@ export interface LinhaParaTotal {
 /** Até 5 cêntimos é arredondamento por linha, não um documento errado. */
 export const TOLERANCIA_TOTAL = 0.05;
 
+export const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
 export function totalComIva(itens: LinhaParaTotal[]): number {
   return itens.reduce((s, it) => {
     const base = (Number(it.quantidade) || 0) * (Number(it.preco_unitario) || 0);

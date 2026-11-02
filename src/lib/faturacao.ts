@@ -159,6 +159,52 @@ export async function buscarOpcoesFaturacao(
   return data.opcoes ?? [];
 }
 
+/** O que o software de faturação guardou de uma FT/FR e quanto dela já foi creditado. */
+export type DocumentoFiscalConsultado =
+  | { suportado: false }
+  | {
+      suportado: true;
+      totalProvider: number;
+      totalWegest: number | null;
+      ncsEmitidas: number;
+      saldoCreditavel: number;
+      voided: boolean;
+    };
+
+/** Pergunta ao fornecedor o total real de uma fatura (teto das notas de crédito). Só leitura. */
+export async function consultarDocumentoFiscal(
+  documentoReferencia: string,
+  cobrancaId?: string
+): Promise<DocumentoFiscalConsultado> {
+  const { data, error } = await supabase.functions.invoke<{
+    success: boolean;
+    error?: string;
+    suportado?: boolean;
+    totalProvider?: number;
+    totalWegest?: number | null;
+    ncsEmitidas?: number;
+    saldoCreditavel?: number;
+    voided?: boolean;
+  }>(FN, {
+    body: {
+      action: 'consultar_documento',
+      documento_referencia: documentoReferencia,
+      cobranca_id: cobrancaId,
+    },
+  });
+  if (error) throw new Error(error.message || 'Falha a contactar o serviço de faturação');
+  if (!data?.success) throw new Error(data?.error || 'Não foi possível consultar o documento');
+  if (data.suportado === false) return { suportado: false };
+  return {
+    suportado: true,
+    totalProvider: Number(data.totalProvider ?? 0),
+    totalWegest: data.totalWegest ?? null,
+    ncsEmitidas: Number(data.ncsEmitidas ?? 0),
+    saldoCreditavel: Number(data.saldoCreditavel ?? 0),
+    voided: data.voided === true,
+  };
+}
+
 /** Health-check: confirma que a edge function autentica no provider configurado. */
 export async function checkFaturacaoHealth(): Promise<boolean> {
   try {

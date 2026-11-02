@@ -40,6 +40,8 @@
 //              body ({ provider, apiKey, settings }) para testar ANTES de gravar.
 //   'preflight' — confirma que a org tem o Recibo (RC) configurado e a chave
 //                 autentica, ANTES de se criar um acordo de parcelamento.
+//   'consultar_documento' — lê na KeyInvoice o total de uma FT/FR e o que já foi creditado
+//              (teto das notas de crédito). Só leitura. Body: { cobranca_id?, documento_referencia }
 //   'pdf'    — devolve o PDF (base64). Body: { invoice_id, provider_doctype?, provider_docnum?, serie?, signed? }
 //              PDF e 'void_receipt' usam a integração gravada na fatura
 //              (invoices.integracao_id) — ver getConfigDoDocumento.
@@ -75,7 +77,13 @@ import {
   recusaPorEmissaoIncerta,
   verificarEmissaoIncerta,
 } from '../_shared/faturacao/reemissao.ts';
-import { avisoTotalDivergente, totalComIva } from '../_shared/faturacao/totais.ts';
+import {
+  ncsContraOriginal,
+  recusaNotaCredito,
+  saldoCreditavel,
+  type NcParaSoma,
+} from '../_shared/faturacao/correcao.ts';
+import { avisoTotalDivergente, round2, totalComIva } from '../_shared/faturacao/totais.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -104,7 +112,14 @@ const PROVIDERS: Record<string, FaturacaoProvider> = {
 const DEFAULT_PROVIDER = 'keyinvoice';
 
 interface Body {
-  action?: 'emit' | 'health' | 'pdf' | 'preflight' | 'void_receipt' | 'opcoes';
+  action?:
+    | 'emit'
+    | 'health'
+    | 'pdf'
+    | 'preflight'
+    | 'void_receipt'
+    | 'opcoes'
+    | 'consultar_documento';
   // emit
   tipo?: 'FT' | 'FR' | 'NC' | 'RC';
   cliente?: Cliente;
@@ -146,8 +161,6 @@ function json(body: unknown, status = 200): Response {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
-
-const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
 
 /** Cliente Supabase com o JWT do chamador (p/ RLS + trigger de org_id). */
 function callerClient(req: Request) {
@@ -523,45 +536,72 @@ async function ultimaIntegracaoUsada(orgId: string, payload: Body): Promise<stri
   return (data?.integracao_id as string | null) ?? null;
 }
 
+/** Fatura (FT/FR) que uma NC ou um RC corrige ou liquida, como está no espelho local. */
+interface FaturaOriginal {
+  id: string;
+  cobranca_id: string | null;
+  total: number | null;
+  integracao_id: string | null;
+  provider_doctype: string | null;
+  serie: string | null;
+  provider_docnum: string | null;
+}
+
+/** Procura a fatura pelo número (documento_referencia), sempre dentro da org de quem pede. */
+async function faturaOriginalPorNumero(
+  orgId: string,
+  payload: Body,
+  emissorId: string | null
+): Promise<FaturaOriginal | null> {
+  // Do mais específico para o geral: duas empresas da org podem repetir o mesmo número.
+  const porNumero = () =>
+    serviceClient()
+      .from('invoices')
+      .select('id, cobranca_id, total, integracao_id, provider_doctype, serie, provider_docnum')
+      .eq('org_id', orgId)
+      .eq('numero', payload.documento_referencia ?? '')
+      .in('tipo', ['FT', 'FR'])
+      .not('integracao_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+  let original: FaturaOriginal | null = null;
+  if (payload.cobranca_id) {
+    ({ data: original } = await porNumero().eq('cobranca_id', payload.cobranca_id).maybeSingle());
+  }
+  if (!original?.integracao_id && payload.contrato_id) {
+    ({ data: original } = await porNumero().eq('contrato_id', payload.contrato_id).maybeSingle());
+  }
+  if (!original?.integracao_id) {
+    ({ data: original } = await porNumero().maybeSingle());
+    if (original?.integracao_id) {
+      const daEmpresa = emissorId ? await integracoesDaEmpresa(orgId, emissorId) : [];
+      if (!originalPorNumeroValido(original.integracao_id, daEmpresa)) original = null;
+    }
+  }
+  return original?.integracao_id ? original : null;
+}
+
 /**
  * Config para EMITIR. FT/FR: a integração escolhida (ou a única ativa). NC/RC: sempre a da
  * fatura original, mesmo inativa — o documento só pode ser corrigido ou liquidado onde existe.
+ * `original` vem preenchido quando a NC/RC aponta para uma fatura identificada.
  */
 async function configParaEmitir(
   req: Request,
   payload: Body,
   emissorId: string | null
-): Promise<{ provider: string; cfg: ProviderConfig; orgId: string; integracaoId: string }> {
+): Promise<{
+  provider: string;
+  cfg: ProviderConfig;
+  orgId: string;
+  integracaoId: string;
+  original: FaturaOriginal | null;
+}> {
   const orgId = await resolverOrgId(req, payload.org_id);
   if (!orgId) throw new EmpresaSemFaturacaoError('Não foi possível determinar a organização.');
-  const db = serviceClient();
 
   if (payload.tipo === 'NC' || payload.tipo === 'RC') {
-    // Do mais específico para o geral: duas empresas da org podem repetir o mesmo número.
-    const porNumero = () =>
-      db
-        .from('invoices')
-        .select('integracao_id')
-        .eq('org_id', orgId)
-        .eq('numero', payload.documento_referencia ?? '')
-        .in('tipo', ['FT', 'FR'])
-        .not('integracao_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1);
-    let original: { integracao_id: string | null } | null = null;
-    if (payload.cobranca_id) {
-      ({ data: original } = await porNumero().eq('cobranca_id', payload.cobranca_id).maybeSingle());
-    }
-    if (!original?.integracao_id && payload.contrato_id) {
-      ({ data: original } = await porNumero().eq('contrato_id', payload.contrato_id).maybeSingle());
-    }
-    if (!original?.integracao_id) {
-      ({ data: original } = await porNumero().maybeSingle());
-      if (original?.integracao_id) {
-        const daEmpresa = emissorId ? await integracoesDaEmpresa(orgId, emissorId) : [];
-        if (!originalPorNumeroValido(original.integracao_id, daEmpresa)) original = null;
-      }
-    }
+    const original = await faturaOriginalPorNumero(orgId, payload, emissorId);
     if (original?.integracao_id) {
       const row = await linhaDaOrgPorId(orgId, original.integracao_id);
       if (!row) {
@@ -575,6 +615,7 @@ async function configParaEmitir(
         cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
         orgId,
         integracaoId: c.integracaoId,
+        original,
       };
     }
     // Sem original identificável: escolhe-se como numa fatura (comportamento anterior).
@@ -598,6 +639,7 @@ async function configParaEmitir(
     cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
     orgId,
     integracaoId: c.integracaoId,
+    original: null,
   };
 }
 
@@ -605,6 +647,44 @@ function pickAdapter(provider: string): FaturacaoProvider {
   const adapter = PROVIDERS[provider];
   if (!adapter) throw new Error(`Provider de faturação desconhecido: ${provider}`);
   return adapter;
+}
+
+/** Total do documento no provider e o que já se creditou contra ele; null se o provider não consulta. */
+async function saldoNoProvider(
+  adapter: FaturacaoProvider,
+  cfg: ProviderConfig,
+  orgId: string,
+  original: FaturaOriginal
+) {
+  if (!adapter.consultar) return null;
+  const doc = await adapter.consultar(
+    {
+      doctype: original.provider_doctype ?? '',
+      serie: original.serie ?? '',
+      docnum: original.provider_docnum ?? '',
+    },
+    cfg
+  );
+  // Ligadas por id, e as antigas (sem ligação) da mesma cobrança; o filtro fino é do módulo puro.
+  const porCobranca = original.cobranca_id
+    ? `,and(documento_referencia_id.is.null,cobranca_id.eq.${original.cobranca_id})`
+    : '';
+  const { data, error } = await serviceClient()
+    .from('invoices')
+    .select('documento_referencia_id, cobranca_id, total')
+    .eq('org_id', orgId)
+    .eq('tipo', 'NC')
+    .eq('status', 'emitida')
+    .or(`documento_referencia_id.eq.${original.id}${porCobranca}`);
+  if (error) throw new Error(`Falha a ler as notas de crédito já emitidas: ${error.message}`);
+  const ncsEmitidas = ncsContraOriginal(original, (data ?? []) as NcParaSoma[]);
+  const totalDocumento = round2(doc.grossTotal);
+  return {
+    doc,
+    ncsEmitidas: round2(ncsEmitidas.reduce((a, b) => a + b, 0)),
+    // Fatura anulada na KeyInvoice: já não há nada a creditar.
+    saldo: doc.voided ? 0 : saldoCreditavel({ totalDocumento, ncsEmitidas }),
+  };
 }
 
 serve(async (req) => {
@@ -739,6 +819,46 @@ serve(async (req) => {
     }
   }
 
+  // ── consultar_documento (só leitura: total na KeyInvoice e NC já emitidas) ──
+  // Não grava em failed_jobs: é uma pergunta do ecrã, não uma emissão.
+  if (payload.action === 'consultar_documento') {
+    try {
+      if (!payload.documento_referencia) {
+        return json({
+          success: false,
+          error: 'consultar_documento: documento_referencia obrigatório',
+        });
+      }
+      const emissorId = await resolverEmissorId(payload);
+      const { provider, cfg, orgId, original } = await configParaEmitir(
+        req,
+        { ...payload, tipo: 'NC' },
+        emissorId
+      );
+      if (!original) {
+        return json({
+          success: false,
+          error: `Documento "${payload.documento_referencia}" não encontrado nesta organização.`,
+        });
+      }
+      const r = await saldoNoProvider(pickAdapter(provider), cfg, orgId, original);
+      if (!r) return json({ success: true, suportado: false });
+      return json({
+        success: true,
+        totalProvider: r.doc.grossTotal,
+        totalWegest: original.total,
+        ncsEmitidas: r.ncsEmitidas,
+        saldoCreditavel: r.saldo,
+        voided: r.doc.voided,
+      });
+    } catch (e) {
+      console.error('[faturacao-emitir] consultar_documento falhou:', (e as Error).message, {
+        documento_referencia: payload.documento_referencia ?? null,
+      });
+      return json({ success: false, error: (e as Error).message });
+    }
+  }
+
   // ── pdf (base64 on-demand) ──
   if (payload.action === 'pdf') {
     try {
@@ -804,7 +924,11 @@ serve(async (req) => {
   try {
     const emissorId = await resolverEmissorId(payload);
     contexto.emissorId = emissorId;
-    const { provider, cfg, orgId, integracaoId } = await configParaEmitir(req, payload, emissorId);
+    const { provider, cfg, orgId, integracaoId, original } = await configParaEmitir(
+      req,
+      payload,
+      emissorId
+    );
     contexto.provider = provider;
     contexto.integracaoId = integracaoId;
     const adapter = pickAdapter(provider);
@@ -817,6 +941,33 @@ serve(async (req) => {
     const supabase = isServiceRole
       ? createClient(env('SUPABASE_URL') ?? '', env('SUPABASE_SERVICE_ROLE_KEY') ?? '')
       : callerClient(req);
+
+    // NC: nunca acima do que o documento vale na KeyInvoice, e nunca sem se saber qual é a fatura.
+    // O diálogo reconsulta no clique, antes de gravar; isso reduz (não elimina) a janela de corrida.
+    if (payload.tipo === 'NC') {
+      if (!original) {
+        return json({
+          success: false,
+          error:
+            'Não foi possível identificar a fatura de origem desta nota de crédito; nada foi emitido.',
+          classe: 'known_failed',
+        });
+      }
+      let recusa = '';
+      try {
+        const r = await saldoNoProvider(adapter, cfg, orgId, original);
+        if (r?.doc.voided) {
+          recusa = 'A fatura está anulada na KeyInvoice; nada foi emitido.';
+        } else if (r) {
+          recusa = recusaNotaCredito({ pedido: totalComIva(payload.itens), saldo: r.saldo }) ?? '';
+        }
+      } catch (e) {
+        console.error('[faturacao-emitir] teto da NC: consulta falhou:', (e as Error).message);
+        recusa =
+          'Não foi possível confirmar o total da fatura na KeyInvoice; nada foi emitido. Tente de novo.';
+      }
+      if (recusa) return json({ success: false, error: recusa, classe: 'known_failed' });
+    }
 
     // Recibo (RC): a KeyInvoice não usa "tipo de documento" próprio para
     // insertReceipt — referencia o documento ORIGINAL (FT/FR) por
@@ -886,6 +1037,7 @@ serve(async (req) => {
         tipo: payload.tipo,
         provider,
         integracao_id: integracaoId,
+        ...(payload.tipo === 'NC' && original ? { documento_referencia_id: original.id } : {}),
         provider_doctype: doc.doctype,
         provider_docnum: doc.docnum || null,
         serie: doc.serie || null,
@@ -914,6 +1066,8 @@ serve(async (req) => {
       return json({
         success: true,
         warning: [avisoDb, avisoTotal].filter(Boolean).join(' '),
+        // O documento existe no provider mas não no espelho local: o chamador tem de o dizer alto.
+        localGravado: false,
         provider: providerMeta,
       });
     }
@@ -921,6 +1075,7 @@ serve(async (req) => {
     return json({
       success: true,
       invoice,
+      localGravado: true,
       provider: providerMeta,
       ...(avisoTotal ? { warning: avisoTotal } : {}),
     });

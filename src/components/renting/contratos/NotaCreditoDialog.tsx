@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -17,9 +17,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
-import { emitirDocumento, baixarDocumentoPdf, carregarClienteParaFatura } from '@/lib/faturacao';
+import {
+  emitirDocumento,
+  baixarDocumentoPdf,
+  carregarClienteParaFatura,
+  consultarDocumentoFiscal,
+} from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
+import { useDocumentoFiscal } from '@/hooks/useDocumentoFiscal';
 import { faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { semCodigo } from '@/types/codigoPorOrg';
 
@@ -64,24 +70,47 @@ export function NotaCreditoDialog({
   const qc = useQueryClient();
   const { data: orgDef } = useOrgDefinicoes();
   const providerLabel = faturacaoProviderLabel(orgDef?.faturacao_provider);
+  // 'na KeyInvoice', mas 'no software de faturação' quando a org não tem fornecedor definido.
+  const naOrigem = `${orgDef?.faturacao_provider ? 'na' : 'no'} ${providerLabel}`;
   const [valor, setValor] = useState('');
   const [motivo, setMotivo] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const totalCobranca = round2(cobranca?.valor_total ?? 0);
-  const saldoDisponivel = round2(Math.max(0, totalCobranca - jaCreditado));
+  const saldoWegest = round2(Math.max(0, totalCobranca - jaCreditado));
+  // O documento fiscal pode valer menos que a cobrança (26 FT da Sul, 10/2026): o teto é o menor.
+  const fiscalRef = cobranca?.documento_externo_ref ?? null;
+  const fiscalQuery = useDocumentoFiscal(fiscalRef, cobranca?.id, orgId, open);
+  const fiscal = fiscalQuery.data?.suportado ? fiscalQuery.data : null;
+  const aConsultar = !!fiscalRef && open && fiscalQuery.isFetching;
+  const consultaFalhou = !!fiscalRef && !aConsultar && fiscalQuery.isError;
+  const saldoDisponivel = fiscal
+    ? round2(Math.min(saldoWegest, fiscal.saldoCreditavel))
+    : saldoWegest;
+  const naoConfirmado = !!fiscalRef && !aConsultar && fiscalQuery.data?.suportado === false;
   const taxaIva = cobranca?.taxa_iva ?? 23;
   const docOriginal =
     cobranca?.documento_externo_ref || (cobranca ? cobranca.id.slice(0, 8).toUpperCase() : '—');
 
-  // Ao abrir, propõe o saldo disponível como valor por defeito.
   useEffect(() => {
-    if (open) {
-      setValor(saldoDisponivel > 0 ? String(saldoDisponivel) : '');
-      setMotivo(defaultMotivo ?? '');
-    }
+    if (open) setMotivo(defaultMotivo ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, cobranca?.id]);
+
+  // Propõe o máximo uma só vez por cobrança, depois da consulta, e nunca por cima do que se escreveu.
+  const jaPreenchido = useRef<string | null>(null);
+  const campoTocado = useRef(false);
+  useEffect(() => {
+    if (!open) {
+      jaPreenchido.current = null;
+      campoTocado.current = false;
+      return;
+    }
+    if (aConsultar || !cobranca || jaPreenchido.current === cobranca.id) return;
+    jaPreenchido.current = cobranca.id;
+    if (!campoTocado.current) setValor(saldoDisponivel > 0 ? String(saldoDisponivel) : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, cobranca?.id, aConsultar]);
 
   const valorNum = round2(parseFloat(valor.replace(',', '.')) || 0);
   const saldoRestante = round2(saldoDisponivel - valorNum);
@@ -90,13 +119,33 @@ export function NotaCreditoDialog({
 
   const erro = useMemo(() => {
     if (!cobranca) return 'Sem cobrança selecionada.';
+    if (aConsultar) return `A confirmar o total da fatura ${naOrigem}…`;
+    if (consultaFalhou) {
+      return (
+        `Não foi possível confirmar o total da fatura ${naOrigem} ` +
+        `(${fiscalQuery.error?.message || 'erro desconhecido'}). Não é possível emitir a nota de crédito.`
+      );
+    }
+    if (fiscal?.voided) {
+      return `A fatura está anulada ${naOrigem}; não é possível emitir a nota de crédito.`;
+    }
     if (saldoDisponivel <= 0) return 'Esta cobrança já está totalmente creditada.';
     if (valorNum <= 0) return 'Indique um valor a creditar.';
     if (valorNum > saldoDisponivel + 0.005)
       return `O valor excede o saldo por creditar (${formatCurrency(saldoDisponivel)}).`;
     if (!motivo.trim()) return 'A justificação é obrigatória.';
     return null;
-  }, [cobranca, saldoDisponivel, valorNum, motivo]);
+  }, [
+    cobranca,
+    aConsultar,
+    consultaFalhou,
+    fiscal?.voided,
+    fiscalQuery.error,
+    naOrigem,
+    saldoDisponivel,
+    valorNum,
+    motivo,
+  ]);
 
   async function handleEmitir() {
     if (!cobranca || erro) {
@@ -105,6 +154,34 @@ export function NotaCreditoDialog({
     }
     setSubmitting(true);
     try {
+      // O trigger de notas_credito lança o crédito logo ao inserir, por isso o teto confirma-se
+      // aqui, com o saldo de agora e não o de quando o diálogo abriu (reduz a janela de corrida).
+      if (cobranca.documento_externo_ref) {
+        const fresco = await consultarDocumentoFiscal(
+          cobranca.documento_externo_ref,
+          cobranca.id
+        ).catch((e: unknown) => {
+          const motivo = e instanceof Error && e.message ? e.message : 'erro desconhecido';
+          throw new Error(
+            `Não foi possível confirmar o total da fatura ${naOrigem} (${motivo}). Nada foi gravado.`
+          );
+        });
+        if (fresco.suportado) {
+          qc.invalidateQueries({ queryKey: ['documento-fiscal'] });
+          const maximo = round2(Math.min(saldoWegest, fresco.saldoCreditavel));
+          if (fresco.voided) {
+            toast.error(`A fatura está anulada ${naOrigem}. Nada foi gravado.`);
+            return;
+          }
+          if (valorNum > maximo + 0.005) {
+            toast.error(
+              `O saldo por creditar mudou para ${formatCurrency(maximo)}. Nada foi gravado: ajuste o valor.`
+            );
+            return;
+          }
+        }
+      }
+
       // Antes de gravar: se a ficha não lê, falha sem deixar a nota de crédito registada.
       const cliente = cobranca.documento_externo_ref
         ? await carregarClienteParaFatura(cobranca.destinatario_id, cobranca.destinatario_nome)
@@ -134,6 +211,7 @@ export function NotaCreditoDialog({
       const numero = codigo != null ? `NC-${codigo}` : 'Nota de Crédito';
 
       qc.invalidateQueries({ queryKey: ['renting'] });
+      qc.invalidateQueries({ queryKey: ['documento-fiscal'] });
       if (cobranca.contrato_id) {
         qc.invalidateQueries({ queryKey: ['contrato-cobrancas', cobranca.contrato_id] });
         qc.invalidateQueries({ queryKey: ['contrato-notas-credito', cobranca.contrato_id] });
@@ -192,7 +270,15 @@ export function NotaCreditoDialog({
           toast.success(
             `Nota de crédito ${res.provider?.FullDocNumber ?? numero} emitida no ${providerLabel} (${formatCurrency(valorNum)}).`
           );
-          if (res.warning) toast.warning(res.warning);
+          if (res.localGravado === false) {
+            toast.error(
+              `A nota de crédito foi emitida ${naOrigem} mas NÃO ficou registada no WeGest. ` +
+                'Avise um administrador antes de emitir outra.',
+              { duration: DURACAO_AVISO_FALHA_MS }
+            );
+          } else if (res.warning) {
+            toast.warning(res.warning);
+          }
           qc.invalidateQueries({ queryKey: ['invoices-by-contrato', cobranca.contrato_id] });
         } catch (kiErr: unknown) {
           console.error('Falha a emitir a nota de crédito no provider:', kiErr);
@@ -246,8 +332,35 @@ export function NotaCreditoDialog({
             {jaCreditado > 0 && (
               <Linha label="Já creditado" value={`− ${formatCurrency(jaCreditado)}`} muted />
             )}
-            <Linha label="Saldo por creditar" value={formatCurrency(saldoDisponivel)} strong />
+            {fiscal ? (
+              <>
+                <Linha label={`Total ${naOrigem}`} value={formatCurrency(fiscal.totalProvider)} />
+                <Linha
+                  label={`Já creditado ${naOrigem}`}
+                  value={`− ${formatCurrency(fiscal.ncsEmitidas)}`}
+                  muted
+                />
+                <Linha label="Máximo a creditar" value={formatCurrency(saldoDisponivel)} strong />
+              </>
+            ) : (
+              <Linha label="Saldo por creditar" value={formatCurrency(saldoDisponivel)} strong />
+            )}
           </div>
+          {naoConfirmado && (
+            <p className="text-xs text-muted-foreground">
+              Total não confirmado no software de faturação — limite pelo valor do WeGest.
+            </p>
+          )}
+          {(aConsultar || consultaFalhou || fiscal?.voided) && (
+            <p
+              className={cn(
+                'text-xs',
+                consultaFalhou || fiscal?.voided ? 'text-destructive' : 'text-muted-foreground'
+              )}
+            >
+              {erro}
+            </p>
+          )}
 
           <div className="space-y-1.5">
             <Label className="text-xs">Valor a creditar</Label>
@@ -257,8 +370,11 @@ export function NotaCreditoDialog({
               step="0.01"
               max={saldoDisponivel}
               value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              disabled={saldoDisponivel <= 0}
+              onChange={(e) => {
+                campoTocado.current = true;
+                setValor(e.target.value);
+              }}
+              disabled={saldoDisponivel <= 0 || aConsultar || consultaFalhou}
               className="h-9"
             />
             {excede ? (
