@@ -9,6 +9,7 @@ import {
   trustedRequestIp,
 } from '../_shared/rate-limit/rateLimit.ts';
 import { EmailService } from '../_shared/email/services/EmailService.ts';
+import { montarLinkRecuperacao } from '../_shared/auth/linkRecuperacao.ts';
 import { captchaResponse, verificarCaptcha } from '../_shared/captcha/turnstile.ts';
 
 // Registo público de organização (/registar-org). Admin nasce por confirmar
@@ -221,13 +222,14 @@ Deno.serve(async (req) => {
       );
       try {
         const emailService = new EmailService(supabase);
+        const redirectTo = resolveRedirect(req).replace(/\/login$/, '/reset-password');
         const { data: link } = await supabase.auth.admin.generateLink({
           type: 'recovery',
           email: emailNorm,
-          options: { redirectTo: resolveRedirect(req).replace(/\/login$/, '/reset-password') },
+          options: { redirectTo },
         } as any);
-        // @ts-ignore - properties shape provided by Supabase
-        const actionLink = (link?.properties as any)?.action_link as string | undefined;
+        const hashedToken = (link?.properties as any)?.hashed_token as string | undefined;
+        const actionLink = hashedToken ? montarLinkRecuperacao(redirectTo, hashedToken) : undefined;
         if (actionLink && perfilExistente.org_id) {
           await emailService.sendAuthEmail(perfilExistente.org_id, {
             to: emailNorm,
