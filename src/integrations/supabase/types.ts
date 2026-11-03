@@ -16832,6 +16832,10 @@ export type Database = {
         Args: { p_contrato: string; p_desde: string }
         Returns: string
       }
+      motorista_bolt_liquido_semana: {
+        Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
+        Returns: number
+      }
       motorista_extrato_periodo: {
         Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
         Returns: {
