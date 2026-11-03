@@ -8,6 +8,7 @@ import { Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import type { Database } from '@/integrations/supabase/types';
+import { CONTAS_VALIDAS_DESDE } from './dashboardStats';
 
 type Movimento = Database['public']['Tables']['motorista_financeiro']['Row'];
 
@@ -44,6 +45,7 @@ export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCard
         .from('motorista_financeiro')
         .select('*')
         .eq('motorista_id', motoristaId)
+        .gte('data_movimento', CONTAS_VALIDAS_DESDE)
         .order('data_movimento', { ascending: false })
         .limit(limite);
 

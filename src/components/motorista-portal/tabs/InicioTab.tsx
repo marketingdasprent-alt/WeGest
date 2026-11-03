@@ -121,6 +121,7 @@ export const InicioTab: React.FC<InicioTabProps> = ({ motorista, usaRecibos }) =
         inicio={semana.inicio}
         fim={semana.fim}
         semanasAtras={semana.semanasAtras}
+        podeAnterior={semana.podeAnterior}
         onAnterior={semana.anterior}
         onSeguinte={semana.seguinte}
       />

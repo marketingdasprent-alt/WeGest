@@ -45,6 +45,7 @@ import { format, startOfWeek, addDays, addWeeks, isBefore, isEqual } from 'date-
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { CONTAS_VALIDAS_DESDE } from './dashboardStats';
 
 interface Recibo {
   id: string;
@@ -130,7 +131,11 @@ export function MotoristaRecibosCard({
 
     const semanas: SemanaOption[] = [];
     const dataContratacaoDate = new Date(dataContratacao);
-    let inicio = startOfWeek(dataContratacaoDate, { weekStartsOn: 1 });
+    const inicioContas = startOfWeek(new Date(`${CONTAS_VALIDAS_DESDE}T12:00:00`), {
+      weekStartsOn: 1,
+    });
+    const daContratacao = startOfWeek(dataContratacaoDate, { weekStartsOn: 1 });
+    let inicio = isBefore(daContratacao, inicioContas) ? inicioContas : daContratacao;
     const hoje = new Date();
     // Incluir até a semana actual (o motorista pode submeter recibo da semana em curso)
     const fimVerificacao = addWeeks(startOfWeek(hoje, { weekStartsOn: 1 }), 1);
@@ -167,6 +172,10 @@ export function MotoristaRecibosCard({
         .select('*')
         .eq('motorista_id', motoristaId)
         .eq('tipo', 'recibo')
+        // Sem histórico antes do corte das contas; sem semana indicada vale a data de criação.
+        .or(
+          `semana_referencia_inicio.gte.${CONTAS_VALIDAS_DESDE},and(semana_referencia_inicio.is.null,created_at.gte.${CONTAS_VALIDAS_DESDE})`
+        )
         .order('created_at', { ascending: false })
         .limit(10);
 

@@ -6,6 +6,7 @@ import { Fuel } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { CONTAS_VALIDAS_DESDE } from './dashboardStats';
 
 interface FuelTransaction {
   id: string;
@@ -56,24 +57,29 @@ export function MotoristaCombustivelCard({ motoristaId }: MotoristaCombustivelCa
   async function loadTransactions() {
     try {
       setLoading(true);
+      // Sem histórico antes do corte das contas.
+      const desde = new Date(`${CONTAS_VALIDAS_DESDE}T00:00:00`).toISOString();
 
       const [bpRes, repsolRes, edpRes] = await Promise.all([
         supabase
           .from('bp_transacoes')
           .select('*')
           .eq('motorista_id', motoristaId)
+          .gte('transaction_date', desde)
           .order('transaction_date', { ascending: false })
           .limit(5),
         supabase
           .from('repsol_transacoes')
           .select('*')
           .eq('motorista_id', motoristaId)
+          .gte('transaction_date', desde)
           .order('transaction_date', { ascending: false })
           .limit(5),
         supabase
           .from('edp_transacoes')
           .select('*')
           .eq('motorista_id', motoristaId)
+          .gte('transaction_date', desde)
           .order('transaction_date', { ascending: false })
           .limit(5),
       ]);

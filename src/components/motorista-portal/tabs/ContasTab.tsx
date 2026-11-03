@@ -27,6 +27,7 @@ export const ContasTab: React.FC<ContasTabProps> = ({ motoristaId }) => {
         inicio={semana.inicio}
         fim={semana.fim}
         semanasAtras={semana.semanasAtras}
+        podeAnterior={semana.podeAnterior}
         onAnterior={semana.anterior}
         onSeguinte={semana.seguinte}
       />

@@ -18,6 +18,8 @@ interface Props {
   fim: Date;
   /** 0 = semana actual, 1 = a anterior, e por aí adiante. */
   semanasAtras: number;
+  /** Desligado na primeira semana com contas: antes dela não há nada para mostrar. */
+  podeAnterior?: boolean;
   onAnterior: () => void;
   onSeguinte: () => void;
 }
@@ -34,6 +36,7 @@ export function MotoristaExtratoCard({
   inicio,
   fim,
   semanasAtras,
+  podeAnterior = true,
   onAnterior,
   onSeguinte,
 }: Props) {
@@ -60,6 +63,7 @@ export function MotoristaExtratoCard({
             size="icon"
             className="h-8 w-8"
             onClick={onAnterior}
+            disabled={!podeAnterior}
             aria-label="Semana anterior"
           >
             <ChevronLeft className="h-4 w-4" />
