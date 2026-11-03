@@ -291,17 +291,15 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       // (ver src/config/bolt.ts). Ler ganhos_liquidos perdia as campanhas nas
       // integrações em oauth. Já não se consulta bolt_viagens: tem uma linha
       // por TENTATIVA de despacho e somá-la conta a mesma corrida várias vezes.
-      const { data: boltResumos } = await supabase
-        .from('bolt_resumos_semanais')
-        .select('liquido_a_pagar')
-        .eq('motorista_id', motoristaId)
-        .lte('periodo_inicio', weekEndStr)
-        .gte('periodo_fim', weekStartStr);
-
-      const boltResumosTotal = (boltResumos || []).reduce(
-        (acc, curr) => acc + (Number(curr.liquido_a_pagar) || 0),
-        0
+      // Pela função e não pela tabela: a tabela só abre a quem tem
+      // financeiro_recibos e um gestor sem ela via 0 € e gravava esse líquido.
+      // Falhar aqui não pode virar 0 €: sem Bolt o resumo não se calcula nem grava.
+      const { data: boltTotalRpc, error: boltErro } = await supabase.rpc(
+        'motorista_bolt_liquido_semana',
+        { p_motorista_id: motoristaId, p_inicio: weekStartStr, p_fim: weekEndStr }
       );
+      if (boltErro) throw boltErro;
+      const boltResumosTotal = Number(boltTotalRpc) || 0;
 
       // 4. Combustíveis (BP, Repsol, EDP)
       const [bpRes, repsolRes, edpRes] = await Promise.all([

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { CONTAS_VALIDAS_DESDE } from '@/components/motorista-portal/dashboardStats';
 
 /**
  * Histórico de acertos semanais do motorista, para o portal dele.
@@ -31,6 +32,7 @@ export function useMotoristaResumosSemanais(motoristaId: string | null | undefin
         .from('motorista_liquido_semanal')
         .select('semana_inicio, semana_fim, liquido')
         .eq('motorista_id', motoristaId!)
+        .gte('semana_inicio', CONTAS_VALIDAS_DESDE)
         .order('semana_inicio', { ascending: false })
         .limit(52);
       if (error) throw error;

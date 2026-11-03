@@ -71,9 +71,15 @@ describe('ganhos Bolt: uma tabela só', () => {
     expect(contas).not.toMatch(/Number\(r\.ganhos_liquidos\)/);
 
     const recibos = ler('src/components/motoristas/tabs/MotoristaRecibosSection.tsx');
-    expect(recibos).toMatch(/\.select\('liquido_a_pagar'\)/);
-    expect(recibos).toMatch(/Number\(curr\.liquido_a_pagar\)/);
+    // A aba Resumos lê a Bolt pela função (um gestor sem financeiro_recibos
+    // não lê a tabela), e a função soma o mesmo campo.
+    expect(recibos).toMatch(/rpc\(\s*'motorista_bolt_liquido_semana'/);
     expect(recibos).not.toMatch(/Number\(curr\.ganhos_liquidos\)/);
+    const funcaoBolt = ler(
+      'supabase/migrations/20261103100000_bolt_liquido_semana_para_gestores.sql'
+    );
+    expect(funcaoBolt).toMatch(/SUM\(b\.liquido_a_pagar\)/);
+    expect(funcaoBolt).not.toMatch(/ganhos_liquidos/);
 
     // O ecrã dos motoristas de plataforma sem ficha mostra quanto cada
     // identificador Bolt facturou — é dinheiro, lê o mesmo campo.

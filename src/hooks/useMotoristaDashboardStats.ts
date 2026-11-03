@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { supabase } from '@/integrations/supabase/client';
 import {
+  CONTAS_VALIDAS_DESDE,
   documentosAExpirar,
   semanasSemRecibo,
   type DocAExpirar,
@@ -36,8 +37,8 @@ const QUERY_KEY = 'motorista-dashboard-stats';
 /**
  * Os números do Início do painel: saldo, recibos e documentos a expirar.
  *
- * O saldo vem da RPC `motorista_saldo_pendente`, a mesma que o backoffice e
- * o resumo semanal usam — nunca recalculado à mão aqui. Recibos e financeiro
+ * O saldo vem da RPC `motoristas_saldo_pendente_lote` (a regra do backoffice e
+ * do resumo semanal), só desde o corte das contas — nunca recalculado à mão aqui. Recibos e financeiro
  * mudam do lado do gestor enquanto o motorista tem a app aberta, por isso
  * há uma subscrição realtime que invalida a query.
  */
@@ -85,12 +86,17 @@ export function useMotoristaDashboardStats(
     queryFn: async (): Promise<DashboardStats> => {
       const m = motorista!;
 
-      const saldo = await supabase.rpc('motorista_saldo_pendente', { p_motorista_id: m.id });
+      // Só o que vem desde o corte das contas: o pendente anterior não se mostra ao motorista.
+      const saldo = await supabase.rpc('motoristas_saldo_pendente_lote', {
+        p_motorista_ids: [m.id],
+        p_data_inicio: CONTAS_VALIDAS_DESDE,
+      });
       if (saldo.error) throw saldo.error;
+      const saldoPendente = Number(saldo.data?.[0]?.saldo) || 0;
 
       if (!usaRecibos) {
         return {
-          saldoPendente: Number(saldo.data) || 0,
+          saldoPendente,
           recibosEmValidacao: [],
           semanasEmFalta: [],
           docsExpirando: documentosAExpirar(m),
@@ -118,7 +124,7 @@ export function useMotoristaDashboardStats(
       );
 
       return {
-        saldoPendente: Number(saldo.data) || 0,
+        saldoPendente,
         recibosEmValidacao: (pendentes.data ?? []).map((r) => ({
           id: r.id,
           descricao: r.descricao,

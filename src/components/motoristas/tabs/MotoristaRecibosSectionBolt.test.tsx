@@ -68,6 +68,12 @@ describe('MotoristaRecibosSection — receita Bolt', () => {
       // liquido_a_pagar: o campo que a ficha lê (coluna gerada, ver src/config/bolt.ts).
       bolt_resumos_semanais: [{ liquido_a_pagar: 300 }],
     });
+    // A Bolt vem pela função, não pela tabela: a tabela só abre a quem tem
+    // financeiro_recibos e um gestor sem ela via 0 €.
+    (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: 300,
+      error: null,
+    });
   });
 
   it('não duplica: mostra só os ganhos do CSV, não a soma com a API', async () => {
@@ -82,8 +88,30 @@ describe('MotoristaRecibosSection — receita Bolt', () => {
   it('não consulta bolt_viagens enquanto a fonte financeira for o CSV (modo sombra)', async () => {
     renderizar();
     await waitFor(() => expect(lerResumo().faturado_bolt).toBe(300));
-    expect(tabelasConsultadas()).toContain('bolt_resumos_semanais');
     expect(tabelasConsultadas()).not.toContain('bolt_viagens');
+  });
+
+  it('lê a Bolt pela função, não pela tabela que só abre a quem tem financeiro_recibos', async () => {
+    renderizar();
+    await waitFor(() => expect(lerResumo().faturado_bolt).toBe(300));
+    expect(tabelasConsultadas()).not.toContain('bolt_resumos_semanais');
+    expect(supabase.rpc).toHaveBeenCalledWith('motorista_bolt_liquido_semana', {
+      p_motorista_id: 'm1',
+      p_inicio: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      p_fim: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+    });
+  });
+
+  it('se a função da Bolt falhar, o resumo não é calculado com uma Bolt inventada', async () => {
+    (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: null,
+      error: { message: 'sem permissao' },
+    });
+    renderizar();
+    await waitFor(() => expect(screen.getByTestId('resumo-dialog')).toBeTruthy());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(lerResumo().faturado_bolt).toBe(0);
+    expect(lerResumo().total_faturado).toBe(0);
   });
 
   it('sem recibo verde aplica ÷1,06 ao valor do CSV (e não a um total duplicado)', async () => {

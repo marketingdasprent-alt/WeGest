@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 
+import { CONTAS_VALIDAS_DESDE } from '@/components/motorista-portal/dashboardStats';
 import {
   useMotoristaExtratoPeriodo,
   inicioDaSemana,
   fimDaSemana,
+  paraDataSql,
 } from '@/hooks/useMotoristaExtratoPeriodo';
 
 /**
@@ -22,6 +24,8 @@ export function useExtratoSemanal(motoristaId: string | null | undefined) {
     return inicioDaSemana(d);
   }, [semanasAtras]);
   const fim = useMemo(() => fimDaSemana(inicio), [inicio]);
+  // Antes do corte não há contas para mostrar ao motorista.
+  const podeAnterior = paraDataSql(inicio) > CONTAS_VALIDAS_DESDE;
 
   const {
     data: extrato,
@@ -36,7 +40,8 @@ export function useExtratoSemanal(motoristaId: string | null | undefined) {
     inicio,
     fim,
     semanasAtras,
-    anterior: () => setSemanasAtras((n) => n + 1),
+    podeAnterior,
+    anterior: () => setSemanasAtras((n) => (podeAnterior ? n + 1 : n)),
     seguinte: () => setSemanasAtras((n) => Math.max(0, n - 1)),
   };
 }
