@@ -118,12 +118,13 @@ jobs:
           falharam=""
           for f in $COM_JWT; do
             echo "::group::$f (verify_jwt=true)"
-            supabase functions deploy "$f" --project-ref "$REF" --use-api || falharam="$falharam $f"
+            # --yes: o CLI recente pede confirmação e, sem terminal, desiste sem publicar nada.
+            supabase functions deploy "$f" --project-ref "$REF" --use-api --yes || falharam="$falharam $f"
             echo "::endgroup::"
           done
           for f in $SEM_JWT; do
             echo "::group::$f (verify_jwt=false)"
-            supabase functions deploy "$f" --project-ref "$REF" --use-api --no-verify-jwt || falharam="$falharam $f"
+            supabase functions deploy "$f" --project-ref "$REF" --use-api --no-verify-jwt --yes || falharam="$falharam $f"
             echo "::endgroup::"
           done
           total=$(( $(printf '%s\n' $COM_JWT $SEM_JWT | grep -c .) ))
