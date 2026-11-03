@@ -171,6 +171,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
     liquido: 0,
     loading: false,
     isImportado: false,
+    falhou: false,
   });
 
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 });
@@ -217,7 +218,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
   };
 
   const loadResumoSemanal = async () => {
-    setResumoSemanal((prev) => ({ ...prev, loading: true }));
+    setResumoSemanal((prev) => ({ ...prev, loading: true, falhou: false }));
     const weekStartISO = weekStart.toISOString();
     const weekEndISO = weekEnd.toISOString();
     const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -263,6 +264,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           liquido: Number(reciboImportado.liquido) || 0,
           loading: false,
           isImportado: true,
+          falhou: false,
         });
         return;
       }
@@ -473,10 +475,12 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         liquido: liquidoFinal,
         loading: false,
         isImportado: false,
+        falhou: false,
       });
     } catch (error) {
       console.error('Erro ao carregar resumo semanal:', error);
-      setResumoSemanal((prev) => ({ ...prev, loading: false }));
+      setResumoSemanal((prev) => ({ ...prev, loading: false, falhou: true }));
+      toast.error('Não foi possível carregar os valores desta semana. Recarregue a página.');
     }
   };
 
@@ -1133,6 +1137,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           outros_custos: resumoSemanal.outrosCustos,
           aluguer: resumoSemanal.aluguer,
           tem_recibo_importado: resumoSemanal.isImportado,
+          dados_incompletos: resumoSemanal.falhou,
         }}
         dateRange={{ from: weekStart, to: weekEnd }}
       />

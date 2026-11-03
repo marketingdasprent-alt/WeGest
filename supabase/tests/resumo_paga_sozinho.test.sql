@@ -10,11 +10,12 @@
 --   (2) líquido negativo (dívida): continua pendente, sem visto;
 --   (3) semana gravada a 0 e corrigida depois: fica paga;
 --   (4) já marcada à mão: não rebenta nem duplica o visto;
---   (5) a Bolt da ficha: sem permissão recusa, service_role soma, anon não chama.
+--   (5) a Bolt da ficha: quem vê a ficha lê, sem permissão recusa, service_role
+--       soma, anon não chama.
 -- ============================================================
 
 begin;
-select plan(9);
+select plan(10);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000003a0000', 'Org Paga Sozinho', 'paga-sozinho');
@@ -92,6 +93,22 @@ insert into public.bolt_resumos_semanais
 values ('00000000-0000-0000-0000-0000003a0000', '00000000-0000-0000-0000-0000003a0e01',
         '2026-10-26 a 2026-11-01', '2026-10-26', '2026-11-01',
         'bolt-x', 'bolt-x', 'Credito', '00000000-0000-0000-0000-0000003a0b01', 503.37);
+
+-- Quem pode ver a ficha lê a Bolt (o caso que falhou em produção: a função
+-- conferia a tabela errada e recusava toda a gente, admin incluído).
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000003a00bb', 'gestor@paga-sozinho.pt');
+insert into public.user_organizacoes (user_id, org_id, is_admin) values
+  ('00000000-0000-0000-0000-0000003a00bb', '00000000-0000-0000-0000-0000003a0000', true);
+insert into public.user_org_ativa (user_id, org_id) values
+  ('00000000-0000-0000-0000-0000003a00bb', '00000000-0000-0000-0000-0000003a0000');
+
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"00000000-0000-0000-0000-0000003a00bb"}', true);
+select is(
+  public.motorista_bolt_liquido_semana('00000000-0000-0000-0000-0000003a0b01', '2026-10-26', '2026-11-01'),
+  503.37::numeric,
+  'admin da organização lê a Bolt da ficha'
+);
 
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"00000000-0000-0000-0000-0000003a00aa"}', true);
 select throws_ok(
