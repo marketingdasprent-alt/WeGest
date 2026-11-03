@@ -50,6 +50,34 @@ describe('mensagemFalhaEmissao', () => {
     expect(msg).not.toContain('Reemita-o');
   });
 
+  it('falha de transporte (unknown) não manda reemitir', () => {
+    const erro = Object.assign(new Error('Falha a contactar o serviço de faturação'), {
+      classe: 'unknown',
+    });
+    const msg = mensagemFalhaEmissao(erro, 'reserva');
+    expect(msg).toMatch(/^Reserva faturada/);
+    expect(msg).toContain('PODE ter sido');
+    expect(msg).not.toContain('Reemita-o');
+  });
+
+  it('numa nota de crédito não fala em fatura nem manda reemitir às cegas', () => {
+    const naoEmitida = mensagemFalhaEmissao(
+      Object.assign(new Error('Série inválida'), { classe: 'known_failed' }),
+      'nota_credito'
+    );
+    expect(naoEmitida).toMatch(/^Crédito registado na conta-corrente/);
+    expect(naoEmitida).toContain('nota de crédito NÃO foi emitida');
+    expect(naoEmitida).not.toContain('Fatura');
+
+    const incerta = mensagemFalhaEmissao(
+      Object.assign(new Error('timeout'), { classe: 'unknown' }),
+      'nota_credito'
+    );
+    expect(incerta).toContain('PODE ter sido');
+    expect(incerta).toContain('antes de emitir outra');
+    expect(incerta).not.toContain('NÃO foi emitida');
+  });
+
   it('com classe known_failed mantém o aviso de que não foi emitido', () => {
     const erro = Object.assign(new Error('Série inválida'), { classe: 'known_failed' });
     expect(mensagemFalhaEmissao(erro)).toContain('NÃO foi emitido');

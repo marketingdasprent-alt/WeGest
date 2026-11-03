@@ -26,7 +26,7 @@ import { resolverDestinatario } from '@/components/renting/contratos/destinatari
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
-import { baixarPdfEmSegundoPlano, clienteRowToFatura } from '@/lib/faturacao';
+import { baixarPdfEmSegundoPlano, carregarClienteParaFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import {
   ParcelamentoDialog,
@@ -228,19 +228,6 @@ export function NovaFaturaDialog({
     return data as string;
   }
 
-  async function fetchClienteFatura(clienteId: string) {
-    try {
-      const { data } = await supabase
-        .from('clientes')
-        .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', clienteId)
-        .single();
-      return clienteRowToFatura(data, alvoFatura.nome);
-    } catch {
-      return clienteRowToFatura(null, alvoFatura.nome);
-    }
-  }
-
   function reset() {
     setLinhas([novaLinha()]);
     setTipoDoc('fatura');
@@ -268,6 +255,8 @@ export function NovaFaturaDialog({
 
       // A FK exige `clientes`; converta o motorista antes de gravar.
       const destinatarioIdFiscal = await resolverIdFiscal();
+      // Antes de gravar: se a ficha não lê, falha sem deixar cobrança nem documento a meio.
+      const cliente = await carregarClienteParaFatura(destinatarioIdFiscal, alvoFatura.nome);
 
       const { data: cobInserida, error: cobErr } = await supabase
         .from('contrato_cobrancas')
@@ -317,7 +306,6 @@ export function NovaFaturaDialog({
       qc.invalidateQueries({ queryKey: ['renting'] });
 
       try {
-        const cliente = await fetchClienteFatura(destinatarioIdFiscal);
         const res = await emitirMut.mutateAsync({
           payload: {
             tipo: tipoDoc === 'fatura_recibo' ? 'FR' : 'FT',

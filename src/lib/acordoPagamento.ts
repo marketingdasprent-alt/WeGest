@@ -97,20 +97,28 @@ export async function registarPagamentoParcela(
   } catch (e) {
     // Só `known_failed` pode reagendar; estados incertos exigem reconciliação.
     const classe = (e as Error & { classe?: 'known_failed' | 'unknown' })?.classe;
-    if (classe === 'known_failed') {
-      await supabase
-        .from('faturacao_outbox' as any)
-        .update({ estado: 'pendente', ultimo_erro: (e as Error).message })
-        .eq('idempotency_key', idempotencyKey);
-    } else {
-      await supabase
-        .from('faturacao_outbox' as any)
-        .update({
-          estado: 'suspenso',
-          needs_reconcile: true,
-          ultimo_erro: (e as Error).message,
-        })
-        .eq('idempotency_key', idempotencyKey);
+    const { error: outboxErr } =
+      classe === 'known_failed'
+        ? await supabase
+            .from('faturacao_outbox' as any)
+            .update({ estado: 'pendente', ultimo_erro: (e as Error).message })
+            .eq('idempotency_key', idempotencyKey)
+        : await supabase
+            .from('faturacao_outbox' as any)
+            .update({
+              estado: 'suspenso',
+              needs_reconcile: true,
+              ultimo_erro: (e as Error).message,
+            })
+            .eq('idempotency_key', idempotencyKey);
+    // Não lança: o pagamento já está registado como pendente e lançar escondia isso.
+    // Devolve o aviso, porque sem a suspensão o reenvio automático pode duplicar o recibo.
+    if (outboxErr) {
+      console.error('Falha a atualizar a faturacao_outbox após erro de emissão:', outboxErr);
+      return {
+        estado: 'liquidacao_pendente',
+        erro: `${(e as Error).message} (não foi possível atualizar a fila de emissão: ${outboxErr.message}; avise um administrador antes de repetir)`,
+      };
     }
     return { estado: 'liquidacao_pendente', erro: (e as Error).message };
   }

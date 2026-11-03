@@ -5,6 +5,7 @@
 // documento original (FT/FR); insertDocument recusa "Tipo de documento inválido".
 import type {
   Cliente,
+  DocumentoNoProvider,
   EmitDocResult,
   EmitInput,
   FaturacaoProvider,
@@ -104,6 +105,44 @@ async function assertArtigoExiste(endpoint: string, sid: string, idProduct: stri
   }
 }
 
+/** O que o getDocument diz de um documento: os totais que a KeyInvoice realmente guardou. */
+async function lerDocumento(
+  endpoint: string,
+  sid: string,
+  docType: string,
+  docSeries: string,
+  docNum: string
+): Promise<DocumentoNoProvider | null> {
+  if (!docType || !docNum) return null;
+  try {
+    const d = await call(
+      endpoint,
+      'getDocument',
+      { DocType: docType, DocNum: docNum, ...(docSeries ? { DocSeries: docSeries } : {}) },
+      { sid }
+    );
+    const gross = Number(d?.Data?.GrossTotal);
+    if (ok(d) && d.Data?.GrossTotal != null && Number.isFinite(gross)) {
+      const opcional = (v: unknown) => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
+      return {
+        grossTotal: gross,
+        netTotal: opcional(d.Data.NetTotal),
+        taxTotal: opcional(d.Data.TaxTotal),
+        vatin: d.Data.VATIN != null ? String(d.Data.VATIN) : null,
+        voided: d.Data.Voided != null && Number(d.Data.Voided) !== 0,
+      };
+    }
+    console.error('[keyinvoice] getDocument sem GrossTotal:', d?.ErrorMessage ?? 'sem Data', {
+      docType,
+      docSeries,
+      docNum,
+    });
+  } catch (e) {
+    console.error('[keyinvoice] getDocument falhou:', (e as Error).message, { docType, docNum });
+  }
+  return null;
+}
+
 /** GrossTotal do documento acabado de emitir. Cada conta decide se o Price vem com IVA
  *  incluído, e a resposta do insertDocument não traz totais. Best-effort: o documento
  *  já existe, por isso uma falha aqui devolve null e nunca lança. */
@@ -114,25 +153,7 @@ async function lerTotalEmitido(
   docSeries: string,
   docNum: string
 ): Promise<number | null> {
-  if (!docType || !docNum) return null;
-  try {
-    const d = await call(
-      endpoint,
-      'getDocument',
-      { DocType: docType, DocNum: docNum, ...(docSeries ? { DocSeries: docSeries } : {}) },
-      { sid }
-    );
-    const total = Number(d?.Data?.GrossTotal);
-    if (ok(d) && d.Data?.GrossTotal != null && Number.isFinite(total)) return total;
-    console.error('[keyinvoice] getDocument sem GrossTotal:', d?.ErrorMessage ?? 'sem Data', {
-      docType,
-      docSeries,
-      docNum,
-    });
-  } catch (e) {
-    console.error('[keyinvoice] getDocument falhou:', (e as Error).message, { docType, docNum });
-  }
-  return null;
+  return (await lerDocumento(endpoint, sid, docType, docSeries, docNum))?.grossTotal ?? null;
 }
 
 /** getTaxes -> mapa { taxa(%) : IdTax }. Tolerante a nomes de campos. */
@@ -310,6 +331,14 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       total:
         input.tipo === 'RC' ? null : await lerTotalEmitido(r.endpoint, sid, doctype, serie, docnum),
     };
+  },
+
+  async consultar(ref, cfg): Promise<DocumentoNoProvider> {
+    const r = resolve(cfg);
+    const sid = await authenticate(r.apiKey, r.endpoint);
+    const doc = await lerDocumento(r.endpoint, sid, ref.doctype, ref.serie, ref.docnum);
+    if (!doc) throw new Error('A KeyInvoice não devolveu o documento (getDocument sem totais).');
+    return doc;
   },
 
   async voidReceipt(input: VoidReceiptInput, cfg): Promise<void> {

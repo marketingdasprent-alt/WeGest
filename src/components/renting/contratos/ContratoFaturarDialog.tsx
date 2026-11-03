@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
-import { baixarPdfEmSegundoPlano, clienteRowToFatura } from '@/lib/faturacao';
+import { baixarPdfEmSegundoPlano, carregarClienteParaFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
@@ -123,21 +123,6 @@ export function ContratoFaturarDialog({
   const faturaZero = fatura.valorRegistado === 0;
   const podeFaturar = fatura.valorRegistado >= 0; // 0€ é permitido (cortesia / 100% desconto)
 
-  /** Dados do cliente (cabeçalho fiscal) para o documento.
-   *  `clienteId` é sempre um id de `clientes` (num motorista é o da ficha dele). */
-  async function fetchClienteFatura(clienteId: string) {
-    try {
-      const { data } = await supabase
-        .from('clientes')
-        .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', clienteId)
-        .single();
-      return clienteRowToFatura(data, destinatario.nome);
-    } catch {
-      return clienteRowToFatura(null, destinatario.nome);
-    }
-  }
-
   /** Id de `clientes` que representa o destinatário escolhido. Num motorista,
    *  garante (criando se preciso) a ficha de cliente dele — `destinatario_id`
    *  tem FK para `clientes` e não aceita um id de `motoristas_ativos`. */
@@ -196,6 +181,8 @@ export function ContratoFaturarDialog({
       // Id fiscal ANTES de gravar: num motorista troca-se o id dele pelo da
       // ficha de cliente, senão a FK de destinatario_id rebenta.
       const destinatarioIdFiscal = await resolverIdFiscal();
+      // Antes de gravar: se a ficha não lê, falha sem deixar cobrança nem documento a meio.
+      const cliente = await carregarClienteParaFatura(destinatarioIdFiscal, destinatario.nome);
 
       const tipoLabel = tipo === 'fatura_recibo' ? 'Factura-Recibo' : 'Factura';
       const descricao = `${tipoLabel} — Contrato #${String(contrato.codigo).padStart(4, '0')} · Venc: ${dataVenc.split('-').reverse().join('/')}`;
@@ -299,7 +286,6 @@ export function ContratoFaturarDialog({
               taxa_iva: taxaIva,
               desconto: contrato.desconto_percentagem ?? 0,
             }));
-          const cliente = await fetchClienteFatura(destinatarioIdFiscal);
           const res = await emitirMut.mutateAsync({
             payload: {
               tipo: tipo === 'fatura_recibo' ? 'FR' : 'FT',

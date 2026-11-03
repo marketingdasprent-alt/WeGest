@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/utils/formatters';
 import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturacao';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
-import { baixarPdfEmSegundoPlano, clienteRowToFatura } from '@/lib/faturacao';
+import { baixarPdfEmSegundoPlano, carregarClienteParaFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import { useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { useOrgDefinicoes } from '@/hooks/useOrgDefinicoes';
@@ -102,19 +102,6 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
   const podeFaturar = !!reserva.cliente_id && calc.totalComIva > 0;
   const codigoLabel = `Reserva #${reserva.codigo}`;
 
-  async function fetchClienteFatura() {
-    try {
-      const { data } = await supabase
-        .from('clientes')
-        .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', reserva.cliente_id!)
-        .single();
-      return clienteRowToFatura(data, reserva.cliente_nome ?? undefined);
-    } catch {
-      return clienteRowToFatura(null, reserva.cliente_nome ?? undefined);
-    }
-  }
-
   async function handleCriar() {
     if (!podeFaturar) {
       toast.error('A reserva precisa de cliente e valor para ser faturada.');
@@ -141,6 +128,12 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
       const tipoLabel = tipo === 'fatura_recibo' ? 'Factura-Recibo' : 'Factura';
       const descricao = `${tipoLabel} — ${codigoLabel} · Venc: ${dataVenc.split('-').reverse().join('/')}`;
       const emitidaEm = new Date(`${dataDoc}T12:00:00`).toISOString();
+
+      // Antes de gravar: se a ficha não lê, falha sem deixar cobrança nem documento a meio.
+      const cliente = await carregarClienteParaFatura(
+        reserva.cliente_id!,
+        reserva.cliente_nome ?? undefined
+      );
 
       // Fase 1 — cobrança ligada à reserva (trigger lança o débito).
       const { data: cobInserida, error: cobErr } = await supabase
@@ -189,7 +182,6 @@ export function ReservaFaturarDialog({ open, onOpenChange, reserva, emitente, on
 
       // Fase 2 — emissão fiscal no provider configurado (não reverte a Fase 1).
       try {
-        const cliente = await fetchClienteFatura();
         const itens: ItemFatura[] = [
           {
             descricao: `Aluguer — ${codigoLabel}`,

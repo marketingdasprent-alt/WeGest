@@ -39,7 +39,7 @@ import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
 import {
   baixarDocumentoPdf,
   baixarPdfEmSegundoPlano,
-  clienteRowToFatura,
+  carregarClienteParaFatura,
   anularCobrancasFaturacao,
 } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
@@ -396,11 +396,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
       const isFR = /^fa[c]?tura-recibo/i.test((c.descricao ?? '').trim());
       const escolhido = await pedirFornecedor.pedir(isFR ? 'FR' : 'FT', { cobranca_id: c.id });
       if (escolhido === 'cancelado') return;
-      const { data: cli } = await supabase
-        .from('clientes')
-        .select('nome, nif, email, morada, codigo_postal, localidade')
-        .eq('id', c.destinatario_id)
-        .single();
+      const cliente = await carregarClienteParaFatura(c.destinatario_id, c.destinatario_nome);
       const itens: ItemFatura[] = [
         {
           descricao: `Aluguer — Reserva #${reserva.codigo}`,
@@ -424,7 +420,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
       const res = await emitirMut.mutateAsync({
         payload: {
           tipo: isFR ? 'FR' : 'FT',
-          cliente: clienteRowToFatura(cli, c.destinatario_nome),
+          cliente,
           itens,
           cobranca_id: c.id,
           integracao_id: escolhido.integracaoId ?? undefined,

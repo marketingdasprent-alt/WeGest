@@ -47,6 +47,8 @@ export interface EmitResult {
    *  = não se sabe se foi criado, nunca reemitir sem reconciliar primeiro. */
   classe?: 'known_failed' | 'unknown';
   warning?: string;
+  /** false = o documento existe no provider mas não ficou gravado em `invoices`. */
+  localGravado?: boolean;
   invoice?: InvoiceMetadata;
   /** Identificação devolvida pelo provider de faturação. */
   provider?: {

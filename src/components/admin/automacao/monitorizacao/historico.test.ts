@@ -179,6 +179,22 @@ describe('consolidarHistorico', () => {
     const ids = linhas.map((l) => l.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('um evento que dispara várias regras dá uma linha por run, com ids distintos', () => {
+    // lead.novo dispara 2 regras: a timeline devolve o mesmo event_id duas vezes.
+    // Com a mesma key, o React deixava linhas velhas no ecrã ao filtrar.
+    const linhas = consolidarHistorico(
+      [
+        itemTimeline({ event_id: 'lead', run_id: 'r1' }),
+        itemTimeline({ event_id: 'lead', run_id: 'r2' }),
+      ],
+      [],
+      []
+    );
+
+    expect(linhas).toHaveLength(2);
+    expect(new Set(linhas.map((l) => l.id)).size).toBe(2);
+  });
 });
 
 describe('filtrarHistorico', () => {

@@ -95,6 +95,15 @@ export interface EmitDocResult {
   total?: number | null;
 }
 
+/** O que o provider guardou de um documento já emitido (totais com IVA, sem IVA e IVA). */
+export interface DocumentoNoProvider {
+  grossTotal: number;
+  netTotal: number | null;
+  taxTotal: number | null;
+  vatin: string | null;
+  voided: boolean;
+}
+
 /** Contrato que cada provider de faturação implementa. */
 export interface FaturacaoProvider {
   /** Confirma que as credenciais autenticam. Lança em caso de falha. */
@@ -107,6 +116,8 @@ export interface FaturacaoProvider {
   voidReceipt(input: VoidReceiptInput, cfg: ProviderConfig): Promise<void>;
   /** Confirma se o provider tem o doctype do tipo indicado configurado (config da org OU fallback do deployment). Usado no pré-voo, antes de se aceitar criar um acordo de parcelamento. */
   hasDoctype(tipo: EmitInput['tipo'], cfg: ProviderConfig): boolean;
+  /** Lê um documento já emitido no provider. Opcional: sem ele não há teto de NC pelo total do provider. Lança se não conseguir ler. */
+  consultar?(ref: DocumentoOriginal, cfg: ProviderConfig): Promise<DocumentoNoProvider>;
 }
 
 /**

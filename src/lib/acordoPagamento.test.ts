@@ -5,15 +5,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // como `const` simples faria a factory correr antes de eles existirem
 // (TDZ). vi.hoisted() garante que a criação corre junto com o hoist do
 // próprio vi.mock — mesmo padrão de FecharContratoDialog.test.tsx.
-const { rpc, updateOutbox, emitirDocumento, outboxSucessoErroForcado } = vi.hoisted(() => ({
-  rpc: vi.fn(),
-  updateOutbox: vi.fn(),
-  emitirDocumento: vi.fn(),
-  // Holder mutável só para o teste best-effort: permite forçar um erro
-  // especificamente no update do outbox para 'sucesso', sem afectar os
-  // outros updates de faturacao_outbox (pendente/suspenso no catch).
-  outboxSucessoErroForcado: { valor: null as { message: string } | null },
-}));
+const { rpc, updateOutbox, emitirDocumento, outboxSucessoErroForcado, outboxErroGeral } =
+  vi.hoisted(() => ({
+    rpc: vi.fn(),
+    updateOutbox: vi.fn(),
+    emitirDocumento: vi.fn(),
+    // Holder mutável só para o teste best-effort: permite forçar um erro
+    // especificamente no update do outbox para 'sucesso', sem afectar os
+    // outros updates de faturacao_outbox (pendente/suspenso no catch).
+    outboxSucessoErroForcado: { valor: null as { message: string } | null },
+    outboxErroGeral: { valor: null as { message: string } | null },
+  }));
 
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
@@ -22,6 +24,7 @@ vi.mock('@/integrations/supabase/client', () => ({
         eq: async (...args: unknown[]) => {
           if (tabela === 'faturacao_outbox') {
             updateOutbox(linha, ...args);
+            if (outboxErroGeral.valor) return { error: outboxErroGeral.valor };
             if (
               outboxSucessoErroForcado.valor &&
               (linha as { estado?: string })?.estado === 'sucesso'
@@ -78,6 +81,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockRpcPadrao();
   outboxSucessoErroForcado.valor = null;
+  outboxErroGeral.valor = null;
 });
 
 describe('marcaCorrelacao', () => {
@@ -185,6 +189,17 @@ describe('registarPagamentoParcela', () => {
       'idempotency_key',
       'RC:parcela:p-1'
     );
+  });
+
+  it('se o outbox não consegue suspender, o erro devolvido avisa em vez de calar', async () => {
+    outboxErroGeral.valor = { message: 'permission denied' };
+    emitirDocumento.mockRejectedValue(
+      Object.assign(new Error('falha de transporte'), { classe: 'unknown' })
+    );
+    const r = await registarPagamentoParcela(base);
+    expect(r.estado).toBe('liquidacao_pendente');
+    expect(r.erro).toContain('falha de transporte');
+    expect(r.erro).toContain('permission denied');
   });
 
   it('erro sem classe (ex.: falha a contactar a propria funcao) suspende por omissao segura', async () => {

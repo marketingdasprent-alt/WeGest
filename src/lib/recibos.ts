@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { semCodigo } from '@/types/codigoPorOrg';
 import type { InvoiceMetadata } from '@/types/faturacao';
-import { clienteRowToFatura, emitirDocumento } from '@/lib/faturacao';
+import { carregarClienteParaFatura, emitirDocumento } from '@/lib/faturacao';
 import { ErroRecibo, explicarErroRecibo, type ErroReciboExplicado } from '@/lib/reciboErro';
 
 /** Fatura em aberto sobre a qual se faz o recibo. */
@@ -34,14 +34,13 @@ export interface ReciboRegistado {
 const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
 
 async function emitirReciboFiscal(cobranca: CobrancaParaRecibo, pag: DadosPagamento, obs: string) {
-  const { data: cli } = await supabase
-    .from('clientes')
-    .select('nome, nif, email, morada, codigo_postal, localidade')
-    .eq('id', cobranca.destinatario_id)
-    .maybeSingle();
+  const cliente = await carregarClienteParaFatura(
+    cobranca.destinatario_id,
+    cobranca.destinatario_nome
+  );
   return emitirDocumento({
     tipo: 'RC',
-    cliente: clienteRowToFatura(cli, cobranca.destinatario_nome),
+    cliente,
     itens: [
       {
         descricao: `Recibo de ${cobranca.documento_externo_ref}`,
