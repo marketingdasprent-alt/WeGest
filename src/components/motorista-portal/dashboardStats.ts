@@ -20,19 +20,26 @@ export interface DocAExpirar {
   validade: Date;
 }
 
+/** Decisão de 03/11/2026: as contas só valem a partir da semana de 26/10 (a primeira gerada). */
+export const CONTAS_VALIDAS_DESDE = '2026-10-26';
+
 /**
  * Semanas completas desde a contratação sem recibo verde submetido, da mais
  * recente para a mais antiga. A semana em curso nunca conta — ainda não acabou.
+ * Nada anterior a `desde` é pedido ao motorista.
  */
 export function semanasSemRecibo(
   dataContratacao: string | null | undefined,
   semanasComRecibo: ReadonlySet<string>,
-  hoje: Date = new Date()
+  hoje: Date = new Date(),
+  desde: string = CONTAS_VALIDAS_DESDE
 ): SemanaEmFalta[] {
   if (!dataContratacao) return [];
 
   const emFalta: SemanaEmFalta[] = [];
-  let semana = startOfWeek(new Date(dataContratacao), { weekStartsOn: 1 });
+  const contratacao = startOfWeek(new Date(dataContratacao), { weekStartsOn: 1 });
+  const inicioContas = startOfWeek(new Date(`${desde}T12:00:00`), { weekStartsOn: 1 });
+  let semana = isBefore(contratacao, inicioContas) ? inicioContas : contratacao;
   const limite = startOfWeek(hoje, { weekStartsOn: 1 });
 
   while (isBefore(semana, limite)) {

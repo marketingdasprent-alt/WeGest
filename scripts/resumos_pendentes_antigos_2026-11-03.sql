@@ -1,31 +1,25 @@
--- Resumos positivos antigos que ficaram pendentes (nunca foi marcado "Pago").
--- O pagamento automático (20261103110000) só vale daqui para a frente.
+-- Decisão de 03/11/2026: as contas só valem desde a semana de 26/10 (a primeira
+-- gerada no WeGest). Tudo o que ficou pendente antes disso deixa de contar.
 --
--- 1) ENSAIO: corre só este SELECT e revê a lista. Quem tem o líquido gravado SEM
---    Bolt (gestor sem financeiro_recibos) aparece com bolt_na_semana = 0 mas
---    líquido > 0: NÃO marcar essas, corrigir primeiro.
--- 2) APLICAR: só depois de rever. Marca como pago o que nunca foi pago, até à
---    semana passada. Reversível: apagar a linha de relatorio_pagamento_pagos volta
---    o movimento a pendente (sincronizar_pagamento_resumo).
+-- Marca-se como PAGO (visto no Relatório de Pagamento) e não como cancelado:
+-- movimentos_ja_no_resumo só esconde do saldo os acertos que o resumo já somou
+-- se o resumo estiver pendente ou pago. Cancelar o resumo fazia reaparecer no
+-- saldo esses acertos soltos, e o motorista ficava com outro saldo falso.
+--
+-- Fica de fora a semana de 26/10 e o que não é resumo (multas, danos, caução).
+-- Reversível: apagar a linha de relatorio_pagamento_pagos reabre o movimento.
 
--- 1) ENSAIO
-select l.motorista_id, m.nome, l.semana_inicio, l.liquido,
-       coalesce((select sum(b.liquido_a_pagar) from bolt_resumos_semanais b
-                  where b.motorista_id = l.motorista_id
-                    and b.periodo_inicio <= l.semana_fim
-                    and coalesce(b.periodo_fim, b.periodo_inicio) >= l.semana_inicio), 0) as bolt_na_semana
+-- 1) ENSAIO: o que vai ser marcado, por sinal (débito = o motorista devia).
+select f.tipo, count(*) as semanas, round(sum(f.valor), 2) as total
   from motorista_liquido_semanal l
   join motorista_financeiro f on f.liquido_semanal_id = l.id and f.status = 'pendente'
-  join motoristas_ativos m on m.id = l.motorista_id
- where l.liquido > 0
-   and l.semana_fim < date_trunc('week', current_date)::date
- order by m.nome, l.semana_inicio;
+ where l.semana_inicio < '2026-10-26'
+ group by f.tipo;
 
 -- 2) APLICAR (descomentar depois de rever o ensaio)
 -- insert into relatorio_pagamento_pagos (org_id, motorista_id, semana_inicio)
 -- select l.org_id, l.motorista_id, l.semana_inicio
 --   from motorista_liquido_semanal l
 --   join motorista_financeiro f on f.liquido_semanal_id = l.id and f.status = 'pendente'
---  where l.liquido > 0
---    and l.semana_fim < date_trunc('week', current_date)::date
+--  where l.semana_inicio < '2026-10-26'
 -- on conflict (org_id, motorista_id, semana_inicio) do nothing;
