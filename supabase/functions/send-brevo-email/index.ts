@@ -1,21 +1,26 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.105.4";
-import { EmailService } from "../_shared/email/services/EmailService.ts";
-import { passwordRecoveryTemplate, magicLinkTemplate, motoristaOnboardingTemplate } from "../_shared/email/templates/authEmail.ts";
-import { AuthorizationError, requireInternalRequest } from "../_shared/auth/edgeAuthorization.ts";
+import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { EmailService } from '../_shared/email/services/EmailService.ts';
+import {
+  passwordRecoveryTemplate,
+  magicLinkTemplate,
+  motoristaOnboardingTemplate,
+} from '../_shared/email/templates/authEmail.ts';
+import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
+import { montarLinkRecuperacao } from '../_shared/auth/linkRecuperacao.ts';
 
 // Emails de autenticação (recovery/magic link/onboarding). Gera um token de
 // entrada válido para qualquer email — só pode ser chamada internamente
 // (auditoria 2026-09-16).
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const siteUrlEnv = (Deno.env.get("SUPABASE_SITE_URL") || '').replace(/\/$/, '');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const siteUrlEnv = (Deno.env.get('SUPABASE_SITE_URL') || '').replace(/\/$/, '');
 
 interface EmailRequest {
   to: string;
@@ -30,13 +35,13 @@ interface EmailRequest {
 
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
+  if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured");
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY not configured');
     }
 
     // Guarda ANTES de criar o cliente privilegiado.
@@ -47,7 +52,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const { to, type, redirect_to }: EmailRequest = await req.json();
 
-    let actionLink = "";
+    let actionLink = '';
 
     if (type === 'password_recovery' || type === 'magic_link' || type === 'motorista_onboarding') {
       // O onboarding do motorista também aterra em /reset-password (define a
@@ -64,8 +69,7 @@ const handler = async (req: Request): Promise<Response> => {
       if (redirect_to) {
         try {
           const u = new URL(redirect_to);
-          const allowedHost =
-            u.hostname === 'wegest.pt' || u.hostname.endsWith('.wegest.pt');
+          const allowedHost = u.hostname === 'wegest.pt' || u.hostname.endsWith('.wegest.pt');
           if (allowedHost) {
             u.pathname = targetPath;
             u.search = '';
@@ -80,18 +84,23 @@ const handler = async (req: Request): Promise<Response> => {
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: isRecovery ? 'recovery' : 'magiclink',
         email: to,
-        options: { redirectTo }
+        options: { redirectTo },
       } as any);
 
       if (linkError || !linkData) {
         throw new Error(`Erro ao gerar link do Supabase: ${linkError?.message || 'sem dados'}`);
       }
-      // @ts-ignore - properties shape provided by Supabase
-      actionLink = (linkData.properties as any).action_link as string;
+      const properties = linkData.properties as any;
+      if (isRecovery && !properties.hashed_token) {
+        throw new Error('Supabase não devolveu o token de recuperação');
+      }
+      actionLink = isRecovery
+        ? montarLinkRecuperacao(redirectTo, properties.hashed_token as string)
+        : (properties.action_link as string);
     } else {
       return new Response(JSON.stringify({ success: false, error: 'type inválido' }), {
         status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
 
@@ -113,8 +122,8 @@ const handler = async (req: Request): Promise<Response> => {
     } else {
       // Fallback legado: utilizador sem profile resolvido (ex.: 1º login).
       // Mesmo caminho de sempre, direto à key global — nunca deve bloquear login.
-      const brevoApiKey = Deno.env.get("BREVO_API_KEY");
-      if (!brevoApiKey) throw new Error("BREVO_API_KEY not configured");
+      const brevoApiKey = Deno.env.get('BREVO_API_KEY');
+      if (!brevoApiKey) throw new Error('BREVO_API_KEY not configured');
 
       const { subject, html } =
         type === 'password_recovery'
@@ -126,12 +135,12 @@ const handler = async (req: Request): Promise<Response> => {
       const brevoResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
-          'accept': 'application/json',
+          accept: 'application/json',
           'api-key': brevoApiKey,
           'content-type': 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: "WeGest", email: "noreply@dasprent.pt" },
+          sender: { name: 'WeGest', email: 'noreply@dasprent.pt' },
           to: [{ email: to, name: to.split('@')[0] }],
           subject,
           htmlContent: html,
@@ -148,42 +157,48 @@ const handler = async (req: Request): Promise<Response> => {
 
     if (!result.success) throw new Error(result.error || 'Falha ao enviar email');
 
-    console.log('Email enviado com sucesso via', orgId ? 'EmailService' : 'fallback legado', 'para:', to, 'tipo:', type);
+    console.log(
+      'Email enviado com sucesso via',
+      orgId ? 'EmailService' : 'fallback legado',
+      'para:',
+      to,
+      'tipo:',
+      type
+    );
 
     return new Response(
       JSON.stringify({
         success: true,
         messageId: result.providerMessageId,
-        message: 'Email enviado com sucesso'
+        message: 'Email enviado com sucesso',
       }),
       {
         status: 200,
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           ...corsHeaders,
         },
       }
     );
-
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       return new Response(JSON.stringify({ success: false, error: error.message }), {
         status: error.status,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
-    console.error("Erro ao enviar email via Brevo:", error);
+    console.error('Erro ao enviar email via Brevo:', error);
     return new Response(
       JSON.stringify({
         success: false,
         error: error.message,
-        message: 'Erro ao enviar email'
+        message: 'Erro ao enviar email',
       }),
       {
         status: 500,
         headers: {
-          "Content-Type": "application/json",
-          ...corsHeaders
+          'Content-Type': 'application/json',
+          ...corsHeaders,
         },
       }
     );

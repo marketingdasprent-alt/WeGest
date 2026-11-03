@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 import { Eye, EyeOff, KeyRound, CheckCircle2, Circle } from 'lucide-react';
 import { getPostAuthRoute, getUnauthenticatedRoute } from '@/lib/native';
+import { lerTokenRecuperacao } from '@/lib/linkRecuperacao';
 import {
   passwordChecks,
   isPasswordStrong,
@@ -23,10 +24,43 @@ const ResetPassword = () => {
   const [loading, setLoading] = useState(false);
   const [hasSession, setHasSession] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [tokenPendente, setTokenPendente] = useState(() =>
+    lerTokenRecuperacao(window.location.href)
+  );
+  const [aVerificar, setAVerificar] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const handleContinuar = async () => {
+    if (!tokenPendente) return;
+    setAVerificar(true);
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenPendente,
+      type: 'recovery',
+    });
+    setAVerificar(false);
+    // Falha de rede não gasta o token: fica o botão para tentar de novo.
+    if (error && !error.status) {
+      toast({
+        title: 'Sem ligação',
+        description: 'Verifique a internet e toque em continuar outra vez.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    // O token já foi gasto (ou recusado): tirá-lo da URL para um refresh não o reenviar.
+    window.history.replaceState(null, '', window.location.pathname);
+    setTokenPendente(null);
+    setHasSession(!error);
+    setChecking(false);
+  };
+
   useEffect(() => {
+    // Com token_hash na URL não há sessão a esperar: fica o botão Continuar.
+    if (lerTokenRecuperacao(window.location.href)) {
+      setChecking(false);
+      return;
+    }
     const url = new URL(window.location.href);
     const hasRecoveryToken =
       url.searchParams.has('code') ||
@@ -129,7 +163,22 @@ const ResetPassword = () => {
       logoAlt="WeGest"
       headerIcon={<KeyRound className="auth-icon-accent" />}
     >
-      {hasSession ? (
+      {/* O token pendente vem antes da sessão: uma sessão antiga noutra conta
+          neste browser não pode receber a palavra-passe nova. */}
+      {tokenPendente ? (
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            Toque em continuar para definir a nova palavra-passe.
+          </p>
+          <Button
+            onClick={handleContinuar}
+            disabled={aVerificar}
+            className="auth-primary-button w-full"
+          >
+            {aVerificar ? 'A validar...' : 'Continuar'}
+          </Button>
+        </div>
+      ) : hasSession ? (
         <form onSubmit={handleResetPassword} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="password">Nova palavra-passe</Label>
