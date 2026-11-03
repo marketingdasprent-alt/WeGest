@@ -112,6 +112,8 @@ describe('MotoristaRecibosSection — receita Bolt', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(lerResumo().faturado_bolt).toBe(0);
     expect(lerResumo().total_faturado).toBe(0);
+    // Esses zeros são "sem resposta": o resumo não os pode gravar como líquido.
+    expect(lerResumo().dados_incompletos).toBe(true);
   });
 
   it('sem recibo verde aplica ÷1,06 ao valor do CSV (e não a um total duplicado)', async () => {

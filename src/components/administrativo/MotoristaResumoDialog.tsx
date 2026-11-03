@@ -69,6 +69,8 @@ export interface MotoristaResumoProps {
   aluguer: number;
   identificador_bolt?: string;
   tem_recibo_importado?: boolean;
+  /** A leitura dos dados falhou: os valores são zeros de "sem resposta" e não se gravam. */
+  dados_incompletos?: boolean;
 }
 
 interface Props {
@@ -229,7 +231,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     liquido,
     semanaInicio: dateRange.from,
     semanaFim: dateRange.to,
-    pronto: open && !loading && !!motorista,
+    pronto: open && !loading && !!motorista && !motorista.dados_incompletos,
   });
 
   if (!motorista) return null;
