@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.105.4";
+import { sincronizarTodas } from "../_shared/cartrack/sincronizarTodas.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,29 +34,19 @@ serve(async (req) => {
     // sync_automatico null = ligado por defeito (o módulo é automático).
     const alvo = (integracoes || []).filter((i: any) => i.sync_automatico !== false);
 
-    const results: any[] = [];
-    for (const intg of alvo) {
-      try {
-        const resp = await fetch(`${supabaseUrl}/functions/v1/cartrack-sync`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${serviceRoleKey}`,
-          },
-          body: JSON.stringify({ integracao_id: intg.id }),
-        });
-        const body = await resp.json().catch(() => ({}));
-        results.push({
-          integracao_id: intg.id,
-          nome: intg.nome,
-          ok: resp.ok && body?.success === true,
-          vehicles: body?.vehicles?.upserted ?? null,
-          error: body?.success ? null : body?.error ?? `HTTP ${resp.status}`,
-        });
-      } catch (e: any) {
-        console.error(`cartrack-scheduled-sync ${intg.id}:`, e);
-        results.push({ integracao_id: intg.id, nome: intg.nome, ok: false, error: e.message });
-      }
+    const results = await sincronizarTodas(alvo, (integracaoId, signal) =>
+      fetch(`${supabaseUrl}/functions/v1/cartrack-sync`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceRoleKey}`,
+        },
+        body: JSON.stringify({ integracao_id: integracaoId }),
+        signal,
+      })
+    );
+    for (const r of results) {
+      if (!r.ok) console.error(`cartrack-scheduled-sync ${r.integracao_id}: ${r.error}`);
     }
 
     return new Response(

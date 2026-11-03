@@ -50,7 +50,19 @@ async function fetchAll(
       ...extraParams,
     });
     const url = `${CARTRACK_API_BASE}/${path}?${params.toString()}`;
-    const resp = await fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
+    // Sem prazo, uma página pendurada na Cartrack prendia a sync inteira (03/11).
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        headers: { Authorization: auth, Accept: 'application/json' },
+        signal: AbortSignal.timeout(30_000),
+      });
+    } catch (e) {
+      const msg = `${path} → sem resposta da Cartrack (${e instanceof Error ? e.message : e})`;
+      console.error(`Cartrack ${msg} (página ${page})`);
+      onFalha?.(msg);
+      break;
+    }
     if (!resp.ok) {
       const err = await resp.text();
       const msg = `${path} → HTTP ${resp.status}: ${err.slice(0, 200)}`;
