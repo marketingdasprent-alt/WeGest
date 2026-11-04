@@ -15,13 +15,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { ProgressIndicator } from '@/components/ui/progress-indicator';
 import { DynamicFormRenderer } from '@/components/formularios/DynamicFormRenderer';
-import { FormField } from '@/components/formularios/DynamicFieldEditor';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { initPixel, trackLeadOnce } from '@/lib/pixel';
 import { paletaDaMarca } from '@/lib/corDaMarca';
 import { modoEmbedAtivo } from '@/utils/formularioEmbed';
+import { errosDosCampos } from '@/utils/formularioValidacao';
 import { useTemaClaroForcado } from '@/hooks/useTemaClaroForcado';
 import { useAlturaParaPaginaMae } from '@/hooks/useAlturaParaPaginaMae';
 import { useFundoTransparente } from '@/hooks/useFundoTransparente';
@@ -148,14 +148,7 @@ const FormularioPublico = () => {
   const validateCurrentStep = () => {
     if (!formulario?.campos) return true;
 
-    const currentFields = getCurrentStepFields();
-    const errors: Record<string, string> = {};
-
-    currentFields.forEach((field: FormField) => {
-      if (field.required && (!formData[field.id] || formData[field.id] === '')) {
-        errors[field.id] = `${field.label} é obrigatório`;
-      }
-    });
+    const errors = errosDosCampos(getCurrentStepFields(), formData);
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -203,6 +196,9 @@ const FormularioPublico = () => {
   };
 
   const handleSubmit = async () => {
+    // O último passo não passa pelo "Continuar": valida aqui.
+    if (!validateCurrentStep()) return;
+
     // Verificar licença TVDE antes de submeter
     if (!checkTVDELicense()) {
       toast({
