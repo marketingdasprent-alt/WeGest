@@ -16828,6 +16828,14 @@ export type Database = {
         Returns: undefined
       }
       migrar_reservas_slot_para_prestacao: { Args: never; Returns: number }
+      minhas_orgs_motorista: {
+        Args: never
+        Returns: {
+          ficha_ativa: boolean
+          org_id: string
+          org_nome: string
+        }[]
+      }
       motivo_tvde_parado_nao_reabre: {
         Args: { p_contrato: string; p_desde: string }
         Returns: string

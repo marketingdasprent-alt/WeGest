@@ -8,6 +8,7 @@ import { CandidaturaRejeitada } from '@/components/motorista-portal/CandidaturaR
 import { MotoristaDashboard } from '@/components/motorista-portal/MotoristaDashboard';
 import { MotoristaLayout } from '@/components/motorista-portal/MotoristaLayout';
 import { getOrgSessionStorageKey } from '@/contexts/TenantContext';
+import { orgParaAlinhar } from '@/lib/orgMotorista';
 
 interface MotoristaData {
   id: string;
@@ -91,16 +92,21 @@ const PainelMotorista: React.FC = () => {
       // também é motorista) pode ter a org ativa noutra org; a RLS RESTRICTIVE
       // de `motoristas_ativos` (org_id = get_current_org_id()) bloqueia então a
       // leitura do próprio registo e o painel cairia no formulário de
-      // candidatura em branco. A RPC devolve a org do motorista ignorando a RLS.
-      const { data: orgMotorista } = await supabase.rpc('get_minha_org_motorista');
-      if (orgMotorista) {
+      // candidatura em branco. A RPC devolve as orgs do motorista ignorando a RLS;
+      // com várias (mudou de empresa), a escolhida no seletor fica.
+      const { data: orgsMotorista } = await supabase.rpc('minhas_orgs_motorista');
+      const idsMotorista = (orgsMotorista ?? []).map((o) => o.org_id);
+      if (idsMotorista.length > 0) {
         const { data: orgAtiva } = await supabase
           .from('user_org_ativa')
           .select('org_id')
           .eq('user_id', user.id)
           .maybeSingle();
+        const orgDestaAba =
+          sessionStorage.getItem(getOrgSessionStorageKey(user.id)) ?? orgAtiva?.org_id ?? null;
+        const orgMotorista = orgParaAlinhar(idsMotorista, orgDestaAba);
 
-        if (orgAtiva?.org_id !== orgMotorista) {
+        if (orgMotorista && orgAtiva?.org_id !== orgMotorista) {
           const { error: switchError } = await supabase
             .from('user_org_ativa')
             .upsert({ user_id: user.id, org_id: orgMotorista }, { onConflict: 'user_id' });
