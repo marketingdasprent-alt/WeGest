@@ -95,6 +95,7 @@ const RentingMovimentacoes = lazy(() => import('@/pages/renting/RentingMovimenta
 const RentingMovimentacaoForm = lazy(() => import('@/pages/renting/RentingMovimentacaoForm'));
 const RentingClientes = lazy(() => import('@/pages/renting/RentingClientes'));
 const RentingClienteForm = lazy(() => import('@/pages/renting/RentingClienteForm'));
+const RentingClientesPorLiquidar = lazy(() => import('@/pages/renting/RentingClientesPorLiquidar'));
 const RentingGrupos = lazy(() => import('@/pages/renting/RentingGrupos'));
 const RentingGrupoForm = lazy(() => import('@/pages/renting/RentingGrupoForm'));
 const RentingTarifas = lazy(() => import('@/pages/renting/RentingTarifas'));
@@ -694,6 +695,16 @@ const WebAppRoutes = () => {
                 <ProtectedRoute requiredResource="renting_clientes">
                   <DashboardLayout>
                     <RentingClientes />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/renting/clientes/por-liquidar"
+              element={
+                <ProtectedRoute requiredResource={RECURSOS.FINANCEIRO_RECIBOS}>
+                  <DashboardLayout>
+                    <RentingClientesPorLiquidar />
                   </DashboardLayout>
                 </ProtectedRoute>
               }
