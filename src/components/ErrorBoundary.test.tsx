@@ -127,6 +127,62 @@ describe('ErrorBoundary', () => {
   });
 });
 
+describe('ErrorBoundary — versão antiga depois de um deploy', () => {
+  function FicheiroEmFalta(): JSX.Element {
+    throw new TypeError(
+      'Failed to fetch dynamically imported module: https://www.wegest.pt/assets/Pagina-abc.js'
+    );
+  }
+
+  afterEach(() => {
+    sessionStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('recarrega sozinho a página quando falta um ficheiro da versão anterior', () => {
+    const recarregar = vi.fn();
+    vi.spyOn(window, 'location', 'get').mockReturnValue({
+      reload: recarregar,
+    } as unknown as Location);
+
+    render(
+      <ErrorBoundary>
+        <FicheiroEmFalta />
+      </ErrorBoundary>
+    );
+    expect(recarregar).toHaveBeenCalledTimes(1);
+  });
+
+  it('"tentar de novo" recarrega a página em vez de repetir o import falhado', () => {
+    const recarregar = vi.fn();
+    vi.spyOn(window, 'location', 'get').mockReturnValue({
+      reload: recarregar,
+    } as unknown as Location);
+
+    render(
+      <ErrorBoundary>
+        <FicheiroEmFalta />
+      </ErrorBoundary>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
+    expect(recarregar).toHaveBeenCalledTimes(2);
+  });
+
+  it('erro normal não recarrega a página', () => {
+    const recarregar = vi.fn();
+    vi.spyOn(window, 'location', 'get').mockReturnValue({
+      reload: recarregar,
+    } as unknown as Location);
+
+    render(
+      <ErrorBoundary>
+        <Rebenta />
+      </ErrorBoundary>
+    );
+    expect(recarregar).not.toHaveBeenCalled();
+  });
+});
+
 describe('RouteErrorBoundary', () => {
   /**
    * O comportamento que mais importa e o mais fácil de perder num refactor:

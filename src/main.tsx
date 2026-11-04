@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 
 import { removeLegacyAuthenticatedCache } from '@/lib/pwaCacheCleanup';
 import { arrancarPwa, usaServiceWorker } from '@/lib/pwaArranque';
+import { recarregarParaVersaoNova } from '@/lib/versaoAntiga';
 
 import App from './App.tsx';
 import './index.css';
@@ -28,5 +29,11 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 const nativo = Capacitor.isNativePlatform();
 if (usaServiceWorker(nativo, window.location.hostname)) void removeLegacyAuthenticatedCache();
 arrancarPwa({ nativo, hostname: window.location.hostname, registerSW });
+
+// Ficheiro de uma versão anterior que já não existe (deploy com a aba aberta):
+// recarregar traz a versão nova em vez de deixar a secção em erro.
+window.addEventListener('vite:preloadError', (evento) => {
+  if (recarregarParaVersaoNova()) evento.preventDefault();
+});
 
 createRoot(document.getElementById('root')!).render(<App />);
