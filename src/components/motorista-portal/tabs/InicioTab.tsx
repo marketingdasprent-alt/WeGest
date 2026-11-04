@@ -21,6 +21,8 @@ import { MotoristaExtratoCard } from '../MotoristaExtratoCard';
 interface InicioTabProps {
   motorista: MotoristaAtivo;
   usaRecibos: boolean;
+  /** Ficha inativa: só consulta (saldo, semana, acordos), sem pedir km nem documentos. */
+  fichaAtiva?: boolean;
 }
 
 const eur = (v: number) =>
@@ -34,7 +36,11 @@ const eur = (v: number) =>
  * semana ao vivo. O resto vive nas outras secções — aqui não se faz scroll
  * por nove cartões para achar o que interessa.
  */
-export const InicioTab: React.FC<InicioTabProps> = ({ motorista, usaRecibos }) => {
+export const InicioTab: React.FC<InicioTabProps> = ({
+  motorista,
+  usaRecibos,
+  fichaAtiva = true,
+}) => {
   const { irPara } = useMotoristaTab();
   const {
     data: stats,
@@ -48,10 +54,10 @@ export const InicioTab: React.FC<InicioTabProps> = ({ motorista, usaRecibos }) =
 
   // Sem resposta ainda trata-se como entregue: um cartão a piscar durante o
   // carregamento assusta sem motivo, e corrige-se sozinho num instante.
-  const kmPorEntregar = !!viatura && !!semanaKm && !semanaKm.entregue;
+  const kmPorEntregar = fichaAtiva && !!viatura && !!semanaKm && !semanaKm.entregue;
 
   const alertas = construirAlertas({
-    docsExpirando: stats?.docsExpirando ?? [],
+    docsExpirando: fichaAtiva ? (stats?.docsExpirando ?? []) : [],
     semanasEmFalta: stats?.semanasEmFalta.length ?? 0,
     recibosEmValidacao: stats?.recibosEmValidacao.length ?? 0,
     acordosAtivos: acordos?.length ?? 0,
@@ -70,6 +76,13 @@ export const InicioTab: React.FC<InicioTabProps> = ({ motorista, usaRecibos }) =
           {format(new Date(), "EEEE, d 'de' MMMM", { locale: pt })}
         </p>
       </div>
+
+      {!fichaAtiva && (
+        <p className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
+          Já não está a trabalhar com esta empresa. Aqui fica o seu histórico: saldo, acertos e
+          semanas anteriores.
+        </p>
+      )}
 
       {kmPorEntregar && <MotoristaRegistarKmCard motoristaId={motorista.id} />}
 
@@ -96,7 +109,9 @@ export const InicioTab: React.FC<InicioTabProps> = ({ motorista, usaRecibos }) =
           rotulo="Viatura"
           icone={Car}
           valor={
-            viaturaALoad ? (
+            !fichaAtiva ? (
+              'Sem viatura'
+            ) : viaturaALoad ? (
               <Skeleton className="h-6 w-24" />
             ) : viatura ? (
               <span className="font-mono tracking-wide">{viatura.matricula}</span>
@@ -105,10 +120,12 @@ export const InicioTab: React.FC<InicioTabProps> = ({ motorista, usaRecibos }) =
             )
           }
           detalhe={
-            viatura
-              ? nomeViatura ||
-                (viatura.kmAtual != null ? `${viatura.kmAtual.toLocaleString('pt-PT')} km` : null)
-              : 'Nenhuma atribuída'
+            !fichaAtiva
+              ? 'Nesta empresa'
+              : viatura
+                ? nomeViatura ||
+                  (viatura.kmAtual != null ? `${viatura.kmAtual.toLocaleString('pt-PT')} km` : null)
+                : 'Nenhuma atribuída'
           }
           onClick={() => irPara('viatura')}
         />
