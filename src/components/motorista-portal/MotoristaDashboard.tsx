@@ -57,13 +57,16 @@ export function MotoristaDashboard() {
     );
   }
 
+  // Ficha inativa (deixou a empresa): o painel fica só de consulta — saldo,
+  // acertos e histórico, sem pedir km, recibos nem mostrar carro atual.
+  const fichaAtiva = motorista.status_ativo !== false;
   // Motorista que NÃO usa recibos verdes (recibo_verde=false): esconde tudo o
   // que lhes diz respeito. null/true = usa (comportamento normal).
-  const usaRecibos = motorista.recibo_verde !== false;
+  const usaRecibos = fichaAtiva && motorista.recibo_verde !== false;
 
   switch (tab) {
     case 'viatura':
-      return <ViaturaTab motoristaId={motorista.id} />;
+      return <ViaturaTab motoristaId={motorista.id} fichaAtiva={fichaAtiva} />;
     case 'contas':
       return <ContasTab motoristaId={motorista.id} />;
     case 'documentos':
@@ -76,6 +79,6 @@ export function MotoristaDashboard() {
         />
       );
     default:
-      return <InicioTab motorista={motorista} usaRecibos={usaRecibos} />;
+      return <InicioTab motorista={motorista} usaRecibos={usaRecibos} fichaAtiva={fichaAtiva} />;
   }
 }
