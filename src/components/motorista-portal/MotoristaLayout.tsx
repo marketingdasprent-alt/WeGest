@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { MotoristaSidebar } from './MotoristaSidebar';
 import { MotoristaBottomNav } from './MotoristaBottomNav';
+import { SeletorOrgMotorista } from './SeletorOrgMotorista';
 
 interface MotoristaLayoutProps {
   children: React.ReactNode;
@@ -50,6 +51,7 @@ export const MotoristaLayout: React.FC<MotoristaLayoutProps> = ({
             </div>
 
             <div className="flex shrink-0 items-center gap-1">
+              <SeletorOrgMotorista />
               <ThemeToggle />
               <Avatar className="hidden h-8 w-8 border border-border lg:flex">
                 <AvatarImage src={userPhoto} />
