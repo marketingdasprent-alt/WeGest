@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   Loader2,
   Plus,
+  Receipt,
   Search,
   SlidersHorizontal,
   Users,
@@ -31,6 +32,8 @@ import { useClientes } from '@/hooks/useClientes';
 import { usePagination } from '@/hooks/usePagination';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
+import { RECURSOS } from '@/utils/permissions';
 
 import { cn, matchesSearch } from '@/lib/utils';
 import { exportClientesExcel } from '@/utils/clientesExport';
@@ -208,6 +211,8 @@ const RentingClientes = () => {
 
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { hasAccessToResource } = usePermissions();
+  const podeVerPorLiquidar = hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
   const [exporting, setExporting] = useState(false);
 
   // Ordenação da tabela
@@ -641,6 +646,16 @@ const RentingClientes = () => {
           )}
           Exportar
         </Button>
+        {podeVerPorLiquidar && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/renting/clientes/por-liquidar')}
+          >
+            <Receipt className="h-4 w-4 mr-2" />
+            Por liquidar
+          </Button>
+        )}
         <Button onClick={handleNew} size="sm">
           <Plus className="h-4 w-4 mr-2" />
           Novo Cliente
