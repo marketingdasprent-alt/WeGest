@@ -10,6 +10,7 @@ import {
 } from '../_shared/rate-limit/rateLimit.ts';
 import { EmailService } from '../_shared/email/services/EmailService.ts';
 import { montarLinkRecuperacao } from '../_shared/auth/linkRecuperacao.ts';
+import { montarLinkConfirmacao } from '../_shared/auth/linkConfirmacao.ts';
 import { captchaResponse, verificarCaptcha } from '../_shared/captcha/turnstile.ts';
 
 // Registo público de organização (/registar-org). Admin nasce por confirmar
@@ -70,9 +71,10 @@ function resolveRedirect(req: Request): string {
   try {
     if (origin) {
       const u = new URL(origin);
+      // O link do email vai direto a este host (já não passa pelo /verify): só https.
       if (
-        u.hostname === 'wegest.pt' ||
-        u.hostname.endsWith('.wegest.pt') ||
+        (u.protocol === 'https:' &&
+          (u.hostname === 'wegest.pt' || u.hostname.endsWith('.wegest.pt'))) ||
         u.hostname === 'localhost'
       ) {
         return `${u.origin}/login`;
@@ -407,8 +409,11 @@ Deno.serve(async (req) => {
         options: { redirectTo: resolveRedirect(req) },
       } as any);
       if (linkError || !linkData) throw new Error(linkError?.message || 'sem link');
+      // O action_link gasta o token no 1.º GET (scanners de email): vai o token_hash.
       // @ts-ignore - properties shape provided by Supabase
-      const actionLink = (linkData.properties as any).action_link as string;
+      const hashedToken = (linkData.properties as any).hashed_token as string | undefined;
+      if (!hashedToken) throw new Error('Supabase não devolveu o token de confirmação');
+      const actionLink = montarLinkConfirmacao(resolveRedirect(req), hashedToken, 'signup');
 
       const emailService = new EmailService(supabase);
       const result = await emailService.sendOrgConfirmacao(org.id, {

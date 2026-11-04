@@ -50,6 +50,7 @@ const MinhaOrganizacao = lazy(() => import('@/pages/MinhaOrganizacao'));
 const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
+const ConfirmarEmail = lazy(() => import('@/pages/ConfirmarEmail'));
 const Obrigado = lazy(() => import('@/pages/Obrigado'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 const LeadDetails = lazy(() => import('@/pages/LeadDetails'));
@@ -193,6 +194,7 @@ const WebAppRoutes = () => {
             <Route path="/registar-org" element={<RegistarOrg />} />
             <Route path="/register" element={<Register />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/confirmar-email" element={<ConfirmarEmail />} />
             <Route path="/obrigado" element={<Obrigado />} />
             <Route path="/motorista" element={<Navigate to="/login" replace />} />
             <Route path="/motorista/login" element={<Navigate to="/login" replace />} />

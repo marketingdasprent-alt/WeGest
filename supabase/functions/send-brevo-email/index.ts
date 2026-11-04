@@ -8,6 +8,7 @@ import {
 } from '../_shared/email/templates/authEmail.ts';
 import { AuthorizationError, requireInternalRequest } from '../_shared/auth/edgeAuthorization.ts';
 import { montarLinkRecuperacao } from '../_shared/auth/linkRecuperacao.ts';
+import { montarLinkConfirmacao } from '../_shared/auth/linkConfirmacao.ts';
 
 // Emails de autenticação (recovery/magic link/onboarding). Gera um token de
 // entrada válido para qualquer email — só pode ser chamada internamente
@@ -69,7 +70,9 @@ const handler = async (req: Request): Promise<Response> => {
       if (redirect_to) {
         try {
           const u = new URL(redirect_to);
-          const allowedHost = u.hostname === 'wegest.pt' || u.hostname.endsWith('.wegest.pt');
+          const allowedHost =
+            u.protocol === 'https:' &&
+            (u.hostname === 'wegest.pt' || u.hostname.endsWith('.wegest.pt'));
           if (allowedHost) {
             u.pathname = targetPath;
             u.search = '';
@@ -91,12 +94,13 @@ const handler = async (req: Request): Promise<Response> => {
         throw new Error(`Erro ao gerar link do Supabase: ${linkError?.message || 'sem dados'}`);
       }
       const properties = linkData.properties as any;
-      if (isRecovery && !properties.hashed_token) {
-        throw new Error('Supabase não devolveu o token de recuperação');
+      if (!properties.hashed_token) {
+        throw new Error('Supabase não devolveu o token do link');
       }
+      const hashedToken = properties.hashed_token as string;
       actionLink = isRecovery
-        ? montarLinkRecuperacao(redirectTo, properties.hashed_token as string)
-        : (properties.action_link as string);
+        ? montarLinkRecuperacao(redirectTo, hashedToken)
+        : montarLinkConfirmacao(redirectTo, hashedToken, 'magiclink');
     } else {
       return new Response(JSON.stringify({ success: false, error: 'type inválido' }), {
         status: 400,

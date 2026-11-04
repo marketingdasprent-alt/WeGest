@@ -15,6 +15,7 @@ const LoginMotorista = lazy(() => import('@/pages/motorista/LoginMotorista'));
 const PainelMotorista = lazy(() => import('@/pages/motorista/PainelMotorista'));
 const RegistoMotorista = lazy(() => import('@/pages/motorista/RegistoMotorista'));
 const ResetPassword = lazy(() => import('@/pages/ResetPassword'));
+const ConfirmarEmail = lazy(() => import('@/pages/ConfirmarEmail'));
 const Login = lazy(() => import('@/pages/Login'));
 const CRMContatos = lazy(() => import('@/pages/CRMContatos'));
 const LeadDetails = lazy(() => import('@/pages/LeadDetails'));
@@ -100,6 +101,7 @@ const NativeAppRoutes = () => {
           <Route path="/login" element={<LoginMotorista />} />
           <Route path="/equipa" element={<Login />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/confirmar-email" element={<ConfirmarEmail />} />
           <Route
             path="/crm"
             element={
