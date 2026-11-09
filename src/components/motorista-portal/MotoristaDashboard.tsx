@@ -10,6 +10,7 @@ import { InicioTab } from './tabs/InicioTab';
 import { ViaturaTab } from './tabs/ViaturaTab';
 import { ContasTab } from './tabs/ContasTab';
 import { DocumentosTab } from './tabs/DocumentosTab';
+import { FichaInativaAviso } from './FichaInativaAviso';
 
 /**
  * O painel do motorista: lê a ficha dele e mostra a secção pedida no URL.
@@ -57,9 +58,9 @@ export function MotoristaDashboard() {
     );
   }
 
-  // Ficha inativa (deixou a empresa): o painel fica só de consulta — saldo,
-  // acertos e histórico, sem pedir km, recibos nem mostrar carro atual.
+  // Só a ficha ativa aparece na app: inativa não mostra saldo nem resumos.
   const fichaAtiva = motorista.status_ativo !== false;
+  if (!fichaAtiva) return <FichaInativaAviso onSair={() => signOut()} />;
   // Motorista que NÃO usa recibos verdes (recibo_verde=false): esconde tudo o
   // que lhes diz respeito. null/true = usa (comportamento normal).
   const usaRecibos = fichaAtiva && motorista.recibo_verde !== false;

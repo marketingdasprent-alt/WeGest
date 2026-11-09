@@ -30,7 +30,7 @@ describe('SeletorOrgMotorista', () => {
     ];
     orgsMotorista = [
       { orgId: 'premium', nome: 'PREMIUM RIDE', fichaAtiva: true },
-      { orgId: 'decada', nome: 'Década Ousada', fichaAtiva: false },
+      { orgId: 'decada', nome: 'Década Ousada', fichaAtiva: true },
     ];
   });
 
@@ -44,13 +44,13 @@ describe('SeletorOrgMotorista', () => {
     expect(switchOrg).toHaveBeenCalledWith('decada');
   });
 
-  it('a ficha inativa aparece marcada como anterior', () => {
+  it('ficha inativa não aparece: só fica a ativa e o seletor some', () => {
+    orgsMotorista = [
+      { orgId: 'premium', nome: 'PREMIUM RIDE', fichaAtiva: true },
+      { orgId: 'decada', nome: 'Década Ousada', fichaAtiva: false },
+    ];
     render(<SeletorOrgMotorista />);
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Escolher empresa' }), {
-      button: 0,
-      ctrlKey: false,
-    });
-    expect(screen.getByText('anterior')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Escolher empresa' })).toBeNull();
   });
 
   it('com uma só empresa não aparece', () => {

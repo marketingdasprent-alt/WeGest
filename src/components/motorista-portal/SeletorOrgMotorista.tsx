@@ -21,8 +21,8 @@ export function SeletorOrgMotorista() {
   const { orgId, orgs, switchOrg } = useTenant();
   const { data: orgsMotorista = [] } = useOrgsMotorista(user?.id);
 
-  // Só as empresas a que a conta pertence: o switchOrg recusa as outras.
-  const opcoes = orgsMotorista.filter((o) => orgs.some((m) => m.id === o.orgId));
+  // Só fichas ativas, e só empresas a que a conta pertence (o switchOrg recusa as outras).
+  const opcoes = orgsMotorista.filter((o) => o.fichaAtiva && orgs.some((m) => m.id === o.orgId));
   if (opcoes.length <= 1) return null;
 
   const atual = opcoes.find((o) => o.orgId === orgId);
@@ -53,7 +53,6 @@ export function SeletorOrgMotorista() {
           >
             <Building2 className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="flex-1 truncate">{o.nome}</span>
-            {!o.fichaAtiva && <span className="text-xs text-muted-foreground">anterior</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
