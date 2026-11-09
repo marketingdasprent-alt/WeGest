@@ -30,6 +30,11 @@ vi.mock('@/hooks/useCombustivelSemDono', async () => {
   };
 });
 
+vi.mock('@/hooks/useEnvioResumos', () => ({
+  useResumosEnviados: () => ({ data: new Map() }),
+  useMarcarResumosEnviados: () => ({ mutate: vi.fn(), isPending: false }),
+  useContactosMotoristas: () => ({ data: new Map(), isLoading: false }),
+}));
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasAccessToResource: () => true, isAdmin: true }),
 }));

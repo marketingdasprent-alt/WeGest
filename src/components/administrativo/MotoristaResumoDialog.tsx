@@ -25,6 +25,8 @@ import { generateResumoPrintHTML } from './motorista-resumo/generateResumoPrintH
 import { usePermissions } from '@/hooks/usePermissions';
 import { useOrgId } from '@/contexts/TenantContext';
 import { useGravarLiquidoSemanal } from '@/hooks/useGravarLiquidoSemanal';
+import { useMarcarResumosEnviados } from '@/hooks/useEnvioResumos';
+import type { CanalEnvio } from './envioResumos';
 
 // Linha Gorjeta: dados sensíveis (rendimento pessoal do motorista) — só
 // visível para admins da org dona dos dados, nunca para motoristas.
@@ -134,6 +136,16 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
     aluguerEstimado,
   } = useMotoristaResumoData(open, motorista, dateRange);
   const [isSending, setIsSending] = useState(false);
+  const marcarEnviado = useMarcarResumosEnviados();
+  // Enviar por qualquer canal publica a semana no perfil do motorista.
+  const registarEnvio = (canal: CanalEnvio) => {
+    if (!motorista.motorista_id) return;
+    marcarEnviado.mutate({
+      motoristaIds: [motorista.motorista_id],
+      semanaInicio: format(dateRange.from, 'yyyy-MM-dd'),
+      canal,
+    });
+  };
   const [settings, setSettings] = useState<PrintSettings>(loadSettings);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
 
@@ -399,6 +411,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       });
 
       window.open(linkWhatsApp(texto), '_blank', 'noopener');
+      registarEnvio('whatsapp');
 
       if (!linkPdf) {
         // Falhou o upload: o resumo não fica sem saída — desce para o disco
@@ -452,6 +465,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       );
       if (dbError) throw dbError;
 
+      registarEnvio('app');
       toast.success('Resumo enviado para a conta do motorista com sucesso!');
     } catch (error: any) {
       toast.error('Erro ao enviar resumo: ' + (error.message || String(error)));
@@ -510,6 +524,7 @@ export function MotoristaResumoDialog({ open, onOpenChange, motorista, dateRange
       <EmailResumoDialog
         open={showEmailDialog}
         onOpenChange={setShowEmailDialog}
+        onEnviado={() => registarEnvio('email')}
         driverName={motorista.driver_name}
         defaultEmail={motoristaEmail}
         dateRange={dateRange}
