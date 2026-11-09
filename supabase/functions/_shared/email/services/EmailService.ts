@@ -28,6 +28,7 @@ import {
   type ReciboAnuladoInput,
 } from '../templates/reciboAnulado.ts';
 import { reminderTemplate, type ReminderInput } from '../templates/reminder.ts';
+import { resumoSemanalTemplate, type ResumoSemanalInput } from '../templates/resumoSemanal.ts';
 import {
   eliminacaoContaAdminTemplate,
   eliminacaoContaConfirmacaoTemplate,
@@ -303,6 +304,25 @@ export class EmailService {
     const message: EmailMessage = { to: [{ email: args.to, name: args.toNome }], subject, html };
 
     return this.send(orgId, 'recibo_anulado', message);
+  }
+
+  async sendResumoSemanal(
+    orgId: string,
+    args: ResumoSemanalInput & { to: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+
+    const { subject, html } = resumoSemanalTemplate(args);
+    const message: EmailMessage = {
+      to: [{ email: args.to, name: args.motoristaNome }],
+      subject,
+      html,
+      tags: ['resumo_semanal'],
+    };
+
+    return this.send(orgId, 'resumo_semanal', message);
   }
 
   async sendReminder(

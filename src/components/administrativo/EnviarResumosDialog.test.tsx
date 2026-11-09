@@ -4,8 +4,10 @@ import { EnviarResumosDialog } from './EnviarResumosDialog';
 import type { MotoristaResumo } from './contasResumoExports';
 
 const mutate = vi.fn();
+const enviarEmail = vi.fn();
 vi.mock('@/hooks/useEnvioResumos', () => ({
   useMarcarResumosEnviados: () => ({ mutate, isPending: false }),
+  useEnviarResumosEmail: () => ({ mutate: enviarEmail, isPending: false }),
   useContactosMotoristas: () => ({
     isLoading: false,
     data: new Map([
@@ -37,6 +39,7 @@ const base = {
 describe('EnviarResumosDialog', () => {
   beforeEach(() => {
     mutate.mockClear();
+    enviarEmail.mockClear();
     vi.spyOn(window, 'open').mockReturnValue(null);
   });
 
@@ -71,5 +74,37 @@ describe('EnviarResumosDialog', () => {
     render(<EnviarResumosDialog {...base} canal="email" enviados={enviados} />);
     expect(screen.getByText('Enviado')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Reenviar/ })).toBeEnabled();
+  });
+});
+
+describe('EnviarResumosDialog · e-mail pelo Brevo', () => {
+  beforeEach(() => {
+    enviarEmail.mockClear();
+    vi.spyOn(window, 'open').mockReturnValue(null);
+  });
+
+  it('"Enviar a todos" manda só quem tem e-mail e ainda não recebeu, sem abrir o Outlook', () => {
+    render(<EnviarResumosDialog {...base} canal="email" />);
+    fireEvent.click(screen.getByRole('button', { name: /Enviar a todos por e-mail \(1\)/ }));
+    expect(enviarEmail).toHaveBeenCalledWith(
+      { motoristaIds: ['m1'], semanaInicio: '2026-11-02' },
+      expect.anything()
+    );
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
+  it('o botão da linha envia esse motorista pelo Brevo', () => {
+    render(<EnviarResumosDialog {...base} canal="email" />);
+    fireEvent.click(screen.getAllByRole('button', { name: /^E-mail$/ })[0]);
+    expect(enviarEmail).toHaveBeenCalledWith(
+      { motoristaIds: ['m1'], semanaInicio: '2026-11-02' },
+      expect.anything()
+    );
+  });
+
+  it('sem ninguém por enviar, não mostra "Enviar a todos"', () => {
+    const enviados = new Map([['m1', { enviadoEm: '2026-11-09', canais: ['email' as const] }]]);
+    render(<EnviarResumosDialog {...base} canal="email" enviados={enviados} />);
+    expect(screen.queryByRole('button', { name: /Enviar a todos/ })).toBeNull();
   });
 });

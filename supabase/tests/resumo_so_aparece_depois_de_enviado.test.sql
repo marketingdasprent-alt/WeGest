@@ -2,16 +2,16 @@
 -- O motorista só vê o resumo depois de enviado — pgTAP
 -- ============================================================
 -- Corre com:  supabase start  &&  supabase test db
--- Ver a migração 20261109120000.
+-- Ver as migrações 20261109120000 e 20261109140000.
 --   (1) semana por enviar: o motorista não vê o líquido nem o movimento;
---   (2) movimentos sem resumo continuam à vista;
+--   (2) movimentos datados na semana por enviar também ficam escondidos;
 --   (3) marcar como enviado (app): passa a ver os dois;
 --   (4) reenviar por outro canal junta o canal sem mudar a data;
 --   (5) canal inválido é recusado; anon não chama a função.
 -- ============================================================
 
 begin;
-select plan(8);
+select plan(9);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000003b00aa', 'motorista@enviado.pt'),
@@ -37,7 +37,9 @@ insert into public.motorista_liquido_semanal (org_id, motorista_id, semana_inici
 insert into public.motorista_financeiro
   (org_id, motorista_id, tipo, categoria, descricao, valor, data_movimento, status) values
   ('00000000-0000-0000-0000-0000003b0000', '00000000-0000-0000-0000-0000003b0b01',
-   'debito', 'outro', 'Multa', 15, '2026-11-10', 'pendente');
+   'debito', 'outro', 'Multa', 15, '2026-11-10', 'pendente'),
+  ('00000000-0000-0000-0000-0000003b0000', '00000000-0000-0000-0000-0000003b0b01',
+   'debito', 'outro', 'Fora da semana', 20, '2026-11-20', 'pendente');
 
 -- (1) e (2) como motorista
 set local role authenticated;
@@ -56,9 +58,9 @@ select is(
 );
 
 select is(
-  (select count(*)::int from public.motorista_financeiro where categoria = 'outro'),
-  1,
-  'movimentos sem resumo continuam à vista (2)'
+  (select descricao from public.motorista_financeiro where categoria = 'outro'),
+  'Fora da semana',
+  'movimento da semana por enviar escondido; o de fora continua à vista (2)'
 );
 
 -- (3) gestor envia para a app
@@ -75,6 +77,12 @@ select is(
     + (select count(*)::int from public.motorista_financeiro where categoria = 'resumos'),
   2,
   'depois de enviada: o motorista vê o líquido e o movimento (3)'
+);
+
+select is(
+  (select count(*)::int from public.motorista_financeiro where categoria = 'outro'),
+  2,
+  'depois de enviada: os movimentos da semana voltam à vista (3)'
 );
 
 -- (4) reenviar por WhatsApp

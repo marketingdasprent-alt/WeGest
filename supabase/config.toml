@@ -327,3 +327,8 @@ verify_jwt = true
 # gravada na linha, e o destino sai sempre da tabela — nunca do pedido.
 [functions.link-curto]
 verify_jwt = false
+
+# Resumo semanal por e-mail aos motoristas (botão Enviar aos Motoristas →
+# E-mail). Só com sessão; a função confere admin ou administrativo_resumos.
+[functions.enviar-resumos-email]
+verify_jwt = true

@@ -95,3 +95,54 @@ export function useMarcarResumosEnviados() {
     },
   });
 }
+
+export interface FalhaEnvioEmail {
+  motoristaId: string;
+  nome: string;
+  motivo: string;
+}
+
+export interface ResultadoEnvioEmail {
+  enviados: number;
+  semEmail: FalhaEnvioEmail[];
+  falhados: FalhaEnvioEmail[];
+}
+
+export async function enviarResumosEmail(input: {
+  motoristaIds: string[];
+  semanaInicio: string;
+}): Promise<ResultadoEnvioEmail> {
+  const { data, error } = await supabase.functions.invoke<ResultadoEnvioEmail>(
+    'enviar-resumos-email',
+    { body: input }
+  );
+  if (error) {
+    // A razão real vem no corpo da resposta, não em error.message.
+    let mensagem = error.message || 'Falha ao contactar o serviço de e-mail';
+    try {
+      const body = await (error as { context?: Response }).context?.json?.();
+      mensagem = body?.error || mensagem;
+    } catch {
+      // corpo não é JSON: fica a mensagem genérica
+    }
+    throw new Error(mensagem);
+  }
+  return data ?? { enviados: 0, semEmail: [], falhados: [] };
+}
+
+export function useEnviarResumosEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: enviarResumosEmail,
+    onSuccess: (r, { semanaInicio }) => {
+      qc.invalidateQueries({ queryKey: ['resumos-enviados', { semanaInicio }] });
+      const problemas = r.falhados.length + r.semEmail.length;
+      if (problemas === 0) toast.success(`${r.enviados} e-mails enviados`);
+      else toast.warning(`${r.enviados} e-mails enviados, ${problemas} por enviar`);
+    },
+    onError: (error: unknown) => {
+      const msg = error instanceof Error ? error.message : 'Erro inesperado';
+      toast.error('Não foi possível enviar os e-mails: ' + msg);
+    },
+  });
+}
