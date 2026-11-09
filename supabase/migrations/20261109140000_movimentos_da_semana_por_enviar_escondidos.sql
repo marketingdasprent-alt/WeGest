@@ -3,6 +3,13 @@
 -- continuavam à vista e entravam no saldo dele (34 motoristas a 09/11/2026).
 -- Agora tudo o que tem data numa semana com resumo por enviar fica escondido.
 
+-- A semana de 02/11 já tinha sido entregue aos motoristas: só a partir da de
+-- 09/11 é que o resumo espera pelo envio (aplicado à mão a 09/11/2026).
+UPDATE public.motorista_liquido_semanal
+   SET enviado_em = COALESCE(gravado_em, NOW())
+ WHERE semana_inicio = DATE '2026-11-02'
+   AND enviado_em IS NULL;
+
 -- SECURITY DEFINER: o motorista não lê as linhas por enviar (RLS), por isso a
 -- pergunta tem de ser feita por fora dela. Só devolve verdadeiro/falso.
 CREATE OR REPLACE FUNCTION public.semana_resumo_por_enviar(p_motorista_id UUID, p_data DATE)
