@@ -95,8 +95,11 @@ const PainelMotorista: React.FC = () => {
       // candidatura em branco. A RPC devolve as orgs do motorista ignorando a RLS;
       // com várias (mudou de empresa), a escolhida no seletor fica.
       const { data: orgsMotorista } = await supabase.rpc('minhas_orgs_motorista');
-      const idsMotorista = (orgsMotorista ?? []).map((o) => o.org_id);
-      if (idsMotorista.length > 0) {
+      const fichasMotorista = (orgsMotorista ?? []).map((o) => ({
+        orgId: o.org_id,
+        fichaAtiva: o.ficha_ativa,
+      }));
+      if (fichasMotorista.length > 0) {
         const { data: orgAtiva } = await supabase
           .from('user_org_ativa')
           .select('org_id')
@@ -104,7 +107,7 @@ const PainelMotorista: React.FC = () => {
           .maybeSingle();
         const orgDestaAba =
           sessionStorage.getItem(getOrgSessionStorageKey(user.id)) ?? orgAtiva?.org_id ?? null;
-        const orgMotorista = orgParaAlinhar(idsMotorista, orgDestaAba);
+        const orgMotorista = orgParaAlinhar(fichasMotorista, orgDestaAba);
 
         if (orgMotorista && orgAtiva?.org_id !== orgMotorista) {
           const { error: switchError } = await supabase
