@@ -23,9 +23,6 @@
 begin;
 select plan(16);
 
--- Este teste mexe em fechos por pagar: sem o pagamento automático (20261103110000).
-alter table public.motorista_liquido_semanal disable trigger motorista_liquido_semanal_paga_sozinho;
-
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000001e00ff', 'bootstrap@ultima-ficha.pt');
 

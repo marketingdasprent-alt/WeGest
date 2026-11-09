@@ -18,9 +18,6 @@
 begin;
 select plan(7);
 
--- Este teste é sobre semanas por pagar: sem o pagamento automático (20261103110000).
-alter table public.motorista_liquido_semanal disable trigger motorista_liquido_semanal_paga_sozinho;
-
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000002c0000', 'Org Saldo Resumo', 'saldo-resumo');
 
