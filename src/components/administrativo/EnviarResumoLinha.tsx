@@ -1,10 +1,9 @@
-import { CheckCircle2, ExternalLink } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ContactoMotorista, EstadoEnvio } from '@/hooks/useEnvioResumos';
 import {
-  assuntoEmailResumo,
-  linkEmailPara,
+  emailValido,
   linkWhatsAppPara,
   montarMensagemEnvio,
   NOMES_CANAL,
@@ -21,7 +20,8 @@ interface EnviarResumoLinhaProps {
   weekStart: Date;
   weekEnd: Date;
   formatCurrency: (valor: number) => string;
-  onEnviado: () => void;
+  onEnviar: () => void;
+  isEnviando?: boolean;
 }
 
 export function EnviarResumoLinha({
@@ -32,28 +32,28 @@ export function EnviarResumoLinha({
   weekStart,
   weekEnd,
   formatCurrency,
-  onEnviado,
+  onEnviar,
+  isEnviando = false,
 }: EnviarResumoLinhaProps) {
   const jaNoCanal = estado?.canais.includes(canal) ?? false;
   const telefone = telefoneParaWhatsApp(contacto?.telefone);
-  const email = contacto?.email?.trim() || null;
+  const email = emailValido(contacto?.email) ? contacto!.email!.trim() : null;
   const destino = canal === 'whatsapp' ? telefone : canal === 'email' ? email : null;
 
-  const handleAbrir = () => {
+  // O e-mail sai pelo Brevo (quem o envia é o diálogo); o WhatsApp abre a conversa.
+  const handleEnviar = () => {
     if (!destino) return;
-    const texto = montarMensagemEnvio({
-      nome: resumo.driver_name,
-      inicio: weekStart,
-      fim: weekEnd,
-      liquido: resumo.liquido,
-      fmt: formatCurrency,
-    });
-    const url =
-      canal === 'whatsapp'
-        ? linkWhatsAppPara(destino, texto)
-        : linkEmailPara(destino, assuntoEmailResumo(weekStart, weekEnd), texto);
-    window.open(url, '_blank', 'noopener');
-    onEnviado();
+    if (canal === 'whatsapp') {
+      const texto = montarMensagemEnvio({
+        nome: resumo.driver_name,
+        inicio: weekStart,
+        fim: weekEnd,
+        liquido: resumo.liquido,
+        fmt: formatCurrency,
+      });
+      window.open(linkWhatsAppPara(destino, texto), '_blank', 'noopener');
+    }
+    onEnviar();
   };
 
   return (
@@ -80,8 +80,17 @@ export function EnviarResumoLinha({
           )
         )}
         {canal !== 'app' && (
-          <Button size="sm" variant="outline" disabled={!destino} onClick={handleAbrir}>
-            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!destino || isEnviando}
+            onClick={handleEnviar}
+          >
+            {isEnviando ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+            )}
             {jaNoCanal ? 'Reenviar' : NOMES_CANAL[canal]}
           </Button>
         )}

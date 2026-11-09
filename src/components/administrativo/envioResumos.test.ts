@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  assuntoEmailResumo,
-  linkEmailPara,
+  emailValido,
   linkWhatsAppPara,
   montarMensagemEnvio,
   telefoneParaWhatsApp,
@@ -47,11 +46,10 @@ describe('mensagem e links', () => {
     );
   });
 
-  it('link do e-mail codifica assunto e corpo', () => {
-    const assunto = assuntoEmailResumo(inicio, fim);
-    expect(assunto).toBe('Resumo semanal 02/11 - 08/11/2026');
-    expect(linkEmailPara('a@b.pt', assunto, 'x y')).toBe(
-      'mailto:a%40b.pt?subject=Resumo%20semanal%2002%2F11%20-%2008%2F11%2F2026&body=x%20y'
-    );
+  it('emailValido aceita endereços normais e recusa vazios ou sem domínio', () => {
+    expect(emailValido(' ana@x.pt ')).toBe(true);
+    expect(emailValido('ana@x')).toBe(false);
+    expect(emailValido('')).toBe(false);
+    expect(emailValido(null)).toBe(false);
   });
 });

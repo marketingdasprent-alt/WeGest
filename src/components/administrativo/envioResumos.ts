@@ -45,10 +45,6 @@ export function linkWhatsAppPara(telefone: string, texto: string): string {
   return `https://wa.me/${telefone}?text=${encodeURIComponent(texto)}`;
 }
 
-export function linkEmailPara(email: string, assunto: string, corpo: string): string {
-  return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
-}
-
-export function assuntoEmailResumo(inicio: Date, fim: Date): string {
-  return `Resumo semanal ${format(inicio, 'dd/MM')} - ${format(fim, 'dd/MM/yyyy')}`;
+export function emailValido(email: string | null | undefined): email is string {
+  return !!email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
