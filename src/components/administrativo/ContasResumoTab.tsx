@@ -37,6 +37,10 @@ import { ContasResumoFiltros } from './ContasResumoFiltros';
 import { ContasResumoStats } from './ContasResumoStats';
 import { ContasResumoTabela } from './ContasResumoTabela';
 import { ContasResumoBulkBar } from './ContasResumoBulkBar';
+import { EnviarMotoristasMenu } from './EnviarMotoristasMenu';
+import { EnviarResumosDialog } from './EnviarResumosDialog';
+import type { CanalEnvio } from './envioResumos';
+import { useResumosEnviados } from '@/hooks/useEnvioResumos';
 import { useEstadoPersistido, useSemanaPersistida } from '@/hooks/useEstadoPersistido';
 
 const WEEK_STARTS_ON = 1;
@@ -88,6 +92,7 @@ export function ContasResumoTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSending, setIsBulkSending] = useState(false);
+  const [canalEnvio, setCanalEnvio] = useState<CanalEnvio | null>(null);
   const [importarWizardOpen, setImportarWizardOpen] = useState(false);
   const [importacaoAutomaticaOpen, setImportacaoAutomaticaOpen] = useState(false);
   const [relatorioPagamentoOpen, setRelatorioPagamentoOpen] = useState(false);
@@ -415,6 +420,11 @@ export function ContasResumoTab() {
 
   // Antes de qualquer return: hooks depois dele mudam de número entre renders.
   const { data: semDono } = useCombustivelSemDono(weekStart, weekEnd);
+  const { data: enviados } = useResumosEnviados(format(weekStart, 'yyyy-MM-dd'));
+  const alvoEnvio =
+    selectedIds.size > 0
+      ? filteredResumos.filter((r) => r._uid && selectedIds.has(r._uid))
+      : filteredResumos;
 
   if (loading && resumos.length === 0) {
     return (
@@ -477,7 +487,15 @@ export function ContasResumoTab() {
 
       <CombustivelSemDonoAviso grupos={semDono ?? []} />
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        {periodoFechado !== false && (
+          <EnviarMotoristasMenu
+            quantidade={alvoEnvio.length}
+            temSelecao={selectedIds.size > 0}
+            disabled={loading}
+            onEscolher={setCanalEnvio}
+          />
+        )}
         <Popover open={fecharPopoverOpen} onOpenChange={setFecharPopoverOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" disabled={fechandoSemana}>
@@ -574,6 +592,19 @@ export function ContasResumoTab() {
         onBulkEmail={handleBulkEmail}
         onClearSelection={() => setSelectedIds(new Set())}
       />
+
+      {canalEnvio && (
+        <EnviarResumosDialog
+          open
+          onOpenChange={(aberto) => !aberto && setCanalEnvio(null)}
+          canal={canalEnvio}
+          resumos={alvoEnvio}
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+          enviados={enviados ?? new Map()}
+          formatCurrency={formatCurrency}
+        />
+      )}
 
       <MotoristaResumoDialog
         open={dialogOpen}

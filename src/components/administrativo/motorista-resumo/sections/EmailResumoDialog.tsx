@@ -12,6 +12,8 @@ import { percentagem, type RetencaoIrs } from '../retencaoIrs';
 interface EmailResumoDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Chamado depois de abrir o e-mail — marca a semana como enviada. */
+  onEnviado?: () => void;
   driverName: string;
   defaultEmail: string | null;
   dateRange: { from: Date; to: Date };
@@ -32,6 +34,7 @@ interface EmailResumoDialogProps {
 export function EmailResumoDialog({
   open,
   onOpenChange,
+  onEnviado,
   driverName,
   defaultEmail,
   dateRange,
@@ -81,6 +84,7 @@ export function EmailResumoDialog({
     window.open(
       `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(subject)}${cc}&body=${encodeURIComponent(body)}`
     );
+    onEnviado?.();
     onOpenChange(false);
   };
 
