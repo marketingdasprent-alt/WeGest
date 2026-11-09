@@ -7,11 +7,12 @@
 --   (2) movimentos datados na semana por enviar também ficam escondidos;
 --   (3) marcar como enviado (app): passa a ver os dois;
 --   (4) reenviar por outro canal junta o canal sem mudar a data;
---   (5) canal inválido é recusado; anon não chama a função.
+--   (5) canal inválido é recusado; anon não chama a função;
+--   (6) ficha inativa: o motorista não vê nada dela (20261109160000).
 -- ============================================================
 
 begin;
-select plan(9);
+select plan(10);
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000003b00aa', 'motorista@enviado.pt'),
@@ -108,6 +109,19 @@ select ok(
   not has_function_privilege('anon', 'public.marcar_resumos_enviados(uuid[], date, text)', 'execute'),
   'anon não chama marcar_resumos_enviados (5)'
 );
+
+-- (6) ficha inativa: o motorista deixa de ver os valores dela.
+update public.motoristas_ativos set status_ativo = false
+ where id = '00000000-0000-0000-0000-0000003b0b01';
+set local role authenticated;
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"00000000-0000-0000-0000-0000003b00aa"}', true);
+select is(
+  (select count(*)::int from public.motorista_liquido_semanal)
+    + (select count(*)::int from public.motorista_financeiro),
+  0,
+  'ficha inativa: o motorista não vê resumos nem movimentos (6)'
+);
+reset role;
 
 select * from finish();
 rollback;
