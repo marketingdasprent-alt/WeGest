@@ -41,11 +41,12 @@ import {
   Check,
   AlertCircle,
 } from 'lucide-react';
-import { format, startOfWeek, addDays, addWeeks, isBefore, isEqual } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { CONTAS_VALIDAS_DESDE } from './dashboardStats';
+import { semanasParaRecibo } from './semanasRecibo';
 
 interface Recibo {
   id: string;
@@ -58,12 +59,6 @@ interface Recibo {
   status: string;
   observacoes: string | null;
   created_at: string;
-}
-
-interface SemanaOption {
-  value: string;
-  label: string;
-  jaTemRecibo: boolean;
 }
 
 interface MotoristaRecibosCardProps {
@@ -125,45 +120,14 @@ export function MotoristaRecibosCard({
     };
   }, [motoristaId]);
 
-  // Gerar lista de semanas desde a data de contratação
-  const semanasDisponiveis = useMemo((): SemanaOption[] => {
-    if (!dataContratacao) return [];
-
-    const semanas: SemanaOption[] = [];
-    const dataContratacaoDate = new Date(dataContratacao);
-    const inicioContas = startOfWeek(new Date(`${CONTAS_VALIDAS_DESDE}T12:00:00`), {
-      weekStartsOn: 1,
-    });
-    const daContratacao = startOfWeek(dataContratacaoDate, { weekStartsOn: 1 });
-    let inicio = isBefore(daContratacao, inicioContas) ? inicioContas : daContratacao;
-    const hoje = new Date();
-    // Incluir até a semana actual (o motorista pode submeter recibo da semana em curso)
-    const fimVerificacao = addWeeks(startOfWeek(hoje, { weekStartsOn: 1 }), 1);
-
-    // Criar set de semanas que já têm recibo
-    const semanasComRecibo = new Set(
-      recibos.filter((r) => r.semana_referencia_inicio).map((r) => r.semana_referencia_inicio)
-    );
-
-    while (
-      isBefore(inicio, fimVerificacao) ||
-      isEqual(inicio, startOfWeek(hoje, { weekStartsOn: 1 }))
-    ) {
-      const fim = addDays(inicio, 6);
-      const valorSemana = format(inicio, 'yyyy-MM-dd');
-
-      semanas.push({
-        value: valorSemana,
-        label: `${format(inicio, 'dd MMM', { locale: pt })} - ${format(fim, 'dd MMM yyyy', { locale: pt })}`,
-        jaTemRecibo: semanasComRecibo.has(valorSemana),
-      });
-
-      inicio = addWeeks(inicio, 1);
-    }
-
-    // Ordenar do mais recente para o mais antigo
-    return semanas.reverse();
-  }, [dataContratacao, recibos]);
+  const semanasDisponiveis = useMemo(
+    () =>
+      semanasParaRecibo(
+        dataContratacao,
+        new Set(recibos.map((r) => r.semana_referencia_inicio).filter((s): s is string => !!s))
+      ),
+    [dataContratacao, recibos]
+  );
 
   async function loadRecibos() {
     try {
