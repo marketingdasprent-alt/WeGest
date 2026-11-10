@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { removeLegacyAuthenticatedCache } from '@/lib/pwaCacheCleanup';
 import { arrancarPwa, usaServiceWorker } from '@/lib/pwaArranque';
 import { recarregarParaVersaoNova } from '@/lib/versaoAntiga';
+import { protegerContraTradutor } from '@/lib/protecaoTradutor';
 
 import App from './App.tsx';
 import './index.css';
@@ -35,5 +36,8 @@ arrancarPwa({ nativo, hostname: window.location.hostname, registerSW });
 window.addEventListener('vite:preloadError', (evento) => {
   if (recarregarParaVersaoNova()) evento.preventDefault();
 });
+
+// Antes de montar: a página traduzida pelo browser rebentava a app.
+protegerContraTradutor();
 
 createRoot(document.getElementById('root')!).render(<App />);
