@@ -6,38 +6,58 @@ import { removeLegacyAuthenticatedCache } from '@/lib/pwaCacheCleanup';
 import { arrancarPwa, usaServiceWorker } from '@/lib/pwaArranque';
 import { recarregarParaVersaoNova } from '@/lib/versaoAntiga';
 import { protegerContraTradutor } from '@/lib/protecaoTradutor';
+import { urlSemWww } from '@/lib/semWww';
 
 import App from './App.tsx';
 import './index.css';
 import { setupNativeApp } from './lib/native-bootstrap';
 
-void setupNativeApp();
+function arrancar() {
+  void setupNativeApp();
 
-// Dev: mata qualquer service worker registado de uma sessão anterior (build de
-// produção aberto no mesmo localhost, ou HMR que perdeu o timestamp). O plugin
-// PWA não gera SW em dev (devOptions.enabled: false), mas um já registado
-// continua a intercetar pedidos e a servir módulos velhos — o sintoma é
-// "does not provide an export" num ficheiro que compila bem, com o mesmo `?t=`
-// congelado em todos os erros por muito que se reinicie o Vite.
-if (import.meta.env.DEV && 'serviceWorker' in navigator) {
-  void navigator.serviceWorker.getRegistrations().then((regs) => {
-    regs.forEach((r) => void r.unregister());
+  // Dev: mata qualquer service worker registado de uma sessão anterior (build de
+  // produção aberto no mesmo localhost, ou HMR que perdeu o timestamp). O plugin
+  // PWA não gera SW em dev (devOptions.enabled: false), mas um já registado
+  // continua a intercetar pedidos e a servir módulos velhos — o sintoma é
+  // "does not provide an export" num ficheiro que compila bem, com o mesmo `?t=`
+  // congelado em todos os erros por muito que se reinicie o Vite.
+  if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+    void navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((r) => void r.unregister());
+    });
+  }
+
+  // Service worker só na web da app: nem no nativo (tela branca e reloads em
+  // loop) nem em docs.wegest.pt, onde se desliga a quem já o tinha (ver pwaArranque).
+  const nativo = Capacitor.isNativePlatform();
+  if (usaServiceWorker(nativo, window.location.hostname)) void removeLegacyAuthenticatedCache();
+  arrancarPwa({ nativo, hostname: window.location.hostname, registerSW });
+
+  // Ficheiro de uma versão anterior que já não existe (deploy com a aba aberta):
+  // recarregar traz a versão nova em vez de deixar a secção em erro.
+  window.addEventListener('vite:preloadError', (evento) => {
+    if (recarregarParaVersaoNova()) evento.preventDefault();
   });
+
+  // Antes de montar: a página traduzida pelo browser rebentava a app.
+  protegerContraTradutor();
+
+  createRoot(document.getElementById('root')!).render(<App />);
 }
 
-// Service worker só na web da app: nem no nativo (tela branca e reloads em
-// loop) nem em docs.wegest.pt, onde se desliga a quem já o tinha (ver pwaArranque).
-const nativo = Capacitor.isNativePlatform();
-if (usaServiceWorker(nativo, window.location.hostname)) void removeLegacyAuthenticatedCache();
-arrancarPwa({ nativo, hostname: window.location.hostname, registerSW });
-
-// Ficheiro de uma versão anterior que já não existe (deploy com a aba aberta):
-// recarregar traz a versão nova em vez de deixar a secção em erro.
-window.addEventListener('vite:preloadError', (evento) => {
-  if (recarregarParaVersaoNova()) evento.preventDefault();
-});
-
-// Antes de montar: a página traduzida pelo browser rebentava a app.
-protegerContraTradutor();
-
-createRoot(document.getElementById('root')!).render(<App />);
+// www.wegest.pt é outro site para o browser (com a sua cópia antiga guardada):
+// tira-se o service worker do www e segue-se para wegest.pt, mesmo caminho.
+const destinoSemWww = urlSemWww(window.location.href);
+if (destinoSemWww) {
+  const seguir = () => window.location.replace(destinoSemWww);
+  if ('serviceWorker' in navigator) {
+    void navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .finally(seguir);
+  } else {
+    seguir();
+  }
+} else {
+  arrancar();
+}
