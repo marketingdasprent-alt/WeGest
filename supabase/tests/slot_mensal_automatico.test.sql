@@ -5,7 +5,8 @@
 -- na N-ésima segunda-feira do mês escolhida no motorista
 -- (slot_semana_cobranca), sem duplicar recorrência ativa, lançamento
 -- manual da semana nem a própria corrida anterior.
--- Novembro 2026: segundas 02, 09, 16, 23 e 30.
+-- Novembro 2026: segundas 02, 09, 16, 23 e 30. O resumo gerado numa segunda é
+-- o da semana anterior, por isso o débito fica no domingo antes dela.
 -- ============================================================
 
 begin;
@@ -37,7 +38,7 @@ insert into public.motorista_financeiro_recorrencias
 
 insert into public.motorista_financeiro
   (org_id, motorista_id, tipo, categoria, descricao, valor, data_movimento, status) values
-  ('00000000-0000-0000-0000-0000005a0001', '00000000-0000-0000-0000-0000005ac003', 'debito', 'slot_mensal', 'manual', 125, '2026-11-03', 'pendente');
+  ('00000000-0000-0000-0000-0000005a0001', '00000000-0000-0000-0000-0000005ac003', 'debito', 'slot_mensal', 'manual', 125, '2026-10-28', 'pendente');
 
 -- 04/11/2026 cai na semana da 1ª segunda-feira (02/11).
 select is(public.gerar_slot_mensal_motoristas('2026-11-04'), 1, '1ª semana lança só o motorista elegível da 1ª');
@@ -46,10 +47,10 @@ select results_eq(
   $$ select valor, data_movimento, categoria, tipo, status, descricao, referencia
        from public.motorista_financeiro
       where motorista_id = '00000000-0000-0000-0000-0000005ac001' $$,
-  $$ values (125.00::numeric, '2026-11-02'::date, 'slot_mensal'::text, 'debito'::text, 'pendente'::text,
+  $$ values (125.00::numeric, '2026-11-01'::date, 'slot_mensal'::text, 'debito'::text, 'pendente'::text,
              'Mensalidade slot — 11/2026'::text,
              'slot-auto:00000000-0000-0000-0000-0000005ac001:2026-11'::text) $$,
-  'débito slot_mensal de novembro na 1ª segunda-feira, com o Valor Mensal'
+  'débito de novembro no domingo 01/11, dentro do resumo gerado na 1ª segunda-feira'
 );
 
 select is(
