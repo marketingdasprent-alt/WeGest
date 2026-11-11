@@ -97,6 +97,65 @@
     <!-- End Google Tag Manager (noscript) -->
 
     <div id="root"></div>
+    <!-- Rede de segurança: se a app não arrancar (versão antiga guardada, browser
+         antigo), mostra um botão que limpa a cópia guardada e recarrega. ES5 de propósito. -->
+    <script>
+      (function () {
+        var ID = 'arranque-falhou';
+        function vazia() {
+          var r = document.getElementById('root');
+          return r && r.children.length === 0;
+        }
+        function limparERecarregar() {
+          var tarefas = [];
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            tarefas.push(
+              navigator.serviceWorker.getRegistrations().then(function (rs) {
+                return Promise.all(
+                  rs.map(function (r) {
+                    return r.unregister();
+                  })
+                );
+              })
+            );
+          }
+          if (window.caches && caches.keys) {
+            tarefas.push(
+              caches.keys().then(function (ns) {
+                return Promise.all(
+                  ns.map(function (n) {
+                    return caches.delete(n);
+                  })
+                );
+              })
+            );
+          }
+          var fim = function () {
+            window.location.reload();
+          };
+          if (window.Promise && tarefas.length) Promise.all(tarefas).then(fim, fim);
+          else fim();
+        }
+        setTimeout(function () {
+          if (!vazia() || document.getElementById(ID)) return;
+          var d = document.createElement('div');
+          d.id = ID;
+          d.style.cssText =
+            'position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;font-family:sans-serif;background:#fff;color:#111;z-index:9999';
+          d.innerHTML =
+            '<p style="margin:0;font-size:16px">A página não carregou.</p>' +
+            '<button type="button" style="padding:12px 24px;font-size:16px;border:0;border-radius:8px;background:#111;color:#fff">Recarregar</button>';
+          d.querySelector('button').onclick = limparERecarregar;
+          document.body.appendChild(d);
+          var vigia = setInterval(function () {
+            if (!vazia()) {
+              clearInterval(vigia);
+              if (d.parentNode) d.parentNode.removeChild(d);
+            }
+          }, 1000);
+        }, 8000);
+      })();
+    </script>
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
     <script type="module" src="/src/main.tsx"></script>
   </body>

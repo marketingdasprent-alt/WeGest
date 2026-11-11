@@ -145,6 +145,9 @@ export default defineConfig(({ mode }) => ({
           /^\/formulario\//,
           /^\/motorista\//,
           /^\/login$/,
+          // Links de e-mail: um SW antigo servia a versão guardada e a página ficava em branco.
+          /^\/reset-password$/,
+          /^\/confirmar-email$/,
         ],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Nota: o vite-plugin-pwa precacheia SEMPRE o manifest.webmanifest (não
