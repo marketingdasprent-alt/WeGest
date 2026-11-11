@@ -7,6 +7,7 @@ import { arrancarPwa, usaServiceWorker } from '@/lib/pwaArranque';
 import { recarregarParaVersaoNova } from '@/lib/versaoAntiga';
 import { protegerContraTradutor } from '@/lib/protecaoTradutor';
 import { urlSemWww } from '@/lib/semWww';
+import { caminhoSemBarrasDuplas } from '@/lib/semBarrasDuplas';
 
 import App from './App.tsx';
 import './index.css';
@@ -41,6 +42,16 @@ function arrancar() {
 
   // Antes de montar: a página traduzida pelo browser rebentava a app.
   protegerContraTradutor();
+
+  // Links de e-mail com `wegest.pt//confirmar-email` (barra a mais no Site URL).
+  const caminhoLimpo = caminhoSemBarrasDuplas(window.location.pathname);
+  if (caminhoLimpo) {
+    window.history.replaceState(
+      window.history.state,
+      '',
+      caminhoLimpo + window.location.search + window.location.hash
+    );
+  }
 
   createRoot(document.getElementById('root')!).render(<App />);
 }
