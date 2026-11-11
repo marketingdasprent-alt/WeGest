@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2.105.4';
+import { mascararEmail } from '../_shared/auth/emailMascarado.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,6 +65,24 @@ serve(async (req) => {
       .maybeSingle();
 
     if (perfilErr || !perfil) {
+      // Ficha com este email mas já ligada a outra conta (mudou de email): sem
+      // isto caía em "criar" e nascia uma candidatura duplicada da mesma pessoa.
+      const { data: fichaComConta } = await admin
+        .from('motoristas_ativos')
+        .select('user_id')
+        .eq('org_id', orgId)
+        .not('user_id', 'is', null)
+        .ilike('email', escapeLike(emailNorm))
+        .order('status_ativo', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (fichaComConta?.user_id) {
+        const { data: conta } = await admin.auth.admin.getUserById(fichaComConta.user_id);
+        const emailConta = conta?.user?.email;
+        if (emailConta && emailConta.toLowerCase() !== emailNorm) {
+          return json({ ok: true, status: 'outra_conta', email_conta: mascararEmail(emailConta) });
+        }
+      }
       return json({ ok: true, status: 'criar' });
     }
 
