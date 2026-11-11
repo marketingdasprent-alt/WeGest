@@ -8,7 +8,7 @@ import type { ViaturaPeriodoInput } from './slotPeriodos';
  * rent-a-car (316,13 € em vez dos 300 € da tarifa).
  */
 export const COLUNAS_CONTRATO_PARA_PERIODO =
-  'viatura_id, data_inicio, data_fim, valor_total_manual, preco_semana_acordado, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)';
+  'viatura_id, data_inicio, data_fim, valor_total_manual, preco_semana_acordado, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id), cliente:cliente_id(frota_parceira)';
 
 export interface ContratoParaPeriodo {
   viatura_id: string | null;
@@ -26,6 +26,8 @@ export interface ContratoParaPeriodo {
   regime?: string | null;
 
   substituido_em?: string | null;
+  /** Cliente do contrato; `frota_parceira` = o aluguer não se desconta ao condutor. */
+  cliente?: { frota_parceira?: boolean | null } | null;
   viaturas?: {
     matricula?: string | null;
     modelo_id?: string | null;
@@ -86,6 +88,8 @@ function precoSemanalManualRentACar(c: ContratoParaPeriodo): number | null {
 
 function contratoContaParaAluguer(c: ContratoParaPeriodo): boolean {
   if (!c.viatura_id || !c.data_inicio) return false;
+  // Frota parceira: o cliente paga o aluguer e cobra-o ao motorista na empresa dele.
+  if (c.cliente?.frota_parceira) return false;
   const cancelado = (c.estado_operacional ?? '').trim().toLowerCase() === 'cancelado';
   return !cancelado || c.substituido_em != null;
 }

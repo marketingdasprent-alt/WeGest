@@ -18,6 +18,8 @@ function diasEntre(inicio: Date, fim: Date): number {
 
 interface ContratoRow {
   id: string;
+  /** Frota parceira: o aluguer é da empresa cliente, não do condutor. */
+  cliente?: { frota_parceira?: boolean | null } | null;
   org_id: string;
   viatura_id: string;
   regime: string;
@@ -122,7 +124,7 @@ Deno.serve(async (req) => {
     const { data: contratosSemana, error: contratosError } = await supabase
       .from('contratos_renting')
       .select(
-        'id, org_id, viatura_id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, preco_semana_acordado, estado_operacional, versao, substituido_em'
+        'id, org_id, viatura_id, regime, data_inicio, data_fim, tarifa_id, tarifa_diaria, valor_total_manual, preco_semana_acordado, estado_operacional, versao, substituido_em, cliente:cliente_id(frota_parceira)'
       )
       .eq('org_id', orgId)
       .is('deleted_at', null)
@@ -159,11 +161,16 @@ Deno.serve(async (req) => {
         .lt('data_inicio', semanaFimExclusivoStr)
         .or(`data_fim.is.null,data_fim.gte.${semanaInicio}`)
         .order('data_inicio', { ascending: false });
+      const deFrotaParceira = new Set(
+        todosContratos.filter((c) => c.cliente?.frota_parceira).map((c) => c.id)
+      );
       for (const cc of (condutores ?? []) as Array<{
         contrato_id: string;
         motorista_id: string | null;
         cliente_id: string | null;
       }>) {
+        // Contrato com frota parceira: sem condutor a quem descontar o aluguer.
+        if (deFrotaParceira.has(cc.contrato_id)) continue;
         if (!condutorPorContrato.has(cc.contrato_id)) {
           condutorPorContrato.set(cc.contrato_id, {
             motorista_id: cc.motorista_id ?? null,

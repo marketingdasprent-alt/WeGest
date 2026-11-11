@@ -351,7 +351,7 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         supabase
           .from('contratos_renting')
           .select(
-            'viatura_id, data_inicio, data_fim, valor_total_manual, preco_semana_acordado, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id)'
+            'viatura_id, data_inicio, data_fim, valor_total_manual, preco_semana_acordado, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id), cliente:cliente_id(frota_parceira)'
           )
           .eq('contrato_condutores.motorista_id', motoristaId)
           .is('deleted_at', null)
