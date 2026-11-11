@@ -13,6 +13,7 @@ import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 import { resolveOrgByCodigo, normalizeCodigo, type ResolvedOrg } from '@/lib/org-codigo';
 import { isPasswordStrong, PASSWORD_POLICY_MESSAGE } from '@/lib/passwordPolicy';
 import { RegistoMotoristaFormCriarConta } from './RegistoMotoristaFormCriarConta';
+import { RegistoMotoristaOutraConta } from './RegistoMotoristaOutraConta';
 
 const CARGO_MOTORISTA_ID = 'a0000000-0000-0000-0000-000000000001';
 
@@ -21,11 +22,13 @@ const CARGO_MOTORISTA_ID = 'a0000000-0000-0000-0000-000000000001';
 //  'criar'        → sem perfil elegível: formulário completo de candidatura (signUp).
 //  'enviado'      → perfil existia sem conta: conta preparada, link seguro enviado por email.
 //  'existe_conta' → já existe uma conta auth com este email (não mexida) → iniciar sessão.
-type Step = 'email' | 'criar' | 'enviado' | 'existe_conta';
+//  'outra_conta'  → a ficha com este email já tem conta noutro email → entrar com esse.
+type Step = 'email' | 'criar' | 'enviado' | 'existe_conta' | 'outra_conta';
 
 interface OnboardingResponse {
   ok: boolean;
-  status?: 'criar' | 'enviado' | 'existe_conta';
+  status?: 'criar' | 'enviado' | 'existe_conta' | 'outra_conta';
+  email_conta?: string;
   error?: string;
 }
 
@@ -37,6 +40,7 @@ const RegistoMotorista: React.FC = () => {
   const hasRedirected = useRef(false);
 
   const [step, setStep] = useState<Step>('email');
+  const [emailConta, setEmailConta] = useState('');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -185,6 +189,8 @@ const RegistoMotorista: React.FC = () => {
       if (error) throw error;
       if (!data?.ok) throw new Error(data?.error || 'Não foi possível continuar.');
 
+      setEmailConta(data.email_conta ?? '');
+      setEmailConta(data.email_conta ?? '');
       setStep(data.status ?? 'criar');
     } catch (error: any) {
       console.error('Erro ao verificar email:', error);
@@ -299,6 +305,10 @@ const RegistoMotorista: React.FC = () => {
         </p>
       </AuthMobileShell>
     );
+  }
+
+  if (step === 'outra_conta') {
+    return <RegistoMotoristaOutraConta emailConta={emailConta} onVoltar={() => setStep('email')} />;
   }
 
   // Já existe uma conta auth com este email — não a tocamos (podia ser de
