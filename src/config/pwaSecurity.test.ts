@@ -36,4 +36,17 @@ describe('service worker e o formulário incorporável', () => {
     expect(denylist).toContain('/^\\/motorista\\//');
     expect(denylist).toContain('/^\\/login$/');
   });
+
+  it('links de e-mail (recuperar senha, confirmar) vão sempre à rede, nunca à versão guardada', () => {
+    // 11/11/2026: motorista clicou em "recuperar senha" e a página ficou em branco.
+    const denylist = config.match(/navigateFallbackDenylist:\s*\[([^\]]*)\]/)?.[1] ?? '';
+    expect(denylist).toContain('/^\\/reset-password$/');
+    expect(denylist).toContain('/^\\/confirmar-email$/');
+  });
+
+  it('o index.html mostra um botão de recarregar se a app não arrancar', () => {
+    const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
+    expect(html).toContain('arranque-falhou');
+    expect(html).toContain('getRegistrations');
+  });
 });
