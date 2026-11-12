@@ -36,7 +36,10 @@ Deno.test('com número gerado é sucesso mesmo que a mensagem não seja "Sucesso
 });
 
 Deno.test('o Primavera recusou: mensagem de erro e sem número é falha segura', () => {
-  const r = lerRespostaInserir(200, JSON.stringify({ Estado: { Mensagem: 'Entidade inexistente' } }));
+  const r = lerRespostaInserir(
+    200,
+    JSON.stringify({ Estado: { Mensagem: 'Entidade inexistente' } })
+  );
   assertEquals(r, { tipo: 'recusado', mensagem: 'Primavera recusou: Entidade inexistente' });
 });
 
@@ -49,6 +52,15 @@ Deno.test('HTTP 4xx é recusa; HTTP 5xx é ambíguo', () => {
 
 Deno.test('2xx sem JSON ou sem número e sem erro é ambíguo, nunca "falhou"', () => {
   assertEquals(lerRespostaInserir(200, '<html>ok</html>').tipo, 'ambiguo');
-  assertEquals(lerRespostaInserir(200, JSON.stringify({ Estado: { Mensagem: 'Sucesso' } })).tipo, 'ambiguo');
+  assertEquals(
+    lerRespostaInserir(200, JSON.stringify({ Estado: { Mensagem: 'Sucesso' } })).tipo,
+    'ambiguo'
+  );
   assertEquals(lerRespostaInserir(200, '{}').tipo, 'ambiguo');
+});
+
+Deno.test('a resposta do inserir não traz total: quem o acrescenta é o agente', () => {
+  const r = lerRespostaInserir(200, SUCESSO);
+  if (r.tipo !== 'ok') throw new Error('esperava ok');
+  assertEquals(r.documento.total, undefined);
 });

@@ -1,8 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   AmbiguoError,
-  CLIENTES_POR_OMISSAO,
-  type ConfigAsConnect,
   construirLinhas,
   criarClienteAsConnect,
   dataDocLisboa,
@@ -19,50 +17,7 @@ import {
   timeoutDoImprimir,
   lerRespostaImprimir,
 } from './asconnect.ts';
-
-const cfgBase: ConfigAsConnect = {
-  primavera: { endpoint: 'http://srv:8090', username: 'u', password: 'p', enterprise: 'E' },
-  iva_codes: { '23': '01', '0': '04' },
-  tipos_documento: { FT: 'FA' },
-  artigo_por_omissao: 'ALUGUER',
-  clientes: CLIENTES_POR_OMISSAO,
-  precos_com_iva: false,
-  condicao_pagamento: '1',
-};
-
-interface Chamada {
-  url: string;
-  corpo: any;
-}
-
-/** fetch falso: devolve, por caminho, a resposta indicada e regista o corpo enviado. */
-function fetchFalso(respostas: Record<string, unknown[]>) {
-  const chamadas: Chamada[] = [];
-  const fila = Object.fromEntries(Object.entries(respostas).map(([k, v]) => [k, [...v]]));
-  const fn = (async (url: string, init?: RequestInit) => {
-    const caminho = url.replace('http://srv:8090', '');
-    chamadas.push({ url: caminho, corpo: init?.body ? JSON.parse(String(init.body)) : null });
-    const r = fila[caminho]?.shift();
-    if (r === undefined) throw new Error(`pedido inesperado: ${caminho}`);
-    return new Response(typeof r === 'string' ? r : JSON.stringify(r), { status: 200 });
-  }) as unknown as typeof fetch;
-  return { fn, chamadas };
-}
-
-const SUCESSO = { Estado: { Mensagem: 'Sucesso' } };
-const DOC_OK = {
-  TipoDocGerado: 'FA',
-  SerieDocGerado: '2026',
-  NumeroDocGerado: '68',
-  Documento: 'FA 2026/68',
-  ...SUCESSO,
-};
-const payload = {
-  tipo: 'FT' as const,
-  cliente: { nome: 'Ana', nif: '234567890', morada: 'Rua A' },
-  itens: [{ descricao: 'Aluguer semana 41', quantidade: 1, taxa_iva: 23, preco_unitario: 100 }],
-  referencia_externa: 'CTR-12',
-};
+import { cfgBase, DOC_OK, fetchFalso, payload, semLeituraTotal, SUCESSO } from './testeUtil.ts';
 
 describe('helpers', () => {
   it('aceita "Sucesso" e "Sucesso." (os dois formatos do PDF)', () => {
@@ -140,7 +95,7 @@ describe('emitir', () => {
       new Date('2026-10-13T09:00:00Z')
     );
 
-    expect(chamadas.map((c) => c.url)).toEqual([
+    expect(semLeituraTotal(chamadas).map((c) => c.url)).toEqual([
       '/auth/gettoken',
       '/erp/query/tabledata',
       '/documentos/vendas/inserir',
@@ -183,7 +138,7 @@ describe('emitir', () => {
     });
     // O inserir grava a CondPag (provado no DASPWSTEST a 2026-10-22, FA 2026/51).
     expect(chamadas.some((c) => c.url === '/ficha/cliente/atualizar')).toBe(false);
-    expect(chamadas.at(-1)!.corpo.Documento.Entidade).toBe('234567890');
+    expect(semLeituraTotal(chamadas).at(-1)!.corpo.Documento.Entidade).toBe('234567890');
   });
 
   it('config incompleta falha antes de tocar no Primavera (nem cria cliente)', async () => {
@@ -300,23 +255,33 @@ describe('prazo do WeGest', () => {
   });
 
   it('com tempo, envia o inserir com um limite que acaba dentro do prazo', async () => {
-    const sinais: AbortSignal[] = [];
-    const { fn: base, chamadas } = fetchFalso({
-      '/auth/gettoken': ['tok'],
-      '/erp/query/tabledata': [{ Resultado: [{ Cliente: 'C1' }], ...SUCESSO }],
-      '/documentos/vendas/inserir': [DOC_OK],
+    const sinais: Record<string, AbortSignal & { ms?: number }> = {};
+    // Guarda o limite pedido a cada AbortSignal.timeout para o confirmar por URL.
+    const espia = vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      const sinal = new AbortController().signal as AbortSignal & { ms?: number };
+      sinal.ms = ms;
+      return sinal;
     });
-    const fn = (async (url: string, init?: RequestInit) => {
-      if (init?.signal) sinais.push(init.signal);
-      return base(url, init);
-    }) as typeof fetch;
-    const r = await criarClienteAsConnect(cfgBase, fn).emitir(payload, new Date(), {
-      criadoEm: 0,
-      relogio: () => 20_000,
-    });
-    expect(r.numero).toBe('FA 2026/68');
-    expect(chamadas.at(-1)!.url).toBe('/documentos/vendas/inserir');
-    expect(sinais.at(-1)!.aborted).toBe(false);
+    try {
+      const { fn: base } = fetchFalso({
+        '/auth/gettoken': ['tok'],
+        '/erp/query/tabledata': [{ Resultado: [{ Cliente: 'C1' }], ...SUCESSO }],
+        '/documentos/vendas/inserir': [DOC_OK],
+      });
+      const fn = (async (url: string, init?: RequestInit) => {
+        if (init?.signal) sinais[url.replace(/^https?:\/\/[^/]+/, '')] = init.signal as never;
+        return base(url, init);
+      }) as typeof fetch;
+      const r = await criarClienteAsConnect(cfgBase, fn).emitir(payload, new Date(), {
+        criadoEm: 0,
+        relogio: () => 20_000,
+      });
+      expect(r.numero).toBe('FA 2026/68');
+      // Restam 23 s (43 s - 20 s): o limite do inserir é esse, nem mais nem menos.
+      expect(sinais['/documentos/vendas/inserir']?.ms).toBe(23_000);
+    } finally {
+      espia.mockRestore();
+    }
   });
 });
 
@@ -333,7 +298,7 @@ describe('garantirCliente: CondPag do cliente existente', () => {
         '/documentos/vendas/inserir': [DOC_OK],
       });
       await criarClienteAsConnect(cfgBase, fn).emitir(payload);
-      expect(chamadas.map((c) => c.url)).toEqual([
+      expect(semLeituraTotal(chamadas).map((c) => c.url)).toEqual([
         '/auth/gettoken',
         '/erp/query/tabledata',
         '/ficha/cliente/atualizar',

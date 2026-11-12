@@ -125,7 +125,9 @@ async function esperarResultado(
   const d = desfechoDoJob(await lerJob(jobId), { desistiu: true, cancelouPendente });
   if (d.tipo === 'ok') return d.resultado;
   if (d.tipo === 'falha') throw new Error(d.mensagem);
-  throw new EmissaoAmbiguaError(d.tipo === 'ambiguo' ? d.mensagem : 'Primavera: desfecho desconhecido.');
+  throw new EmissaoAmbiguaError(
+    d.tipo === 'ambiguo' ? d.mensagem : 'Primavera: desfecho desconhecido.'
+  );
 }
 
 /** Tira o ficheiro da fila depois de entregue (fica só extensão e tamanho). Se falhar, o
@@ -228,6 +230,8 @@ export const primaveraProvider: FaturacaoProvider = {
       docnum: String(r.docnum),
       serie: String(r.serie ?? ''),
       numero: r.numero || String(r.docnum),
+      // Agente antigo não manda total: null => a edge avisa que não confirmou, sem travar.
+      total: typeof r.total === 'number' && Number.isFinite(r.total) ? r.total : null,
       raw: r.raw ?? r,
     };
   },
