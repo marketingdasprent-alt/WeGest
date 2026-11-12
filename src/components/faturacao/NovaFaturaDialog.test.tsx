@@ -68,4 +68,35 @@ describe('NovaFaturaDialog — leitura do cliente antes de gravar', () => {
     expect(insertMock).not.toHaveBeenCalled();
     expect(emitirMutate).not.toHaveBeenCalled();
   });
+
+  it('total divergente invalida as opções de fornecedor (a integração ficou travada)', async () => {
+    carregarCliente.mockResolvedValue({ nome: 'Cliente Um' });
+    insertMock.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: { id: 'cob-1' }, error: null }) }),
+    });
+    emitirMutate.mockResolvedValue({
+      success: true,
+      totalDivergente: { numero: 'FT 1/1', esperado: 100, real: 123 },
+    });
+    const qc = new QueryClient();
+    const invalidate = vi.spyOn(qc, 'invalidateQueries');
+    render(
+      <QueryClientProvider client={qc}>
+        <NovaFaturaDialog
+          open
+          onOpenChange={() => {}}
+          alvo={{ tipo: 'contrato', id: 'ct-1', orgId: 'org-1', codigoLabel: 'Contrato #1' }}
+          destinatario={{ id: 'cli-1', nome: 'Cliente Um' }}
+          onCriada={() => {}}
+        />
+      </QueryClientProvider>
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('0,00'), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Criar$/ }));
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({ queryKey: ['faturacao-opcoes'] })
+    );
+  });
 });

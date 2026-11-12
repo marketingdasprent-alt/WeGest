@@ -28,6 +28,7 @@ import { METODO_OPTIONS, metodoLabel } from '@/components/administrativo/faturac
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import { baixarPdfEmSegundoPlano, carregarClienteParaFatura } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
+import { avisarTotalDaEmissao } from '@/lib/faturacaoTotal';
 import {
   ParcelamentoDialog,
   type ParcelamentoFaturaAlvo,
@@ -344,6 +345,8 @@ export function NovaFaturaDialog({
             : undefined
         );
         if (res.warning) toast.warning(res.warning);
+        avisarTotalDaEmissao(res);
+        if (res.totalDivergente) qc.invalidateQueries({ queryKey: ['faturacao-opcoes'] });
         // Depois do sucesso e sem esperar: o PDF do Primavera pode levar dezenas de segundos.
         baixarPdfEmSegundoPlano(res.invoice, (m) => toast.warning(m));
       } catch (kiErr: any) {

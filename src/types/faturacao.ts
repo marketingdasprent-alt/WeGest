@@ -47,6 +47,10 @@ export interface EmitResult {
    *  = não se sabe se foi criado, nunca reemitir sem reconciliar primeiro. */
   classe?: 'known_failed' | 'unknown';
   warning?: string;
+  /** A KeyInvoice gravou um total diferente do pedido: a edge travou a faturação da integração. */
+  totalDivergente?: { numero: string; esperado: number; real: number };
+  /** O total gravado não pôde ser lido de volta: confirmar o documento antes de emitir mais. */
+  totalNaoConfirmado?: true;
   /** false = o documento existe no provider mas não ficou gravado em `invoices`. */
   localGravado?: boolean;
   invoice?: InvoiceMetadata;
