@@ -42,15 +42,15 @@ function motivoLegivel(erro: unknown): string {
 function mensagemNotaCredito(motivo: string, classe: string | undefined): string {
   if (classe === 'unknown') {
     return (
-      'Crédito registado na conta-corrente, mas não se sabe se a nota de crédito foi emitida — PODE ter sido. ' +
+      'Nada foi gravado no WeGest, mas não se sabe se a nota de crédito foi emitida — PODE ter sido. ' +
       `Motivo: ${motivo}. ` +
       'Confirme no software de faturação antes de emitir outra; emitir sem confirmar pode duplicar o documento.'
     );
   }
   return (
-    'Crédito registado na conta-corrente, mas a nota de crédito NÃO foi emitida. ' +
+    'A nota de crédito NÃO foi emitida e nada foi gravado no WeGest. ' +
     `Motivo: ${motivo}. ` +
-    'Reemita-a na lista de documentos — até lá não existe documento para o cliente.'
+    'Corrija o motivo e tente novamente.'
   );
 }
 

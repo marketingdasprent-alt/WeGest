@@ -3,9 +3,16 @@
 
 import { precoParaProvider } from '../../supabase/functions/_shared/faturacao/totais.ts';
 import {
+  campoSemMaiusculas,
+  lerTotalDocumento as lerTotal,
+  timeoutDaLeituraTotal,
+} from './totalDocumento.ts';
+import {
   type DocumentoEmitido,
   lerRespostaInserir,
 } from '../../supabase/functions/_shared/primavera/resposta.ts';
+
+export { campoSemMaiusculas };
 
 const TIMEOUT_PEDIDO_MS = 12_000;
 const TIMEOUT_INSERIR_MS = 60_000;
@@ -102,7 +109,7 @@ export interface PayloadEmit {
   referencia_externa?: string | null;
 }
 
-export type ResultadoEmit = DocumentoEmitido;
+export type ResultadoEmit = DocumentoEmitido & { total: number | null };
 
 type FetchFn = typeof fetch;
 
@@ -160,16 +167,6 @@ export function variantesNif(nif: string, pais: string): string[] {
   const limpo = nif.replace(/\s+/g, '').toUpperCase();
   const outra = /^[A-Z]{2}/.test(limpo) ? limpo.slice(2) : `${pais}${limpo}`;
   return [...new Set([limpo, outra].filter(Boolean))];
-}
-
-/** As views devolvem nomes com capitalização mista ("artigo", "Descricao"); o SQL Server não distingue. */
-export function campoSemMaiusculas(
-  linha: Record<string, unknown> | undefined,
-  campo: string
-): unknown {
-  if (!linha) return undefined;
-  const chave = Object.keys(linha).find((k) => k.toLowerCase() === campo.toLowerCase());
-  return chave === undefined ? undefined : linha[chave];
 }
 
 /** Instante, no relógio desta máquina, em que o WeGest criou o pedido. Com a hora do
@@ -291,13 +288,18 @@ export function construirLinhas(cfg: ConfigAsConnect, itens: ItemEmit[]) {
 export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = fetch) {
   let token: string | undefined;
 
-  async function pedido(metodo: string, caminho: string, corpo: unknown): Promise<unknown> {
+  async function pedido(
+    metodo: string,
+    caminho: string,
+    corpo: unknown,
+    timeoutMs: number = TIMEOUT_PEDIDO_MS
+  ): Promise<unknown> {
     if (!token) token = await obterToken();
     const res = await fetchFn(`${cfg.primavera.endpoint}${caminho}`, {
       method: metodo,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(corpo),
-      signal: AbortSignal.timeout(TIMEOUT_PEDIDO_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     const texto = await res.text();
     if (!res.ok) throw new Error(`${caminho} falhou (HTTP ${res.status}): ${texto.slice(0, 300)}`);
@@ -331,6 +333,7 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
       operadorLogico?: 'AND' | 'OR';
       pageSize?: number;
       ordenarPor?: string;
+      timeoutMs?: number;
     } = {}
   ): Promise<Record<string, unknown>[]> {
     const colunas = opcoes.colunas ?? ['*'];
@@ -338,20 +341,25 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     // O AS Connect recusa Pagination sem OrderBy ("Order by is Mandatory..."). Com "*"
     // e sem campo conhecido não há por onde ordenar: pede tudo e corta aqui.
     const ordenarPor = opcoes.ordenarPor ?? (colunas[0] !== '*' ? colunas[0] : undefined);
-    const d = (await pedido('POST', '/erp/query/tabledata', {
-      Query: {
-        Table: tabela,
-        Columns: colunas,
-        Filters: opcoes.filtros ?? [],
-        LogicalOperator: opcoes.operadorLogico ?? 'AND',
-        ...(ordenarPor
-          ? {
-              OrderBy: [{ field: ordenarPor, direction: 'Asc' }],
-              Pagination: { page: 1, pageSize },
-            }
-          : {}),
+    const d = (await pedido(
+      'POST',
+      '/erp/query/tabledata',
+      {
+        Query: {
+          Table: tabela,
+          Columns: colunas,
+          Filters: opcoes.filtros ?? [],
+          LogicalOperator: opcoes.operadorLogico ?? 'AND',
+          ...(ordenarPor
+            ? {
+                OrderBy: [{ field: ordenarPor, direction: 'Asc' }],
+                Pagination: { page: 1, pageSize },
+              }
+            : {}),
+        },
       },
-    })) as { Resultado?: Record<string, unknown>[]; Estado?: { Mensagem?: string } };
+      opcoes.timeoutMs
+    )) as { Resultado?: Record<string, unknown>[]; Estado?: { Mensagem?: string } };
     if (!estadoEhSucesso(d?.Estado?.Mensagem)) {
       throw new Error(`Consulta a ${tabela} recusada: ${d?.Estado?.Mensagem ?? 'sem Estado'}`);
     }
@@ -424,6 +432,9 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     }
   }
 
+  const lerTotalDocumento = (tipo: string, serie: string, numero: string, timeoutMs?: number) =>
+    lerTotal(consultar, tipo, serie, numero, timeoutMs);
+
   async function emitir(
     payload: PayloadEmit,
     agora: Date = new Date(),
@@ -482,7 +493,28 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     const leitura = lerRespostaInserir(status, texto, tipoDocumento);
     if (leitura.tipo === 'recusado') throw new Error(leitura.mensagem);
     if (leitura.tipo === 'ambiguo') throw new AmbiguoError(leitura.mensagem);
-    return leitura.documento;
+    const { documento } = leitura;
+    // O documento já existe: nenhuma falha desta leitura pode virar erro, senão a fila reemitia.
+    let total: number | null = null;
+    const timeoutLeitura = timeoutDaLeituraTotal(
+      prazo.criadoEm,
+      (prazo.relogio ?? Date.now)(),
+      PRAZO_INSERIR_MS
+    );
+    if (timeoutLeitura !== null) {
+      try {
+        total = await lerTotalDocumento(
+          documento.doctype,
+          documento.serie,
+          documento.docnum,
+          timeoutLeitura
+        );
+      } catch (erro) {
+        console.warn('[asconnect] total não lido:', erro instanceof Error ? erro.message : erro);
+        total = null;
+      }
+    }
+    return { ...documento, total };
   }
 
   /** Token + uma leitura à BD: prova que o AS Connect chega à empresa, não só que autentica. */
@@ -537,5 +569,14 @@ export function criarClienteAsConnect(cfg: ConfigAsConnect, fetchFn: FetchFn = f
     return lerRespostaImprimir(status, texto);
   }
 
-  return { pedido, obterToken, consultar, garantirCliente, emitir, testar, imprimir };
+  return {
+    pedido,
+    obterToken,
+    consultar,
+    lerTotalDocumento,
+    garantirCliente,
+    emitir,
+    testar,
+    imprimir,
+  };
 }

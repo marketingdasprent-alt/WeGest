@@ -83,7 +83,16 @@ import {
   saldoCreditavel,
   type NcParaSoma,
 } from '../_shared/faturacao/correcao.ts';
-import { avisoTotalDivergente, round2, totalComIva } from '../_shared/faturacao/totais.ts';
+import { round2, totalComIva } from '../_shared/faturacao/totais.ts';
+import {
+  avisosDaDecisao,
+  confirmaTotalEmitido,
+  decisaoSegura,
+  mensagemNotificacaoTravao,
+  recusaPorTravao,
+  RECUSA_NC_SEM_CONSULTA,
+  type DecisaoTotal,
+} from '../_shared/faturacao/travao.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -643,6 +652,75 @@ async function configParaEmitir(
   };
 }
 
+/** Mensagem de recusa se a integração está travada. Sem conseguir ler o estado, recusa (falha fechada). */
+async function recusaPorIntegracaoTravada(
+  orgId: string,
+  integracaoId: string
+): Promise<string | null> {
+  const { data, error } = await serviceClient()
+    .from('plataformas_configuracao')
+    .select('faturacao_bloqueada_em, faturacao_bloqueio_motivo')
+    .eq('id', integracaoId)
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (error || !data) {
+    return `Não foi possível confirmar se a faturação está travada (${error?.message ?? 'integração não encontrada'}). Tente de novo.`;
+  }
+  return recusaPorTravao(
+    data.faturacao_bloqueada_em as string | null,
+    data.faturacao_bloqueio_motivo as string | null
+  );
+}
+
+/**
+ * Trava a integração e avisa os administradores da organização (sino, sem email).
+ * O documento já existe no fornecedor: isto nunca lança, só regista o que falhou.
+ */
+async function travarIntegracao(
+  orgId: string,
+  integracaoId: string,
+  d: Extract<DecisaoTotal, { estado: 'divergente' }>
+) {
+  const db = serviceClient();
+  try {
+    const { error } = await db
+      .from('plataformas_configuracao')
+      .update({
+        faturacao_bloqueada_em: new Date().toISOString(),
+        faturacao_bloqueio_motivo: d.motivo,
+      })
+      .eq('id', integracaoId)
+      .eq('org_id', orgId);
+    if (error) console.error('[faturacao-emitir] travão não gravado:', error.message);
+
+    // Só admins desta organização: a notificação nunca atravessa organizações.
+    const { data: admins, error: adminsErr } = await db
+      .from('user_organizacoes')
+      .select('user_id')
+      .eq('org_id', orgId)
+      .eq('is_admin', true);
+    if (adminsErr) {
+      console.error('[faturacao-emitir] admins não lidos:', adminsErr.message);
+      return;
+    }
+    const { titulo, mensagem } = mensagemNotificacaoTravao(d);
+    const linhas = (admins ?? []).map((a) => ({
+      org_id: orgId,
+      tipo: 'faturacao_total_divergente',
+      titulo,
+      mensagem,
+      severidade: 'urgente',
+      destinatario_id: a.user_id as string,
+      link: `/admin/settings?integracao=${integracaoId}`,
+    }));
+    if (!linhas.length) return;
+    const { error: notErr } = await db.from('notificacoes').insert(linhas);
+    if (notErr) console.error('[faturacao-emitir] notificação não gravada:', notErr.message);
+  } catch (e) {
+    console.error('[faturacao-emitir] travão falhou:', (e as Error).message);
+  }
+}
+
 function pickAdapter(provider: string): FaturacaoProvider {
   const adapter = PROVIDERS[provider];
   if (!adapter) throw new Error(`Provider de faturação desconhecido: ${provider}`);
@@ -933,6 +1011,13 @@ serve(async (req) => {
     contexto.integracaoId = integracaoId;
     const adapter = pickAdapter(provider);
 
+    // Integração travada por um total divergente: nenhuma fatura (FT/FR) sai até um admin
+    // desbloquear. NC e RC ficam livres: a NC é a forma de corrigir a fatura errada.
+    if (payload.tipo === 'FT' || payload.tipo === 'FR') {
+      const travada = await recusaPorIntegracaoTravada(orgId, integracaoId);
+      if (travada) return json({ success: false, error: travada, classe: 'known_failed' });
+    }
+
     // Worker (service role) grava com service role e org_id explícito — o trigger
     // set_invoice_org_id não consegue resolver a org sem sessão de utilizador.
     // Resolvido AQUI (não só mais abaixo) porque o Recibo precisa do mesmo
@@ -956,9 +1041,12 @@ serve(async (req) => {
       let recusa = '';
       try {
         const r = await saldoNoProvider(adapter, cfg, orgId, original);
-        if (r?.doc.voided) {
+        if (!r) {
+          // Sem consulta não há teto pelo total real: falha fechada.
+          recusa = RECUSA_NC_SEM_CONSULTA;
+        } else if (r.doc.voided) {
           recusa = 'A fatura está anulada na KeyInvoice; nada foi emitido.';
-        } else if (r) {
+        } else {
           recusa = recusaNotaCredito({ pedido: totalComIva(payload.itens), saldo: r.saldo }) ?? '';
         }
       } catch (e) {
@@ -1015,15 +1103,39 @@ serve(async (req) => {
     docEmitido = true;
 
     // Grava-se o total que o provider emitiu, quando o devolve: é esse o do documento fiscal.
-    const esperado = totalComIva(payload.itens);
-    const total = doc.total ?? esperado;
-    const avisoTotal = avisoTotalDivergente(esperado, doc.total, doc.numero || doc.docnum);
-    if (avisoTotal) {
-      console.error('[faturacao-emitir] total emitido diverge do pedido:', avisoTotal, {
-        contrato_id: payload.contrato_id ?? null,
-        cobranca_id: payload.cobranca_id ?? null,
-        integracao_id: integracaoId,
-      });
+    // O documento já existe: um erro ao calcular não pode impedir a gravação do espelho.
+    let total: number;
+    try {
+      total = doc.total ?? totalComIva(payload.itens);
+    } catch (e) {
+      console.warn('[faturacao-emitir] total calculado inválido:', e);
+      total = 0;
+    }
+    const numeroDoc = doc.numero || doc.docnum;
+    // O travão compara com o que o fornecedor emite por linha (arredondado), não com a soma exata.
+    // O RC não devolve total. O Primavera emite de forma síncrona pela fila e o agente lê o total
+    // do CabecDoc logo a seguir; agente antigo ou leitura falhada dá total null => nao_confirmado
+    // (aviso, sem travar). A recusa de NC sem `consultar` fica: o Primavera só emite FT.
+    const decisao = confirmaTotalEmitido(payload.tipo)
+      ? decisaoSegura(
+          payload.itens,
+          (cfg.settings as Record<string, unknown> | null)?.precos_com_iva === true,
+          doc.total,
+          numeroDoc,
+          payload.tipo
+        )
+      : null;
+    const avisos = decisao ? avisosDaDecisao(decisao, numeroDoc) : {};
+    const logCtx = {
+      contrato_id: payload.contrato_id ?? null,
+      cobranca_id: payload.cobranca_id ?? null,
+      integracao_id: integracaoId,
+    };
+    if (decisao?.estado === 'divergente') {
+      console.error('[faturacao-emitir] total emitido diverge do pedido:', decisao.motivo, logCtx);
+      await travarIntegracao(orgId, integracaoId, decisao);
+    } else if (decisao?.estado === 'nao_confirmado') {
+      console.warn('[faturacao-emitir] total emitido não confirmado:', numeroDoc, logCtx);
     }
 
     const cliente = payload.cliente ?? ({} as Cliente);
@@ -1044,6 +1156,7 @@ serve(async (req) => {
         numero: doc.numero || doc.docnum || null,
         data_emissao: new Date().toISOString().slice(0, 10),
         total: round2(total),
+        total_fiscal: decisao?.totalFiscal ?? null,
         cliente_nif: (cliente.nif || '').trim() || null,
         referencia_externa: payload.referencia_externa ?? null,
         observacoes: payload.observacoes ?? null,
@@ -1065,7 +1178,9 @@ serve(async (req) => {
       const avisoDb = `Documento emitido (${doc.numero || doc.docnum}) mas falhou gravar localmente: ${dbErr.message}`;
       return json({
         success: true,
-        warning: [avisoDb, avisoTotal].filter(Boolean).join(' '),
+        warning: [avisoDb, avisos.warning].filter(Boolean).join(' '),
+        ...(avisos.totalDivergente ? { totalDivergente: avisos.totalDivergente } : {}),
+        ...(avisos.totalNaoConfirmado ? { totalNaoConfirmado: true } : {}),
         // O documento existe no provider mas não no espelho local: o chamador tem de o dizer alto.
         localGravado: false,
         provider: providerMeta,
@@ -1077,7 +1192,7 @@ serve(async (req) => {
       invoice,
       localGravado: true,
       provider: providerMeta,
-      ...(avisoTotal ? { warning: avisoTotal } : {}),
+      ...avisos,
     });
   } catch (e) {
     // known_failed = provado que nada foi criado (o provider respondeu e

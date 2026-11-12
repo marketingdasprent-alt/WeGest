@@ -392,7 +392,8 @@ jobs:
             ti_ticket_mensagens \
             km_excedente_no_fecho \
             rls_automacao_monitorizacao \
-            invoices_documento_referencia
+            invoices_documento_referencia \
+            nota_credito_teto_total_fiscal
 
       # ── Gate 5: concorrência a sério ──────────────────────────────────
       # Não é pgTAP de propósito: os ficheiros pgTAP correm dentro de

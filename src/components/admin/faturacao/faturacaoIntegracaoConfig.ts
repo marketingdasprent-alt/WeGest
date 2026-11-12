@@ -37,6 +37,9 @@ export interface FaturacaoConfigRow {
   ativo: boolean | null;
   /** Empresa emissora em nome da qual esta integração emite. */
   emissor_id: string | null;
+  /** Preenchido quando a edge travou a integração por um total divergente. */
+  faturacao_bloqueada_em?: string | null;
+  faturacao_bloqueio_motivo?: string | null;
 }
 
 export type CamposPorTipo = Record<TipoDocumentoFiscal, string>;

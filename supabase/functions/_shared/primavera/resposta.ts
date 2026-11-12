@@ -21,6 +21,8 @@ export interface DocumentoEmitido {
   serie: string;
   numero: string;
   id_doc: string | null;
+  /** Total lido do CabecDoc pelo agente depois do inserir; ausente/null se não se leu. */
+  total?: number | null;
   raw: RespostaDocumento;
 }
 

@@ -38,6 +38,7 @@ import {
   type FaturacaoConfigRow,
 } from './faturacaoIntegracaoConfig';
 import { DefinicoesAvancadasFields } from './DefinicoesAvancadasFields';
+import { FaturacaoBloqueadaAviso } from './FaturacaoBloqueadaAviso';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import type { Json } from '@/integrations/supabase/types';
 import { filtroMesmoFornecedor } from '@/lib/integracoesFaturacao';
@@ -314,6 +315,16 @@ export function FaturacaoIntegracaoDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {row?.id && row.faturacao_bloqueada_em && (
+            <FaturacaoBloqueadaAviso
+              integracaoId={row.id}
+              motivo={row.faturacao_bloqueio_motivo ?? null}
+              onDesbloqueada={() => {
+                onSuccess();
+                onOpenChange(false);
+              }}
+            />
+          )}
           <FaturacaoIdentidadeFields
             nome={nome}
             onNomeChange={setNome}

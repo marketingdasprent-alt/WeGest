@@ -65,8 +65,8 @@ describe('mensagemFalhaEmissao', () => {
       Object.assign(new Error('Série inválida'), { classe: 'known_failed' }),
       'nota_credito'
     );
-    expect(naoEmitida).toMatch(/^Crédito registado na conta-corrente/);
-    expect(naoEmitida).toContain('nota de crédito NÃO foi emitida');
+    expect(naoEmitida).toMatch(/^A nota de crédito NÃO foi emitida e nada foi gravado/);
+    expect(naoEmitida).toContain('Série inválida');
     expect(naoEmitida).not.toContain('Fatura');
 
     const incerta = mensagemFalhaEmissao(

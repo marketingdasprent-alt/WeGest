@@ -1,60 +1,51 @@
-import { describe, it, expect } from 'vitest';
-// TS puro, sem APIs de Deno: a edge function faturacao-emitir usa o mesmo ficheiro.
-import {
-  avisoTotalDivergente,
-  precoParaProvider,
-  totalComIva,
-} from '../../supabase/functions/_shared/faturacao/totais';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-describe('precoParaProvider', () => {
-  it('conta normal recebe o preço sem IVA, tal como está', () => {
-    expect(precoParaProvider(1115, 23, false)).toBe(1115);
+const { toastMock } = vi.hoisted(() => ({ toastMock: { error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: toastMock }));
+
+import { avisarTotalDaEmissao, mensagensTotalEmissao } from './faturacaoTotal';
+
+describe('faturacaoTotal', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('sem campos de total não há mensagens nem toast', () => {
+    expect(mensagensTotalEmissao({})).toEqual([]);
+    avisarTotalDaEmissao({});
+    expect(toastMock.error).not.toHaveBeenCalled();
   });
 
-  // A conta da Sul tira o IVA de dentro: 1371,45 / 1,23 = 1115 + 256,45 de IVA.
-  it('conta com IVA incluído recebe o preço já com IVA', () => {
-    expect(precoParaProvider(1115, 23, true)).toBe(1371.45);
-    expect(precoParaProvider(1118.45, 23, true)).toBe(1375.69);
+  it('total divergente diz o número, o total real e o esperado', () => {
+    const [msg] = mensagensTotalEmissao({
+      totalDivergente: { numero: '4 67/15', esperado: 590, real: 725.7 },
+    });
+    expect(msg).toContain('Fatura 4 67/15 emitida com total');
+    expect(msg).toContain('€725,70');
+    expect(msg).toContain('€590,00');
+    expect(msg).not.toContain('�');
+    expect(msg).toContain('A emissão de faturas desta integração foi travada.');
   });
 
-  it('a 0 % o preço não muda em nenhuma das contas', () => {
-    expect(precoParaProvider(47.8, 0, true)).toBe(47.8);
-  });
-});
-
-describe('totalComIva', () => {
-  it('soma o IVA por cima do preço sem IVA', () => {
-    expect(totalComIva([{ quantidade: 1, preco_unitario: 1115, taxa_iva: 23 }])).toBeCloseTo(
-      1371.45,
-      2
-    );
-  });
-
-  it('aplica o desconto antes do IVA e soma várias linhas', () => {
-    const total = totalComIva([
-      { quantidade: 2, preco_unitario: 100, taxa_iva: 23, desconto: 10 },
-      { quantidade: 1, preco_unitario: 50, taxa_iva: 0 },
+  it('total não confirmado tem o seu texto', () => {
+    expect(mensagensTotalEmissao({ totalNaoConfirmado: true })).toEqual([
+      'Total da fatura não confirmado na KeyInvoice; confirme o documento antes de emitir mais.',
     ]);
-    expect(total).toBeCloseTo(271.4, 2);
-  });
-});
-
-describe('avisoTotalDivergente', () => {
-  it('não avisa quando o provider não devolveu o total', () => {
-    expect(avisoTotalDivergente(1371.45, null, '4 67/28')).toBeNull();
-    expect(avisoTotalDivergente(1371.45, undefined, '4 67/28')).toBeNull();
   });
 
-  it('tolera diferenças de arredondamento por linha', () => {
-    expect(avisoTotalDivergente(152.89, 152.87, '4 67/4')).toBeNull();
+  it('o toast é persistente, com botão de fechar e id estável por número', () => {
+    avisarTotalDaEmissao({ totalDivergente: { numero: '4 67/15', esperado: 590, real: 725.7 } });
+    expect(toastMock.error).toHaveBeenCalledWith(expect.stringContaining('€725,70'), {
+      duration: Infinity,
+      closeButton: true,
+      id: 'total-4 67/15',
+    });
   });
 
-  // Caso real de 08-10-2026: a conta da Sul leu o preço sem IVA como IVA incluído.
-  it('avisa quando o documento fiscal saiu com outro total', () => {
-    const aviso = avisoTotalDivergente(1371.45, 1115, '4 67/28');
-    expect(aviso).toContain('4 67/28');
-    expect(aviso).toContain('1115.00');
-    expect(aviso).toContain('1371.45');
-    expect(aviso).toContain('IVA incluído');
+  it('total não confirmado também é persistente e deduplicado', () => {
+    avisarTotalDaEmissao({ totalNaoConfirmado: true });
+    expect(toastMock.error).toHaveBeenCalledWith(expect.any(String), {
+      duration: Infinity,
+      closeButton: true,
+      id: 'total-nao-confirmado',
+    });
   });
 });
