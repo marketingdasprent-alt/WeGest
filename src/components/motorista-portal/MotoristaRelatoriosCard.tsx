@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Eye, FileText } from 'lucide-react';
+import { ChevronRight, Download, Eye, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useMotoristaResumosSemanais } from '@/hooks/useMotoristaResumosSemanais';
+import { ResumoSemanaDialog } from './ResumoSemanaDialog';
 
 interface MotoristaRelatoriosCardProps {
   motoristaId: string;
@@ -33,6 +34,7 @@ const dia = (iso: string, fmt: string) => format(new Date(`${iso}T00:00:00`), fm
 export function MotoristaRelatoriosCard({ motoristaId }: MotoristaRelatoriosCardProps) {
   const { data: acertos = [], isLoading, error } = useMotoristaResumosSemanais(motoristaId);
   const [todos, setTodos] = useState(false);
+  const [acertoAberto, setAcertoAberto] = useState<string | null>(null);
   const visiveis = todos ? acertos : acertos.slice(0, MOSTRAR);
 
   async function urlAssinada(url: string) {
@@ -112,23 +114,34 @@ export function MotoristaRelatoriosCard({ motoristaId }: MotoristaRelatoriosCard
         ) : (
           <ul className="divide-y divide-border">
             {visiveis.map((r) => (
-              <li key={r.semanaInicio} className="flex items-center gap-3 px-4 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">
-                    {dia(r.semanaInicio, 'd MMM')} a {dia(r.semanaFim, 'd MMM yyyy')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {r.liquido < 0 ? 'Em dívida' : 'A receber'}
-                  </p>
-                </div>
-                <p
-                  className={cn(
-                    'shrink-0 text-sm font-semibold tabular-nums',
-                    r.liquido < 0 ? 'text-destructive' : 'text-emerald-600'
-                  )}
+              <li key={r.semanaInicio} className="flex items-center gap-1 pr-2">
+                <button
+                  type="button"
+                  onClick={() => setAcertoAberto(r.id)}
+                  className="flex min-h-[3.25rem] min-w-0 flex-1 items-center gap-3 py-2.5 pl-4 pr-2 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+                  aria-label={`Ver o resumo de ${dia(r.semanaInicio, 'd MMM')} a ${dia(r.semanaFim, 'd MMM yyyy')}`}
                 >
-                  {eur(r.liquido)}
-                </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {dia(r.semanaInicio, 'd MMM')} a {dia(r.semanaFim, 'd MMM yyyy')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.liquido < 0 ? 'Em dívida' : 'A receber'}
+                    </p>
+                  </div>
+                  <p
+                    className={cn(
+                      'shrink-0 text-sm font-semibold tabular-nums',
+                      r.liquido < 0 ? 'text-destructive' : 'text-emerald-600'
+                    )}
+                  >
+                    {eur(r.liquido)}
+                  </p>
+                  <ChevronRight
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </button>
                 {/* Os botões só aparecem quando há mesmo um PDF gerado. */}
                 {r.ficheiroUrl && (
                   <div className="flex shrink-0 gap-0.5">
@@ -157,6 +170,7 @@ export function MotoristaRelatoriosCard({ motoristaId }: MotoristaRelatoriosCard
           </ul>
         )}
       </CardContent>
+      <ResumoSemanaDialog acertoId={acertoAberto} onClose={() => setAcertoAberto(null)} />
     </Card>
   );
 }

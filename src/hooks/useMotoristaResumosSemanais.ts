@@ -15,6 +15,8 @@ import { CONTAS_VALIDAS_DESDE } from '@/components/motorista-portal/dashboardSta
  */
 
 export interface ResumoSemanalMotorista {
+  /** Linha em motorista_liquido_semanal: abre o resumo completo da semana. */
+  id: string;
   semanaInicio: string;
   semanaFim: string;
   liquido: number;
@@ -30,7 +32,7 @@ export function useMotoristaResumosSemanais(motoristaId: string | null | undefin
     queryFn: async (): Promise<ResumoSemanalMotorista[]> => {
       const { data, error } = await supabase
         .from('motorista_liquido_semanal')
-        .select('semana_inicio, semana_fim, liquido')
+        .select('id, semana_inicio, semana_fim, liquido')
         .eq('motorista_id', motoristaId!)
         .gte('semana_inicio', CONTAS_VALIDAS_DESDE)
         .order('semana_inicio', { ascending: false })
@@ -55,6 +57,7 @@ export function useMotoristaResumosSemanais(motoristaId: string | null | undefin
       return data.map((r) => {
         const pdf = porSemana.get(r.semana_inicio);
         return {
+          id: r.id,
           semanaInicio: r.semana_inicio,
           semanaFim: r.semana_fim,
           liquido: Number(r.liquido) || 0,

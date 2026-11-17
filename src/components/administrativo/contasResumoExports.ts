@@ -5,6 +5,7 @@ import { pt } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { generateFinanceiroPDF } from '@/utils/generateFinanceiroPDF';
 import { escapeHtml } from '@/lib/safeHtml';
+import type { DetalheResumoSemanal } from '@/lib/resumoSemanalDetalhe';
 import {
   divisorCorte,
   type RetencaoIrs,
@@ -42,6 +43,8 @@ export interface MotoristaResumo {
    *  dele. Positivo = a favor do motorista; negativo = motorista deve.
    *  undefined enquanto a busca em lote não responde. */
   saldoPendente?: number;
+  /** Fotografia do resumo da semana, gravada com o líquido para o motorista a abrir no app. */
+  detalhe?: DetalheResumoSemanal | null;
 }
 
 const fmtEur = (v: number) =>

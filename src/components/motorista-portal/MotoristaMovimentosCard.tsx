@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Wallet, ArrowUpCircle, ArrowDownCircle, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import type { Database } from '@/integrations/supabase/types';
 import { CONTAS_VALIDAS_DESDE } from './dashboardStats';
+import { ResumoSemanaDialog } from './ResumoSemanaDialog';
 
 type Movimento = Database['public']['Tables']['motorista_financeiro']['Row'];
 
@@ -32,6 +33,7 @@ export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCard
   // "Ver todos" alarga o limite da própria query em vez de abrir uma página
   // nova só para isto — mantém o componente simples, o extrato já é a lista.
   const [limite, setLimite] = useState(LIMITE_INICIAL);
+  const [acertoAberto, setAcertoAberto] = useState<string | null>(null);
 
   useEffect(() => {
     loadMovimentos();
@@ -104,8 +106,10 @@ export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCard
           <ul className="divide-y divide-border">
             {movimentos.map((m) => {
               const credito = m.tipo === 'credito';
-              return (
-                <li key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+              // Movimento que vem de uma semana fechada abre o resumo dessa semana.
+              const semanaId = m.liquido_semanal_id;
+              const conteudo = (
+                <>
                   {credito ? (
                     <ArrowUpCircle
                       className="h-4 w-4 shrink-0 text-emerald-600"
@@ -135,12 +139,35 @@ export function MotoristaMovimentosCard({ motoristaId }: MotoristaMovimentosCard
                     {credito ? '+' : '−'}
                     {formatCurrency(Number(m.valor))}
                   </p>
+                  {semanaId && (
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                  )}
+                </>
+              );
+              return (
+                <li key={m.id}>
+                  {semanaId ? (
+                    <button
+                      type="button"
+                      onClick={() => setAcertoAberto(semanaId)}
+                      className="flex min-h-[3.25rem] w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none"
+                      aria-label={`Ver o resumo: ${m.descricao ?? 'semana'}`}
+                    >
+                      {conteudo}
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-3 px-4 py-2.5">{conteudo}</div>
+                  )}
                 </li>
               );
             })}
           </ul>
         )}
       </CardContent>
+      <ResumoSemanaDialog acertoId={acertoAberto} onClose={() => setAcertoAberto(null)} />
     </Card>
   );
 }
