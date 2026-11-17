@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Eye, EyeOff, Car } from 'lucide-react';
 import { getResetPasswordRedirectUrl } from '@/lib/native';
-import { traduzirErroAuth } from '@/lib/erroAuth';
+import { ehEmailNaoConfirmado, traduzirErroAuth } from '@/lib/erroAuth';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
+import { ReenviarConfirmacao } from '@/components/auth/ReenviarConfirmacao';
 
 const LoginMotorista: React.FC = () => {
   const { user } = useAuth();
@@ -24,6 +25,7 @@ const LoginMotorista: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [naoConfirmado, setNaoConfirmado] = useState(false);
   const [isResetMode, setIsResetMode] = useState(
     new URLSearchParams(location.search).get('modo') === 'recuperar'
   );
@@ -57,6 +59,7 @@ const LoginMotorista: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setNaoConfirmado(false);
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -76,6 +79,7 @@ const LoginMotorista: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Erro no login:', error);
+      setNaoConfirmado(ehEmailNaoConfirmado(error));
       toast({
         title: 'Erro no login',
         description: traduzirErroAuth(error, 'Ocorreu um erro ao iniciar sessão.'),
@@ -191,7 +195,10 @@ const LoginMotorista: React.FC = () => {
               type="email"
               placeholder="seu@email.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setNaoConfirmado(false);
+              }}
               required
               disabled={loading}
               className="auth-input"
@@ -234,6 +241,8 @@ const LoginMotorista: React.FC = () => {
               'Entrar'
             )}
           </Button>
+
+          {naoConfirmado && <ReenviarConfirmacao email={email} />}
 
           <button
             type="button"
