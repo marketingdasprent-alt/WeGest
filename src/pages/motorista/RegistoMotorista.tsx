@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Car, MailCheck, LogIn } from 'lucide-react';
 import { getEmailRedirectUrl, isNativeApp } from '@/lib/native';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
+import { ReenviarConfirmacao } from '@/components/auth/ReenviarConfirmacao';
 import { resolveOrgByCodigo, normalizeCodigo, type ResolvedOrg } from '@/lib/org-codigo';
 import { isPasswordStrong, PASSWORD_POLICY_MESSAGE } from '@/lib/passwordPolicy';
 import { RegistoMotoristaFormCriarConta } from './RegistoMotoristaFormCriarConta';
@@ -339,6 +340,12 @@ const RegistoMotorista: React.FC = () => {
           >
             Iniciar sessão
           </Button>
+          <div className="space-y-2 border-t pt-4">
+            <p className="text-sm text-muted-foreground">
+              Criou a conta mas ainda não a confirmou, ou perdeu o email? Peça um novo link.
+            </p>
+            <ReenviarConfirmacao email={email} />
+          </div>
         </div>
       </AuthMobileShell>
     );

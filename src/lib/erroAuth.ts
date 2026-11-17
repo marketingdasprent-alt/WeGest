@@ -23,6 +23,10 @@ export function traduzirErroAuth(error: unknown, fallback = ERRO_AUTH_FALLBACK):
     return 'Não existe nenhuma conta com este email.';
   if (m.includes('banned') || m.includes('disabled') || m.includes('user_banned'))
     return 'Esta conta está bloqueada. Contacte o administrador da sua empresa.';
+  // Pedido repetido cedo demais (ex.: reenviar a confirmação): o Supabase fala em
+  // segundos e em inglês, "For security purposes, you can only request this after 52 seconds."
+  if (m.includes('for security purposes'))
+    return 'Aguarde cerca de um minuto antes de pedir outro email.';
   if (m.includes('rate limit') || m.includes('too many') || m.includes('exceeded'))
     return 'Demasiadas tentativas. Aguarde uns minutos e tente novamente.';
   if (m.includes('expired') && (m.includes('link') || m.includes('token') || m.includes('otp')))
@@ -41,4 +45,12 @@ export function ehEmailSemConta(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code;
   if (code === 'otp_disabled') return true;
   return errorMessage(error, '').toLowerCase().includes('signups not allowed for otp');
+}
+
+/** Login com a conta criada mas o email ainda por confirmar. */
+export function ehEmailNaoConfirmado(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (code === 'email_not_confirmed') return true;
+  const m = errorMessage(error, '').toLowerCase();
+  return m.includes('email not confirmed') || m.includes('email_not_confirmed');
 }

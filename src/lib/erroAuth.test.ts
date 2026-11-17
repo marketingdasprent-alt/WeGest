@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import { traduzirErroAuth, ERRO_AUTH_FALLBACK, ehEmailSemConta } from './erroAuth';
+import {
+  traduzirErroAuth,
+  ERRO_AUTH_FALLBACK,
+  ehEmailSemConta,
+  ehEmailNaoConfirmado,
+} from './erroAuth';
 
 describe('ehEmailSemConta', () => {
   it('reconhece o código do OTP para email sem conta', () => {
@@ -59,5 +64,31 @@ describe('traduzirErroAuth', () => {
 
   it('devolve a mensagem original quando não conhece o erro', () => {
     expect(traduzirErroAuth(new Error('Boom desconhecido'))).toBe('Boom desconhecido');
+  });
+});
+
+describe('ehEmailNaoConfirmado', () => {
+  it('reconhece o erro de login com email por confirmar', () => {
+    expect(ehEmailNaoConfirmado({ code: 'email_not_confirmed', message: 'x' })).toBe(true);
+    expect(ehEmailNaoConfirmado(new Error('Email not confirmed'))).toBe(true);
+  });
+  it('não confunde com credenciais erradas', () => {
+    expect(ehEmailNaoConfirmado(new Error('Invalid login credentials'))).toBe(false);
+    expect(ehEmailNaoConfirmado(null)).toBe(false);
+  });
+});
+
+describe('traduzirErroAuth: pedido repetido cedo demais', () => {
+  it('traduz o limite de segundos do Supabase', () => {
+    expect(
+      traduzirErroAuth(
+        new Error('For security purposes, you can only request this after 52 seconds.')
+      )
+    ).toBe('Aguarde cerca de um minuto antes de pedir outro email.');
+  });
+  it('mantém o aviso do limite por hora', () => {
+    expect(traduzirErroAuth(new Error('email rate limit exceeded'))).toMatch(
+      /Demasiadas tentativas/
+    );
   });
 });
