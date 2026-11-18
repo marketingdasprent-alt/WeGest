@@ -158,6 +158,8 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
   const [resumoSemanal, setResumoSemanal] = useState({
     faturadoBolt: 0,
     faturadoUber: 0,
+    gorjetaBolt: 0,
+    gorjetaUber: 0,
     outrasReceitas: 0,
     totalFaturado: 0,
     custosSemanal: 0,
@@ -251,6 +253,8 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         setResumoSemanal({
           faturadoBolt: boltVal,
           faturadoUber: uberVal,
+          gorjetaBolt: 0,
+          gorjetaUber: 0,
           outrasReceitas: outrasRec,
           totalFaturado: totalFat,
           custosSemanal: custosTotal,
@@ -278,13 +282,17 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       // aqui com 0 € de Uber apesar de ter 483,93 € já resolvidos.
       const { data: uberTrans } = await supabase
         .from('uber_resumos_semanais')
-        .select('ganhos_brutos')
+        .select('ganhos_brutos, gorjetas')
         .eq('motorista_id', motoristaId)
         .lte('periodo_inicio', weekEndStr)
         .gte('periodo_fim', weekStartStr);
 
       const uberTotal = (uberTrans || []).reduce(
         (acc, curr) => acc + (Number(curr.ganhos_brutos) || 0),
+        0
+      );
+      const gorjetaUber = (uberTrans || []).reduce(
+        (acc, curr) => acc + (Number(curr.gorjetas) || 0),
         0
       );
 
@@ -302,6 +310,10 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       );
       if (boltErro) throw boltErro;
       const boltResumosTotal = Number(boltTotalRpc) || 0;
+
+      // A função só devolve a soma, sem gorjeta, e a tabela não se lê aqui (ver
+      // teste). Até a função a devolver, a gorjeta do Bolt fica 0 nesta ficha.
+      const gorjetaBolt = 0;
 
       // 4. Combustíveis (BP, Repsol, EDP)
       const [bpRes, repsolRes, edpRes] = await Promise.all([
@@ -445,9 +457,17 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       const faturadoPlataformas = uberTotal + boltTotal;
       const totalFaturadoReal = faturadoPlataformas + extraCredits;
 
+      // Corte só sobre a base: a gorjeta não é dividida (igual ao Resumo Financeiro).
+      const divisor = divisorCorte(
+        passesReciboVerde,
+        !!taxasRetencao,
+        corteSemReciboDaFicha(motorista)
+      );
       const receitaLiquidaPlataformas =
-        faturadoPlataformas /
-        divisorCorte(passesReciboVerde, !!taxasRetencao, corteSemReciboDaFicha(motorista));
+        (boltTotal - gorjetaBolt) / divisor +
+        gorjetaBolt +
+        (uberTotal - gorjetaUber) / divisor +
+        gorjetaUber;
 
       const totalAluguer = fixedRent;
       const totalOutrosCustos = finOutros + extraCostsTotal;
@@ -462,6 +482,8 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       setResumoSemanal({
         faturadoBolt: boltTotal,
         faturadoUber: uberTotal,
+        gorjetaBolt,
+        gorjetaUber,
         outrasReceitas: extraCredits,
         totalFaturado: totalFaturadoReal,
         custosSemanal: custosTotal,
@@ -1124,6 +1146,8 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           total_faturado: resumoSemanal.totalFaturado,
           faturado_bolt: resumoSemanal.faturadoBolt,
           faturado_uber: resumoSemanal.faturadoUber,
+          gorjeta_bolt: resumoSemanal.gorjetaBolt,
+          gorjeta_uber: resumoSemanal.gorjetaUber,
           total_viagens: 0,
           viagens_bolt: 0,
           viagens_uber: 0,

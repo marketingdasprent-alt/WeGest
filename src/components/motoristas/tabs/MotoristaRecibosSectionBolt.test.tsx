@@ -59,6 +59,29 @@ const renderizar = (reciboVerde = true) =>
     />
   );
 
+describe('MotoristaRecibosSection — gorjeta fora do corte', () => {
+  beforeEach(() => {
+    mockarTabelas({
+      uber_resumos_semanais: [{ ganhos_brutos: 412.33, gorjetas: 12.9 }],
+      bolt_resumos_semanais: [{ gorjetas: 0 }],
+    });
+    (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: 4.94,
+      error: null,
+    });
+  });
+
+  it('passa a gorjeta ao resumo e só corta os 6% sobre a base (igual ao Resumo Financeiro)', async () => {
+    renderizar(false);
+    await waitFor(() => expect(lerResumo().faturado_uber).toBe(412.33));
+    const resumo = lerResumo();
+    expect(resumo.gorjeta_uber).toBe(12.9);
+    expect(resumo.gorjeta_bolt).toBe(0);
+    // Caso real 09–15/11: 394,38 €. Com a gorjeta dividida pelo corte dava 393,65 €.
+    expect(resumo.liquido).toBeCloseTo((412.33 - 12.9) / 1.06 + 12.9 + 4.94 / 1.06, 2);
+  });
+});
+
 describe('MotoristaRecibosSection — receita Bolt', () => {
   beforeEach(() => {
     mockarTabelas({
