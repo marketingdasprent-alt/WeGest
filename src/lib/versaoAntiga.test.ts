@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { eErroDeVersaoAntiga, recarregarParaVersaoNova } from './versaoAntiga';
+import { eErroDeVersaoAntiga, recarregarParaVersaoNova, renovarERecarregar } from './versaoAntiga';
 
 function armazenamentoFalso(): Storage {
   const dados = new Map<string, string>();
@@ -62,5 +62,43 @@ describe('recarregarParaVersaoNova', () => {
     recarregarParaVersaoNova(janela, 1_000, arm);
     expect(recarregarParaVersaoNova(janela, 120_000, arm)).toBe(true);
     expect(janela.location.reload).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('renovarERecarregar', () => {
+  it('renova os ficheiros e só depois recarrega', async () => {
+    const janela = janelaFalsa();
+    const ordem: string[] = [];
+    (janela.location.reload as ReturnType<typeof vi.fn>).mockImplementation(() =>
+      ordem.push('recarregou')
+    );
+    const renovar = vi.fn(async () => void ordem.push('renovou'));
+    const erro = new TypeError(
+      'Failed to fetch dynamically imported module: https://wegest.pt/assets/A-1.js'
+    );
+
+    expect(renovarERecarregar(erro, janela, 1000, armazenamentoFalso(), renovar)).toBe(true);
+    await vi.waitFor(() => expect(janela.location.reload).toHaveBeenCalled());
+    expect(renovar).toHaveBeenCalledWith(erro);
+    expect(ordem).toEqual(['renovou', 'recarregou']);
+  });
+
+  it('recarrega mesmo que a renovação falhe', async () => {
+    const janela = janelaFalsa();
+    const renovar = vi.fn(async () => {
+      throw new Error('falhou');
+    });
+    renovarERecarregar(new Error('x'), janela, 1000, armazenamentoFalso(), renovar);
+    await vi.waitFor(() => expect(janela.location.reload).toHaveBeenCalled());
+  });
+
+  it('não entra em ciclo: uma segunda tentativa dentro de 1 minuto não faz nada', async () => {
+    const janela = janelaFalsa();
+    const arm = armazenamentoFalso();
+    const renovar = vi.fn(async () => undefined);
+    expect(renovarERecarregar(new Error('x'), janela, 1000, arm, renovar)).toBe(true);
+    expect(renovarERecarregar(new Error('x'), janela, 30_000, arm, renovar)).toBe(false);
+    await vi.waitFor(() => expect(janela.location.reload).toHaveBeenCalledTimes(1));
+    expect(renovar).toHaveBeenCalledTimes(1);
   });
 });

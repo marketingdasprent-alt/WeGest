@@ -2,7 +2,8 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { AlertTriangle, RotateCcw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { eErroDeVersaoAntiga, recarregarParaVersaoNova } from '@/lib/versaoAntiga';
+import { eErroDeVersaoAntiga, renovarERecarregar } from '@/lib/versaoAntiga';
+import { renovarFicheirosEmFalta } from '@/lib/renovarFicheiros';
 
 // Error boundaries do React exigem componente de classe e só capturam renderização.
 
@@ -34,7 +35,7 @@ export class ErrorBoundary extends Component<Props, State> {
       componentStack: info.componentStack,
     });
     // Aba com a versão anterior a um deploy: recarregar traz a nova.
-    if (eErroDeVersaoAntiga(erro)) recarregarParaVersaoNova();
+    if (eErroDeVersaoAntiga(erro)) renovarERecarregar(erro);
   }
 
   componentDidUpdate(anterior: Props): void {
@@ -78,7 +79,11 @@ function EcraDeErro({ erro, reset }: FallbackProps) {
       <div className="flex flex-wrap items-center justify-center gap-2">
         <Button
           // O import falhado fica em memória: só recarregar a página o refaz.
-          onClick={eErroDeVersaoAntiga(erro) ? () => window.location.reload() : reset}
+          onClick={
+            eErroDeVersaoAntiga(erro)
+              ? () => void renovarFicheirosEmFalta(erro).finally(() => window.location.reload())
+              : reset
+          }
           variant="default"
         >
           <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />

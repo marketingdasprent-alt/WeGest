@@ -4,6 +4,8 @@
 // Recarregar uma vez traz a versão nova; a marca na sessão evita um ciclo se o
 // erro afinal for outro.
 
+import { renovarFicheirosEmFalta } from './renovarFicheiros';
+
 const MARCA = 'wegest_recarregou_versao_nova';
 /** Uma recarga por janela de tempo: um segundo deploy mais tarde volta a poder recarregar. */
 const JANELA_MS = 60_000;
@@ -41,5 +43,33 @@ export function recarregarParaVersaoNova(
     // Sem sessionStorage (modo privado restrito): recarrega na mesma, uma vez por erro.
   }
   janela.location.reload();
+  return true;
+}
+
+/**
+ * Como `recarregarParaVersaoNova`, mas antes renova na cache do navegador o ficheiro
+ * que falhou e os que ele importa: sem isso, uma cópia estragada guardada por um
+ * ano continuava lá depois de recarregar. Devolve true quando vai recarregar
+ * (decidido já, para o chamador poder travar o erro); o resto corre depois.
+ * `renovar` e os restantes são injectáveis para os testes.
+ */
+export function renovarERecarregar(
+  erro: unknown,
+  janela: Window = window,
+  agora: number = Date.now(),
+  armazenamento: Storage | null = janela.sessionStorage ?? null,
+  renovar: (erro: unknown) => Promise<unknown> = renovarFicheirosEmFalta
+): boolean {
+  try {
+    const ultima = Number(armazenamento?.getItem(MARCA) ?? 0);
+    if (ultima && agora - ultima < JANELA_MS) return false;
+    armazenamento?.setItem(MARCA, String(agora));
+  } catch {
+    // Sem sessionStorage: recarrega na mesma, uma vez por erro.
+  }
+  void Promise.resolve()
+    .then(() => renovar(erro))
+    .catch(() => undefined)
+    .finally(() => janela.location.reload());
   return true;
 }
