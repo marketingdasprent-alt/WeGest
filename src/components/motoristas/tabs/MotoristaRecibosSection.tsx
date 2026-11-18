@@ -311,9 +311,14 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       if (boltErro) throw boltErro;
       const boltResumosTotal = Number(boltTotalRpc) || 0;
 
-      // A função só devolve a soma, sem gorjeta, e a tabela não se lê aqui (ver
-      // teste). Até a função a devolver, a gorjeta do Bolt fica 0 nesta ficha.
-      const gorjetaBolt = 0;
+      // Gorjeta fora do corte. Falhar aqui não derruba o resumo (fica 0, o total
+      // já veio certo), ao contrário do total acima.
+      const { data: boltGorjetaRpc } = await supabase.rpc('motorista_bolt_gorjeta_semana', {
+        p_motorista_id: motoristaId,
+        p_inicio: weekStartStr,
+        p_fim: weekEndStr,
+      });
+      const gorjetaBolt = Number(boltGorjetaRpc) || 0;
 
       // 4. Combustíveis (BP, Repsol, EDP)
       const [bpRes, repsolRes, edpRes] = await Promise.all([
