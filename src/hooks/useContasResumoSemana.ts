@@ -16,6 +16,7 @@ import {
   type TarifaModeloRow,
 } from '@/components/administrativo/motorista-resumo/tvdeModeloPreco';
 import { classificarMovimento } from '@shared/movimentosMotorista';
+import { construirDetalheResumo, ehColunaDetalheEmFalta } from '@/lib/resumoSemanalDetalhe';
 import { construirLinhasLiquidoSemanal } from '@/components/administrativo/motorista-resumo/linhasLiquidoSemanal';
 import { motoristasComCustos } from '@/components/administrativo/motorista-resumo/motoristasComCustos';
 import { normalizeName, isNameMatch } from '@/components/administrativo/motoristaNomeMatching';
@@ -755,6 +756,24 @@ export function useContasResumoSemana(
           slot: slotValor,
           aluguer: aluguerValor,
           identificador_bolt: m.identificador_bolt,
+          detalhe: construirDetalheResumo({
+            faturadoBolt: m.faturado_bolt,
+            faturadoUber: m.faturado_uber,
+            outrasReceitas: extrasValor,
+            receitaAjustada: receita,
+            despesas: {
+              aluguer: aluguerValor,
+              combustivel: combustivelValor,
+              portagens: portagensValor,
+              outros_custos: adhocValor,
+              slot: slotValor,
+              caucao: caucaoValor,
+              seguros: segurosValor,
+              reparacoes: reparacoesValor,
+            },
+            retencao,
+            liquido,
+          }),
         };
       });
 
@@ -776,9 +795,18 @@ export function useContasResumoSemana(
             gravadoPor: (await supabase.auth.getUser()).data.user?.id ?? null,
           });
           if (linhas.length > 0) {
-            const { error: erroGravar } = await supabase
-              .from('motorista_liquido_semanal')
-              .upsert(linhas, { onConflict: 'motorista_id,semana_inicio' });
+            const gravar = (l: unknown[]) =>
+              supabase
+                .from('motorista_liquido_semanal')
+                .upsert(l as never, { onConflict: 'motorista_id,semana_inicio' });
+            let { error: erroGravar } = await gravar(linhas);
+            // Base ainda sem a coluna do resumo (migração por aplicar): o líquido
+            // grava-se na mesma, só sem a fotografia. Nunca perder o acerto por isto.
+            if (erroGravar && ehColunaDetalheEmFalta(erroGravar)) {
+              ({ error: erroGravar } = await gravar(
+                linhas.map(({ detalhe: _d, ...resto }) => resto)
+              ));
+            }
             if (erroGravar) console.error('[liquido semanal] falha ao gravar em lote:', erroGravar);
           }
         } catch (erroGravar) {

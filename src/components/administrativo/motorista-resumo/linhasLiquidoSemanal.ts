@@ -9,10 +9,14 @@
 // Grava-se o valor JÁ CALCULADO pela lista — não se recalcula aqui. O que fica
 // gravado tem de ser o mesmo número que esteve no ecrã.
 
+import type { DetalheResumoSemanal } from '@/lib/resumoSemanalDetalhe';
+
 export interface ResumoParaGravar {
   motorista_id?: string;
   driver_name: string;
   liquido: number;
+  /** Fotografia do resumo, para o motorista o abrir no app. */
+  detalhe?: DetalheResumoSemanal | null;
 }
 
 export interface LinhaLiquidoSemanal {
@@ -23,6 +27,7 @@ export interface LinhaLiquidoSemanal {
   liquido: number;
   gravado_em: string;
   gravado_por: string | null;
+  detalhe: DetalheResumoSemanal | null;
 }
 
 export interface ContextoGravacao {
@@ -63,6 +68,7 @@ export function construirLinhasLiquidoSemanal(
       liquido: Number(r.liquido.toFixed(2)),
       gravado_em: ctx.gravadoEm,
       gravado_por: ctx.gravadoPor,
+      detalhe: r.detalhe ?? null,
     });
   }
 

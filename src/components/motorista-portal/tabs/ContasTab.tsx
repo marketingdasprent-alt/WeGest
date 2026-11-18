@@ -36,7 +36,7 @@ export const ContasTab: React.FC<ContasTabProps> = ({ motoristaId }) => {
 
       <MotoristaAcordoCard />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <MotoristaMovimentosCard motoristaId={motoristaId} />
         <MotoristaCombustivelCard motoristaId={motoristaId} />
       </div>

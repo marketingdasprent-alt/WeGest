@@ -27,6 +27,7 @@ describe('construirLinhasLiquidoSemanal', () => {
         liquido: 43.33,
         gravado_em: '2026-09-04T09:00:00.000Z',
         gravado_por: 'user-1',
+        detalhe: null,
       },
       {
         motorista_id: 'm-2',
@@ -36,8 +37,35 @@ describe('construirLinhasLiquidoSemanal', () => {
         liquido: -820.37,
         gravado_em: '2026-09-04T09:00:00.000Z',
         gravado_por: 'user-1',
+        detalhe: null,
       },
     ]);
+  });
+
+  it('leva a fotografia do resumo junto com o líquido, para o motorista a abrir no app', () => {
+    const detalhe = {
+      versao: 1 as const,
+      receitas: { bolt: 10, uber: 20, outras: 0 },
+      totalReceitas: 30,
+      despesas: {
+        aluguer: 0,
+        combustivel: 0,
+        portagens: 0,
+        outros_custos: 0,
+        slot: 0,
+        caucao: 0,
+        seguros: 0,
+        reparacoes: 0,
+      },
+      totalDespesas: 0,
+      retencao: null,
+      liquido: 30,
+    };
+    const linhas = construirLinhasLiquidoSemanal(
+      [{ motorista_id: 'm-1', driver_name: 'Ana Costa', liquido: 30, detalhe }],
+      CTX
+    );
+    expect(linhas[0].detalhe).toEqual(detalhe);
   });
 
   it('deixa de fora linhas de plataforma sem motorista associado', () => {
