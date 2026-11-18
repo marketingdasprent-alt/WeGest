@@ -4,7 +4,7 @@ import { Capacitor } from '@capacitor/core';
 
 import { removeLegacyAuthenticatedCache } from '@/lib/pwaCacheCleanup';
 import { arrancarPwa, usaServiceWorker } from '@/lib/pwaArranque';
-import { recarregarParaVersaoNova } from '@/lib/versaoAntiga';
+import { renovarERecarregar } from '@/lib/versaoAntiga';
 import { protegerContraTradutor } from '@/lib/protecaoTradutor';
 import { urlSemWww } from '@/lib/semWww';
 import { caminhoSemBarrasDuplas } from '@/lib/semBarrasDuplas';
@@ -37,7 +37,8 @@ function arrancar() {
   // Ficheiro de uma versão anterior que já não existe (deploy com a aba aberta):
   // recarregar traz a versão nova em vez de deixar a secção em erro.
   window.addEventListener('vite:preloadError', (evento) => {
-    if (recarregarParaVersaoNova()) evento.preventDefault();
+    if (renovarERecarregar((evento as Event & { payload?: unknown }).payload))
+      evento.preventDefault();
   });
 
   // Antes de montar: a página traduzida pelo browser rebentava a app.

@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { MemoryRouter, Route, Routes, Link } from 'react-router-dom';
 import { ErrorBoundary, RouteErrorBoundary } from './ErrorBoundary';
+
+// A renovação vai à rede; nos testes não há rede, e o que interessa aqui é o recarregar.
+const renovar = vi.hoisted(() => vi.fn(async () => ({ renovados: 0, aindaMaus: [] as string[] })));
+vi.mock('@/lib/renovarFicheiros', async (original) => ({
+  ...(await original<typeof import('@/lib/renovarFicheiros')>()),
+  renovarFicheirosEmFalta: renovar,
+}));
 
 /**
  * Antes destes testes existirem, um erro de render em qualquer componente levava
@@ -139,7 +146,7 @@ describe('ErrorBoundary — versão antiga depois de um deploy', () => {
     vi.restoreAllMocks();
   });
 
-  it('recarrega sozinho a página quando falta um ficheiro da versão anterior', () => {
+  it('recarrega sozinho a página quando falta um ficheiro da versão anterior', async () => {
     const recarregar = vi.fn();
     vi.spyOn(window, 'location', 'get').mockReturnValue({
       reload: recarregar,
@@ -150,10 +157,12 @@ describe('ErrorBoundary — versão antiga depois de um deploy', () => {
         <FicheiroEmFalta />
       </ErrorBoundary>
     );
-    expect(recarregar).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(recarregar).toHaveBeenCalledTimes(1));
+    // Antes de recarregar, renova os ficheiros guardados na cache do navegador.
+    expect(renovar).toHaveBeenCalledTimes(1);
   });
 
-  it('"tentar de novo" recarrega a página em vez de repetir o import falhado', () => {
+  it('"tentar de novo" recarrega a página em vez de repetir o import falhado', async () => {
     const recarregar = vi.fn();
     vi.spyOn(window, 'location', 'get').mockReturnValue({
       reload: recarregar,
@@ -164,8 +173,9 @@ describe('ErrorBoundary — versão antiga depois de um deploy', () => {
         <FicheiroEmFalta />
       </ErrorBoundary>
     );
+    await waitFor(() => expect(recarregar).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
-    expect(recarregar).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(recarregar).toHaveBeenCalledTimes(2));
   });
 
   it('erro normal não recarrega a página', () => {
