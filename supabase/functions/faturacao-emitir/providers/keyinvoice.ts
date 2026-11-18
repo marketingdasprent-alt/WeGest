@@ -16,6 +16,11 @@ import type {
 import { EmissaoAmbiguaError } from '../types.ts';
 import { precoParaProvider } from '../../_shared/faturacao/totais.ts';
 import { corpoInsertReceipt } from '../../_shared/faturacao/recibo.ts';
+import {
+  mensagemArtigoRecusado,
+  mensagemSemArtigo,
+  recusaDeArtigo,
+} from '../../_shared/faturacao/erroArtigo.ts';
 
 const env = (k: string) => Deno.env.get(k);
 
@@ -239,6 +244,8 @@ export const keyInvoiceProvider: FaturacaoProvider = {
 
     let method: string;
     let doc: Record<string, unknown>;
+    // Artigos enviados nas linhas: se a KeyInvoice recusar um, a mensagem diz qual.
+    let artigosDasLinhas: string[] = [];
 
     if (input.tipo === 'RC') {
       // insertReceipt (não insertDocument): referencia o documento original
@@ -261,6 +268,8 @@ export const keyInvoiceProvider: FaturacaoProvider = {
       const taxMap = await buildTaxMap(r.endpoint, sid);
       const docLines = input.itens.map((it) => {
         const idProduct = it.id_produto || it.ref || r.defaultProduct;
+        // Sem código de artigo a KeyInvoice recusa a linha com um erro que não explica nada.
+        if (!idProduct) throw new Error(mensagemSemArtigo());
         const idTax = it.id_tax || taxMap[Number(it.taxa_iva)] || r.defaultIdTax;
         // KeyInvoice espera todos os valores como string.
         return {
@@ -272,6 +281,7 @@ export const keyInvoiceProvider: FaturacaoProvider = {
           ...(it.desconto ? { Discount: String(Number(it.desconto)) } : {}),
         };
       });
+      artigosDasLinhas = docLines.map((l) => l.IdProduct);
       for (const idProduct of new Set(docLines.map((l) => l.IdProduct).filter(Boolean))) {
         await assertArtigoExiste(r.endpoint, sid, idProduct);
       }
@@ -304,7 +314,11 @@ export const keyInvoiceProvider: FaturacaoProvider = {
         );
       }
       // 2xx com Status !== 1: o provider recusou explicitamente — nada foi criado.
-      throw new Error(`${method} falhou: ${res?.ErrorMessage || 'recusado'}`);
+      const motivo = res?.ErrorMessage || 'recusado';
+      if (recusaDeArtigo(motivo)) {
+        throw new Error(mensagemArtigoRecusado(motivo, artigosDasLinhas));
+      }
+      throw new Error(`${method} falhou: ${motivo}`);
     }
     if (!res.Data) {
       // Status OK sem Data não é recusa; impossível confirmar criação — nunca reemitir sem reconciliar.
