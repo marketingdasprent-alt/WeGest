@@ -65,9 +65,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm type-check
 
-  test:
-    name: 🧪 Tests
+  # Os testes (457 ficheiros, ~3500 testes) corriam todos numa só máquina, com
+  # `maxWorkers: '25%'` (vitest.config.ts: de propósito, para não falharem ao acaso por
+  # contenção): quase 10 minutos. Agora correm em 6 máquinas ao mesmo tempo, cada uma com
+  # a sua sexta parte e a mesma configuração estável. O job "🧪 Tests" abaixo junta o
+  # resultado e mantém o nome de sempre.
+  test-partes:
+    name: 🧪 Tests (parte ${{ matrix.parte }} de 6)
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2, 3, 4, 5, 6]
 
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +90,22 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm exec vitest run --shard=${{ matrix.parte }}/6
+
+  test:
+    name: 🧪 Tests
+    needs: test-partes
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Todas as partes passaram?
+        run: |
+          if [ "${{ needs.test-partes.result }}" != "success" ]; then
+            echo "::error::Alguma das 6 partes dos testes falhou ou não correu (resultado: ${{ needs.test-partes.result }})."
+            exit 1
+          fi
+          echo "✓ as 6 partes dos testes passaram"
 
   deno-test:
     name: 🦕 Deno Tests (Edge Functions)
@@ -129,6 +154,39 @@ jobs:
           path: dist/
           retention-days: 7
 
+  # Diz se o pedido de junção mexe na base de dados. Fora de pull_request (push para
+  # main/develop) assume sempre que sim: o main tem de passar tudo.
+  mudancas:
+    name: 🔍 O que mudou
+    runs-on: ubuntu-latest
+    outputs:
+      base_de_dados: ${{ steps.filtro.outputs.base_de_dados }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filtro
+        env:
+          EVENTO: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENTO" != "pull_request" ]; then
+            echo "base_de_dados=true" >> "$GITHUB_OUTPUT"
+            echo "Evento $EVENTO: a base de dados corre sempre."
+            exit 0
+          fi
+          FICHEIROS=$(git diff --name-only "$BASE"...HEAD)
+          echo "$FICHEIROS"
+          if echo "$FICHEIROS" | grep -Eq '^(supabase/(migrations|migrations_archive|tests|seed|config\.toml)|scripts/|\.github/workflows/ci\.yml)'; then
+            echo "base_de_dados=true" >> "$GITHUB_OUTPUT"
+            echo "→ mexe na base de dados: o gate corre."
+          else
+            echo "base_de_dados=false" >> "$GITHUB_OUTPUT"
+            echo "→ não mexe na base de dados: o gate não é preciso."
+          fi
+
   # ══════════════════════════════════════════════════════════════════════════
   # Reconstrução da base de dados + pgTAP
   # ══════════════════════════════════════════════════════════════════════════
@@ -151,6 +209,11 @@ jobs:
   # registadas como sucesso"). Ou passa, ou trava o merge.
   db-tests:
     name: 🗄️ DB Rebuild + pgTAP
+    needs: mudancas
+    # Num pedido de junção que não toca na base de dados (migrações, testes pgTAP,
+    # scripts, este workflow) reconstruí-la não testa nada de novo e custava ~3,5 min.
+    # No main e em qualquer alteração à base corre sempre.
+    if: ${{ needs.mudancas.outputs.base_de_dados == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
