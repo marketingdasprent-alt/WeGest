@@ -15,13 +15,19 @@ export interface EstadoCobrancaDisplay {
   label: string;
   className: string;
   totalmenteCreditada: boolean;
+  /** Cobrança registada, mas sem documento fiscal emitido: não é uma fatura. */
+  semDocumentoFiscal: boolean;
 }
 
 // Só estados emitidos/pagos viram "Creditada"; crédito parcial mantém o estado.
+//
+// "emitida" é o estado INTERNO da cobrança (nasce assim, antes de falar com o fornecedor de
+// faturação). Sem documento fiscal ainda não há fatura: a lista não pode dizer "emitida".
 export function estadoCobrancaDisplay(
   estado: string,
   valorTotal: number | null | undefined,
-  jaCreditado: number | null | undefined
+  jaCreditado: number | null | undefined,
+  semDocumentoFiscal = false
 ): EstadoCobrancaDisplay {
   const total = Number(valorTotal ?? 0);
   const creditado = Number(jaCreditado ?? 0);
@@ -33,11 +39,21 @@ export function estadoCobrancaDisplay(
       label: 'Creditada',
       className: ESTADO_COBRANCA_CLASS.creditada,
       totalmenteCreditada: true,
+      semDocumentoFiscal: false,
+    };
+  }
+  if (semDocumentoFiscal && estado === 'emitida') {
+    return {
+      label: 'Sem fatura fiscal',
+      className: ESTADO_COBRANCA_CLASS.pendente,
+      totalmenteCreditada: false,
+      semDocumentoFiscal: true,
     };
   }
   return {
     label: estado,
     className: ESTADO_COBRANCA_CLASS[estado] ?? '',
     totalmenteCreditada: false,
+    semDocumentoFiscal: false,
   };
 }
