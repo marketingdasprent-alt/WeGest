@@ -1730,6 +1730,7 @@ export type Database = {
           semana_inicio: string | null
           started_at: string | null
           status: string
+          tentativas: number
         }
         Insert: {
           alertado_em?: string | null
@@ -1748,6 +1749,7 @@ export type Database = {
           semana_inicio?: string | null
           started_at?: string | null
           status?: string
+          tentativas?: number
         }
         Update: {
           alertado_em?: string | null
@@ -1766,6 +1768,7 @@ export type Database = {
           semana_inicio?: string | null
           started_at?: string | null
           status?: string
+          tentativas?: number
         }
         Relationships: [
           {
@@ -3228,6 +3231,7 @@ export type Database = {
           deleted_at: string | null
           elegivel_anuncios: boolean
           email: string | null
+          frota_parceira: boolean
           genero: Database["public"]["Enums"]["genero_enum"] | null
           iban: string | null
           id: string
@@ -3266,6 +3270,7 @@ export type Database = {
           deleted_at?: string | null
           elegivel_anuncios?: boolean
           email?: string | null
+          frota_parceira?: boolean
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
           id?: string
@@ -3304,6 +3309,7 @@ export type Database = {
           deleted_at?: string | null
           elegivel_anuncios?: boolean
           email?: string | null
+          frota_parceira?: boolean
           genero?: Database["public"]["Enums"]["genero_enum"] | null
           iban?: string | null
           id?: string
@@ -6579,6 +6585,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           data_emissao: string | null
+          documento_referencia_id: string | null
           enviado_em: string | null
           erro_msg: string | null
           id: string
@@ -6604,6 +6611,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
+          documento_referencia_id?: string | null
           enviado_em?: string | null
           erro_msg?: string | null
           id?: string
@@ -6629,6 +6637,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           data_emissao?: string | null
+          documento_referencia_id?: string | null
           enviado_em?: string | null
           erro_msg?: string | null
           id?: string
@@ -6667,6 +6676,13 @@ export type Database = {
             columns: ["contrato_id"]
             isOneToOne: false
             referencedRelation: "contratos_renting"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_documento_referencia_id_fkey"
+            columns: ["documento_referencia_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
           {
@@ -7844,6 +7860,10 @@ export type Database = {
       }
       motorista_liquido_semanal: {
         Row: {
+          detalhe: Json | null
+          enviado_canais: string[]
+          enviado_em: string | null
+          enviado_por: string | null
           gravado_em: string
           gravado_por: string | null
           id: string
@@ -7855,6 +7875,10 @@ export type Database = {
           semana_inicio: string
         }
         Insert: {
+          detalhe?: Json | null
+          enviado_canais?: string[]
+          enviado_em?: string | null
+          enviado_por?: string | null
           gravado_em?: string
           gravado_por?: string | null
           id?: string
@@ -7866,6 +7890,10 @@ export type Database = {
           semana_inicio: string
         }
         Update: {
+          detalhe?: Json | null
+          enviado_canais?: string[]
+          enviado_em?: string | null
+          enviado_por?: string | null
           gravado_em?: string
           gravado_por?: string | null
           id?: string
@@ -16070,6 +16098,7 @@ export type Database = {
           semana_inicio: string | null
           started_at: string | null
           status: string
+          tentativas: number
         }[]
         SetofOptions: {
           from: "*"
@@ -16759,6 +16788,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      invoices_ligar_nc_ao_original: { Args: never; Returns: number }
       is_current_user_admin: { Args: never; Returns: boolean }
       is_decada_ousada_admin: { Args: never; Returns: boolean }
       is_storage_admin: { Args: never; Returns: boolean }
@@ -16818,6 +16848,14 @@ export type Database = {
         Returns: Json
       }
       marcar_convite_usado: { Args: { p_token: string }; Returns: boolean }
+      marcar_resumos_enviados: {
+        Args: {
+          p_canal: string
+          p_motorista_ids: string[]
+          p_semana_inicio: string
+        }
+        Returns: number
+      }
       marcar_todas_notificacoes_lidas: { Args: never; Returns: Json }
       marketing_lista_contagem: {
         Args: { p_lista_id: string }
@@ -16839,6 +16877,10 @@ export type Database = {
       motivo_tvde_parado_nao_reabre: {
         Args: { p_contrato: string; p_desde: string }
         Returns: string
+      }
+      motorista_bolt_gorjeta_semana: {
+        Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
+        Returns: number
       }
       motorista_bolt_liquido_semana: {
         Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
@@ -17220,6 +17262,10 @@ export type Database = {
       }
       semana_ja_liquidada: {
         Args: { p_fim: string; p_inicio: string; p_motorista: string }
+        Returns: boolean
+      }
+      semana_resumo_por_enviar: {
+        Args: { p_data: string; p_motorista_id: string }
         Returns: boolean
       }
       set_email_api_key: {

@@ -45,6 +45,16 @@ function mockarTabelas(tabelas: Record<string, any[]>) {
   );
 }
 
+/** As duas funções da Bolt respondem separado: o total e a gorjeta. */
+function mockarBoltRpc(liquido: number, gorjeta = 0) {
+  (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation((nome: string) =>
+    Promise.resolve({
+      data: nome === 'motorista_bolt_gorjeta_semana' ? gorjeta : liquido,
+      error: null,
+    })
+  );
+}
+
 const tabelasConsultadas = () =>
   (supabase.from as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c: any[]) => c[0]);
 
@@ -63,22 +73,33 @@ describe('MotoristaRecibosSection — gorjeta fora do corte', () => {
   beforeEach(() => {
     mockarTabelas({
       uber_resumos_semanais: [{ ganhos_brutos: 412.33, gorjetas: 12.9 }],
-      bolt_resumos_semanais: [{ gorjetas: 0 }],
     });
-    (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: 4.94,
-      error: null,
-    });
+    // Bolt do caso real: 4,94 € com 2,00 € de gorjeta.
+    mockarBoltRpc(4.94, 2);
   });
 
-  it('passa a gorjeta ao resumo e só corta os 6% sobre a base (igual ao Resumo Financeiro)', async () => {
+  it('passa as gorjetas ao resumo e só corta os 6% sobre a base (igual ao Resumo Financeiro)', async () => {
     renderizar(false);
     await waitFor(() => expect(lerResumo().faturado_uber).toBe(412.33));
     const resumo = lerResumo();
     expect(resumo.gorjeta_uber).toBe(12.9);
-    expect(resumo.gorjeta_bolt).toBe(0);
-    // Caso real 09–15/11: 394,38 €. Com a gorjeta dividida pelo corte dava 393,65 €.
-    expect(resumo.liquido).toBeCloseTo((412.33 - 12.9) / 1.06 + 12.9 + 4.94 / 1.06, 2);
+    expect(resumo.gorjeta_bolt).toBe(2);
+    // Caso real 09–15/11: 394,38 € de receitas. Sem as gorjetas fora do corte dava 393,65 €.
+    expect(resumo.liquido).toBeCloseTo((412.33 - 12.9) / 1.06 + 12.9 + (4.94 - 2) / 1.06 + 2, 2);
+  });
+
+  it('se a função da gorjeta falhar, o resumo não rebenta: gorjeta Bolt fica 0', async () => {
+    (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation((nome: string) =>
+      Promise.resolve(
+        nome === 'motorista_bolt_gorjeta_semana'
+          ? { data: null, error: { message: 'function does not exist' } }
+          : { data: 4.94, error: null }
+      )
+    );
+    renderizar(false);
+    await waitFor(() => expect(lerResumo().faturado_uber).toBe(412.33));
+    expect(lerResumo().gorjeta_bolt).toBe(0);
+    expect(lerResumo().dados_incompletos).not.toBe(true);
   });
 });
 
@@ -93,10 +114,7 @@ describe('MotoristaRecibosSection — receita Bolt', () => {
     });
     // A Bolt vem pela função, não pela tabela: a tabela só abre a quem tem
     // financeiro_recibos e um gestor sem ela via 0 €.
-    (supabase.rpc as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: 300,
-      error: null,
-    });
+    mockarBoltRpc(300);
   });
 
   it('não duplica: mostra só os ganhos do CSV, não a soma com a API', async () => {

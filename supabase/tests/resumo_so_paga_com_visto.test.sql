@@ -15,7 +15,7 @@
 -- ============================================================
 
 begin;
-select plan(9);
+select plan(12);
 
 insert into public.organizacoes (id, nome, codigo) values
   ('00000000-0000-0000-0000-0000003a0000', 'Org Paga Com Visto', 'paga-com-visto');
@@ -84,10 +84,10 @@ insert into public.plataformas_configuracao (id, org_id, nome, plataforma, csv_s
   ('00000000-0000-0000-0000-0000003a0e01', '00000000-0000-0000-0000-0000003a0000', 'Bolt', 'bolt', true);
 insert into public.bolt_resumos_semanais
   (org_id, integracao_id, periodo, periodo_inicio, periodo_fim, chave_motorista,
-   identificador_motorista, motorista_nome, motorista_id, ganhos_liquidos)
+   identificador_motorista, motorista_nome, motorista_id, ganhos_liquidos, gorjetas)
 values ('00000000-0000-0000-0000-0000003a0000', '00000000-0000-0000-0000-0000003a0e01',
         '2026-10-26 a 2026-11-01', '2026-10-26', '2026-11-01',
-        'bolt-x', 'bolt-x', 'Credito', '00000000-0000-0000-0000-0000003a0b01', 503.37);
+        'bolt-x', 'bolt-x', 'Credito', '00000000-0000-0000-0000-0000003a0b01', 503.37, 2);
 
 -- Quem pode ver a ficha lê a Bolt (o caso que falhou em produção: a função
 -- conferia a tabela errada e recusava toda a gente, admin incluído).
@@ -123,6 +123,27 @@ select is(
 select ok(
   not has_function_privilege('anon', 'public.motorista_bolt_liquido_semana(uuid, date, date)', 'execute'),
   'anon não chama motorista_bolt_liquido_semana (5)'
+);
+
+-- (6) a gorjeta Bolt da ficha, mesmas regras de acesso do total
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"00000000-0000-0000-0000-0000003a00bb"}', true);
+select is(
+  public.motorista_bolt_gorjeta_semana('00000000-0000-0000-0000-0000003a0b01', '2026-10-26', '2026-11-01'),
+  2::numeric,
+  'admin da organização lê a gorjeta Bolt da ficha (6)'
+);
+
+select set_config('request.jwt.claims', '{"role":"authenticated","sub":"00000000-0000-0000-0000-0000003a00aa"}', true);
+select throws_ok(
+  $$ select public.motorista_bolt_gorjeta_semana('00000000-0000-0000-0000-0000003a0b01', '2026-10-26', '2026-11-01') $$,
+  '42501',
+  'sem permissao para ver a Bolt deste motorista',
+  'utilizador sem acesso à ficha não lê a gorjeta Bolt (6)'
+);
+
+select ok(
+  not has_function_privilege('anon', 'public.motorista_bolt_gorjeta_semana(uuid, date, date)', 'execute'),
+  'anon não chama motorista_bolt_gorjeta_semana (6)'
 );
 
 select * from finish();
