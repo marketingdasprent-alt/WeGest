@@ -44,6 +44,7 @@ import {
 } from '@/lib/faturacao';
 import { DURACAO_AVISO_FALHA_MS, mensagemFalhaEmissao } from '@/lib/faturacaoFalha';
 import type { InvoiceMetadata, ItemFatura } from '@/types/faturacao';
+import { temDocumentoFiscalCertificado } from '@/lib/cobrancaFiscal';
 import type { FaturacaoDocEmitente } from '@/types/faturacao';
 import {
   FaturacaoActionsToolbar,
@@ -270,9 +271,10 @@ export function ReservaTabFaturar({ reserva }: Props) {
         (c) =>
           c.estado === 'anulada' &&
           c.emite_fatura_fiscal &&
+          temDocumentoFiscalCertificado(c, invoices) &&
           round2((c.valor_total ?? 0) - (ncPorCobranca[c.id] ?? 0)) > 0.005
       ),
-    [cobrancas, ncPorCobranca]
+    [cobrancas, ncPorCobranca, invoices]
   );
 
   function cobrancaParaNC(c: CobrancaRow): NotaCreditoCobranca {
@@ -303,7 +305,9 @@ export function ReservaTabFaturar({ reserva }: Props) {
 
       // Pergunta-se num pop-up (não notificação, fácil de perder); se
       // dispensado, fica em "Faturas anuladas por creditar" para mais tarde.
-      const fiscaisAnuladas = ativas.filter((c) => c.emite_fatura_fiscal);
+      const fiscaisAnuladas = ativas.filter(
+        (c) => c.emite_fatura_fiscal && temDocumentoFiscalCertificado(c, invoices)
+      );
       toast.success('Faturação anulada — a reserva voltou a "não faturada".');
       if (fiscaisAnuladas.length > 0) setNcPromptAlvos(fiscaisAnuladas);
       setAnularOpen(false);
@@ -575,7 +579,7 @@ export function ReservaTabFaturar({ reserva }: Props) {
                   const inv = invoiceByCobranca.get(c.id);
                   const creditado = round2(ncPorCobranca?.[c.id] ?? 0);
                   const porEmitir =
-                    !c.documento_externo_ref &&
+                    !temDocumentoFiscalCertificado(c, invoices) &&
                     c.emite_fatura_fiscal &&
                     (c.estado === 'emitida' || c.estado === 'paga') &&
                     (c.valor_total ?? 0) > 0;
@@ -651,15 +655,26 @@ export function ReservaTabFaturar({ reserva }: Props) {
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const est = estadoCobrancaDisplay(c.estado, c.valor_total, creditado);
+                          const est = estadoCobrancaDisplay(
+                            c.estado,
+                            c.valor_total,
+                            creditado,
+                            porEmitir
+                          );
                           return (
                             <Badge
                               variant="outline"
-                              className={cn('capitalize border', est.className)}
+                              className={cn(
+                                'border',
+                                !est.semDocumentoFiscal && 'capitalize',
+                                est.className
+                              )}
                               title={
                                 est.totalmenteCreditada
                                   ? 'Fatura integralmente regularizada por nota(s) de crédito. A fatura mantém-se emitida para efeitos fiscais.'
-                                  : undefined
+                                  : est.semDocumentoFiscal
+                                    ? 'A cobrança está registada, mas o documento fiscal ainda não foi emitido. Não é uma fatura. Use Reemitir.'
+                                    : undefined
                               }
                             >
                               {est.label}

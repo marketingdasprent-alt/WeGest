@@ -47,6 +47,7 @@ import { useContratoExtras, calcExtraTotal } from '@/hooks/useContratoExtras';
 import { useContratoTaxas, calcTaxaValor } from '@/hooks/useContratoTaxas';
 import { useContratoCondutores } from '@/hooks/useContratoCondutores';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
+import { temDocumentoFiscalCertificado } from '@/lib/cobrancaFiscal';
 import { useInvoicesByContrato, useEmitirEEscreverFatura } from '@/hooks/useFaturacao';
 import { usePedirFornecedor } from '@/hooks/useOpcoesFaturacao';
 import {
@@ -377,9 +378,10 @@ export function ContratoTabFaturar({ contrato }: Props) {
         (c) =>
           c.estado === 'anulada' &&
           c.emite_fatura_fiscal &&
+          temDocumentoFiscalCertificado(c, invoices) &&
           round2((c.valor_total ?? 0) - (ncPorCobranca[c.id] ?? 0)) > 0.005
       ),
-    [cobrancas, ncPorCobranca]
+    [cobrancas, ncPorCobranca, invoices]
   );
 
   function cobrancaParaNC(c: CobrancaRow): NotaCreditoCobranca {
@@ -434,7 +436,10 @@ export function ContratoTabFaturar({ contrato }: Props) {
       // notificação, fácil de perder/ignorar); se for dispensado, ficam
       // listadas em "Faturas anuladas por creditar" para tratar mais tarde.
       const fiscaisAnuladas = (cobrancas ?? []).filter(
-        (c) => idsParaAnular.includes(c.id) && c.emite_fatura_fiscal
+        (c) =>
+          idsParaAnular.includes(c.id) &&
+          c.emite_fatura_fiscal &&
+          temDocumentoFiscalCertificado(c, invoices)
       );
       toast.success(
         idsParaAnular.length === ativasIds.length
@@ -863,7 +868,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
                   const saldoPagar = round2((c.valor_total ?? 0) - pago - creditado);
                   const inv = invoiceByCobranca.get(c.id);
                   const porEmitir =
-                    !c.documento_externo_ref &&
+                    !temDocumentoFiscalCertificado(c, invoices) &&
                     c.emite_fatura_fiscal &&
                     (c.estado === 'emitida' || c.estado === 'paga') &&
                     (c.valor_total ?? 0) > 0;
@@ -972,15 +977,26 @@ export function ContratoTabFaturar({ contrato }: Props) {
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const est = estadoCobrancaDisplay(c.estado, c.valor_total, creditado);
+                          const est = estadoCobrancaDisplay(
+                            c.estado,
+                            c.valor_total,
+                            creditado,
+                            porEmitir
+                          );
                           return (
                             <Badge
                               variant="outline"
-                              className={cn('capitalize border', est.className)}
+                              className={cn(
+                                'border',
+                                !est.semDocumentoFiscal && 'capitalize',
+                                est.className
+                              )}
                               title={
                                 est.totalmenteCreditada
                                   ? 'Fatura integralmente regularizada por nota(s) de crédito. A fatura mantém-se emitida para efeitos fiscais.'
-                                  : undefined
+                                  : est.semDocumentoFiscal
+                                    ? 'A cobrança está registada, mas o documento fiscal ainda não foi emitido. Não é uma fatura. Use Reemitir.'
+                                    : undefined
                               }
                             >
                               {est.label}

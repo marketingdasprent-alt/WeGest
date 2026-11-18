@@ -60,3 +60,23 @@ describe('estadoCobrancaDisplay', () => {
     expect(result.className).toBe('');
   });
 });
+
+describe('estadoCobrancaDisplay: cobrança sem documento fiscal', () => {
+  it('"emitida" sem documento fiscal não se chama emitida: não é uma fatura', () => {
+    const result = estadoCobrancaDisplay('emitida', 1063.95, 0, true);
+    expect(result.label).toBe('Sem fatura fiscal');
+    expect(result.semDocumentoFiscal).toBe(true);
+    expect(result.totalmenteCreditada).toBe(false);
+  });
+
+  it('com documento fiscal continua "emitida"', () => {
+    const result = estadoCobrancaDisplay('emitida', 100, 0, false);
+    expect(result.label).toBe('emitida');
+    expect(result.semDocumentoFiscal).toBe(false);
+  });
+
+  it('só se aplica ao estado emitida: anulada e paga mantêm o estado', () => {
+    expect(estadoCobrancaDisplay('anulada', 100, 0, true).label).toBe('anulada');
+    expect(estadoCobrancaDisplay('paga', 100, 0, true).label).toBe('paga');
+  });
+});
