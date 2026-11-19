@@ -9,10 +9,11 @@ export const PROVIDERS_CONHECIDOS: Array<{ slug: ProviderSlug; label: string }> 
   { slug: 'primavera', label: 'Primavera' },
 ];
 
-// O AS Connect só tem documentado o documento de venda (FT); ver agent/primavera-agent.
+// O Primavera só emite pelo serviço (com `servico_url`); o agente antigo da AS Connect foi retirado.
+// Uma integração Primavera sem serviço não emite nenhum tipo (ver `servico` em IntegracaoDaEmpresa).
 export const TIPOS_NAO_SUPORTADOS: Record<ProviderSlug, TipoDoc[]> = {
   keyinvoice: [],
-  primavera: ['FR', 'NC', 'RC'],
+  primavera: ['FT', 'FR', 'NC', 'RC'],
 };
 
 const PLURAL: Record<TipoDoc, string> = {
@@ -26,6 +27,8 @@ export interface IntegracaoDaEmpresa {
   id: string;
   provider: string;
   ativo: boolean;
+  /** Primavera com o serviço configurado (emite FT, FR, NC e RC). Sem isto a integração Primavera não emite. */
+  servico?: boolean;
 }
 
 export interface OpcaoFornecedor {
@@ -37,7 +40,15 @@ export interface OpcaoFornecedor {
   ultima_usada: boolean;
 }
 
-export function motivoTipoNaoSuportado(provider: string, tipo: TipoDoc): string | null {
+export function motivoTipoNaoSuportado(
+  provider: string,
+  tipo: TipoDoc,
+  servico = false
+): string | null {
+  if (provider === 'primavera' && servico) return null;
+  if (provider === 'primavera') {
+    return 'O Primavera deste emissor ainda não está configurado pelo serviço (Administração, Integrações)';
+  }
   const nao = TIPOS_NAO_SUPORTADOS[provider as ProviderSlug] ?? [];
   if (!nao.includes(tipo)) return null;
   const label = PROVIDERS_CONHECIDOS.find((p) => p.slug === provider)?.label ?? provider;
@@ -69,7 +80,7 @@ export function montarOpcoes(
       ultima_usada: linha.id === ultimaIntegracaoId,
     };
     if (!linha.ativo) return { ...base, disponivel: false, motivo: 'Integração inativa' };
-    const motivo = motivoTipoNaoSuportado(slug, tipo);
+    const motivo = motivoTipoNaoSuportado(slug, tipo, linha.servico === true);
     return motivo ? { ...base, disponivel: false, motivo } : { ...base, disponivel: true };
   });
 }
@@ -97,7 +108,7 @@ export function escolherIntegracao(
         erro: 'A integração escolhida não está ativa para esta empresa. Volte a abrir o ecrã e escolha de novo.',
       };
     }
-    const motivo = motivoTipoNaoSuportado(escolhida.provider, tipo);
+    const motivo = motivoTipoNaoSuportado(escolhida.provider, tipo, escolhida.servico === true);
     return motivo
       ? { ok: false, codigo: 'nao_suporta', erro: `${motivo}.` }
       : { ok: true, integracaoId: escolhida.id };
@@ -111,13 +122,15 @@ export function escolherIntegracao(
       erro: 'Esta empresa não tem software de faturação ativo.',
     };
   }
-  const suportam = ativasDeFacto.filter((i) => !motivoTipoNaoSuportado(i.provider, tipo));
+  const suportam = ativasDeFacto.filter(
+    (i) => !motivoTipoNaoSuportado(i.provider, tipo, i.servico === true)
+  );
   if (suportam.length === 1) return { ok: true, integracaoId: suportam[0].id };
   if (!suportam.length) {
     return {
       ok: false,
       codigo: 'nao_suporta',
-      erro: `${motivoTipoNaoSuportado(ativasDeFacto[0].provider, tipo)}.`,
+      erro: `${motivoTipoNaoSuportado(ativasDeFacto[0].provider, tipo, ativasDeFacto[0].servico === true)}.`,
     };
   }
   return {

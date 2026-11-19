@@ -73,6 +73,7 @@ import {
   faturaDoDocumento,
 } from '../_shared/faturacao/documento.ts';
 import { linhaDeFalhaEmissao } from '../_shared/faturacao/falhas.ts';
+import { lerConfigServico } from '../_shared/faturacao/primaveraServico.ts';
 import {
   recusaPorEmissaoIncerta,
   verificarEmissaoIncerta,
@@ -496,7 +497,16 @@ async function integracoesDaEmpresa(orgId: string, emissorId: string): Promise<L
 }
 
 function paraEscolha(linhas: LinhaDaEmpresa[]): IntegracaoDaEmpresa[] {
-  return linhas.map((l) => ({ id: l.id, provider: configDaLinha(l).provider, ativo: !!l.ativo }));
+  return linhas.map((l) => {
+    const c = configDaLinha(l);
+    return {
+      id: l.id,
+      provider: c.provider,
+      ativo: !!l.ativo,
+      // Primavera só emite com o serviço configurado.
+      servico: lerConfigServico(c.settings).modo === 'servico',
+    };
+  });
 }
 
 /** Integração da fatura mais recente do mesmo contrato ou reserva, para a pré-seleção. */
@@ -618,11 +628,27 @@ async function configParaEmitir(
         original,
       };
     }
-    // Sem original identificável: escolhe-se como numa fatura (comportamento anterior).
+    // Sem original identificável: nunca se pede escolha ao utilizador (a NC e o recibo seguem a fatura).
+    // Tenta-se o fornecedor do último documento fiscal do mesmo contrato, reserva ou cobrança.
   }
 
   if (!emissorId) throw await erroEmpresaSemFaturacao(orgId, null);
   const linhas = await integracoesDaEmpresa(orgId, emissorId);
+  const segueFatura = payload.tipo === 'NC' || payload.tipo === 'RC';
+  if (segueFatura && !payload.integracao_id) {
+    const ultima = await ultimaIntegracaoUsada(orgId, payload);
+    const row = ultima ? linhas.find((l) => l.id === ultima) : undefined;
+    if (row) {
+      const c = configDaLinha(row);
+      return {
+        provider: c.provider,
+        cfg: { apiKey: c.apiKey, settings: c.settings, orgId, integracaoId: c.integracaoId },
+        orgId,
+        integracaoId: c.integracaoId,
+        original: null,
+      };
+    }
+  }
   const escolha = escolherIntegracao(
     paraEscolha(linhas.filter((l) => l.ativo)),
     payload.tipo as TipoDoc,
@@ -630,6 +656,11 @@ async function configParaEmitir(
   );
   if (!escolha.ok) {
     if (escolha.codigo === 'sem_integracao') throw await erroEmpresaSemFaturacao(orgId, emissorId);
+    if (segueFatura && escolha.codigo === 'escolha_obrigatoria') {
+      throw new EscolhaFornecedorError(
+        'Não foi possível saber em que fornecedor foi emitida a fatura original. Indique o número da fatura original, tal como está no documento, e tente de novo.'
+      );
+    }
     throw new EscolhaFornecedorError(escolha.erro);
   }
   const row = linhas.find((l) => l.id === escolha.integracaoId)!;
@@ -1008,6 +1039,7 @@ serve(async (req) => {
       referencia_externa: payload.referencia_externa,
       documento_referencia: payload.documento_referencia,
       documentoOriginal,
+      cobrancaId: payload.cobranca_id,
     };
     const doc = await adapter.emit(emitInput, cfg);
     // A partir daqui o documento fiscal JÁ EXISTE no provider — qualquer falha
