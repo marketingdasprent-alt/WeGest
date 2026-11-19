@@ -16,27 +16,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import {
-  Loader2,
-  Eye,
-  EyeOff,
-  Plug,
-  ChevronDown,
-  ChevronRight,
-  Info,
-  AlertTriangle,
-  Sparkles,
-  Copy,
-} from 'lucide-react';
+import { Loader2, Plug, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { FATURACAO_PROVIDERS, faturacaoProviderLabel } from '@/lib/faturacaoProviders';
 import { FaturacaoIdentidadeFields } from './FaturacaoIdentidadeFields';
 import {
   buildFaturacaoSettings,
   camposPorTipo,
   CAMPOS_POR_TIPO_VAZIOS,
+  integracaoPrimaveraAntiga,
+  METODO_PAGAMENTO_SERVICO_OMISSAO,
+  primeiroErroServico,
+  validarServicoPrimavera,
+  type AmbienteServico,
   type CamposPorTipo,
   type FaturacaoConfigRow,
+  type MetodoPagamentoServico,
 } from './faturacaoIntegracaoConfig';
+import { PrimaveraServicoFields } from './PrimaveraServicoFields';
+import { ChaveApiField } from './ChaveApiField';
 import { DefinicoesAvancadasFields } from './DefinicoesAvancadasFields';
 import { useClientesEmpresas } from '@/hooks/useClientesEmpresas';
 import type { Json } from '@/integrations/supabase/types';
@@ -96,8 +93,22 @@ export function FaturacaoIntegracaoDialog({
   const [dt, setDt] = useState<CamposPorTipo>(CAMPOS_POR_TIPO_VAZIOS);
   const [ds, setDs] = useState<CamposPorTipo>(CAMPOS_POR_TIPO_VAZIOS);
   const [precosComIva, setPrecosComIva] = useState(false);
+  // Campos do Primavera (só se usam quando o provider é 'primavera').
+  const [servicoUrl, setServicoUrl] = useState('');
+  const [ambiente, setAmbiente] = useState<AmbienteServico | ''>('');
+  const [empresa, setEmpresa] = useState('');
+  const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamentoServico>(
+    METODO_PAGAMENTO_SERVICO_OMISSAO
+  );
+  const [mostrarErros, setMostrarErros] = useState(false);
+  const [resultadoTeste, setResultadoTeste] = useState<{ ok: boolean; mensagem: string } | null>(
+    null
+  );
 
   const providerMeta = FATURACAO_PROVIDERS[provider];
+  // Primavera só existe pelo serviço (o agente da AS Connect deixou de existir).
+  const modoServico = provider === 'primavera';
+  const integracaoAntiga = modoServico && integracaoPrimaveraAntiga(row);
   const settingsAtuais = () =>
     buildFaturacaoSettings({
       provider,
@@ -107,7 +118,12 @@ export function FaturacaoIntegracaoDialog({
       doctypes: dt,
       docseries: ds,
       precosComIva,
+      ...(modoServico ? { servicoUrl, ambiente, empresa, metodoPagamento } : {}),
     });
+  const errosServico = modoServico
+    ? validarServicoPrimavera({ servicoUrl, ambiente, empresa, apiKey })
+    : {};
+
   const { getById: getEmpresaById } = useClientesEmpresas();
   const empresaNome = (emissorId && getEmpresaById(emissorId)?.nome) || 'a empresa escolhida';
 
@@ -115,19 +131,16 @@ export function FaturacaoIntegracaoDialog({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [gerandoChave, setGerandoChave] = useState(false);
-  // A chave gerada nesta sessão do diálogo ainda não foi guardada — mostra-se
-  // sempre em claro (é a única oportunidade de a copiar). Uma chave que veio
-  // de `row` (já gravada antes) segue a regra normal do campo (escondida,
-  // revelável pelo olho) — não há razão nova para a mostrar por omissão.
-  const [chaveAcabouDeSerGerada, setChaveAcabouDeSerGerada] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     const c = row?.config ?? {};
     setNome(row?.nome || providerMeta?.label || provider);
     setEmissorId(row?.emissor_id ?? null);
-    setApiKey(row?.client_secret || '');
+    // Integração Primavera antiga (agente): a chave era do agente, não serve ao serviço.
+    setApiKey(
+      provider === 'primavera' && integracaoPrimaveraAntiga(row) ? '' : row?.client_secret || ''
+    );
     // Integração nova fica activa: cada empresa tem o seu lugar próprio, por
     // isso activar uma não desliga a de mais ninguém — só desliga outra da
     // MESMA empresa, e essa é a intenção de quem a está a substituir. A editar
@@ -140,39 +153,30 @@ export function FaturacaoIntegracaoDialog({
     setDt(camposPorTipo(c.doctypes));
     setDs(camposPorTipo(c.docseries));
     setPrecosComIva(c.precos_com_iva === true);
+    setServicoUrl(c.servico_url || '');
+    setAmbiente(c.ambiente === 'teste' || c.ambiente === 'producao' ? c.ambiente : '');
+    setEmpresa(c.empresa || '');
+    setMetodoPagamento(c.metodo_pagamento || METODO_PAGAMENTO_SERVICO_OMISSAO);
+    setMostrarErros(false);
+    setResultadoTeste(null);
     setShowKey(false);
     setShowAdvanced(false);
-    setChaveAcabouDeSerGerada(false);
   }, [open, row, existeOutraIntegracaoAtiva, provider, providerMeta?.label]);
 
-  /** Gera a chave do agente (RPC no Postgres, nunca calculada no browser) e
-   *  mostra-a já em claro — é a única vez que se vê por inteiro. */
-  async function handleGerarChave() {
-    setGerandoChave(true);
-    try {
-      const { data, error } = await supabase.rpc('gerar_chave_agente_primavera');
-      if (error) throw error;
-      setApiKey(data as string);
-      setChaveAcabouDeSerGerada(true);
-      setShowKey(true);
-    } catch (e) {
-      toast.error(`Não foi possível gerar a chave: ${e instanceof Error ? e.message : 'erro'}`);
-    } finally {
-      setGerandoChave(false);
-    }
-  }
-
-  async function handleCopiarChave() {
-    try {
-      await navigator.clipboard.writeText(apiKey);
-      toast.success('Chave copiada.');
-    } catch {
-      toast.error('Não foi possível copiar — selecione e copie manualmente.');
-    }
-  }
+  // Um resultado de teste só vale para o que foi testado: ao editar, apaga-se.
+  useEffect(() => {
+    setResultadoTeste(null);
+  }, [servicoUrl, ambiente, empresa, apiKey]);
 
   async function handleTest() {
-    if (!apiKey.trim()) {
+    if (modoServico) {
+      const erro = primeiroErroServico(errosServico);
+      if (erro) {
+        setMostrarErros(true);
+        toast.error(erro);
+        return;
+      }
+    } else if (!apiKey.trim()) {
       toast.error(
         `Introduza ${providerMeta?.apiKeyLabel ? 'a ' + providerMeta.apiKeyLabel.toLowerCase() : 'a chave da API'} antes de testar.`
       );
@@ -180,23 +184,36 @@ export function FaturacaoIntegracaoDialog({
     }
     setTesting(true);
     try {
-      // Primavera (chave gerada pelo WeGest): testa o agente da linha já gravada. Com
-      // integracao_id o servidor usa esta integração e não "a que estiver ativa agora";
-      // sem linha gravada, a empresa diz qual das linhas do provider se testa.
-      const body = providerMeta?.chaveGeradaPeloWeGest
-        ? row?.id
-          ? { action: 'health', integracao_id: row.id }
-          : { action: 'health', provider, emissor_id: emissorId }
-        : { action: 'health', provider, apiKey: apiKey.trim(), settings: settingsAtuais() };
+      // Caminho normal, com a chave e os settings no corpo (também no Primavera),
+      // sem depender da linha já gravada.
+      const body = {
+        action: 'health',
+        provider,
+        apiKey: apiKey.trim(),
+        settings: settingsAtuais(),
+      };
       const { data, error } = await supabase.functions.invoke('faturacao-emitir', { body });
       if (error) throw new Error(error.message);
-      if (data?.ok) {
+      if (modoServico) {
+        // O servidor já diz o que falhou (ambiente, empresa ou chave): mostra-se tal como vem.
+        if (data?.ok) {
+          const mensagem = 'Ligação ao serviço do Primavera confirmada.';
+          setResultadoTeste({ ok: true, mensagem });
+          toast.success(mensagem);
+        } else {
+          const mensagem = data?.error || 'Não foi possível confirmar a ligação ao serviço.';
+          setResultadoTeste({ ok: false, mensagem });
+          toast.error(mensagem);
+        }
+      } else if (data?.ok) {
         toast.success(`Ligação ao ${faturacaoProviderLabel(provider)} confirmada.`);
       } else {
         toast.error(`Falha na ligação: ${data?.error || 'verifique a chave.'}`);
       }
     } catch (e) {
-      toast.error(`Falha na ligação: ${e instanceof Error ? e.message : 'erro'}`);
+      const mensagem = `Falha na ligação: ${e instanceof Error ? e.message : 'erro'}`;
+      if (modoServico) setResultadoTeste({ ok: false, mensagem });
+      toast.error(mensagem);
     } finally {
       setTesting(false);
     }
@@ -210,7 +227,14 @@ export function FaturacaoIntegracaoDialog({
       toast.error('Escolha a empresa que vai faturar com esta integração.');
       return;
     }
-    if (!apiKey.trim()) {
+    if (modoServico) {
+      const erro = primeiroErroServico(errosServico);
+      if (erro) {
+        setMostrarErros(true);
+        toast.error(erro);
+        return;
+      }
+    } else if (!apiKey.trim()) {
       toast.error(
         `Introduza ${providerMeta?.apiKeyLabel ? 'a ' + providerMeta.apiKeyLabel.toLowerCase() : 'a chave da API'}.`
       );
@@ -342,140 +366,39 @@ export function FaturacaoIntegracaoDialog({
             </div>
           )}
 
-          {!!providerMeta?.tiposNaoSuportados?.length && (
-            <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0 translate-y-0.5" />
-              <p>
-                Nesta ligação, {providerMeta.tiposNaoSuportados.join(', ')} ainda não estão
-                disponíveis — só{' '}
-                {['FT', 'FR', 'NC', 'RC']
-                  .filter(
-                    (t) => !providerMeta.tiposNaoSuportados!.includes(t as 'FR' | 'NC' | 'RC')
-                  )
-                  .join(', ')}{' '}
-                funciona por agora, até confirmar com o fornecedor.
-              </p>
-            </div>
-          )}
-
-          {providerMeta?.chaveGeradaPeloWeGest ? (
-            <div className="space-y-2">
-              <Label htmlFor="fat-key">
-                {providerMeta.apiKeyLabel || 'Chave'} <span className="text-destructive">*</span>
-              </Label>
-              {!apiKey ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleGerarChave}
-                  disabled={gerandoChave}
-                  className="gap-2"
-                >
-                  {gerandoChave ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}
-                  Gerar {(providerMeta.apiKeyLabel || 'chave').toLowerCase()}
-                </Button>
-              ) : (
-                <>
-                  <div className="relative">
-                    <Input
-                      id="fat-key"
-                      type={showKey || chaveAcabouDeSerGerada ? 'text' : 'password'}
-                      value={apiKey}
-                      readOnly
-                      className="pr-16 font-mono text-xs"
-                    />
-                    <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={handleCopiarChave}
-                        title="Copiar"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      {!chaveAcabouDeSerGerada && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => setShowKey((s) => !s)}
-                          title={showKey ? 'Ocultar' : 'Mostrar'}
-                        >
-                          {showKey ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {chaveAcabouDeSerGerada && (
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                      Copie agora — não volta a ser mostrada por inteiro depois de fechar isto.
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-                    onClick={handleGerarChave}
-                    disabled={gerandoChave}
-                  >
-                    Gerar nova chave (invalida a anterior)
-                  </button>
-                </>
-              )}
-              {providerMeta.chaveGeradaAjuda && (
-                <p className="text-xs text-muted-foreground">{providerMeta.chaveGeradaAjuda}</p>
-              )}
-            </div>
+          {modoServico ? (
+            <PrimaveraServicoFields
+              integracaoAntiga={integracaoAntiga}
+              servicoUrl={servicoUrl}
+              onServicoUrlChange={setServicoUrl}
+              ambiente={ambiente}
+              onAmbienteChange={setAmbiente}
+              empresa={empresa}
+              onEmpresaChange={setEmpresa}
+              metodoPagamento={metodoPagamento}
+              onMetodoPagamentoChange={setMetodoPagamento}
+              apiKey={apiKey}
+              onApiKeyChange={setApiKey}
+              showKey={showKey}
+              onToggleShowKey={() => setShowKey((v) => !v)}
+              erros={mostrarErros ? errosServico : {}}
+              resultadoTeste={resultadoTeste}
+              disabled={saving || testing}
+            />
           ) : (
-            <div className="space-y-2">
-              <Label htmlFor="fat-key">
-                {providerMeta?.apiKeyLabel || 'Chave da API'}{' '}
-                <span className="text-destructive">*</span>
-              </Label>
-              <div className="relative">
-                <Input
-                  id="fat-key"
-                  type={showKey ? 'text' : 'password'}
-                  placeholder={
-                    providerMeta?.apiKeyLabel
-                      ? `Introduza ${providerMeta.apiKeyLabel.toLowerCase()}`
-                      : 'Cole aqui a chave da API'
-                  }
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  autoComplete="off"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-2 top-1/2 h-7 w-7 -translate-y-1/2"
-                  onClick={() => setShowKey((s) => !s)}
-                >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Para o {faturacaoProviderLabel(provider)}, normalmente basta a chave — o resto usa
-                os valores por defeito.
-              </p>
-            </div>
+            <ChaveApiField
+              rotulo={providerMeta?.apiKeyLabel}
+              apiKey={apiKey}
+              onApiKeyChange={setApiKey}
+              showKey={showKey}
+              onToggleShowKey={() => setShowKey((s) => !s)}
+              providerNome={faturacaoProviderLabel(provider)}
+            />
           )}
 
-          {/* Primavera não tem nada disto: endpoint/username/enterprise/password
-              e os códigos de IVA vivem só na configuração local do agente
-              (agent/primavera-agent/), nunca nesta base de dados. */}
-          {!providerMeta?.chaveGeradaPeloWeGest && (
+          {/* O Primavera não tem nada disto: o endereço e a empresa do serviço já
+              estão nos campos acima. */}
+          {!modoServico && (
             <>
               <Separator />
 

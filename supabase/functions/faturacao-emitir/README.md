@@ -8,18 +8,12 @@ config.provider` — nenhum interfere com o outro:
 
 - **KeyInvoice** (`providers/keyinvoice.ts`) — completo: emit/pdf/voidReceipt para
   FT/FR/NC/RC. Liga-se DIRECTO à API do KeyInvoice (SaaS, acessível da internet).
-- **Primavera V10, via AS Connect** (`providers/primavera.ts`) — só emissão de **FT**,
-  e por uma FILA (`primavera_jobs`), não por ligação directa: o servidor Primavera de
-  cada empresa cliente vive atrás de VPN interna, inacessível a partir de uma edge
-  function na nuvem. Um AGENTE local, a correr dentro da rede da empresa
-  (`agent/primavera-agent/`), faz a ponte — ver a secção "Arquitectura: agente local"
-  abaixo. A documentação do AS Connect de 2026-09-18 já aceita `TipoDocumento` no
-  pedido e traz endpoints de cliente e de consulta de tabelas, mas o agente ainda só
-  emite FT. O PDF vem de `/documentos/vendas/imprimir` pelo mesmo agente (job `pdf`,
-  migração 20261014170000); a anulação continua sem endpoint — `voidReceipt()` falha
-  sempre, de propósito, até isso ficar confirmado. Ver os comentários no topo do
-  ficheiro para a lista exacta do que está por confirmar (ver também a memória do
-  projecto, `project_primavera-integration.md`).
+- **Primavera pelo serviço** (`providers/primavera-servico.ts`) — FT, FR, RC e NC (total), por HTTPS
+  directo ao serviço do Primavera (V10 no SRVAPP). Todas as rotas levam a empresa no caminho:
+  `<servico_url>/<empresa>/faturas`, com a chave em `X-Api-Key`. Cada pedido leva uma chave
+  contra duplicados (`ordem_id` = id da cobrança, `pagamento_id`, `nota_id`); repetir é seguro.
+  O agente local e a fila da AS Connect foram retirados a 19/11/2026: uma integração sem
+  `servico_url` já não emite e responde a pedir a configuração do serviço.
 
 Para suportar outro software, adiciona-se um adapter em `providers/<nome>.ts` que
 implemente `FaturacaoProvider` (ver `types.ts`) e regista-se no mapa `PROVIDERS` em
@@ -30,58 +24,29 @@ implemente `FaturacaoProvider` (ver `types.ts`) e regista-se no mapa `PROVIDERS`
 A config vive em `plataformas_configuracao` (RLS admin-only):
 
 - `plataforma = 'faturacao'`, `ativo = true`
-- `client_secret` = chave da API do provider — para o Primavera, é a **chave do agente**
-  (gerada pelo WeGest, prefixo `pva_`, RPC `gerar_chave_agente_primavera()`), NÃO a
-  password do AS Connect. A password/username/enterprise do Primavera nunca estão nesta
-  base de dados — ficam só na configuração local do agente.
-- `config` (jsonb) = `{ provider, endpoint?, doctypes?, default_product?, default_idtax? }`
-  — só usado pelo KeyInvoice; o Primavera não guarda nada aqui além de `{ provider }`.
+- `client_secret` = chave da API do provider. Para o Primavera é a chave do serviço (uma por empresa e ambiente),
+  que o WeGest não gera.
+- `config` (jsonb) = `{ provider, endpoint?, doctypes?, default_product?, default_idtax? }` para o KeyInvoice.
+  Primavera: `{ provider, servico_url (https), empresa (dasprent, decada, distancia...), ambiente (teste|producao,
+obrigatório), metodo_pagamento }`. Antes de cada emissão o `/saude` da empresa tem de bater com o ambiente
+  (teste: `fiscal:false`; produção: `fiscal:true` e séries comunicadas); senão recusa.
 
 O slug público (só para mostrar o nome na UI) fica em `org_definicoes.faturacao_provider`.
 
-**Trocar de software = mudar na app.** Para o KeyInvoice, basta colar a chave. Para o
-Primavera, a UI (Admin → Faturação → Integração) tem um botão "Gerar chave do agente" em
-vez de um campo para colar — essa chave só serve para autenticar o agente a fazer poll,
-nunca dá acesso a nada do Primavera por si só.
+**Trocar de software = mudar na app** (Administração, Integrações, Faturação). Para o KeyInvoice, basta colar a chave.
+Para o Primavera preenchem-se o endereço do serviço, a empresa, o ambiente e a chave.
 
-## Arquitectura: agente local (só o Primavera)
+## Primavera: o que o serviço aceita hoje
 
-O servidor Primavera de cada empresa cliente costuma estar atrás de VPN interna — uma
-edge function na nuvem não lhe consegue chegar directamente, e pedir a cada cliente que
-exponha o seu servidor à internet não escala (é fricção de rede que a maioria não sabe
-resolver, multiplicada por cada empresa nova). Em vez disso:
-
-```
-emit()/health()/pdf() em providers/primavera.ts
-    -> INSERT em primavera_jobs (status=pending)
-    -> espera (poll curto, com timeout) até o job ficar done/failed
-
-agente local (agent/primavera-agent/, dentro da rede do cliente)
-    -> primavera-agent-poll  (pergunta "há trabalho?", autentica com a chave do agente)
-    -> fala com o AS Connect LOCALMENTE (endereço da rede do cliente, nunca exposto)
-    -> primavera-agent-result  (fecha o job: done/failed + resultado)
-```
-
-O agente liga-se sempre **para fora** (nunca precisa de porta aberta nem VPN especial —
-atravessa qualquer firewall corporativo tal como um browser). Instruções completas para
-configurar e correr o agente em `agent/primavera-agent/README.md`.
-
-A fila é por INTEGRAÇÃO (`primavera_jobs.integracao_id`), não por organização: com duas
-empresas emissoras na mesma organização, cada agente tem a sua chave e só reclama os
-pedidos da sua empresa (migração 20261013120000).
-
-Timeouts de espera em `providers/primavera.ts` (`HEALTH_TIMEOUT_MS`, `EMIT_TIMEOUT_MS`,
-`PDF_TIMEOUT_MS`). Imprimir não cria documento: no `pdf()` qualquer falha, ambígua ou não,
-é só "tente novamente", e o ficheiro sai da fila depois de entregue. Ao desistir de um pdf,
-o provider fecha-o como `failed` mesmo já reclamado, e um resultado tardio do agente leva 409.
-Ao expirar, o provider cancela o pedido se ainda estiver `pending` (UPDATE atómico: nenhum
-agente lhe tocou, falha CONHECIDA, seguro reagendar). Se já estiver `claimed`, ou se o
-cancelamento não apanhar nada, o desfecho é AMBÍGUO (`EmissaoAmbiguaError`, nunca reemitir
-sem confirmar directamente no Primavera). A fila também nunca repõe um `emit` reclamado há
-mais de 2 minutos: passa a `ambiguo`. Um `pending` com `expires_at` ultrapassado fecha como
-`failed` ao ser reclamado, sem correr. O agente reporta `ambiguous: true` quando o pedido
-saiu para o Primavera e a resposta não chegou (rede, 5xx, resposta sem forma), e
-`primavera-agent-result` só fecha jobs ainda `claimed`.
+- Linhas só com IVA 23, 13 e 6%. IVA 0% é recusado antes de sair, porque o código de isenção (M01, M07...) é por
+  empresa e decisão da contabilidade; o WeGest ainda não o guarda por linha.
+- Nota de crédito só da fatura toda (ou do que falta dela): o serviço também aceita parciais por linha, mas isso
+  precisa de saber a posição das linhas da fatura original, que o WeGest ainda não guarda.
+- Consumidor final (sem NIF): até 1000,00 €; na Década Ousada ainda não está configurado no serviço.
+- 503 com `tentar_de_novo`: o adapter repete o mesmo pedido até 3 vezes (3 s entre elas). Sem resposta, nunca
+  repete: lê `GET /faturas?ordem_id=` e, se não consegue confirmar, falha como ambíguo (`EmissaoAmbiguaError`).
+- A tabela `primavera_jobs` e a RPC `gerar_chave_agente_primavera` continuam na base (sem uso); retirá-las
+  precisa de migração e de sim próprio.
 
 ## Chave da API — sem fallback global
 
@@ -128,9 +93,8 @@ pode/deve ser removido — já não é lido por ninguém.
 ```bash
 supabase db push
 supabase functions deploy faturacao-emitir
-# Só se estiverem a mexer no Primavera:
-supabase functions deploy primavera-agent-poll
-supabase functions deploy primavera-agent-result
+# As funções primavera-agent-poll e primavera-agent-result já não existem no repositório; se ainda estiverem
+# publicadas, retiram-se com `supabase functions delete` (só com o sim do dono).
 ```
 
 ## Smoke-test (KeyInvoice)

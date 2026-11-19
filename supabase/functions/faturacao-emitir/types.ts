@@ -43,6 +43,8 @@ export interface EmitInput {
   observacoes?: string;
   referencia_externa?: string;
   documento_referencia?: string; // obrigatório p/ NC e RC
+  /** Id da cobrança que origina o documento. O serviço do Primavera usa-o como chave contra faturas duplicadas. */
+  cobrancaId?: string;
   /** Só para RC — ver DocumentoOriginal. */
   documentoOriginal?: DocumentoOriginal;
 }
