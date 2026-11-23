@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { semCodigo } from '@/types/codigoPorOrg';
 import { motivoTvdeSemPreco } from '@/utils/precoContratoTvde';
+import { ehRegimeTvde } from '@shared/precoAluguer';
 import type { TablesUpdate } from '@/integrations/supabase/types';
 import type {
   ContratoRenting,
@@ -1062,11 +1063,13 @@ export function useCriarVersaoContrato() {
 async function motivoContratoSemPreco(contratoId: string): Promise<string | null> {
   const { data: c, error } = await supabase
     .from('contratos_renting')
-    .select('regime, valor_total_manual, tarifa_id, viaturas(modelo_id)')
+    .select(
+      'regime, preco_semana_acordado, valor_total_manual, tarifa_id, viaturas(modelo_id), renting_tarifas(preco_semana)'
+    )
     .eq('id', contratoId)
     .single();
   if (error) throw new Error(error.message);
-  if (c.regime !== 'tvde') return null;
+  if (!ehRegimeTvde(c.regime)) return null;
 
   const modeloId = (c.viaturas as { modelo_id: string | null } | null)?.modelo_id ?? null;
   let precoSemanaModelo: number | null = null;
@@ -1083,7 +1086,10 @@ async function motivoContratoSemPreco(contratoId: string): Promise<string | null
 
   return motivoTvdeSemPreco({
     regime: c.regime,
-    valorTotalManual: c.valor_total_manual,
+    precoSemanaAcordado: c.preco_semana_acordado,
+    precoTarifa: (c.renting_tarifas as { preco_semana: number | null } | null)?.preco_semana,
+    // Renovação mantém o comportamento antigo: um manual legado conta como preço.
+    valorManualLegado: c.valor_total_manual,
     tarifaId: c.tarifa_id,
     modeloId,
     precoSemanaModelo,

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
 import { useToast } from '@/hooks/use-toast';
+import { useCriarPedidoTrocaKms } from '@/hooks/usePedidosTrocaKms';
 import { useClientes } from '@/hooks/useClientes';
 import { useContratoCoberturas, useSyncContratoCoberturas } from '@/hooks/useContratoCoberturas';
 import {
@@ -46,13 +47,11 @@ import { useReservaCondutores } from '@/hooks/useReservaCondutores';
 import { useReservaExtras } from '@/hooks/useReservaExtras';
 import { useViaturas } from '@/hooks/useViaturas';
 import { useViaturasOcupadasPeriodo } from '@/hooks/useViaturasOcupadasPeriodo';
+import { ehRegimeTvde, precoSemanalTvde } from '@shared/precoAluguer';
+import { pedidoNaAbertura } from './pedidoNaAbertura';
 
 import { fillEmptyFormFields } from '@/lib/fillEmptyFormFields';
-import {
-  motivoTvdeSemPreco,
-  precoSemanaNegociadoTvde,
-  tarifaCobreModelo,
-} from '@/utils/precoContratoTvde';
+import { motivoTvdeSemPreco, tarifaCobreModelo } from '@/utils/precoContratoTvde';
 
 import type {
   CoberturaFormItem,
@@ -170,6 +169,10 @@ export interface UseContratoFormReturn {
   tarifaDiaria: number | null;
   valorTotalManual: number | null;
   baseAluguerTarifa: number | null;
+  /** TVDE: preço semanal da tarifa para o modelo da viatura (o que se cobra sem pedido aprovado). */
+  precoSemanaTarifaTvde: number | null;
+  precoSemanaPretendido: number | null;
+  motivoPrecoSemana: string;
   descontoPercentagem: number | null;
   regime: string;
   tarifaIdWatch: string | null;
@@ -235,6 +238,7 @@ export function useContratoForm(): UseContratoFormReturn {
 
   // ── Mutations ──────────────────────────────────────────────────
   const createMutation = useCreateContratoRenting();
+  const criarPedidoMutation = useCriarPedidoTrocaKms();
   const updateMutation = useUpdateContratoRenting();
   const deleteMutation = useDeleteContratoRenting();
   const cancelarMutation = useCancelarContratoRenting();
@@ -522,7 +526,12 @@ export function useContratoForm(): UseContratoFormReturn {
         // desactualizado e um `valor_total_manual` correcto. Ler primeiro o
         // manual faz essas converterem-se com o preço certo, sem ninguém ter
         // de lhes tocar.
-        valor_total_manual: reservaFromQuery.valor_total_manual ?? reservaFromQuery.valor_total,
+        // TVDE: o preço cobrado é o da tarifa (ou o aprovado); copiar o valor da
+        // reserva para o manual criava um preço que o fecho semanal ignora.
+        valor_total_manual:
+          reservaFromQuery.regime === 'tvde'
+            ? null
+            : (reservaFromQuery.valor_total_manual ?? reservaFromQuery.valor_total),
         is_longa_duracao: reservaFromQuery.is_longa_duracao ?? false,
         renovacao_opcao: reservaFromQuery.renovacao_opcao ?? null,
         renovacao_intervalo_dias: reservaFromQuery.renovacao_intervalo_dias,
@@ -699,6 +708,20 @@ export function useContratoForm(): UseContratoFormReturn {
     });
   }, [condutoresWatch, motoristas]);
 
+  // Na abertura, mudar de regime (em qualquer sentido) limpa o que só faz sentido
+  // no anterior: o manual, o valor acordado e o motivo. Uma reserva nova a
+  // hidratar (reserva_id muda) não conta como mudança do utilizador.
+  const regimeAnterior = useRef<{ regime: string; reservaId: string } | null>(null);
+  const reservaIdForm = form.watch('reserva_id');
+  useEffect(() => {
+    const ant = regimeAnterior.current;
+    regimeAnterior.current = { regime, reservaId: reservaIdForm };
+    if (isEdit || !ant || ant.regime === regime || ant.reservaId !== reservaIdForm) return;
+    form.setValue('valor_total_manual', null);
+    form.setValue('preco_semana_pretendido', null);
+    form.setValue('motivo_preco_semana', '');
+  }, [isEdit, regime, reservaIdForm, form]);
+
   // IVA derivado do regime. Nunca é editável no formulário — sai sempre do
   // regime + taxas da organização —, mas `taxa_iva` continua a ser calculado
   // aqui e gravado normalmente no submit.
@@ -784,12 +807,9 @@ export function useContratoForm(): UseContratoFormReturn {
       !isTvdeReg ? (linha?.preco_dia ?? null) : null,
       !isTvdeReg ? (linha?.preco_mes ?? null) : null
     );
-    // Preço negociado e aprovado viaja com o contrato na troca; a tabela do
-    // modelo novo não o pode desfazer — muda-se com outro pedido.
-    const negociado = precoSemanaNegociadoTvde(regime, contrato?.preco_semana_acordado);
-    if (negociado != null) {
-      form.setValue('valor_total_manual', negociado, { shouldDirty: true });
-    } else if (fat) {
+    // TVDE: o preço (aprovado ou da tarifa) resolve-se ao vivo, por isso a troca
+    // de viatura não escreve o manual; o aprovado viaja com o contrato.
+    if (!isTvdeReg && fat) {
       form.setValue('valor_total_manual', fat.valor, { shouldDirty: true });
     }
   };
@@ -831,6 +851,29 @@ export function useContratoForm(): UseContratoFormReturn {
     dataInicio,
     dataFim,
   ]);
+
+  // Preço semanal TVDE da tarifa para o modelo, pela mesma regra do fecho
+  // semanal. Sem pedido aprovado é este o valor cobrado.
+  const precoTarifaTvde = (
+    tarifaId: string | null | undefined,
+    viaturaIdSel: string
+  ): number | null => {
+    if (!tarifaId) return null;
+    const modeloId = viaturas.find((v) => v.id === viaturaIdSel)?.modelo_id ?? null;
+    return precoSemanalTvde({
+      regime: 'tvde',
+      precoTarifa: tarifas.find((t) => t.id === tarifaId)?.preco_semana,
+      precoTarifaModelo: modeloId
+        ? precosModeloTvde.find((p) => p.tarifa_id === tarifaId && p.modelo_id === modeloId)
+            ?.preco_semana
+        : null,
+    }).valor;
+  };
+  const precoSemanaTarifaTvde = ehRegimeTvde(regime)
+    ? precoTarifaTvde(tarifaIdWatch, viaturaIdWatch)
+    : null;
+  const precoSemanaPretendido = form.watch('preco_semana_pretendido') ?? null;
+  const motivoPrecoSemana = form.watch('motivo_preco_semana') ?? '';
 
   // ── Coberturas preço/dia ──────────────────────────────────────
   const coberturasPrecoDia = useMemo(
@@ -959,15 +1002,20 @@ export function useContratoForm(): UseContratoFormReturn {
   // ── onSubmit ──────────────────────────────────────────────────
   const onSubmit = (values: ContratoFormValues) => {
     const viaturaEscolhida = viaturas.find((v) => v.id === values.viatura_id);
-    const semPreco = motivoTvdeSemPreco({
-      regime: values.regime,
-      valorTotalManual: values.valor_total_manual,
-      tarifaId: values.tarifa_id,
-      modeloId: viaturaEscolhida?.modelo_id,
-      precoSemanaModelo: precosModeloTvde.find(
-        (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaEscolhida?.modelo_id
-      )?.preco_semana,
-    });
+    // Só na criação: editar um contrato TVDE antigo sem preço (ex.: observações)
+    // não pode passar a ser recusado.
+    const semPreco = isEdit
+      ? null
+      : motivoTvdeSemPreco({
+          regime: values.regime,
+          precoSemanaAcordado: contrato?.preco_semana_acordado,
+          precoTarifa: tarifas.find((t) => t.id === values.tarifa_id)?.preco_semana,
+          tarifaId: values.tarifa_id,
+          modeloId: viaturaEscolhida?.modelo_id,
+          precoSemanaModelo: precosModeloTvde.find(
+            (p) => p.tarifa_id === values.tarifa_id && p.modelo_id === viaturaEscolhida?.modelo_id
+          )?.preco_semana,
+        });
     if (semPreco) {
       toast({ title: 'Contrato TVDE sem preço', description: semPreco, variant: 'destructive' });
       return;
@@ -1043,6 +1091,9 @@ export function useContratoForm(): UseContratoFormReturn {
       tarifa_id: values.tarifa_id ?? null,
       desconto_percentagem: values.desconto_percentagem,
       taxa_iva: values.taxa_iva,
+      // TVDE a criar: só o campo explícito "faturar ao cliente por período"
+      // escreve o manual; o valor do motorista segue a tarifa ou um pedido.
+      // Na edição mantém-se o valor hidratado, para não mexer em contratos existentes.
       valor_total_manual: values.valor_total_manual,
       is_longa_duracao: values.is_longa_duracao,
       renovacao_opcao: values.renovacao_opcao ?? null,
@@ -1117,6 +1168,36 @@ export function useContratoForm(): UseContratoFormReturn {
       return true;
     };
 
+    // Não atómico de propósito: o contrato já existe; se o pedido falhar,
+    // pede-se no cartão do contrato.
+    const pedirValorAcordado = async (contratoId: string) => {
+      const resultado = pedidoNaAbertura({
+        regime: values.regime,
+        pretendido: values.preco_semana_pretendido,
+        motivo: values.motivo_preco_semana,
+        precoTarifa: precoTarifaTvde(values.tarifa_id, values.viatura_id),
+        contratoId,
+      });
+      if (resultado.estado === 'sem-preco-tarifa') {
+        toast({
+          title: 'Valor acordado não pedido',
+          description:
+            'A tarifa não tem preço para este modelo. Pede o valor acordado ao supervisor no cartão do contrato.',
+        });
+        return;
+      }
+      if (resultado.estado !== 'pedir') return;
+      try {
+        await criarPedidoMutation.mutateAsync(resultado.pedido);
+      } catch {
+        // O hook já mostrou o erro (destrutivo); aqui só o que fazer a seguir.
+        toast({
+          title: 'Contrato aberto.',
+          description: 'Pede o valor acordado no cartão do contrato.',
+        });
+      }
+    };
+
     if (isEdit && contrato) {
       updateMutation.mutate(
         { id: contrato.id, ...payload, gestor_id: values.gestor_id ?? null },
@@ -1126,6 +1207,7 @@ export function useContratoForm(): UseContratoFormReturn {
       createMutation.mutate(payload, {
         onSuccess: async (created) => {
           await syncRelacoes(created.id);
+          await pedirValorAcordado(created.id);
           navigate(`/renting/contratos/${created.id}?criado=1`);
         },
       });
@@ -1283,6 +1365,9 @@ export function useContratoForm(): UseContratoFormReturn {
     tarifaDiaria,
     valorTotalManual,
     baseAluguerTarifa,
+    precoSemanaTarifaTvde,
+    precoSemanaPretendido,
+    motivoPrecoSemana,
     descontoPercentagem,
     regime,
     tarifaIdWatch,

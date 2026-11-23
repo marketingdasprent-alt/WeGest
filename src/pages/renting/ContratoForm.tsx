@@ -112,6 +112,9 @@ const ContratoForm = () => {
     tarifaDiaria,
     valorTotalManual,
     baseAluguerTarifa,
+    precoSemanaTarifaTvde,
+    precoSemanaPretendido,
+    motivoPrecoSemana,
     descontoPercentagem,
     regime,
     isLongaDuracao,
@@ -410,6 +413,7 @@ const ContratoForm = () => {
                       proximaRenovacaoEm={contrato?.proxima_renovacao_em ?? null}
                       precoSemanaAcordado={contrato?.preco_semana_acordado ?? null}
                       precoSemanalGravado={precoTravado ? semanalEstado : undefined}
+                      precoTarifaTvde={precoTravado ? undefined : precoSemanaTarifaTvde}
                     />
                   </TabsContent>
 
@@ -488,6 +492,15 @@ const ContratoForm = () => {
             subtotalSnapshot={contrato?.total_subtotal}
             ivaSnapshot={contrato?.total_iva}
             editavel={!precoTravado}
+            valorAcordadoTvde={{
+              precoTarifa: precoSemanaTarifaTvde,
+              pretendido: precoSemanaPretendido,
+              motivo: motivoPrecoSemana,
+              onPretendidoChange: (valor) =>
+                form.setValue('preco_semana_pretendido', valor, { shouldDirty: true }),
+              onMotivoChange: (motivo) =>
+                form.setValue('motivo_preco_semana', motivo, { shouldDirty: true }),
+            }}
             acaoValor={
               isEdit && contrato && regime === 'tvde' ? (
                 <PedidoPrecoSemanal

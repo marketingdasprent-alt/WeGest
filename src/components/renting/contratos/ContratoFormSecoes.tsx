@@ -34,10 +34,11 @@ import { PedirAlteracaoContratoDialog } from './PedirAlteracaoContratoDialog';
 import { type TipoPedidoAlteracao } from '@/hooks/usePedidosTrocaKms';
 import { BotaoPedirAlteracao } from './BotaoPedirAlteracao';
 import { PrecoSemanalPendente } from './PrecoSemanalPendente';
+import { FaturarPorPeriodoTvde } from './FaturarPorPeriodoTvde';
 import { precoSemanalTvde } from '@shared/precoAluguer';
 import type { PrecoSemanalTvdeEstado } from '@/hooks/usePrecoSemanalTvdeContrato';
 import {
-  precoSemanaNegociadoTvde,
+  precoSemanaDifereDaTarifa,
   tarifaCobreModelo,
   textoPrecoSemanaTvde,
 } from '@/utils/precoContratoTvde';
@@ -85,6 +86,8 @@ interface ContratoFormSecoesProps {
   precoSemanaAcordado?: number | null;
   /** Contrato gravado: o mesmo preço do resumo, lido da BD (inclui tarifas inactivas). */
   precoSemanalGravado?: PrecoSemanalTvdeEstado;
+  /** Abertura TVDE: o preço da tarifa que o contrato cobra e com que se compara o valor acordado (o mesmo do pedido). */
+  precoTarifaTvde?: number | null;
 }
 
 /**
@@ -112,6 +115,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   proximaRenovacaoEm,
   precoSemanaAcordado = null,
   precoSemanalGravado,
+  precoTarifaTvde,
 }) => {
   // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
   // que partia os grids lá dentro. O cinzento vem dos próprios campos
@@ -232,9 +236,17 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     precoTarifa: tarifaAtual?.preco_semana,
     precoTarifaModelo: precoModeloSemanaTvde,
   }).valor;
+  // Na abertura o valor vem do hook, o mesmo que serve de "valor atual" do pedido.
+  const naAbertura = !contratoId && precoTarifaTvde !== undefined;
   const semanalCondutor = precoSemanalGravado
     ? (precoSemanalGravado.preco?.valor ?? null)
-    : semanalLocal;
+    : naAbertura
+      ? precoTarifaTvde
+      : semanalLocal;
+  // Abertura TVDE: o valor combinado só vale depois de aprovado; até lá cobra-se a tarifa.
+  const pretendido = form.watch('preco_semana_pretendido');
+  const pedidoPendente =
+    isTvde && !contratoId && precoSemanaDifereDaTarifa(pretendido, semanalCondutor);
   const semanalTexto = precoSemanalGravado?.carregando
     ? 'A carregar…'
     : precoSemanalGravado?.erro
@@ -256,21 +268,14 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
     preco_semana: precoSemanaAcordado ?? precoModeloSemanaTvde ?? 0,
   };
 
-  // Mudar a tarifa NÃO recalculava o preço do contrato: valor_total_manual
-  // manda sobre tudo (calcularBaseAluguerRenting) e sobre o próprio preview
-  // deste cartão (a Tarifa & Faturação mostra valor_total_manual ?? faturacao.
-  // valor — com o manual preenchido, nem o preview mudava). Escolher uma
-  // tarifa nova ficava sem efeito nenhum, silenciosamente — em 206 dos 236
-  // contratos vivos há um valor_total_manual gravado.
-  //
-  // Corrige-se no onValueChange do Select: só dispara com uma escolha real do
-  // utilizador — nunca com a hidratação da edição (form.reset), que muda
-  // tarifa_id por fora e não pode reescrever silenciosamente um preço
-  // negociado só porque o contrato acabou de carregar.
+  // Rent-a-car: valor_total_manual manda sobre o preço da tarifa, por isso trocar
+  // de tarifa só tem efeito se o reescrevermos — e só numa escolha real do
+  // utilizador, nunca na hidratação da edição (form.reset), que não pode apagar
+  // um preço negociado. TVDE: o preço cobrado resolve-se ao vivo (acordado ou
+  // tarifa), logo não se escreve nada.
   const handleTarifaChange = (novoId: string | null) => {
     form.setValue('tarifa_id', novoId, { shouldDirty: true });
-    // O preço negociado e aprovado fica com o contrato, como na troca de viatura.
-    if (precoSemanaNegociadoTvde(regime, precoSemanaAcordado) != null) return;
+    if (isTvde) return;
 
     const tarifaNova = novoId ? (tarifas.find((t) => t.id === novoId) ?? null) : null;
     const linhaNova =
@@ -282,9 +287,9 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       isLongaDuracao,
       dias,
       tarifaNova,
-      isTvde ? (linhaNova?.preco_semana ?? null) : null,
-      !isTvde ? (linhaNova?.preco_dia ?? null) : null,
-      !isTvde ? (linhaNova?.preco_mes ?? null) : null
+      null,
+      linhaNova?.preco_dia ?? null,
+      linhaNova?.preco_mes ?? null
     );
     if (novoValor !== undefined) {
       form.setValue('valor_total_manual', novoValor, { shouldDirty: true });
@@ -456,6 +461,8 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
             </div>
           )}
 
+          {isTvde && !contratoId && <FaturarPorPeriodoTvde form={form} />}
+
           {faturacao && (
             <div className="mt-3 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-brand-navy/10 p-4">
               <div className="flex items-end justify-between gap-3">
@@ -485,6 +492,11 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold tabular-nums">{semanalTexto}</p>
                     <PrecoSemanalPendente contratoId={contratoId} />
+                    {pedidoPendente && (
+                      <p className="text-xs text-muted-foreground">
+                        Acordado {pretendido?.toFixed(2)} € · pendente de aprovação
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

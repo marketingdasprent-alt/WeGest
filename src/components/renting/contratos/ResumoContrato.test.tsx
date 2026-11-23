@@ -247,18 +247,58 @@ describe('ResumoContrato — preco unitario editavel', () => {
     expect(campo()).toBeDisabled();
   });
 
-  it('TVDE usa preco/semana com divisor 1', () => {
-    const c = renderCircuito({
-      regime: 'tvde',
-      taxaIva: 0,
-      dataFim: null,
-      valorTotalManual: 210,
+  // TVDE: o campo é o valor acordado com o motorista; nunca escreve o manual
+  // (o fecho semanal ignora-o — caso #1026).
+  it('TVDE edita o valor acordado e não escreve o valor manual', () => {
+    const onPretendidoChange = vi.fn();
+    const onChange = vi.fn();
+    render(
+      <ResumoContrato
+        {...props({
+          regime: 'tvde',
+          taxaIva: 0,
+          dataFim: null,
+          valorTotalManual: null,
+          baseAluguerTarifa: 200,
+          onValorTotalManualChange: onChange,
+          valorAcordadoTvde: {
+            precoTarifa: 200,
+            pretendido: null,
+            motivo: '',
+            onPretendidoChange,
+            onMotivoChange: vi.fn(),
+          },
+        })}
+      />
+    );
+    expect(screen.queryByLabelText('Preço/semana (IVA inc.)')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Valor semanal acordado com o motorista'), {
+      target: { value: '250' },
     });
-    const label = 'Preço/semana (IVA inc.)';
-    expect(campo(label)).toHaveValue('210.00');
-    fireEvent.focus(campo(label));
-    fireEvent.change(campo(label), { target: { value: '250' } });
-    expect(c.onChange).toHaveBeenCalledWith(250);
+    expect(onPretendidoChange).toHaveBeenCalledWith(250);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('TVDE com valor diferente da tarifa mostra o aviso de aprovação', () => {
+    render(
+      <ResumoContrato
+        {...props({
+          regime: 'tvde',
+          taxaIva: 0,
+          dataFim: null,
+          valorTotalManual: null,
+          baseAluguerTarifa: 200,
+          valorAcordadoTvde: {
+            precoTarifa: 200,
+            pretendido: 180,
+            motivo: '',
+            onPretendidoChange: vi.fn(),
+            onMotivoChange: vi.fn(),
+          },
+        })}
+      />
+    );
+    expect(screen.getByText(/Vai pedir aprovação ao Supervisor Gestor TVDE/)).toBeInTheDocument();
   });
 
   it('sem editavel mantem-se so-leitura', () => {

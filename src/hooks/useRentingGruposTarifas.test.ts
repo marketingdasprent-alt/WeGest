@@ -384,8 +384,10 @@ describe('descricaoFaturarAoCliente', () => {
 describe('valorAoMudarTarifa', () => {
   const tarifa = { preco_dia: 40, preco_semana: 250, preco_mes: 900 };
 
-  it('TVDE com preço do modelo: o valor passa a ser o preço semanal novo', () => {
-    expect(valorAoMudarTarifa('tvde', true, null, tarifa, 275, null, null)).toBe(275);
+  // O TVDE cobra a tarifa ao vivo; escrever valor_total_manual dava o caso #1026.
+  it('TVDE nunca escreve valor_total_manual ao mudar a tarifa', () => {
+    expect(valorAoMudarTarifa('tvde', true, null, tarifa, 275, null, null)).toBeUndefined();
+    expect(valorAoMudarTarifa('tvde', false, 7, tarifa, 275, null, null)).toBeUndefined();
   });
 
   // O quadro da tarifa mostrava o preço/dia novo e o total ficava o da tarifa

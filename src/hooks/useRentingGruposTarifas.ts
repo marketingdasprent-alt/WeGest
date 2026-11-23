@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { ehRegimeTvde } from '@shared/precoAluguer';
 
 export interface RentingGrupoMin {
   id: string;
@@ -228,7 +229,8 @@ export function valorAoMudarTarifa(
   precoModeloDia: number | null,
   precoModeloMes: number | null
 ): number | null | undefined {
-  if (regime === 'slot' || !tarifaNova) return undefined;
+  // TVDE: o preço cobrado resolve-se ao vivo (acordado ou tarifa); o manual não conta.
+  if (regime === 'slot' || ehRegimeTvde(regime) || !tarifaNova) return undefined;
   const valor = resolverValorTotalManualAoMudarTarifa(
     regime,
     isLongaDuracao,
@@ -240,8 +242,6 @@ export function valorAoMudarTarifa(
   );
   if (valor != null) return valor;
   const temPreco =
-    regime === 'tvde'
-      ? precoModeloSemana != null
-      : (precoModeloDia ?? precoModeloMes ?? tarifaNova.preco_dia ?? tarifaNova.preco_mes) != null;
+    (precoModeloDia ?? precoModeloMes ?? tarifaNova.preco_dia ?? tarifaNova.preco_mes) != null;
   return temPreco ? null : undefined;
 }

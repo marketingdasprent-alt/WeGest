@@ -85,6 +85,10 @@ export const contratoFormSchema = z
       })
       .pipe(z.number().min(0, 'Mínimo 0%').max(100, 'Máximo 100%')),
     valor_total_manual: optionalNonNegativeNumber,
+    // Só do formulário, nunca gravados: o valor semanal que o gestor combinou com
+    // o motorista na abertura TVDE vira um pedido ao supervisor (useContratoForm).
+    preco_semana_pretendido: optionalNonNegativeNumber,
+    motivo_preco_semana: z.string().max(200).optional(),
 
     // Longa duração / renovação
     is_longa_duracao: z.boolean().default(false),
@@ -273,6 +277,8 @@ export const DEFAULT_CONTRATO_VALUES: ContratoFormValues = {
   desconto_percentagem: null,
   taxa_iva: 23,
   valor_total_manual: null,
+  preco_semana_pretendido: null,
+  motivo_preco_semana: '',
   is_longa_duracao: false,
   renovacao_opcao: null,
   renovacao_intervalo_dias: null,

@@ -29,6 +29,7 @@ interface ContratoTabGeralProps {
   proximaRenovacaoEm?: string | null;
   precoSemanaAcordado?: number | null;
   precoSemanalGravado?: PrecoSemanalTvdeEstado;
+  precoTarifaTvde?: number | null;
 }
 
 /**
@@ -55,6 +56,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
   proximaRenovacaoEm,
   precoSemanaAcordado,
   precoSemanalGravado,
+  precoTarifaTvde,
 }) => {
   return (
     <ContratoFormSecoes
@@ -76,6 +78,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
       proximaRenovacaoEm={proximaRenovacaoEm}
       precoSemanaAcordado={precoSemanaAcordado}
       precoSemanalGravado={precoSemanalGravado}
+      precoTarifaTvde={precoTarifaTvde}
     />
   );
 };

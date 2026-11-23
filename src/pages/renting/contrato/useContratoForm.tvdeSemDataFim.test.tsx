@@ -23,27 +23,41 @@ import type { Reserva } from '@/types/reserva';
 // devolve a MESMA referência enquanto os dados não mudam. Um array novo a
 // cada render faz o efeito de hidratação disparar sozinho e o React entra
 // em ciclo.
-const { mutateCriar, VAZIO, VIATURAS, GRUPOS, MODELOS, NOOP, VIATURA_ID, toastSpy, CONDUTORES } =
-  vi.hoisted(() => {
-    const id = '3f8c1c22-1111-4111-8111-111111111111';
-    return {
-      mutateCriar: vi.fn(),
-      VAZIO: [] as unknown[],
-      VIATURAS: [{ id, matricula: 'AA-00-BB', grupo_id: 'g1', modelo_id: null }],
-      GRUPOS: [{ id: 'g1', nome: 'B' }],
-      MODELOS: new Set<string>(),
-      NOOP: { mutate: () => {}, mutateAsync: async () => {}, isPending: false },
-      VIATURA_ID: id,
-      CONDUTORES: [
-        {
-          cliente_id: '3f8c1c22-2222-4222-8222-222222222222',
-          motorista_id: null,
-          is_principal: true,
-        },
-      ],
-      toastSpy: vi.fn(),
-    };
-  });
+const {
+  mutateCriar,
+  VAZIO,
+  VIATURAS,
+  GRUPOS,
+  MODELOS,
+  NOOP,
+  VIATURA_ID,
+  toastSpy,
+  CONDUTORES,
+  PRECOS,
+} = vi.hoisted(() => {
+  const id = '3f8c1c22-1111-4111-8111-111111111111';
+  return {
+    mutateCriar: vi.fn(),
+    VAZIO: [] as unknown[],
+    VIATURAS: [{ id, matricula: 'AA-00-BB', grupo_id: 'g1', modelo_id: 'm1' }],
+    GRUPOS: [{ id: 'g1', nome: 'B' }],
+    MODELOS: new Set<string>(['m1']),
+    NOOP: { mutate: () => {}, mutateAsync: async () => {}, isPending: false },
+    VIATURA_ID: id,
+    CONDUTORES: [
+      {
+        cliente_id: '3f8c1c22-2222-4222-8222-222222222222',
+        motorista_id: null,
+        is_principal: true,
+      },
+    ],
+    toastSpy: vi.fn(),
+    // O TVDE já não conta o valor manual como preço: a tarifa tem de cobrir o modelo.
+    PRECOS: [
+      { tarifa_id: '3f8c1c22-5555-4555-8555-555555555555', modelo_id: 'm1', preco_semana: 175 },
+    ],
+  };
+});
 
 const CLIENTE_ID = '3f8c1c22-2222-4222-8222-222222222222';
 const RESERVA_ID = '3f8c1c22-3333-4333-8333-333333333333';
@@ -82,7 +96,7 @@ vi.mock('@/hooks/useOrgDefinicoes', () => ({
 vi.mock('@/hooks/useRentingGruposTarifas', () => ({
   useRentingGruposMin: () => ({ data: GRUPOS }),
   useRentingTarifasMin: () => ({ data: VAZIO }),
-  useRentingTarifaPrecosModelo: () => ({ data: VAZIO }),
+  useRentingTarifaPrecosModelo: () => ({ data: PRECOS }),
   calcularBaseAluguerRenting: () => 0,
   calcularFaturacaoRenting: () => null,
 }));
