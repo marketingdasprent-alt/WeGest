@@ -10,6 +10,9 @@
 --   * mudar no próprio sítio um contrato que já começou nesta semana;
 --   * aplicar-se à versão em vigor quando o pedido foi feito numa anterior;
 --   * recusar fora de TVDE e quem não é supervisor, sem deixar rasto.
+-- O valor do contrato (200) iguala o preço semanal da tarifa: só assim o aceite
+-- o acompanha. Já com semana fechada (resumo), o aceite abre versão nova; sem
+-- nenhuma, muda no próprio sítio (ver tvde_preco_semanal_acordado_ou_tarifa).
 -- Tudo relativo a now(): nada depende do dia da semana.
 -- ============================================================
 
@@ -54,28 +57,41 @@ insert into public.reservas (id, org_id, codigo, data_inicio, viatura_id, client
   ('00000000-0000-0000-0000-0000000d1403', '00000000-0000-0000-0000-0000000d1000', 980003,
    now() - interval '10 days', '00000000-0000-0000-0000-0000000d1e03', '00000000-0000-0000-0000-0000000d1c01', 'concluida');
 
+-- Tarifa TVDE a 200 €/semana: é o preço antigo que o valor do contrato iguala.
+insert into public.renting_tarifas (id, org_id, nome, tipo, ativa, preco_semana) values
+  ('00000000-0000-0000-0000-0000000d1f01', '00000000-0000-0000-0000-0000000d1000', 'TVDE Preco Neg', 'tvde', true, 200);
+
 create temp table semana on commit drop as
   select date_trunc('week', now() at time zone 'Europe/Lisbon') at time zone 'Europe/Lisbon' as desde;
 
 insert into public.contratos_renting
   (id, org_id, reserva_id, cliente_id, viatura_id, matricula, data_inicio, data_fim,
-   estado_operacional, estado_financeiro, regime, taxa_iva, valor_total_manual, created_by)
+   estado_operacional, estado_financeiro, regime, taxa_iva, valor_total_manual, tarifa_id, created_by)
 values
   -- C1: TVDE em curso há 40 dias — o aceite abre versão nova.
   ('00000000-0000-0000-0000-0000000d1001', '00000000-0000-0000-0000-0000000d1000',
    '00000000-0000-0000-0000-0000000d1401', '00000000-0000-0000-0000-0000000d1c01',
    '00000000-0000-0000-0000-0000000d1e01', 'PN-01-AA', now() - interval '40 days', null,
-   'em_curso', 'pendente', 'tvde', 23, 200, '00000000-0000-0000-0000-0000000d1a01'),
+   'em_curso', 'pendente', 'tvde', 23, 200, '00000000-0000-0000-0000-0000000d1f01', '00000000-0000-0000-0000-0000000d1a01'),
   -- C2: TVDE que começou nesta semana — muda no próprio sítio.
   ('00000000-0000-0000-0000-0000000d1002', '00000000-0000-0000-0000-0000000d1000',
    '00000000-0000-0000-0000-0000000d1402', '00000000-0000-0000-0000-0000000d1c01',
    '00000000-0000-0000-0000-0000000d1e02', 'PN-02-AA', (select desde from semana) + interval '1 minute', null,
-   'em_curso', 'pendente', 'tvde', 23, 200, '00000000-0000-0000-0000-0000000d1a01'),
+   'em_curso', 'pendente', 'tvde', 23, 200, '00000000-0000-0000-0000-0000000d1f01', '00000000-0000-0000-0000-0000000d1a01'),
   -- C3: rent-a-car — não se negoceia preço semanal.
   ('00000000-0000-0000-0000-0000000d1003', '00000000-0000-0000-0000-0000000d1000',
    '00000000-0000-0000-0000-0000000d1403', '00000000-0000-0000-0000-0000000d1c01',
    '00000000-0000-0000-0000-0000000d1e03', 'PN-03-AA', now() - interval '10 days', now() + interval '20 days',
-   'em_curso', 'pendente', 'rent_a_car', 23, 900, '00000000-0000-0000-0000-0000000d1a01');
+   'em_curso', 'pendente', 'rent_a_car', 23, 900, null, '00000000-0000-0000-0000-0000000d1a01');
+
+-- C1 já fechou uma semana: sem este resumo o aceite mudava o contrato no próprio sítio.
+insert into public.motoristas_ativos (id, org_id, nome) values
+  ('00000000-0000-0000-0000-0000000d1d01', '00000000-0000-0000-0000-0000000d1000', 'Motorista Preco');
+insert into public.motorista_resumo_semanal (org_id, motorista_id, contrato_id, viatura_id, semana_inicio, semana_fim) values
+  ('00000000-0000-0000-0000-0000000d1000', '00000000-0000-0000-0000-0000000d1d01',
+   '00000000-0000-0000-0000-0000000d1001', '00000000-0000-0000-0000-0000000d1e01',
+   ((select desde from semana) at time zone 'Europe/Lisbon')::date - 14,
+   ((select desde from semana) at time zone 'Europe/Lisbon')::date - 8);
 
 insert into public.contrato_condutores (org_id, contrato_id, cliente_id, is_principal) values
   ('00000000-0000-0000-0000-0000000d1000', '00000000-0000-0000-0000-0000000d1001',
@@ -97,6 +113,8 @@ select has_column('public', 'contratos_renting', 'preco_semana_acordado',
   'o contrato guarda o preço semanal negociado');
 
 select ok(not has_function_privilege('authenticated',
+  'public.fn_aplicar_preco_semana_negociado(uuid, numeric, uuid)', 'EXECUTE')
+  and not has_function_privilege('anon',
   'public.fn_aplicar_preco_semana_negociado(uuid, numeric, uuid)', 'EXECUTE'),
   'só a resposta ao pedido aplica o preço — o browser não o chama directamente');
 
