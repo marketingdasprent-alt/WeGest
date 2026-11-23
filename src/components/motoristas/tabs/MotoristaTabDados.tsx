@@ -1,4 +1,4 @@
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { format } from 'date-fns';
@@ -13,6 +13,7 @@ import { Motorista } from '@/pages/Motoristas';
 import { useGestoresTvdeNomes } from '@/hooks/useGestoresTvde';
 import { MotoristaCartoesFrota } from '../MotoristaCartoesFrota';
 import { validateDateYear, YEAR_RANGE_MESSAGE } from '@/utils/dateValidators';
+import { errorMessage } from '@/utils/errorMessage';
 import {
   validarNIF,
   validarIBAN,
@@ -31,6 +32,7 @@ import {
   EstadoConfiguracaoSection,
   ObservacoesSection,
 } from './dados';
+import { avisoGravacaoInvalida } from './dados/resumoErrosMotorista';
 
 // Mapeia os labels do select deste form para as chaves de regra do pt-validators.
 const DOC_TYPE_KEY: Record<string, string> = {
@@ -281,6 +283,8 @@ export function MotoristaTabDados({
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
+    let gravado = false;
+    let criado: Motorista | null = null;
     try {
       const nifNormalizado = data.nif ? data.nif.replace(/\s/g, '') : null;
       if (isCreating && nifNormalizado) {
@@ -355,27 +359,40 @@ export function MotoristaTabDados({
           .select()
           .single();
         if (error) throw error;
-        toast.success('Motorista criado com sucesso!');
-        setHasChanges(false);
-        onDraftChange?.(null);
-        onCreated?.(novo as Motorista);
+        criado = novo as Motorista;
       } else {
         const { error } = await supabase
           .from('motoristas_ativos')
           .update(updateData)
           .eq('id', motorista.id);
         if (error) throw error;
-        toast.success('Motorista atualizado com sucesso!');
-        setHasChanges(false);
-        onDraftChange?.(null);
-        onSave();
       }
-    } catch (error) {
+      gravado = true;
+    } catch (error: unknown) {
       console.error('Erro ao guardar motorista:', error);
-      toast.error(isCreating ? 'Erro ao criar motorista' : 'Erro ao atualizar motorista');
+      // A mensagem do Postgres (trigger, CHECK, RLS) é o que diz porque não gravou.
+      toast.error(isCreating ? 'Erro ao criar motorista' : 'Erro ao atualizar motorista', {
+        description: errorMessage(error),
+        duration: 8000,
+      });
     } finally {
       setIsSubmitting(false);
     }
+    // Fora do try: uma falha do ecrã pai não pode parecer recusa da base já gravada.
+    if (!gravado) return;
+    toast.success(
+      isCreating ? 'Motorista criado com sucesso!' : 'Motorista atualizado com sucesso!'
+    );
+    setHasChanges(false);
+    onDraftChange?.(null);
+    if (criado) onCreated?.(criado);
+    else onSave();
+  };
+
+  // Sem isto, um campo obrigatório em falta bloqueava o botão sem aviso nenhum.
+  const onInvalid = (errors: FieldErrors<FormData>) => {
+    const { titulo, descricao } = avisoGravacaoInvalida(errors);
+    toast.error(titulo, { description: descricao, duration: 8000 });
   };
 
   const handleCartoesChanged = async () => {
@@ -397,7 +414,7 @@ export function MotoristaTabDados({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-5">
         {/* Linha 1: Dados Pessoais + Morada */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <DadosPessoaisSection
