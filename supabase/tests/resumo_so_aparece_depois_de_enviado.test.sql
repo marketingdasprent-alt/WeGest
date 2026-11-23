@@ -40,7 +40,7 @@ insert into public.motorista_financeiro
   ('00000000-0000-0000-0000-0000003b0000', '00000000-0000-0000-0000-0000003b0b01',
    'debito', 'outro', 'Multa', 15, '2026-11-10', 'pendente'),
   ('00000000-0000-0000-0000-0000003b0000', '00000000-0000-0000-0000-0000003b0b01',
-   'debito', 'outro', 'Fora da semana', 20, '2026-11-20', 'pendente');
+   'debito', 'outro', 'Fora da semana', 20, '2026-11-05', 'pendente');
 
 -- (1) e (2) como motorista
 set local role authenticated;
