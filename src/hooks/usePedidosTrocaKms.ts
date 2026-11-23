@@ -1,8 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { resumirContagens, type ResumoPedidosPendentes } from '@/utils/avisoPedidosPendentes';
 
 export type TipoPedidoAlteracao = 'kms' | 'franquia' | 'tarifa' | 'preco_semana';
+
+const TIPOS_PEDIDO: TipoPedidoAlteracao[] = ['kms', 'franquia', 'tarifa', 'preco_semana'];
 
 export const LABEL_TIPO_PEDIDO: Record<TipoPedidoAlteracao, string> = {
   kms: 'kms',
@@ -92,6 +95,29 @@ export function usePedidosTrocaKmsPendentes() {
   });
 }
 
+/** Contagem de pendentes por tipo, para o aviso de entrada dos aprovadores. */
+export function usePedidosPendentesCount(enabled: boolean) {
+  return useQuery({
+    queryKey: ['pedidos-troca-kms', 'pendentes-count'],
+    queryFn: async (): Promise<ResumoPedidosPendentes> => {
+      // Um count por tipo (head): não carrega linhas, logo sem o corte das 1000.
+      const contagens = await Promise.all(
+        TIPOS_PEDIDO.map(async (tipo) => {
+          const { count, error } = await supabase
+            .from('pedidos_alteracao_contrato')
+            .select('id', { count: 'exact', head: true })
+            .eq('estado', 'pendente')
+            .eq('tipo', tipo);
+          if (error) throw error;
+          return [tipo, count ?? 0] as const;
+        })
+      );
+      return resumirContagens(contagens);
+    },
+    enabled,
+  });
+}
+
 /** Histórico de pedidos já respondidos (aceites/recusados) — consulta do Supervisor Gestor TVDE. */
 export function usePedidosTrocaKmsHistorico() {
   return useQuery({
@@ -147,9 +173,8 @@ export function useCriarPedidoTrocaKms() {
       if (error) throw error;
     },
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({
-        queryKey: ['pedidos-troca-kms', 'pendente', variables.contratoId, variables.tipo],
-      });
+      // Prefixo todo: a lista, a contagem do aviso e o pendente por contrato.
+      qc.invalidateQueries({ queryKey: ['pedidos-troca-kms'] });
       toast({
         title: 'Pedido enviado',
         description: `O Supervisor Gestor TVDE vai avaliar o pedido de alteração de ${LABEL_TIPO_PEDIDO[variables.tipo]}.`,
@@ -189,6 +214,8 @@ export function useResponderPedidoTrocaKms() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['pedidos-troca-kms'] });
       qc.invalidateQueries({ queryKey: ['renting', 'contratos'] });
+      // Aceitar valor semanal muda o preço mostrado no ecrã do contrato.
+      qc.invalidateQueries({ queryKey: ['preco-semanal-tvde'] });
       toast({
         title: variables.aceite ? 'Pedido aceite' : 'Pedido recusado',
       });

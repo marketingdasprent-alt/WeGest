@@ -292,6 +292,7 @@ const RentingTarifaForm = () => {
         qc.invalidateQueries({ queryKey: ['renting_tarifas'] });
         qc.invalidateQueries({ queryKey: ['renting_tarifa', id] });
         qc.invalidateQueries({ queryKey: ['renting_tarifa_precos_modelo', id] });
+        qc.invalidateQueries({ queryKey: ['preco-semanal-tvde'] });
         toast({ title: 'Tarifa actualizada' });
         if (andClose) navigate('/renting/tarifas');
       }

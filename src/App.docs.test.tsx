@@ -29,6 +29,10 @@ vi.mock('@/components/onboarding/OnboardingColaboradorDialog', () => ({
   OnboardingColaboradorDialog: () => <div data-testid="onboarding" />,
 }));
 
+vi.mock('@/components/renting/pedidos-alteracao/AvisoPedidosPendentes', () => ({
+  AvisoPedidosPendentes: () => <div data-testid="aviso-pedidos" />,
+}));
+
 import App from './App';
 
 describe('o que o App monta por ambiente', () => {

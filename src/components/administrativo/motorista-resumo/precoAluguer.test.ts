@@ -2,7 +2,12 @@
 // O ficheiro vive em supabase/functions/_shared/resumo/ e chega aqui pelo
 // alias `@shared` — se este import partir, é porque a partilha partiu.
 import { describe, it, expect } from 'vitest';
-import { resolverPrecoAluguer, precoACobrar, type TabelasDePreco } from '@shared/precoAluguer.ts';
+import {
+  resolverPrecoAluguer,
+  precoACobrar,
+  precoSemanalTvde,
+  type TabelasDePreco,
+} from '@shared/precoAluguer.ts';
 
 const tabelas: TabelasDePreco = {
   porTarifaEModelo: new Map([['tarifa-tvde|modelo-a', 224.99]]),
@@ -113,5 +118,85 @@ describe('precoACobrar — sem contrato activo não se cobra', () => {
     const r = precoACobrar(true, { tarifa_id: 'inexistente' }, { modelo_id: 'nenhum' }, tabelas);
     expect(r.precoSemana).toBeNull();
     expect(r.porRegularizar).toBe(true);
+  });
+});
+
+describe('precoSemanalTvde — o que o fecho cobra', () => {
+  const tvde = { regime: 'tvde' };
+
+  it('o acordado ganha à tarifa e ao modelo', () => {
+    expect(
+      precoSemanalTvde({
+        ...tvde,
+        precoSemanaAcordado: 225,
+        precoTarifa: 275,
+        precoTarifaModelo: 260,
+      })
+    ).toEqual({ valor: 225, origem: 'acordado' });
+  });
+
+  it('0 acordado é um preço', () => {
+    expect(precoSemanalTvde({ ...tvde, precoSemanaAcordado: 0, precoTarifa: 275 })).toEqual({
+      valor: 0,
+      origem: 'acordado',
+    });
+  });
+
+  it('sem acordado, segue o preço geral da tarifa', () => {
+    expect(
+      precoSemanalTvde({
+        ...tvde,
+        precoSemanaAcordado: null,
+        precoTarifa: 275,
+        precoTarifaModelo: 260,
+      })
+    ).toEqual({ valor: 275, origem: 'tarifa' });
+  });
+
+  it('sem preço geral (null ou 0), cai para o do modelo', () => {
+    expect(precoSemanalTvde({ ...tvde, precoTarifa: null, precoTarifaModelo: 260 }).valor).toBe(
+      260
+    );
+    expect(precoSemanalTvde({ ...tvde, precoTarifa: 0, precoTarifaModelo: 260 }).valor).toBe(260);
+    expect(precoSemanalTvde({ ...tvde, precoTarifa: '', precoTarifaModelo: '260' }).valor).toBe(
+      260
+    );
+  });
+
+  it('tarifa a 0 sem modelo cobra 0, como o fecho', () => {
+    expect(precoSemanalTvde({ ...tvde, precoTarifa: 0 })).toEqual({ valor: 0, origem: 'tarifa' });
+  });
+
+  it('sem nada, não há preço', () => {
+    expect(precoSemanalTvde({ ...tvde })).toEqual({ valor: null, origem: 'sem-preco' });
+  });
+
+  it.each(['rent_a_car', 'slot', null, undefined])('regime %s não é TVDE', (regime) => {
+    expect(precoSemanalTvde({ regime, precoSemanaAcordado: 225, precoTarifa: 275 })).toEqual({
+      valor: null,
+      origem: 'sem-preco',
+    });
+  });
+});
+
+describe('precoSemanalTvde — texto, espaços e sem preço', () => {
+  it('aceita acordado "225.00" e tarifa "0.00" (cai para o modelo)', () => {
+    expect(precoSemanalTvde({ regime: 'tvde', precoSemanaAcordado: '225.00' })).toEqual({
+      valor: 225,
+      origem: 'acordado',
+    });
+    expect(
+      precoSemanalTvde({ regime: 'tvde', precoTarifa: '0.00', precoTarifaModelo: '260.00' })
+    ).toEqual({ valor: 260, origem: 'tarifa' });
+  });
+
+  it('regime " TVDE " é TVDE', () => {
+    expect(precoSemanalTvde({ regime: ' TVDE ', precoTarifa: 275 }).valor).toBe(275);
+  });
+
+  it('sem tarifa nem modelo: sem-preco (null, não 0)', () => {
+    expect(
+      precoSemanalTvde({ regime: 'tvde', precoTarifa: null, precoTarifaModelo: null })
+    ).toEqual({ valor: null, origem: 'sem-preco' });
   });
 });

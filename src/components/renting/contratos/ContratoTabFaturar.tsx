@@ -42,6 +42,8 @@ import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-he
 import { formatCurrency, formatDate } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { contratoDias } from '@/lib/contratoDias';
+import { baseFaturaContrato, motivoBaseFaturaIndisponivel } from '@/lib/faturaContrato';
+import { usePrecoSemanalTvdeContrato } from '@/hooks/usePrecoSemanalTvdeContrato';
 import { useContratoCoberturas } from '@/hooks/useContratoCoberturas';
 import { useContratoExtras, calcExtraTotal } from '@/hooks/useContratoExtras';
 import { useContratoTaxas, calcTaxaValor } from '@/hooks/useContratoTaxas';
@@ -553,18 +555,41 @@ export function ContratoTabFaturar({ contrato }: Props) {
     }
   }
 
+  const precoSemanal = usePrecoSemanalTvdeContrato({
+    regime: contrato.regime,
+    precoSemanaAcordado: contrato.preco_semana_acordado,
+    tarifaId: contrato.tarifa_id,
+    viaturaId: contrato.viatura_id,
+  });
+  const dias = calcDias(contrato.data_inicio, contrato.data_fim);
+  const base = useMemo(
+    () =>
+      baseFaturaContrato({
+        regime: contrato.regime,
+        valorTotalManual: contrato.valor_total_manual,
+        tarifaDiaria: contrato.tarifa_diaria,
+        dias,
+        precoSemanalTvde: precoSemanal.preco,
+        carregando: precoSemanal.carregando,
+        erro: precoSemanal.erro,
+      }),
+    [contrato.regime, contrato.valor_total_manual, contrato.tarifa_diaria, dias, precoSemanal]
+  );
+  // Sem base fiável não se factura: 0 € seria uma fatura errada.
+  const motivoSemBase = motivoBaseFaturaIndisponivel(base);
+
   const fatura: FaturaCalculo = useMemo(() => {
-    const dias = calcDias(contrato.data_inicio, contrato.data_fim);
-    const manual = contrato.valor_total_manual != null && contrato.valor_total_manual > 0;
-    const baseAluguer = manual
-      ? contrato.valor_total_manual!
-      : (contrato.tarifa_diaria ?? 0) * dias;
+    const baseAluguer = base.estado === 'ok' ? base.valor : 0;
+    const origem = base.estado === 'ok' ? base.origem : null;
 
     const itens: FaturaCalculo['itens'] = [
       {
-        descricao: manual
-          ? 'Aluguer (valor manual)'
-          : `Aluguer${dias ? ` (${dias} dia${dias !== 1 ? 's' : ''})` : ''}`,
+        descricao:
+          origem === 'manual'
+            ? 'Aluguer (valor manual)'
+            : origem === 'semanal-tvde'
+              ? 'Aluguer (semana)'
+              : `Aluguer${dias ? ` (${dias} dia${dias !== 1 ? 's' : ''})` : ''}`,
         valor: round2(baseAluguer),
       },
     ];
@@ -631,7 +656,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
       valorRegistado: round2(totalComIva),
       taxaIva,
     };
-  }, [contrato, coberturas, extras, taxas]);
+  }, [contrato, coberturas, extras, taxas, base, dias]);
 
   const clienteEntidade: EntidadeOption = {
     id: contrato.cliente_id,
@@ -747,9 +772,14 @@ export function ContratoTabFaturar({ contrato }: Props) {
                   <p className="text-sm font-medium">Faturar este contrato</p>
                   <p className="text-xs text-muted-foreground">
                     Total a faturar:{' '}
-                    <span className="font-semibold">{formatCurrency(fatura.valorRegistado)}</span>
+                    <span className="font-semibold">
+                      {motivoSemBase ? '—' : formatCurrency(fatura.valorRegistado)}
+                    </span>
                     {fatura.dias > 0 ? ` · ${fatura.dias} dia${fatura.dias !== 1 ? 's' : ''}` : ''}
                   </p>
+                  {motivoSemBase && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">{motivoSemBase}</p>
+                  )}
                 </>
               )}
               {podeAnularFaturacao && (
@@ -783,7 +813,7 @@ export function ContratoTabFaturar({ contrato }: Props) {
           <FaturacaoActionsToolbar
             orgId={contrato.org_id}
             emitente={emitente}
-            onFaturar={jaFacturado ? undefined : () => setDialogOpen(true)}
+            onFaturar={jaFacturado || motivoSemBase ? undefined : () => setDialogOpen(true)}
             faturarLabel="Faturar contrato"
             onNovaFatura={() => setNovaFaturaOpen(true)}
             cobrancas={toolbarCobrancas}

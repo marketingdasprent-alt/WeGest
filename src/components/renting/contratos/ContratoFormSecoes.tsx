@@ -33,6 +33,9 @@ import { FranquiaKmsFields } from '@/components/renting/shared/FranquiaKmsFields
 import { PedirAlteracaoContratoDialog } from './PedirAlteracaoContratoDialog';
 import { type TipoPedidoAlteracao } from '@/hooks/usePedidosTrocaKms';
 import { BotaoPedirAlteracao } from './BotaoPedirAlteracao';
+import { PrecoSemanalPendente } from './PrecoSemanalPendente';
+import { precoSemanalTvde } from '@shared/precoAluguer';
+import type { PrecoSemanalTvdeEstado } from '@/hooks/usePrecoSemanalTvdeContrato';
 import {
   precoSemanaNegociadoTvde,
   tarifaCobreModelo,
@@ -80,6 +83,8 @@ interface ContratoFormSecoesProps {
   proximaRenovacaoEm?: string | null;
   /** TVDE: preço semanal negociado e aprovado (contrato gravado). NULL segue a tarifa. */
   precoSemanaAcordado?: number | null;
+  /** Contrato gravado: o mesmo preço do resumo, lido da BD (inclui tarifas inactivas). */
+  precoSemanalGravado?: PrecoSemanalTvdeEstado;
 }
 
 /**
@@ -106,6 +111,7 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
   tarifaGravada = null,
   proximaRenovacaoEm,
   precoSemanaAcordado = null,
+  precoSemanalGravado,
 }) => {
   // min-w-0 desfaz o min-width:min-content que o fieldset traz de fábrica e
   // que partia os grids lá dentro. O cinzento vem dos próprios campos
@@ -218,6 +224,24 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
       precoModeloMesRac,
     ]
   );
+
+  // Mesma ordem do fecho semanal: acordado, tarifa, modelo.
+  const semanalLocal = precoSemanalTvde({
+    regime,
+    precoSemanaAcordado,
+    precoTarifa: tarifaAtual?.preco_semana,
+    precoTarifaModelo: precoModeloSemanaTvde,
+  }).valor;
+  const semanalCondutor = precoSemanalGravado
+    ? (precoSemanalGravado.preco?.valor ?? null)
+    : semanalLocal;
+  const semanalTexto = precoSemanalGravado?.carregando
+    ? 'A carregar…'
+    : precoSemanalGravado?.erro
+      ? 'Erro a ler o preço'
+      : semanalCondutor != null
+        ? `${semanalCondutor.toFixed(2)} €/sem`
+        : '— sem preço/semana';
 
   const [dialogAberto, setDialogAberto] = useState<TipoPedidoAlteracao | null>(null);
   const kmsIncluidos = form.watch('kms_incluidos');
@@ -458,11 +482,10 @@ export const ContratoFormSecoes: React.FC<ContratoFormSecoesProps> = ({
                     <CarTaxiFront className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     Condutor · conta-corrente semanal
                   </p>
-                  <p className="shrink-0 text-sm font-semibold tabular-nums">
-                    {(precoSemanaAcordado ?? faturacao.semanalCondutor) != null
-                      ? `${(precoSemanaAcordado ?? faturacao.semanalCondutor ?? 0).toFixed(2)} €/sem`
-                      : '— sem preço/semana'}
-                  </p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold tabular-nums">{semanalTexto}</p>
+                    <PrecoSemanalPendente contratoId={contratoId} />
+                  </div>
                 </div>
               )}
             </div>

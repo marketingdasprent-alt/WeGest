@@ -52,6 +52,7 @@ import { PedidoPrecoSemanal } from '@/components/renting/contratos/PedidoPrecoSe
 import { HistoricoEdicoesContrato } from '@/components/renting/contratos/HistoricoEdicoesContrato';
 
 import { usePermissions } from '@/hooks/usePermissions';
+import { usePrecoSemanalTvdeContrato } from '@/hooks/usePrecoSemanalTvdeContrato';
 import { useContratoForm } from './contrato/useContratoForm';
 import { ContratoTabGeral } from './contrato/tabs/ContratoTabGeral';
 import { ContratoTabCoberturas } from './contrato/tabs/ContratoTabCoberturas';
@@ -127,6 +128,14 @@ const ContratoForm = () => {
     handleClienteCriado,
     handleMotoristaCriado,
   } = useContratoForm();
+
+  const semanalEstado = usePrecoSemanalTvdeContrato({
+    regime,
+    precoSemanaAcordado: contrato?.preco_semana_acordado,
+    tarifaId: contrato?.tarifa_id,
+    viaturaId: contrato?.viatura_id,
+  });
+  const precoSemanalTvde = semanalEstado.preco;
 
   // Eliminar contratos é de admin — ver o botão mais abaixo.
   const { isAdmin } = usePermissions();
@@ -400,6 +409,7 @@ const ContratoForm = () => {
                       tarifaGravada={contrato?.tarifa_id ?? null}
                       proximaRenovacaoEm={contrato?.proxima_renovacao_em ?? null}
                       precoSemanaAcordado={contrato?.preco_semana_acordado ?? null}
+                      precoSemanalGravado={precoTravado ? semanalEstado : undefined}
                     />
                   </TabsContent>
 
@@ -464,6 +474,9 @@ const ContratoForm = () => {
             tarifaDiaria={tarifaDiaria}
             valorTotalManual={valorTotalManual}
             baseAluguerTarifa={baseAluguerTarifa}
+            precoSemanalTvde={precoTravado ? precoSemanalTvde : undefined}
+            precoSemanalTvdeCarregando={precoTravado && semanalEstado.carregando}
+            precoSemanalTvdeErro={precoTravado && semanalEstado.erro}
             descontoPercentagem={descontoPercentagem}
             taxaIva={taxaIva}
             regime={regime}
@@ -479,9 +492,8 @@ const ContratoForm = () => {
               isEdit && contrato && regime === 'tvde' ? (
                 <PedidoPrecoSemanal
                   contratoId={contrato.id}
-                  valorAtual={
-                    contrato.preco_semana_acordado ?? valorTotalManual ?? baseAluguerTarifa ?? 0
-                  }
+                  valorAtual={precoSemanalTvde?.valor ?? null}
+                  carregando={semanalEstado.carregando}
                 />
               ) : null
             }

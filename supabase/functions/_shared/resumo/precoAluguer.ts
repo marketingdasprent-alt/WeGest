@@ -32,11 +32,15 @@ export interface TabelasDePreco {
   porModelo?: ReadonlyMap<string, number>;
 }
 
-const numero = (v: unknown): number | null => {
+export const numero = (v: unknown): number | null => {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 };
+
+/** Única comparação de regime TVDE (sem espaços nem maiúsculas). */
+export const ehRegimeTvde = (regime: string | null | undefined): boolean =>
+  (regime ?? '').trim().toLowerCase() === 'tvde';
 
 /**
  * Preço semanal negociado de um TVDE (aprovado pelo supervisor), ou `null`
@@ -47,8 +51,41 @@ export function precoSemanaNegociadoTvde(
   regime: string | null | undefined,
   precoSemanaAcordado: number | string | null | undefined
 ): number | null {
-  if ((regime ?? '').trim().toLowerCase() !== 'tvde') return null;
+  if (!ehRegimeTvde(regime)) return null;
   return numero(precoSemanaAcordado);
+}
+
+export interface PrecoSemanalTvde {
+  valor: number | null;
+  origem: 'acordado' | 'tarifa' | 'sem-preco';
+}
+
+/**
+ * O que o fecho semanal cobra a um TVDE: acordado, senão preço geral da tarifa,
+ * senão preço do modelo. Espelha fechar-semana-financeiro; a precedência
+ * tarifa/modelo está por decidir e muda-se só aqui.
+ * Sem nenhum preço devolve `null`, onde o fecho lança 0 €: a interface mostra
+ * "Sem preço" de propósito e nunca factura nem pede alterações a 0 €.
+ */
+export function precoSemanalTvde(input: {
+  regime: string | null | undefined;
+  precoSemanaAcordado?: number | string | null;
+  precoTarifa?: number | string | null;
+  precoTarifaModelo?: number | string | null;
+}): PrecoSemanalTvde {
+  if (!ehRegimeTvde(input.regime)) {
+    return { valor: null, origem: 'sem-preco' };
+  }
+  const acordado = numero(input.precoSemanaAcordado);
+  if (acordado !== null) return { valor: acordado, origem: 'acordado' };
+
+  // O fecho trata 0 da tarifa como "sem preço" e tenta o modelo.
+  const tarifa = numero(input.precoTarifa);
+  if (tarifa) return { valor: tarifa, origem: 'tarifa' };
+  const modelo = numero(input.precoTarifaModelo);
+  if (modelo !== null) return { valor: modelo, origem: 'tarifa' };
+  if (tarifa !== null) return { valor: tarifa, origem: 'tarifa' };
+  return { valor: null, origem: 'sem-preco' };
 }
 
 const SEM_PRECO: PrecoAluguer = { precoSemana: null, origem: 'sem-preco', estimado: true };

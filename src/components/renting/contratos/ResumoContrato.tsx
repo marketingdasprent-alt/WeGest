@@ -8,6 +8,9 @@ import { calcTaxaValor } from '@/hooks/useContratoTaxas';
 import type { ExtraFormItem, TaxaFormItem } from '@/types/contratoRenting';
 import { formatCurrency } from './contratosUtils';
 import { contratoDias } from '@/lib/contratoDias';
+import { ehRegimeTvde } from '@shared/precoAluguer';
+import type { PrecoSemanalTvde } from '@shared/precoAluguer';
+import { ValorSemanalTvde } from './ValorSemanalTvde';
 
 interface ResumoContratoProps {
   dataInicio: string | null | undefined;
@@ -40,6 +43,15 @@ interface ResumoContratoProps {
    * TVDE dá 0 € enquanto o quadro da tarifa mostra o preço semanal.
    */
   baseAluguerTarifa?: number | null;
+  /**
+   * Preço semanal que o fecho cobra ao motorista (TVDE). Passado, o cartão
+   * gravado mostra-o em vez do valor manual, que pode estar desactualizado.
+   */
+  precoSemanalTvde?: PrecoSemanalTvde;
+  /** Contrato TVDE gravado: o preço semanal ainda está a carregar. */
+  precoSemanalTvdeCarregando?: boolean;
+  /** Falhou a leitura do preço semanal. */
+  precoSemanalTvdeErro?: boolean;
   /** Torna o preço editável no cartão. Por omissão o cartão é só-leitura. */
   editavel?: boolean;
   /** Contrato travado: acção por baixo do valor (ex.: pedir alteração ao supervisor). */
@@ -68,6 +80,9 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   editavel = false,
   baseAluguerTarifa,
   acaoValor,
+  precoSemanalTvde,
+  precoSemanalTvdeCarregando = false,
+  precoSemanalTvdeErro = false,
 }) => {
   const calculo = useMemo(() => {
     if (isFacturado && totalSnapshot != null) {
@@ -106,7 +121,9 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     const baseAluguer =
       valorTotalManual != null && valorTotalManual > 0
         ? valorTotalManual
-        : (baseAluguerTarifa ?? (tarifaDiaria ?? 0) * dias);
+        : ehRegimeTvde(regime) && precoSemanalTvde?.valor != null
+          ? precoSemanalTvde.valor
+          : (baseAluguerTarifa ?? (tarifaDiaria ?? 0) * dias);
     const custoCoberturas = coberturasPrecoDia * dias;
     const custoExtras = extras.reduce((soma, e) => soma + calcExtraTotal(e, dias), 0);
     const subtotalBruto = baseAluguer + custoCoberturas + custoExtras;
@@ -151,6 +168,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
     tarifaDiaria,
     valorTotalManual,
     baseAluguerTarifa,
+    precoSemanalTvde,
     regime,
     descontoPercentagem,
     taxaIva,
@@ -238,6 +256,18 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   };
 
   const showsManual = valorTotalManual != null && valorTotalManual > 0 && !isFacturado;
+  const mostraSemanalTvde =
+    ehRegimeTvde(regime) &&
+    !editavel &&
+    !isFacturado &&
+    (precoSemanalTvde !== undefined || precoSemanalTvdeCarregando || precoSemanalTvdeErro);
+  // Sem manual e sem preço (a carregar ou inexistente), o total seria um valor
+  // que o fecho não cobra: mostra-se um traço.
+  const totalPendente =
+    mostraSemanalTvde &&
+    precoSemanalTvde?.valor == null &&
+    !(valorTotalManual != null && valorTotalManual > 0);
+  const totalTexto = totalPendente ? '—' : formatCurrency(calculo.total);
 
   return (
     <Card className="bg-card border-border">
@@ -256,9 +286,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
 
         <div className="rounded-md bg-muted/40 px-3 py-2 mb-3 text-center">
           <div className="text-xs text-muted-foreground">Total</div>
-          <div className="text-2xl font-semibold text-foreground">
-            {formatCurrency(calculo.total)}
-          </div>
+          <div className="text-2xl font-semibold text-foreground">{totalTexto}</div>
           <div className="text-[10px] text-muted-foreground mt-0.5">IVA incluído</div>
         </div>
 
@@ -311,6 +339,12 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
                 <p className="text-muted-foreground text-xs text-right">× 1 semana</p>
               ) : null}
             </>
+          ) : mostraSemanalTvde ? (
+            <ValorSemanalTvde
+              preco={precoSemanalTvde}
+              valorTotalManual={valorTotalManual}
+              erro={precoSemanalTvdeErro}
+            />
           ) : showsManual ? (
             <Row
               label={regime === 'tvde' || regime === 'slot' ? 'Valor semanal' : 'Valor manual'}
@@ -356,7 +390,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
 
           <div className="border-t border-border/50 my-1" />
 
-          <Row label="Total" value={formatCurrency(calculo.total)} strong />
+          <Row label="Total" value={totalTexto} strong />
         </div>
       </CardContent>
     </Card>
