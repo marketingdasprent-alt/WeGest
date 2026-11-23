@@ -1,4 +1,5 @@
 import type { UseFormReturn } from 'react-hook-form';
+import type { PrecoSemanalTvdeEstado } from '@/hooks/usePrecoSemanalTvdeContrato';
 import type { ClienteComDocumentos } from '@/types/cliente';
 import type { Motorista } from '@/types/motorista';
 import type { Estacao } from '@/hooks/useEstacoes';
@@ -27,6 +28,7 @@ interface ContratoTabGeralProps {
   tarifaGravada?: string | null;
   proximaRenovacaoEm?: string | null;
   precoSemanaAcordado?: number | null;
+  precoSemanalGravado?: PrecoSemanalTvdeEstado;
 }
 
 /**
@@ -52,6 +54,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
   tarifaGravada,
   proximaRenovacaoEm,
   precoSemanaAcordado,
+  precoSemanalGravado,
 }) => {
   return (
     <ContratoFormSecoes
@@ -72,6 +75,7 @@ export const ContratoTabGeral: React.FC<ContratoTabGeralProps> = ({
       tarifaGravada={tarifaGravada}
       proximaRenovacaoEm={proximaRenovacaoEm}
       precoSemanaAcordado={precoSemanaAcordado}
+      precoSemanalGravado={precoSemanalGravado}
     />
   );
 };

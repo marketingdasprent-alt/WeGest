@@ -88,7 +88,7 @@ export const MENU_ITEMS: MenuItem[] = [
         recurso: 'renting_clientes',
       },
       {
-        label: 'Pedidos de Kms',
+        label: 'Pedidos de alterações',
         url: '/renting/pedidos-kms',
         icon: Gauge,
         recurso: 'renting_contratos',

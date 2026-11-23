@@ -17,6 +17,7 @@ import WebAppRoutes from '@/routes/WebAppRoutes';
 import { UpdateNotification } from '@/components/UpdateNotification';
 import { NotificacoesPopup } from '@/components/notificacoes/NotificacoesPopup';
 import { OnboardingColaboradorDialog } from '@/components/onboarding/OnboardingColaboradorDialog';
+import { AvisoPedidosPendentes } from '@/components/renting/pedidos-alteracao/AvisoPedidosPendentes';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Fica fora do bundle principal; o próprio seletor só aparece a quem o pode usar.
@@ -74,6 +75,7 @@ const App = () => {
                           <WebAppRoutes />
                           <NotificacoesPopup />
                           <OnboardingColaboradorDialog />
+                          <AvisoPedidosPendentes />
                           <Suspense fallback={null}>
                             <VerComoGrupo />
                           </Suspense>
