@@ -43,10 +43,17 @@ insert into public.user_org_ativa (user_id, org_id) values
 insert into public.clientes (id, org_id, nome) values
   ('00000000-0000-0000-0000-0000000d1c01', '00000000-0000-0000-0000-0000000d1000', 'Cliente Preco');
 
-insert into public.viaturas (id, org_id, matricula, marca, modelo) values
-  ('00000000-0000-0000-0000-0000000d1e01', '00000000-0000-0000-0000-0000000d1000', 'PN-01-AA', 'Toyota', 'Corolla'),
-  ('00000000-0000-0000-0000-0000000d1e02', '00000000-0000-0000-0000-0000000d1000', 'PN-02-AA', 'Toyota', 'Corolla'),
-  ('00000000-0000-0000-0000-0000000d1e03', '00000000-0000-0000-0000-0000000d1000', 'PN-03-AA', 'Toyota', 'Corolla');
+-- marca/modelo de texto vêm de marca_id/modelo_id (trigger): sem eles a marca fica nula.
+insert into public.viatura_marcas (id, org_id, nome) values
+  ('00000000-0000-0000-0000-0000000d1aa1', '00000000-0000-0000-0000-0000000d1000', 'Toyota');
+insert into public.viatura_modelos (id, org_id, marca_id, nome) values
+  ('00000000-0000-0000-0000-0000000d1ab1', '00000000-0000-0000-0000-0000000d1000',
+   '00000000-0000-0000-0000-0000000d1aa1', 'Corolla');
+
+insert into public.viaturas (id, org_id, matricula, marca_id, modelo_id) values
+  ('00000000-0000-0000-0000-0000000d1e01', '00000000-0000-0000-0000-0000000d1000', 'PN-01-AA', '00000000-0000-0000-0000-0000000d1aa1', '00000000-0000-0000-0000-0000000d1ab1'),
+  ('00000000-0000-0000-0000-0000000d1e02', '00000000-0000-0000-0000-0000000d1000', 'PN-02-AA', '00000000-0000-0000-0000-0000000d1aa1', '00000000-0000-0000-0000-0000000d1ab1'),
+  ('00000000-0000-0000-0000-0000000d1e03', '00000000-0000-0000-0000-0000000d1000', 'PN-03-AA', '00000000-0000-0000-0000-0000000d1aa1', '00000000-0000-0000-0000-0000000d1ab1');
 
 -- reserva_id é NOT NULL. 'concluida': já virou contrato.
 insert into public.reservas (id, org_id, codigo, data_inicio, viatura_id, cliente_id, estado) values
