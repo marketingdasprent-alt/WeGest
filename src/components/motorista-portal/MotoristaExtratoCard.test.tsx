@@ -117,6 +117,37 @@ describe('MotoristaExtratoCard', () => {
     expect(screen.queryByText(/0,00/)).toBeNull();
   });
 
+  it('semana por enviar diz que as contas estão em preparação, sem valores nem erro', () => {
+    ver(null);
+    expect(screen.getByText(/estão a ser preparadas/i)).toBeTruthy();
+    expect(screen.queryByText(/não foi possível carregar/i)).toBeNull();
+    expect(screen.queryByText(/€/)).toBeNull();
+    // As setas ficam: o motorista tem de poder ir às semanas já enviadas.
+    expect(screen.getByLabelText(/semana anterior/i)).toBeTruthy();
+  });
+
+  it('erro ganha à semana por enviar', () => {
+    ver(null, { error: new Error('falhou') });
+    expect(screen.getByText(/não foi possível carregar/i)).toBeTruthy();
+    expect(screen.queryByText(/estão a ser preparadas/i)).toBeNull();
+  });
+
+  it('sem resposta (undefined) não finge que a semana está por enviar', () => {
+    render(
+      <MotoristaExtratoCard
+        extrato={undefined}
+        isLoading={false}
+        error={null}
+        inicio={INICIO}
+        fim={FIM}
+        semanasAtras={0}
+        onAnterior={() => {}}
+        onSeguinte={() => {}}
+      />
+    );
+    expect(screen.queryByText(/estão a ser preparadas/i)).toBeNull();
+  });
+
   it('recua para a semana anterior', () => {
     const anterior = vi.fn();
     ver(extrato(), { onAnterior: anterior });

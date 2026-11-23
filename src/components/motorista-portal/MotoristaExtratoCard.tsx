@@ -97,13 +97,28 @@ export function MotoristaExtratoCard({
 
   // Um erro nunca se disfarça de zeros: o motorista tem de saber que o problema
   // é nosso, e não pensar que não ganhou nada.
-  if (error || !extrato) {
+  if (error || extrato === undefined) {
     return (
       <Card>
         {cabecalho}
         <CardContent>
           <p className="text-sm text-destructive">
             Não foi possível carregar os seus valores. Tente daqui a pouco.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // null = o escritório ainda não enviou as contas desta semana.
+  if (extrato === null) {
+    return (
+      <Card>
+        {cabecalho}
+        <CardContent>
+          <p role="status" className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
+            As contas desta semana estão a ser preparadas. Assim que o escritório as enviar,
+            aparecem aqui.
           </p>
         </CardContent>
       </Card>

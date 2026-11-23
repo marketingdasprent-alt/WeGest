@@ -76,7 +76,9 @@ export function useMotoristaExtratoPeriodo(
   return useQuery({
     queryKey: ['motorista-extrato', motoristaId, ini, f],
     enabled: !!motoristaId,
-    staleTime: 60_000,
+    // Semana por enviar volta a perguntar logo: o envio acontece no escritório
+    // e não invalida esta cache no telemóvel do motorista.
+    staleTime: (q) => (q.state.data === null ? 0 : 60_000),
     queryFn: async (): Promise<ExtratoMotorista | null> => {
       const { data, error } = await (supabase as any).rpc('motorista_extrato_periodo', {
         p_motorista_id: motoristaId,
@@ -86,6 +88,7 @@ export function useMotoristaExtratoPeriodo(
       if (error) throw error;
 
       const r = Array.isArray(data) ? data[0] : data;
+      // Sem linhas = semana ainda não enviada ao motorista (20261123120000).
       if (!r) return null;
 
       const receita = num(r.receita);
