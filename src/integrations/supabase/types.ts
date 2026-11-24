@@ -7254,6 +7254,73 @@ export type Database = {
         }
         Relationships: []
       }
+      motorista_acessos_provisorios: {
+        Row: {
+          deleted_at: string | null
+          enviado_em: string
+          enviado_por: string | null
+          expira_em: string
+          expirada_em: string | null
+          id: string
+          motorista_id: string
+          org_id: string
+          senha_digest_envio: string
+          substituida_em: string | null
+          trocada_em: string | null
+          user_id: string
+        }
+        Insert: {
+          deleted_at?: string | null
+          enviado_em?: string
+          enviado_por?: string | null
+          expira_em: string
+          expirada_em?: string | null
+          id?: string
+          motorista_id: string
+          org_id?: string
+          senha_digest_envio: string
+          substituida_em?: string | null
+          trocada_em?: string | null
+          user_id: string
+        }
+        Update: {
+          deleted_at?: string | null
+          enviado_em?: string
+          enviado_por?: string | null
+          expira_em?: string
+          expirada_em?: string | null
+          id?: string
+          motorista_id?: string
+          org_id?: string
+          senha_digest_envio?: string
+          substituida_em?: string | null
+          trocada_em?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_acessos_provisorios_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "dividas_motorista_abertas"
+            referencedColumns: ["motorista_id"]
+          },
+          {
+            foreignKeyName: "motorista_acessos_provisorios_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas_ativos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_acessos_provisorios_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       motorista_candidaturas: {
         Row: {
           anonimizada_em: string | null
@@ -16169,6 +16236,10 @@ export type Database = {
         }[]
       }
       conta_corrente_saldo: { Args: { p_entidade_id: string }; Returns: number }
+      contas_semana_enviadas: {
+        Args: { p_data: string; p_motorista_id: string }
+        Returns: boolean
+      }
       contexto_folha_por_token: {
         Args: { p_token: string }
         Returns: {
@@ -16822,6 +16893,7 @@ export type Database = {
         Args: { p_observacoes: string; p_sem_formacao_tvde?: boolean }
         Returns: string
       }
+      libertar_acesso_provisorio: { Args: { p_id: string }; Returns: undefined }
       limpar_danos_token: { Args: { p_token: string }; Returns: undefined }
       limpar_links_curtos_expirados: { Args: never; Returns: number }
       limpar_notificacoes_antigas: {
@@ -16856,6 +16928,7 @@ export type Database = {
         }
         Returns: number
       }
+      marcar_senha_provisoria_trocada: { Args: never; Returns: boolean }
       marcar_todas_notificacoes_lidas: { Args: never; Returns: Json }
       marketing_lista_contagem: {
         Args: { p_lista_id: string }
@@ -16866,6 +16939,13 @@ export type Database = {
         Returns: undefined
       }
       migrar_reservas_slot_para_prestacao: { Args: never; Returns: number }
+      minha_senha_provisoria: {
+        Args: never
+        Returns: {
+          expira_em: string
+          por_trocar: boolean
+        }[]
+      }
       minhas_orgs_motorista: {
         Args: never
         Returns: {
@@ -16885,6 +16965,17 @@ export type Database = {
       motorista_bolt_liquido_semana: {
         Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
         Returns: number
+      }
+      motorista_estado_acesso: {
+        Args: { p_motorista_id: string }
+        Returns: {
+          email_conta: string
+          email_difere: boolean
+          email_ficha: string
+          estado: string
+          provisoria_expira_em: string
+          ultimo_acesso: string
+        }[]
       }
       motorista_extrato_periodo: {
         Args: { p_fim: string; p_inicio: string; p_motorista_id: string }
@@ -17131,6 +17222,22 @@ export type Database = {
         Returns: undefined
       }
       recalculo_e_forcado: { Args: never; Returns: boolean }
+      reclamar_acessos_provisorios_expirados: {
+        Args: never
+        Returns: {
+          id: string
+          user_id: string
+        }[]
+      }
+      registar_acesso_provisorio: {
+        Args: {
+          p_enviado_por: string
+          p_horas?: number
+          p_motorista_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       rejeitar_candidatura_motorista: {
         Args: { p_candidatura_id: string; p_motivo?: string }
         Returns: boolean
@@ -17226,6 +17333,10 @@ export type Database = {
         Returns: undefined
       }
       retry_failed_job: { Args: { p_id: string }; Returns: undefined }
+      revogar_sessoes_utilizador: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       rotulo_campo_aviso: { Args: { p_chave: string }; Returns: string }
       salvar_precos_modelo_tarifa: {
         Args: {
