@@ -322,3 +322,13 @@ verify_jwt = false
 # E-mail). Só com sessão; a função confere admin ou administrativo_resumos.
 [functions.enviar-resumos-email]
 verify_jwt = true
+
+# Envia ao motorista uma senha temporária de 72 h (botão Enviar acesso na ficha).
+# Só com sessão; a função confere a organização ativa e a permissão motoristas_acesso_app.
+[functions.motorista-enviar-acesso]
+verify_jwt = true
+
+# Roda as senhas provisórias expiradas. Chamada só pelo cron com a service role;
+# a função recusa qualquer outro token.
+[functions.expirar-acessos-provisorios]
+verify_jwt = true

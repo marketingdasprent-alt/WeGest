@@ -294,3 +294,32 @@ Deno.test("EmailService.sendMarketing regista campanha_id e nome no log", async 
     restoreFactory();
   }
 });
+
+Deno.test("EmailService.sendAcessoProvisorio entrega a senha mas nunca a grava em email_sends", async () => {
+  const senha = "Zq7Kp3Wm9Xv2";
+  let enviado: EmailMessage | undefined;
+  EmailProviderFactory.getProvider = async () => ({
+    provider: { send: async (msg: EmailMessage) => ((enviado = msg), { success: true, providerMessageId: "msg-9" }) },
+    sender: { name: "WeGest", email: "noreply@dasprent.pt" },
+  });
+  const { client, inserted } = makeMockSupabase();
+
+  try {
+    const result = await new EmailService(client).sendAcessoProvisorio("org-1", {
+      to: "motorista@empresa.pt",
+      nome: "Maria Silva",
+      senha,
+      expiraEm: new Date("2026-11-28T14:05:00Z"),
+      loginUrl: "https://sul.wegest.pt/motorista/login",
+    });
+
+    assertEquals(result.success, true);
+    assertEquals(enviado?.html?.includes(senha), true);
+    assertEquals(inserted.length, 1);
+    assertEquals(inserted[0].origem, "acesso_provisorio");
+    assertEquals(inserted[0].email, "motorista@empresa.pt");
+    assertEquals(JSON.stringify(inserted[0]).includes(senha), false);
+  } finally {
+    restoreFactory();
+  }
+});

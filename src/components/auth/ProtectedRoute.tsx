@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Navigate, useNavigate, useLocation } from 'react-router-dom';
 
 import { estaInstaladoComoApp, deveBloquearNoPwa } from '@/lib/pwa';
 import { useEhMotorista } from '@/hooks/useEhMotorista';
+import { useSenhaProvisoria } from '@/hooks/useSenhaProvisoria';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTenant } from '@/contexts/TenantContext';
@@ -66,7 +67,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const ehMotoristaQuery = useEhMotorista(user?.id, {
     enabled: instalado && !loadingBase && !!user && tipoUtilizador !== 'motorista',
   });
-  const loading = loadingBase || ehMotoristaQuery.isLoading;
+  // Motorista que entrou com a senha provisória tem de a trocar antes de usar o portal.
+  const senhaProvisoria = useSenhaProvisoria({
+    enabled: !loadingBase && !!user && tipoUtilizador === 'motorista',
+  });
+  const loading = loadingBase || ehMotoristaQuery.isLoading || senhaProvisoria.isLoading;
 
   // Redirecionar para seleção de org se user tem múltiplas orgs sem seleção
   useEffect(() => {
@@ -146,6 +151,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (!user) {
     return null;
+  }
+
+  if (senhaProvisoria.data?.por_trocar) {
+    return <Navigate to="/reset-password?provisoria=1" replace />;
   }
 
   // Conta da área de cliente do site: sem organização, aqui não há nada para ela.

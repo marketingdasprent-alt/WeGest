@@ -39,6 +39,8 @@ import {
   magicLinkTemplate,
   motoristaOnboardingTemplate,
   orgConfirmacaoTemplate,
+  motoristaAcessoProvisorioTemplate,
+  type MotoristaAcessoProvisorioInput,
 } from '../templates/authEmail.ts';
 import {
   jobFalhaTemplate,
@@ -386,6 +388,19 @@ export class EmailService {
     const message: EmailMessage = { to: [{ email: args.to }], subject, html };
 
     return this.send(orgId, 'auth', message);
+  }
+
+  // Só metadados ficam em email_sends; a senha nunca é registada.
+  async sendAcessoProvisorio(
+    orgId: string,
+    args: MotoristaAcessoProvisorioInput & { to: string }
+  ): Promise<EmailSendResult> {
+    if (!args.to || !args.to.includes('@')) {
+      throw new EmailValidationError(`Destinatário inválido: "${args.to}"`);
+    }
+    const { subject, html } = motoristaAcessoProvisorioTemplate(args);
+    const message: EmailMessage = { to: [{ email: args.to, name: args.nome }], subject, html };
+    return this.send(orgId, 'acesso_provisorio', message);
   }
 
   /**

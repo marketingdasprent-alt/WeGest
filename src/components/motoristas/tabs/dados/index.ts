@@ -7,3 +7,4 @@ export { DocumentacaoAdicionalSection } from './DocumentacaoAdicionalSection';
 export { IntegracoesSection } from './IntegracoesSection';
 export { EstadoConfiguracaoSection } from './EstadoConfiguracaoSection';
 export { ObservacoesSection } from './ObservacoesSection';
+export { AcessoAppSection } from './AcessoAppSection';

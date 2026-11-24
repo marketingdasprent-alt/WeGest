@@ -31,6 +31,7 @@ import {
   IntegracoesSection,
   EstadoConfiguracaoSection,
   ObservacoesSection,
+  AcessoAppSection,
 } from './dados';
 import { avisoGravacaoInvalida } from './dados/resumoErrosMotorista';
 
@@ -453,6 +454,8 @@ export function MotoristaTabDados({
 
         {/* Linha 3: Estado & Configuração */}
         <EstadoConfiguracaoSection control={form.control} />
+
+        {!isCreating && motorista?.id && <AcessoAppSection motoristaId={motorista.id} />}
 
         {/* Linha 4: Integrações + Observações */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 py-4">
