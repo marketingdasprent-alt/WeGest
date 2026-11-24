@@ -443,6 +443,7 @@ jobs:
             preco_semana_negociado \
             tvde_preco_semanal_acordado_ou_tarifa \
             varios_grupos_por_pessoa \
+            acesso_provisorio_motorista \
             slot_so_contrato_de_prestacao \
             bp_rejeitadas_fora_das_contas \
             repsol_chave_sem_valor \

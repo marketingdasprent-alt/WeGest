@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthMobileShell } from '@/components/auth/AuthMobileShell';
 import { Eye, EyeOff, KeyRound, CheckCircle2, Circle } from 'lucide-react';
+import { SENHA_PROVISORIA_KEY } from '@/hooks/useSenhaProvisoria';
 import { getPostAuthRoute, getUnauthenticatedRoute } from '@/lib/native';
 import { lerTokenRecuperacao } from '@/lib/linkRecuperacao';
 import {
@@ -30,6 +32,9 @@ const ResetPassword = () => {
   const [aVerificar, setAVerificar] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const provisoria = searchParams.get('provisoria') === '1';
 
   const handleContinuar = async () => {
     if (!tokenPendente) return;
@@ -127,6 +132,21 @@ const ResetPassword = () => {
 
       if (error) throw error;
 
+      if (provisoria) {
+        // RPC da migração 20261125100000; types.ts é regenerado depois de aplicada.
+        const { error: marcarErro } = await supabase.rpc(
+          'marcar_senha_provisoria_trocada' as never
+        );
+        if (marcarErro) {
+          throw new Error(
+            'A palavra-passe foi alterada, mas não foi possível concluir. Escolha-a de novo para terminar.'
+          );
+        }
+        // Sem isto o portal ainda veria "por trocar" em cache e voltava para aqui.
+        queryClient.setQueryData(SENHA_PROVISORIA_KEY, null);
+        await queryClient.invalidateQueries({ queryKey: SENHA_PROVISORIA_KEY });
+      }
+
       toast({
         title: 'Palavra-passe alterada',
         description: 'A sua palavra-passe foi atualizada com sucesso.',
@@ -158,8 +178,12 @@ const ResetPassword = () => {
 
   return (
     <AuthMobileShell
-      title="Redefinir palavra-passe"
-      description="Defina uma nova palavra-passe para voltar a aceder à sua conta."
+      title={provisoria && hasSession ? 'Escolha a sua palavra-passe' : 'Redefinir palavra-passe'}
+      description={
+        provisoria && hasSession
+          ? 'Entrou com uma senha provisória. Substitua-a por uma palavra-passe só sua para continuar.'
+          : 'Defina uma nova palavra-passe para voltar a aceder à sua conta.'
+      }
       logoAlt="WeGest"
       headerIcon={<KeyRound className="auth-icon-accent" />}
     >

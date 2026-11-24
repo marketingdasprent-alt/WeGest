@@ -178,3 +178,71 @@ export function orgConfirmacaoTemplate(
       `;
   return { subject: `Confirme o seu email: ${empresa} no WeGest`, html };
 }
+
+const escapeHtml = (texto: string) =>
+  texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+// "28/11 às 14:05", sempre na hora de Lisboa (o servidor corre em UTC).
+export function formatarExpiracaoLisboa(data: Date): string {
+  const partes = new Intl.DateTimeFormat('pt-PT', {
+    timeZone: 'Europe/Lisbon', day: '2-digit', month: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(data);
+  const parte = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? '';
+  return `${parte('day')}/${parte('month')} às ${parte('hour')}:${parte('minute')}`;
+}
+
+export interface MotoristaAcessoProvisorioInput {
+  nome: string;
+  senha: string;
+  expiraEm: Date;
+  loginUrl: string;
+}
+
+/** Senha temporária para o motorista. O link é só o do login, sem token. */
+export function motoristaAcessoProvisorioTemplate(
+  { nome, senha, expiraEm, loginUrl }: MotoristaAcessoProvisorioInput,
+): { subject: string; html: string } {
+  const primeiro = escapeHtml((nome ?? '').trim().split(/\s+/)[0] || '');
+  const url = escapeHtml(loginUrl);
+  const validade = escapeHtml(`${formatarExpiracaoLisboa(expiraEm)} (hora de Lisboa)`);
+  const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>O seu acesso ao WeGest</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;">
+            <h1 style="color: white; margin: 0; font-size: 28px;">O seu acesso ao WeGest</h1>
+          </div>
+
+          <div style="background: #f9f9f9; padding: 30px; border-radius: 10px; margin-bottom: 30px;">
+            <p>Olá${primeiro ? ` ${primeiro}` : ''},</p>
+            <p>Já pode entrar na app WeGest. Use o seu email e esta palavra-passe temporária:</p>
+
+            <p style="background: #e9ecef; padding: 15px; border-radius: 5px; text-align: center; font-family: 'Courier New', monospace; font-size: 22px; letter-spacing: 2px; font-weight: 700;">${escapeHtml(senha)}</p>
+
+            <div style="text-align: center; margin: 30px 0;">
+              ${botaoEmail(url, 'Entrar na app', BOTAO)}
+            </div>
+
+            <p>Se o botão não funcionar, copie e cole o link abaixo no seu navegador:</p>
+            <p style="background: #e9ecef; padding: 15px; border-radius: 5px; word-break: break-all; font-size: 14px;">${url}</p>
+
+            <p><strong>Esta palavra-passe é válida até ${validade}.</strong> No primeiro acesso vai ter de escolher uma palavra-passe nova.</p>
+            <p>Se não estava à espera deste email, pode ignorá-lo e falar com a sua empresa.</p>
+          </div>
+
+          <div style="text-align: center; color: #666; font-size: 14px;">
+            <p>© ${new Date().getFullYear()} WeGest. Todos os direitos reservados.</p>
+            <p>Este é um email automático, não responda a esta mensagem.</p>
+          </div>
+        </body>
+        </html>
+      `;
+  return { subject: 'O seu acesso à app WeGest', html };
+}
