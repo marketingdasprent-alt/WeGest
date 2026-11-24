@@ -130,15 +130,16 @@ describe('ContratoFormSecoes: troca para modelo sem preço na tarifa gravada', (
     expect(screen.queryByRole('option', { name: 'TVDE - Base' })).toBeNull();
   });
 
-  it('escolhida a tarifa nova, continua livre e o preço segue a tabela dela', () => {
+  // O TVDE cobra a tarifa ao vivo: trocar de tarifa já não escreve valor_total_manual.
+  it('escolhida a tarifa nova, continua livre e o valor manual não é tocado', () => {
     render(<Harness tarifaNoForm={null} />);
     fireEvent.change(seletor(), { target: { value: 'tarifa-acores' } });
     expect(formRef?.getValues('tarifa_id')).toBe('tarifa-acores');
-    expect(formRef?.getValues('valor_total_manual')).toBe(250);
+    expect(formRef?.getValues('valor_total_manual')).toBe(180);
     expect(seletor().closest('fieldset[disabled]')).toBeNull();
   });
 
-  it('preço negociado fica com o contrato ao escolher a tarifa nova', () => {
+  it('com preço negociado, o valor manual também não é tocado ao escolher a tarifa nova', () => {
     render(<Harness tarifaNoForm={null} precoSemanaAcordado={180} />);
     fireEvent.change(seletor(), { target: { value: 'tarifa-acores' } });
     expect(formRef?.getValues('tarifa_id')).toBe('tarifa-acores');

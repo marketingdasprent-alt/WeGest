@@ -11,6 +11,7 @@ import { contratoDias } from '@/lib/contratoDias';
 import { ehRegimeTvde } from '@shared/precoAluguer';
 import type { PrecoSemanalTvde } from '@shared/precoAluguer';
 import { ValorSemanalTvde } from './ValorSemanalTvde';
+import { ValorAcordadoTvde, type ValorAcordadoTvdeProps } from './ValorAcordadoTvde';
 
 interface ResumoContratoProps {
   dataInicio: string | null | undefined;
@@ -54,6 +55,11 @@ interface ResumoContratoProps {
   precoSemanalTvdeErro?: boolean;
   /** Torna o preço editável no cartão. Por omissão o cartão é só-leitura. */
   editavel?: boolean;
+  /**
+   * Abertura de contrato TVDE: o valor combinado com o motorista (vira pedido
+   * ao supervisor, não valor manual). Sem ele, `baseAluguerTarifa` é o preço da tarifa.
+   */
+  valorAcordadoTvde?: ValorAcordadoTvdeProps;
   /** Contrato travado: acção por baixo do valor (ex.: pedir alteração ao supervisor). */
   acaoValor?: React.ReactNode;
 }
@@ -83,6 +89,7 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
   precoSemanalTvde,
   precoSemanalTvdeCarregando = false,
   precoSemanalTvdeErro = false,
+  valorAcordadoTvde,
 }) => {
   const calculo = useMemo(() => {
     if (isFacturado && totalSnapshot != null) {
@@ -295,7 +302,15 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
             <Row label={`Dias`} value={String(calculo.dias)} muted />
           )}
 
-          {editavel ? (
+          {editavel && ehRegimeTvde(regime) ? (
+            <ValorAcordadoTvde
+              precoTarifa={valorAcordadoTvde?.precoTarifa ?? baseAluguerTarifa}
+              pretendido={valorAcordadoTvde?.pretendido}
+              motivo={valorAcordadoTvde?.motivo ?? ''}
+              onPretendidoChange={valorAcordadoTvde?.onPretendidoChange ?? (() => undefined)}
+              onMotivoChange={valorAcordadoTvde?.onMotivoChange ?? (() => undefined)}
+            />
+          ) : editavel ? (
             <>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-muted-foreground text-xs shrink-0">{precoLabel}</span>
@@ -335,8 +350,6 @@ export const ResumoContrato: React.FC<ResumoContratoProps> = ({
                     Define as datas primeiro
                   </p>
                 )
-              ) : regime === 'tvde' ? (
-                <p className="text-muted-foreground text-xs text-right">× 1 semana</p>
               ) : null}
             </>
           ) : mostraSemanalTvde ? (

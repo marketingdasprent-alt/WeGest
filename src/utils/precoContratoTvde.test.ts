@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   motivoTvdeSemPreco,
+  precoSemanaDifereDaTarifa,
   precoSemanaNegociadoTvde,
   tarifaCobreModelo,
 } from './precoContratoTvde';
 
 const base = {
   regime: 'tvde',
-  valorTotalManual: null,
+  precoSemanaAcordado: null,
   tarifaId: 'tvde-base',
   modeloId: 'bmw-530e',
   precoSemanaModelo: 475,
@@ -33,9 +34,43 @@ describe('contrato TVDE tem de ter preço', () => {
     expect(motivoTvdeSemPreco({ ...base, precoSemanaModelo: null })).toMatch(/não tem preço/);
   });
 
-  it('valor acordado manda, mesmo sem tarifa (0 incluído)', () => {
-    expect(motivoTvdeSemPreco({ ...base, tarifaId: null, valorTotalManual: 300 })).toBeNull();
-    expect(motivoTvdeSemPreco({ ...base, tarifaId: null, valorTotalManual: 0 })).toBeNull();
+  it('preço negociado e aprovado vale, mesmo sem tarifa (0 incluído)', () => {
+    expect(motivoTvdeSemPreco({ ...base, tarifaId: null, precoSemanaAcordado: 300 })).toBeNull();
+    expect(motivoTvdeSemPreco({ ...base, tarifaId: null, precoSemanaAcordado: 0 })).toBeNull();
+  });
+
+  // O valor manual não é cobrado no TVDE (caso #1026): já não conta como preço.
+  it('um valor manual sozinho já não chega', () => {
+    const comManual = { ...base, tarifaId: null, valorTotalManual: 300 };
+    expect(motivoTvdeSemPreco(comManual)).toMatch(/não tem tarifa/);
+  });
+
+  // A tarifa só com preço geral (225) é cobrada pelo fecho: não é "sem preço".
+  it('preço geral da tarifa conta, mesmo sem linha para o modelo', () => {
+    const geral = { ...base, precoSemanaModelo: null, precoTarifa: 225 };
+    expect(motivoTvdeSemPreco(geral)).toBeNull();
+    expect(motivoTvdeSemPreco({ ...geral, modeloId: null })).toBeNull();
+  });
+
+  it('valor manual legado só vale quando passado (renovação)', () => {
+    const semPreco = { ...base, precoSemanaModelo: null };
+    expect(motivoTvdeSemPreco({ ...semPreco, valorManualLegado: 300 })).toBeNull();
+    expect(motivoTvdeSemPreco(semPreco)).toMatch(/não tem preço/);
+  });
+
+  it('usa o mesmo conceito de TVDE do fecho (espaços e maiúsculas)', () => {
+    expect(motivoTvdeSemPreco({ ...base, regime: ' TVDE ', tarifaId: null })).toMatch(
+      /não tem tarifa/
+    );
+  });
+
+  it('as mensagens já não mandam indicar um valor acordado à mão', () => {
+    const msgs = [
+      motivoTvdeSemPreco({ ...base, tarifaId: null }),
+      motivoTvdeSemPreco({ ...base, modeloId: null }),
+      motivoTvdeSemPreco({ ...base, precoSemanaModelo: null }),
+    ];
+    msgs.forEach((m) => expect(m).not.toMatch(/indica o valor acordado/));
   });
 
   it('rent-a-car e slot não entram nesta regra', () => {
@@ -77,5 +112,19 @@ describe('tarifaCobreModelo', () => {
 
   it('modelo sem linha na tarifa não está coberto', () => {
     expect(tarifaCobreModelo('tvde', undefined)).toBe(false);
+  });
+});
+
+describe('precoSemanaDifereDaTarifa', () => {
+  it('compara em cêntimos', () => {
+    expect(precoSemanaDifereDaTarifa(180, 200)).toBe(true);
+    expect(precoSemanaDifereDaTarifa(200, 200)).toBe(false);
+    expect(precoSemanaDifereDaTarifa(0.1 + 0.2, 0.3)).toBe(false);
+    expect(precoSemanaDifereDaTarifa(200.01, 200)).toBe(true);
+  });
+  it('sem valor pretendido ou sem preço de tarifa não há diferença', () => {
+    expect(precoSemanaDifereDaTarifa(null, 200)).toBe(false);
+    expect(precoSemanaDifereDaTarifa(undefined, 200)).toBe(false);
+    expect(precoSemanaDifereDaTarifa(180, null)).toBe(false);
   });
 });
