@@ -84,7 +84,12 @@ import {
   saldoCreditavel,
   type NcParaSoma,
 } from '../_shared/faturacao/correcao.ts';
-import { avisoTotalDivergente, round2, totalComIva } from '../_shared/faturacao/totais.ts';
+import {
+  avisoTotalDivergente,
+  round2,
+  totalComIva,
+  totalEsperado,
+} from '../_shared/faturacao/totais.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1047,9 +1052,18 @@ serve(async (req) => {
     docEmitido = true;
 
     // Grava-se o total que o provider emitiu, quando o devolve: é esse o do documento fiscal.
-    const esperado = totalComIva(payload.itens);
-    const total = doc.total ?? esperado;
-    const avisoTotal = avisoTotalDivergente(esperado, doc.total, doc.numero || doc.docnum);
+    const total = doc.total ?? totalComIva(payload.itens);
+    // Compara com o que o fornecedor emite por linha (arredondado), não com a soma exata:
+    // a 4 67/171 (31 portagens, 25-11-2026) saiu certa e avisava 6 cêntimos de diferença.
+    // Só o adapter da KeyInvoice aplica precos_com_iva; os outros mandam sempre sem IVA.
+    const precosComIva =
+      provider === 'keyinvoice' &&
+      (cfg.settings as Record<string, unknown> | null)?.precos_com_iva === true;
+    const avisoTotal = avisoTotalDivergente(
+      totalEsperado(payload.itens, precosComIva),
+      doc.total,
+      doc.numero || doc.docnum
+    );
     if (avisoTotal) {
       console.error('[faturacao-emitir] total emitido diverge do pedido:', avisoTotal, {
         contrato_id: payload.contrato_id ?? null,
