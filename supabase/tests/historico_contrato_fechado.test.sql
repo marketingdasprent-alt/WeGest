@@ -107,11 +107,13 @@ select is(
   'cancelado e depois fechado: o resumo mostra o fecho (caso #753)'
 );
 
+-- Nunca entregue: a base devolve só o registo da criação ("estado inicial:
+-- agendado"), que o ecrã (isAberturaReal) mostra como "sem registo".
 select is(
-  (select count(*)::int from public.contrato_historico_resumo('00000000-0000-0000-0000-0000003f0b02')
+  (select detalhe from public.contrato_historico_resumo('00000000-0000-0000-0000-0000003f0b02')
     where evento_tipo = 'contrato_aberto'),
-  0,
-  'nunca entregue: "aberto por" continua sem registo'
+  'estado inicial: agendado',
+  'nunca entregue: "aberto por" só tem o registo da criação, que o ecrã esconde'
 );
 
 -- (3) Na transacção do teste os dois eventos têm a mesma hora (now()), por
