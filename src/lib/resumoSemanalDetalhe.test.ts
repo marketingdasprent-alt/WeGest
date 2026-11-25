@@ -51,6 +51,43 @@ describe('construirDetalheResumo', () => {
     expect(d?.liquido).toBe(175.42);
   });
 
+  it('guarda o detalhe do aluguer e as viagens, como no documento do escritório', () => {
+    const d = construirDetalheResumo({
+      ...base,
+      despesas: { ...despesasZero, aluguer: 175 },
+      liquido: 390.92 - 175,
+      aluguerDetalhe: [
+        {
+          matricula: 'BH-50-HF',
+          dias: 7,
+          taxaDiaria: 25.004,
+          custo: 175.0001,
+          dataInicioStr: '16/11',
+          dataFimStr: '22/11',
+        },
+      ],
+      viagens: 41.6,
+    });
+    expect(d?.aluguerDetalhe).toEqual([
+      {
+        matricula: 'BH-50-HF',
+        dias: 7,
+        taxaDiaria: 25,
+        custo: 175,
+        dataInicioStr: '16/11',
+        dataFimStr: '22/11',
+      },
+    ]);
+    expect(d?.viagens).toBe(42);
+    expect(lerDetalheResumo(d)).toEqual(d);
+  });
+
+  it('sem aluguer nem viagens, não grava esses campos (semanas antigas continuam válidas)', () => {
+    const d = construirDetalheResumo({ ...base, aluguerDetalhe: [] });
+    expect(d).not.toHaveProperty('aluguerDetalhe');
+    expect(d).not.toHaveProperty('viagens');
+  });
+
   it('não guarda o detalhe se as contas não batem com o líquido gravado', () => {
     expect(construirDetalheResumo({ ...base, liquido: 369.42 })).toBeNull();
   });

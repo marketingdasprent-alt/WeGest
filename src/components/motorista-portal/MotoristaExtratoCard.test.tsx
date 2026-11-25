@@ -1,56 +1,72 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+vi.mock('./ResumoSemanaDialog', () => ({
+  ResumoSemanaDialog: ({ acertoId }: { acertoId: string | null }) =>
+    acertoId ? <div data-testid="resumo-aberto">{acertoId}</div> : null,
+}));
+
 import { MotoristaExtratoCard } from './MotoristaExtratoCard';
-import type { ExtratoMotorista } from '@/hooks/useMotoristaExtratoPeriodo';
+import { despesasDoResumo } from '@/lib/resumoSemanalDetalhe';
+import type { AcertoSemanalDetalhado } from '@/hooks/useAcertoSemanal';
+import type { DetalheResumoSemanal } from '@/lib/resumoSemanalDetalhe';
 
-const INICIO = new Date(2026, 7, 17);
-const FIM = new Date(2026, 7, 23);
+const INICIO = new Date(2026, 10, 16);
+const FIM = new Date(2026, 10, 22);
 
-function extrato(over: Partial<ExtratoMotorista> = {}): ExtratoMotorista {
+// Caso real (Rodrigo, 16–22/11): o documento do escritório tem portagens 1,75 €.
+function detalhe(over: Partial<DetalheResumoSemanal> = {}): DetalheResumoSemanal {
   return {
-    periodoInicio: '2026-08-17',
-    periodoFim: '2026-08-23',
-    receitaBolt: 1000,
-    receitaUber: 0,
-    gorjetas: 0,
-    extras: 0,
-    receita: 1000,
-    viagensBolt: 80,
-    combustivel: 50,
-    portagens: 10,
-    aluguer: 300,
-    reparacoes: 0,
-    outros: 0,
-    totalCustos: 360,
-    liquido: 640,
-    temDadosReceita: true,
-    temCustosLancados: true,
-    acertoLiquido: null,
-    temAcerto: false,
-    mediaPorDia: 142.86,
-    diasDecorridos: 7,
+    versao: 1,
+    receitas: { bolt: 0, uber: 218.54, outras: 0 },
+    totalReceitas: 218.54,
+    despesas: {
+      aluguer: 175,
+      combustivel: 50.07,
+      portagens: 1.75,
+      outros_custos: 6.4,
+      slot: 0,
+      caucao: 0,
+      seguros: 0,
+      reparacoes: 0,
+    },
+    totalDespesas: 233.22,
+    retencao: null,
+    liquido: -14.68,
     ...over,
   };
 }
 
+function acerto(d: DetalheResumoSemanal | null = detalhe()): AcertoSemanalDetalhado {
+  return {
+    id: 'a1',
+    semanaInicio: '2026-11-16',
+    semanaFim: '2026-11-22',
+    liquido: d ? d.liquido : 320,
+    detalhe: d,
+  };
+}
+
 function ver(
-  e: ExtratoMotorista | null,
+  a: AcertoSemanalDetalhado | null | undefined,
   opts: {
     isLoading?: boolean;
     error?: unknown;
     semanasAtras?: number;
+    podeSeguinte?: boolean;
     onAnterior?: () => void;
     onSeguinte?: () => void;
   } = {}
 ) {
   return render(
     <MotoristaExtratoCard
-      extrato={e}
+      acerto={a}
       isLoading={opts.isLoading ?? false}
       error={opts.error ?? null}
       inicio={INICIO}
       fim={FIM}
-      semanasAtras={opts.semanasAtras ?? 0}
+      semanasAtras={opts.semanasAtras ?? 1}
+      podeSeguinte={opts.podeSeguinte}
       onAnterior={opts.onAnterior ?? (() => {})}
       onSeguinte={opts.onSeguinte ?? (() => {})}
     />
@@ -58,122 +74,103 @@ function ver(
 }
 
 describe('MotoristaExtratoCard', () => {
-  it('mostra o líquido e cada desconto que existe', () => {
-    ver(extrato());
-    expect(screen.getByText(/640,00/)).toBeTruthy();
-    expect(screen.getByText('Aluguer da viatura')).toBeTruthy();
-    expect(screen.getByText('Combustível')).toBeTruthy();
-    expect(screen.getByText('Líquido a receber')).toBeTruthy();
+  it('mostra as despesas do resumo do escritório, com as portagens', () => {
+    ver(acerto());
+    expect(screen.getByText('Portagens')).toBeInTheDocument();
+    expect(screen.getByText('−1,75 €')).toBeInTheDocument();
+    expect(screen.getByText('−233,22 €')).toBeInTheDocument();
+    expect(screen.getByText('218,54 €')).toBeInTheDocument();
   });
 
-  it('esconde as rubricas de desconto que estão a zero', () => {
-    ver(extrato());
-    // Reparações e Outros vêm a zero neste extrato — não devem ocupar linha.
-    expect(screen.queryByText('Reparações')).toBeNull();
-    expect(screen.queryByText('Outros')).toBeNull();
+  it('líquido negativo aparece como dívida, no valor do escritório', () => {
+    ver(acerto());
+    expect(screen.getByText('Em dívida')).toBeInTheDocument();
+    expect(screen.getByText('14,68 €')).toBeInTheDocument();
   });
 
-  it('sem dados importados NÃO mostra valores, diz que ainda não chegaram', () => {
-    ver(extrato({ temDadosReceita: false, receita: 0, liquido: 0, viagensBolt: 0 }));
-    expect(screen.getByText(/ainda não foram importados/i)).toBeTruthy();
-    // Um 0 € aqui seria afirmar que ganhou zero, o que não sabemos.
-    expect(screen.queryByText(/Líquido a receber/)).toBeNull();
+  it('não mostra linhas de despesa a zero', () => {
+    ver(acerto());
+    expect(screen.queryByText('Slot')).not.toBeInTheDocument();
+    expect(screen.queryByText('Reparações')).not.toBeInTheDocument();
   });
 
-  it('sem custos lançados avisa que o líquido ainda não os desconta', () => {
-    ver(
-      extrato({
-        temCustosLancados: false,
-        combustivel: 0,
-        portagens: 0,
-        aluguer: 0,
-        totalCustos: 0,
-        liquido: 1000,
-      })
-    );
-    expect(screen.getByText(/ainda não os desconta/i)).toBeTruthy();
-  });
-
-  it('líquido negativo aparece como dívida, sem sinal a confundir', () => {
-    ver(extrato({ liquido: -120 }));
-    expect(screen.getByText('Em dívida')).toBeTruthy();
-    expect(screen.getByText(/120,00/)).toBeTruthy();
-  });
-
-  it('quando o acerto difere, explica qual vale para pagamento', () => {
-    ver(extrato({ temAcerto: true, acertoLiquido: 767.84, liquido: 764 }));
-    expect(screen.getByText(/conta para pagamento/i)).toBeTruthy();
-    expect(screen.getByText(/767,84/)).toBeTruthy();
-  });
-
-  it('acerto igual ao calculado não incomoda o motorista com avisos', () => {
-    ver(extrato({ temAcerto: true, acertoLiquido: 640, liquido: 640 }));
-    expect(screen.queryByText(/conta para pagamento/i)).toBeNull();
-  });
-
-  it('erro mostra erro e nunca zeros disfarçados', () => {
-    ver(null, { error: new Error('falhou') });
-    expect(screen.getByText(/não foi possível carregar/i)).toBeTruthy();
-    expect(screen.queryByText(/0,00/)).toBeNull();
-  });
-
-  it('semana por enviar diz que as contas estão em preparação, sem valores nem erro', () => {
+  it('semana ainda não enviada: avisa que está a ser preparada', () => {
     ver(null);
-    expect(screen.getByText(/estão a ser preparadas/i)).toBeTruthy();
-    expect(screen.queryByText(/não foi possível carregar/i)).toBeNull();
-    expect(screen.queryByText(/€/)).toBeNull();
-    // As setas ficam: o motorista tem de poder ir às semanas já enviadas.
-    expect(screen.getByLabelText(/semana anterior/i)).toBeTruthy();
+    expect(screen.getByRole('status')).toHaveTextContent('a ser preparadas');
   });
 
-  it('erro ganha à semana por enviar', () => {
-    ver(null, { error: new Error('falhou') });
-    expect(screen.getByText(/não foi possível carregar/i)).toBeTruthy();
-    expect(screen.queryByText(/estão a ser preparadas/i)).toBeNull();
+  it('erro não se disfarça de zeros', () => {
+    ver(undefined, { error: new Error('x') });
+    expect(screen.getByText(/Não foi possível carregar/)).toBeInTheDocument();
+    expect(screen.queryByText('Líquido a receber')).not.toBeInTheDocument();
   });
 
-  it('sem resposta (undefined) não finge que a semana está por enviar', () => {
-    render(
-      <MotoristaExtratoCard
-        extrato={undefined}
-        isLoading={false}
-        error={null}
-        inicio={INICIO}
-        fim={FIM}
-        semanasAtras={0}
-        onAnterior={() => {}}
-        onSeguinte={() => {}}
-      />
-    );
-    expect(screen.queryByText(/estão a ser preparadas/i)).toBeNull();
+  it('sem detalhe gravado: mostra o valor que conta para pagamento', () => {
+    ver(acerto(null));
+    expect(screen.getByText(/detalhe desta semana não está disponível/)).toBeInTheDocument();
+    expect(screen.getByText('Líquido a receber')).toBeInTheDocument();
+    expect(screen.getByText('320,00 €')).toBeInTheDocument();
   });
 
-  it('recua para a semana anterior', () => {
-    const anterior = vi.fn();
-    ver(extrato(), { onAnterior: anterior });
-    fireEvent.click(screen.getByLabelText(/semana anterior/i));
-    expect(anterior).toHaveBeenCalledTimes(1);
+  it('abre o resumo completo da semana', () => {
+    ver(acerto());
+    fireEvent.click(screen.getByRole('button', { name: /Ver resumo completo/ }));
+    expect(screen.getByTestId('resumo-aberto')).toHaveTextContent('a1');
   });
 
-  it('na semana actual nao deixa avancar — nao ha ganhos do futuro', () => {
-    ver(extrato(), { semanasAtras: 0 });
-    expect(screen.getByLabelText(/semana seguinte/i).hasAttribute('disabled')).toBe(true);
+  it('com Retenção mostra IVA e IRS, para as contas fecharem à vista', () => {
+    const retencao = {
+      totalLiquido: 266.78,
+      taxaIva: 0.23,
+      iva: 61.36,
+      totalDocumento: 328.14,
+      taxaIrs: 0.25,
+      irs: 66.7,
+      totalAReceber: 261.44,
+    };
+    ver(acerto(detalhe({ totalReceitas: 500, retencao, liquido: 261.44 })));
+    expect(screen.getByText('IVA (23%)')).toBeInTheDocument();
+    expect(screen.getByText('61,36 €')).toBeInTheDocument();
+    expect(screen.getByText('Total documento')).toBeInTheDocument();
+    expect(screen.getByText('IRS retido (25%)')).toBeInTheDocument();
+    expect(screen.getByText('−66,70 €')).toBeInTheDocument();
+    expect(screen.getByText('261,44 €')).toBeInTheDocument();
   });
 
-  it('numa semana passada ja deixa voltar para a frente', () => {
-    const seguinte = vi.fn();
-    ver(extrato(), { semanasAtras: 2, onSeguinte: seguinte });
-    fireEvent.click(screen.getByLabelText(/semana seguinte/i));
-    expect(seguinte).toHaveBeenCalledTimes(1);
+  it('sem Retenção não mostra linhas de IVA e IRS', () => {
+    ver(acerto());
+    expect(screen.queryByText(/IVA/)).not.toBeInTheDocument();
   });
 
-  // Sem isto, uma semana que falhe a carregar prende o motorista nela: fica sem
-  // setas e sem forma de voltar a uma que funcione.
-  it('as setas continuam la quando a semana falha ou esta a carregar', () => {
-    const { unmount } = ver(null, { error: new Error('falhou'), semanasAtras: 1 });
-    expect(screen.getByLabelText(/semana anterior/i)).toBeTruthy();
-    unmount();
-    ver(null, { isLoading: true, semanasAtras: 1 });
-    expect(screen.getByLabelText(/semana anterior/i)).toBeTruthy();
+  it('mostra viagens quando o resumo as tem', () => {
+    ver(acerto(detalhe({ viagens: 42 })));
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('Viagens')).toBeInTheDocument();
+  });
+
+  it('na semana passada não deixa avançar para a semana em curso', () => {
+    ver(acerto(), { podeSeguinte: false });
+    expect(screen.getByRole('button', { name: 'Semana seguinte' })).toBeDisabled();
+  });
+
+  it('setas chamam a navegação', () => {
+    const onAnterior = vi.fn();
+    const onSeguinte = vi.fn();
+    ver(acerto(), { podeSeguinte: true, semanasAtras: 2, onAnterior, onSeguinte });
+    fireEvent.click(screen.getByRole('button', { name: 'Semana anterior' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Semana seguinte' }));
+    expect(onAnterior).toHaveBeenCalledOnce();
+    expect(onSeguinte).toHaveBeenCalledOnce();
+  });
+});
+
+describe('despesasDoResumo', () => {
+  it('segue a ordem do documento do escritório', () => {
+    expect(despesasDoResumo(detalhe()).map((l) => l.rotulo)).toEqual([
+      'Aluguer',
+      'Combustível',
+      'Portagens',
+      'Outros custos',
+    ]);
   });
 });

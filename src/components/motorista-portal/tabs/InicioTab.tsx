@@ -132,13 +132,14 @@ export const InicioTab: React.FC<InicioTabProps> = ({
       </div>
 
       <MotoristaExtratoCard
-        extrato={semana.extrato}
+        acerto={semana.acerto}
         isLoading={semana.isLoading}
         error={semana.error}
         inicio={semana.inicio}
         fim={semana.fim}
         semanasAtras={semana.semanasAtras}
         podeAnterior={semana.podeAnterior}
+        podeSeguinte={semana.podeSeguinte}
         onAnterior={semana.anterior}
         onSeguinte={semana.seguinte}
       />

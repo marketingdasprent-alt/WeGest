@@ -24,13 +24,14 @@ vi.mock('@/hooks/useKmDaSemana', () => ({ useKmDaSemana: () => ({ data: { entreg
 vi.mock('@/hooks/useAcordoVistaDevedor', () => ({ useMeusAcordosAtivos: () => ({ data: [] }) }));
 vi.mock('@/hooks/useExtratoSemanal', () => ({
   useExtratoSemanal: () => ({
-    extrato: null,
+    acerto: null,
     isLoading: false,
     error: null,
     inicio: new Date(2026, 10, 2),
     fim: new Date(2026, 10, 8),
-    semanasAtras: 0,
+    semanasAtras: 1,
     podeAnterior: true,
+    podeSeguinte: false,
     anterior: vi.fn(),
     seguinte: vi.fn(),
   }),

@@ -71,10 +71,11 @@ describe('ganhos Bolt: uma tabela só', () => {
     expect(contas).not.toMatch(/Number\(r\.ganhos_liquidos\)/);
 
     const recibos = ler('src/components/motoristas/tabs/MotoristaRecibosSection.tsx');
-    // A aba Resumos lê a Bolt pela função (um gestor sem financeiro_recibos
-    // não lê a tabela), e a função soma o mesmo campo.
-    expect(recibos).toMatch(/rpc\(\s*'motorista_bolt_liquido_semana'/);
-    expect(recibos).not.toMatch(/Number\(curr\.ganhos_liquidos\)/);
+    // A aba Resumos da ficha não tem conta própria: usa a da lista de
+    // Contas/Resumo (verificada acima), e não lê a Bolt por outro caminho.
+    expect(recibos).toMatch(/useResumoSemanalMotorista\(/);
+    expect(recibos).not.toMatch(/bolt_resumos_semanais|ganhos_liquidos/);
+    // A função continua a servir quem a chama, a somar o mesmo campo.
     const funcaoBolt = ler(
       'supabase/migrations/20261103100000_bolt_liquido_semana_para_gestores.sql'
     );

@@ -52,6 +52,40 @@ describe('ResumoSemanaDialog', () => {
     expect(screen.getByText(/Valor líquido a receber/i)).toBeInTheDocument();
   });
 
+  it('mostra o detalhe do aluguer como o documento do escritório', () => {
+    useAcertoSemanal.mockReturnValue({
+      data: {
+        ...acertoCompleto,
+        detalhe: {
+          ...acertoCompleto.detalhe,
+          aluguerDetalhe: [
+            {
+              matricula: 'BH-50-HF',
+              dias: 7,
+              taxaDiaria: 25,
+              custo: 175,
+              dataInicioStr: '16/11',
+              dataFimStr: '22/11',
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      error: null,
+    });
+    render(<ResumoSemanaDialog acertoId="a1" onClose={() => {}} />);
+    expect(screen.getByText(/Aluguer — detalhe/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/BH-50-HF \(16\/11–22\/11\): 7 dias × 25,00 €\/dia/)
+    ).toBeInTheDocument();
+  });
+
+  it('semana gravada sem detalhe do aluguer não mostra esse bloco', () => {
+    useAcertoSemanal.mockReturnValue({ data: acertoCompleto, isLoading: false, error: null });
+    render(<ResumoSemanaDialog acertoId="a1" onClose={() => {}} />);
+    expect(screen.queryByText(/Aluguer — detalhe/i)).toBeNull();
+  });
+
   it('mostra as linhas de IVA e IRS quando o motorista tem Retenção', () => {
     useAcertoSemanal.mockReturnValue({
       data: {

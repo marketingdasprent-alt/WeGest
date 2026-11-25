@@ -24,6 +24,7 @@ import { normalizeFirstLast, isCompanyName } from './motoristaNomeMatching';
 import { contarInativosEscondidos, inativoVisivelNoResumo } from '@/utils/motoristasInativosResumo';
 import { entraNosNegativos } from '@/utils/saldoNegativoResumo';
 import { useContasResumoSemana } from '@/hooks/useContasResumoSemana';
+import { usePeriodoFechado } from '@/hooks/usePeriodoFechado';
 import { useCombustivelSemDono } from '@/hooks/useCombustivelSemDono';
 import { CombustivelSemDonoAviso } from './CombustivelSemDonoAviso';
 import {
@@ -253,32 +254,8 @@ export function ContasResumoTab() {
     return label;
   };
 
-  // Mostre o retrato gravado no fecho e compare períodos por sobreposição,
-  // porque os fechos podem cobrir intervalos personalizados.
-  const [periodoFechado, setPeriodoFechado] = useState<boolean | null>(null);
-
-  // Dependências em texto evitam ciclos causados por novas instâncias de Date.
-  const semanaInicioStr = format(weekStart, 'yyyy-MM-dd');
-  const semanaFimStr = format(weekEnd, 'yyyy-MM-dd');
-
-  useEffect(() => {
-    let cancelado = false;
-    const verificar = async () => {
-      setPeriodoFechado(null);
-      const { count, error } = await supabase
-        .from('motorista_resumo_semanal')
-        .select('id', { count: 'exact', head: true })
-        .lte('semana_inicio', semanaFimStr)
-        .gte('semana_fim', semanaInicioStr);
-      if (cancelado) return;
-      // Em falha de rede, mantenha o resumo visível.
-      setPeriodoFechado(error ? true : (count ?? 0) > 0);
-    };
-    verificar();
-    return () => {
-      cancelado = true;
-    };
-  }, [semanaInicioStr, semanaFimStr]);
+  // Mostre o retrato gravado no fecho (mesma regra da ficha do motorista).
+  const [periodoFechado, setPeriodoFechado] = usePeriodoFechado(weekStart, weekEnd);
 
   // Trocar de semana descarta o período personalizado para evitar fechos acidentais.
   useEffect(() => {
