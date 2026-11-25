@@ -6,6 +6,7 @@ import {
   buildSlotPeriodos,
   type ViaturaPeriodoInput,
 } from '@/components/administrativo/motorista-resumo/slotPeriodos';
+import type { SlotPeriodo } from '@/components/administrativo/MotoristaResumoDialog';
 import {
   COLUNAS_CONTRATO_PARA_PERIODO,
   periodosDeContratos,
@@ -29,10 +30,16 @@ import {
   type TaxasRetencao,
 } from '@/components/administrativo/motorista-resumo/retencaoIrs';
 
+interface OpcoesContasResumoSemana {
+  /** Só calcula: não grava o líquido de todos (a ficha do motorista usa a mesma conta). */
+  soLeitura?: boolean;
+}
+
 export function useContasResumoSemana(
   weekStart: Date,
   weekEnd: Date,
-  periodoFechado: boolean | null
+  periodoFechado: boolean | null,
+  { soLeitura = false }: OpcoesContasResumoSemana = {}
 ) {
   const [loading, setLoading] = useState(true);
   const [resumos, setResumos] = useState<MotoristaResumo[]>([]);
@@ -361,12 +368,14 @@ export function useContasResumoSemana(
       setAluguerEstimadoMap(aluguerEstimadoMap);
 
       const aluguerByMotorista: Record<string, number> = {};
+      const aluguerPeriodosByMotorista: Record<string, SlotPeriodo[]> = {};
       for (const [motoristaId, linhas] of viaturasPorMotorista) {
-        const total = buildSlotPeriodos(linhas, weekStart, weekEnd, new Map()).reduce(
-          (s, p) => s + p.custo,
-          0
-        );
-        if (total > 0) aluguerByMotorista[motoristaId] = total;
+        const periodos = buildSlotPeriodos(linhas, weekStart, weekEnd, new Map());
+        const total = periodos.reduce((s, p) => s + p.custo, 0);
+        if (total > 0) {
+          aluguerByMotorista[motoristaId] = total;
+          aluguerPeriodosByMotorista[motoristaId] = periodos;
+        }
       }
 
       const reparacoesByMotorista: Record<string, number> = {};
@@ -773,6 +782,8 @@ export function useContasResumoSemana(
             },
             retencao,
             liquido,
+            aluguerDetalhe: m.motorista_id ? aluguerPeriodosByMotorista[m.motorista_id] : undefined,
+            viagens: totalViagens,
           }),
         };
       });
@@ -784,7 +795,9 @@ export function useContasResumoSemana(
       }));
       setResumos(comUid);
 
-      if (periodoFechado !== true) {
+      if (soLeitura) {
+        // Quem grava é a lista de Contas/Resumo; a ficha só mostra.
+      } else if (periodoFechado !== true) {
         console.info('[liquido semanal] período por fechar — calculado, não gravado.');
       } else {
         try {

@@ -12,8 +12,8 @@ interface ContasTabProps {
 }
 
 /**
- * Secção Contas: a semana ao vivo, o histórico dos fechos (o número que
- * conta para pagamento), planos de pagamento, movimentos e abastecimentos.
+ * Secção Contas: a semana fechada (igual ao resumo do escritório), o histórico
+ * dos fechos, planos de pagamento, movimentos e abastecimentos.
  */
 export const ContasTab: React.FC<ContasTabProps> = ({ motoristaId }) => {
   const semana = useExtratoSemanal(motoristaId);
@@ -21,13 +21,14 @@ export const ContasTab: React.FC<ContasTabProps> = ({ motoristaId }) => {
   return (
     <div className="space-y-4">
       <MotoristaExtratoCard
-        extrato={semana.extrato}
+        acerto={semana.acerto}
         isLoading={semana.isLoading}
         error={semana.error}
         inicio={semana.inicio}
         fim={semana.fim}
         semanasAtras={semana.semanasAtras}
         podeAnterior={semana.podeAnterior}
+        podeSeguinte={semana.podeSeguinte}
         onAnterior={semana.anterior}
         onSeguinte={semana.seguinte}
       />

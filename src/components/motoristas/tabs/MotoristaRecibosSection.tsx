@@ -16,7 +16,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { SortableTableHead, toggleSort } from '@/components/ui/sortable-table-head';
-import { classificarMovimento } from '@shared/movimentosMotorista';
 import {
   Select,
   SelectContent,
@@ -39,6 +38,7 @@ import {
   Plus,
   Upload,
   FileText,
+  Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,21 +46,7 @@ import { Separator } from '@/components/ui/separator';
 import { usePermissions } from '@/hooks/usePermissions';
 import { RECURSOS } from '@/utils/permissions';
 import { MotoristaResumoDialog } from '@/components/administrativo/MotoristaResumoDialog';
-import {
-  calcularRetencao,
-  corteSemReciboDaFicha,
-  divisorCorte,
-  taxasRetencaoDaFicha,
-} from '@/components/administrativo/motorista-resumo/retencaoIrs';
-import { buildSlotPeriodos } from '@/components/administrativo/motorista-resumo/slotPeriodos';
-import {
-  periodosDeContratos,
-  type ContratoParaPeriodo,
-} from '@/components/administrativo/motorista-resumo/periodosDoContrato';
-import {
-  buildPrecoPorTarifaModelo,
-  buildTvdeModeloPrecoMap,
-} from '@/components/administrativo/motorista-resumo/tvdeModeloPreco';
+import { useResumoSemanalMotorista, totaisDoResumo } from '@/hooks/useResumoSemanalMotorista';
 
 interface Recibo {
   id: string;
@@ -154,37 +140,25 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
     return semanas.reverse();
   }, [motorista, recibos]);
 
-  // Resumo Financeiro Real-time
-  const [resumoSemanal, setResumoSemanal] = useState({
-    faturadoBolt: 0,
-    faturadoUber: 0,
-    gorjetaBolt: 0,
-    gorjetaUber: 0,
-    outrasReceitas: 0,
-    totalFaturado: 0,
-    custosSemanal: 0,
-    aluguer: 0,
-    combustivel: 0,
-    portagens: 0,
-    reparacoes: 0,
-    caucao: 0,
-    seguros: 0,
-    outrosCustos: 0,
-    liquido: 0,
-    loading: false,
-    isImportado: false,
-    falhou: false,
-  });
-
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 });
+
+  // Os valores da semana vêm da mesma conta da lista de Contas/Resumo.
+  const podeVerFinanceiro = isAdmin || hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
+  const resumoDaSemana = useResumoSemanalMotorista(
+    motoristaId,
+    weekStart,
+    weekEnd,
+    podeVerFinanceiro
+  );
+  const totais = totaisDoResumo(resumoDaSemana.resumo);
 
   useEffect(() => {
     loadData();
   }, [motoristaId, selectedWeek]);
 
   const loadData = async () => {
-    await Promise.all([loadRecibos(), loadResumosGuardados(), loadResumoSemanal()]);
+    await Promise.all([loadRecibos(), loadResumosGuardados()]);
   };
 
   const loadRecibos = async () => {
@@ -216,298 +190,6 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       setResumosGuardados(data || []);
     } catch (error) {
       console.error('Erro ao carregar resumos guardados:', error);
-    }
-  };
-
-  const loadResumoSemanal = async () => {
-    setResumoSemanal((prev) => ({ ...prev, loading: true, falhou: false }));
-    const weekStartISO = weekStart.toISOString();
-    const weekEndISO = weekEnd.toISOString();
-    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
-
-    try {
-      // 0. Verificar se existe recibo importado para este motorista+semana
-      const { data: reciboImportado } = await supabase
-        .from('recibos_importados')
-        .select('*')
-        .eq('motorista_id', motoristaId)
-        .eq('semana_inicio', weekStartStr)
-        .maybeSingle();
-
-      if (reciboImportado) {
-        const boltVal = Number(reciboImportado.faturado_bolt) || 0;
-        const uberVal = Number(reciboImportado.faturado_uber) || 0;
-        const outrasRec = Number(reciboImportado.outras_receitas) || 0;
-        const totalFat = boltVal + uberVal + outrasRec;
-        const aluguer = Number(reciboImportado.aluguer) || 0;
-        const combustivel = Number(reciboImportado.combustivel) || 0;
-        const viaVerde = Number(reciboImportado.via_verde) || 0;
-        const outrosCustos = Number(reciboImportado.outros_custos) || 0;
-        const caucao = Number(reciboImportado.caucao) || 0;
-        const seguros = Number(reciboImportado.seguros) || 0;
-        const reparacoes = Number(reciboImportado.reparacoes) || 0;
-        const custosTotal =
-          aluguer + combustivel + viaVerde + outrosCustos + caucao + seguros + reparacoes;
-
-        setResumoSemanal({
-          faturadoBolt: boltVal,
-          faturadoUber: uberVal,
-          gorjetaBolt: 0,
-          gorjetaUber: 0,
-          outrasReceitas: outrasRec,
-          totalFaturado: totalFat,
-          custosSemanal: custosTotal,
-          aluguer,
-          combustivel,
-          portagens: viaVerde,
-          reparacoes,
-          caucao,
-          seguros,
-          outrosCustos,
-          liquido: Number(reciboImportado.liquido) || 0,
-          loading: false,
-          isImportado: true,
-          falhou: false,
-        });
-        return;
-      }
-
-      // Uber: motorista_id já vem resolvido na própria linha do resumo
-      // semanal pelo gatilho de atribuição por plataforma (ver
-      // motorista_plataforma_identidades) — a mesma fonte que o fecho usa.
-      // Ir por uber_drivers.motorista_id (indirecção antiga) ficava para
-      // trás sempre que a identidade mudava de dono — caso real: Paulo
-      // André Antunes Badalo, transferido para a PREMIUM RIDE, aparecia
-      // aqui com 0 € de Uber apesar de ter 483,93 € já resolvidos.
-      const { data: uberTrans } = await supabase
-        .from('uber_resumos_semanais')
-        .select('ganhos_brutos, gorjetas')
-        .eq('motorista_id', motoristaId)
-        .lte('periodo_inicio', weekEndStr)
-        .gte('periodo_fim', weekStartStr);
-
-      const uberTotal = (uberTrans || []).reduce(
-        (acc, curr) => acc + (Number(curr.ganhos_brutos) || 0),
-        0
-      );
-      const gorjetaUber = (uberTrans || []).reduce(
-        (acc, curr) => acc + (Number(curr.gorjetas) || 0),
-        0
-      );
-
-      // 3. Bolt: um sítio só — bolt_resumos_semanais.liquido_a_pagar, coluna
-      // gerada pela base que soma ganhos_liquidos + campanhas + reembolsos
-      // (ver src/config/bolt.ts). Ler ganhos_liquidos perdia as campanhas nas
-      // integrações em oauth. Já não se consulta bolt_viagens: tem uma linha
-      // por TENTATIVA de despacho e somá-la conta a mesma corrida várias vezes.
-      // Pela função e não pela tabela: a tabela só abre a quem tem
-      // financeiro_recibos e um gestor sem ela via 0 € e gravava esse líquido.
-      // Falhar aqui não pode virar 0 €: sem Bolt o resumo não se calcula nem grava.
-      const { data: boltTotalRpc, error: boltErro } = await supabase.rpc(
-        'motorista_bolt_liquido_semana',
-        { p_motorista_id: motoristaId, p_inicio: weekStartStr, p_fim: weekEndStr }
-      );
-      if (boltErro) throw boltErro;
-      const boltResumosTotal = Number(boltTotalRpc) || 0;
-
-      // Gorjeta fora do corte. Falhar aqui não derruba o resumo (fica 0, o total
-      // já veio certo), ao contrário do total acima.
-      const { data: boltGorjetaRpc } = await supabase.rpc('motorista_bolt_gorjeta_semana', {
-        p_motorista_id: motoristaId,
-        p_inicio: weekStartStr,
-        p_fim: weekEndStr,
-      });
-      const gorjetaBolt = Number(boltGorjetaRpc) || 0;
-
-      // 4. Combustíveis (BP, Repsol, EDP)
-      const [bpRes, repsolRes, edpRes] = await Promise.all([
-        supabase
-          .from('bp_transacoes')
-          .select('amount')
-          .eq('motorista_id', motoristaId)
-          .gte('transaction_date', weekStartISO)
-          .lte('transaction_date', weekEndISO),
-        supabase
-          .from('repsol_transacoes')
-          .select('amount')
-          .eq('motorista_id', motoristaId)
-          .gte('transaction_date', weekStartISO)
-          .lte('transaction_date', weekEndISO),
-        supabase
-          .from('edp_transacoes')
-          .select('amount')
-          .eq('motorista_id', motoristaId)
-          .gte('transaction_date', weekStartISO)
-          .lte('transaction_date', weekEndISO),
-      ]);
-
-      const fuelTotal =
-        (bpRes.data || []).reduce((a, b) => a + (Number(b.amount) || 0), 0) +
-        (repsolRes.data || []).reduce((a, b) => a + (Number(b.amount) || 0), 0) +
-        (edpRes.data || []).reduce((a, b) => a + (Number(b.amount) || 0), 0);
-
-      // 5. Financeiro Manual (Mirroring Admin: ONLY 'pendente')
-      const { data: finData } = await supabase
-        .from('motorista_financeiro')
-        .select('valor, tipo, categoria')
-        .eq('motorista_id', motoristaId)
-        .gte('data_movimento', weekStartStr)
-        .lte('data_movimento', weekEndStr)
-        .eq('status', 'pendente');
-
-      // 5b. Aluguer da semana — do CONTRATO, pelo mesmo caminho que o resumo
-      // do motorista e a lista de Contas/Resumo usam (periodosDoContrato.ts +
-      // buildSlotPeriodos). Isto era a última cópia independente do cálculo, e
-      // errava de três maneiras ao mesmo tempo: cobrava a tarifa do grupo em
-      // vez do preço acordado no contrato, cobrava a semana inteira sem
-      // pro-rata dos dias, e filtrava por status='ativo' — o que punha a
-      // 0,00 € o aluguer de qualquer semana passada cuja viatura já tivesse
-      // sido devolvida.
-      const [{ data: contratosSemana }, { data: tarifasModeloRows }] = await Promise.all([
-        supabase
-          .from('contratos_renting')
-          .select(
-            'viatura_id, data_inicio, data_fim, valor_total_manual, preco_semana_acordado, tarifa_id, regime, estado_operacional, substituido_em, viaturas(matricula, grupo_id, modelo_id), contrato_condutores!inner(motorista_id), cliente:cliente_id(frota_parceira)'
-          )
-          .eq('contrato_condutores.motorista_id', motoristaId)
-          .is('deleted_at', null)
-          // timestamptz: com `.lte(data)` perde-se um contrato que comece com
-          // hora no último dia da semana.
-          .lt('data_inicio', format(addDays(weekEnd, 1), 'yyyy-MM-dd'))
-          .or(`data_fim.is.null,data_fim.gte.${weekStartStr}`),
-        supabase
-          .from('renting_tarifa_precos_modelo')
-          .select('tarifa_id, modelo_id, preco_semana, renting_tarifas!inner(tipo, ativa)')
-          .eq('renting_tarifas.tipo', 'tvde')
-          .eq('renting_tarifas.ativa', true),
-      ]);
-
-      const tarifasModelo = (tarifasModeloRows ?? []) as Array<{
-        tarifa_id: string | null;
-        modelo_id: string;
-        preco_semana: number;
-      }>;
-      const { periodos: periodosAluguer } = periodosDeContratos(
-        (contratosSemana ?? []) as ContratoParaPeriodo[],
-        {
-          porTarifaModelo: buildPrecoPorTarifaModelo(tarifasModelo),
-          porModelo: buildTvdeModeloPrecoMap(tarifasModelo),
-        }
-      );
-      const fixedRent = buildSlotPeriodos(periodosAluguer, weekStart, weekEnd, new Map()).reduce(
-        (soma, p) => soma + p.custo,
-        0
-      );
-
-      // 5c. Fetch Additional Costs (motorista_custos_adicionais)
-      const { data: extraCostsData } = await supabase
-        .from('motorista_custos_adicionais')
-        .select('valor')
-        .eq('motorista_id', motoristaId)
-        .gte('semana_referencia', weekStartStr)
-        .lte('semana_referencia', weekEndStr);
-
-      const extraCostsTotal = (extraCostsData || []).reduce(
-        (acc, curr) => acc + (Number(curr.valor) || 0),
-        0
-      );
-
-      let extraCredits = 0;
-      let finReparacoes = 0;
-      let finCaucao = 0;
-      let finSeguros = 0;
-      let finOutros = 0;
-
-      // A classificação é a partilhada (movimentosMotorista.ts), a mesma do
-      // fecho, da lista de Contas e do resumo do motorista. Este ecrã era o
-      // último com cópia própria da regra, e faltava-lhe a proteção que mais
-      // importa: um crédito de categoria `resumos` é o líquido que ESTE ecrã
-      // gravou, e entrava outra vez como receita. Cada semana já gravada
-      // aparecia com o seu próprio líquido somado em "Outras" e o número
-      // subia a cada recarregamento — 1.599,63 € de receita fantasma na
-      // semana de 24/08, vindos do resumo dessa mesma semana.
-      //
-      // A reparação continua a sair antes: é calculada à parte, e a
-      // classificação partilhada ignora-a precisamente por isso.
-      (finData || []).forEach((mov: any) => {
-        const val = Number(mov.valor) || 0;
-        const categoria = (mov.categoria ?? '').trim().toLowerCase();
-
-        if (mov.tipo !== 'credito' && categoria === 'reparacao') {
-          finReparacoes += val;
-          return;
-        }
-
-        const { destino } = classificarMovimento(mov);
-        if (destino === 'receita_outras') extraCredits += val;
-        else if (destino === 'caucao') finCaucao += val;
-        else if (destino === 'seguros') finSeguros += val;
-        // A mensalidade de slot ganhou balde próprio na classificação
-        // partilhada, mas este ecrã não tem linha para ela — vai para Outros,
-        // exactamente onde caía antes desta migração. Sem este ramo o valor
-        // não ia para lado nenhum: 6.030 € em 50 movimentos de 10 motoristas
-        // desapareciam da conta, e o líquido mostrado aqui subia na mesma
-        // medida.
-        else if (destino === 'outros' || destino === 'slot') finOutros += val;
-      });
-
-      // 6. FINAL AGGREGATION (MIRROR OF ContasResumoTab.tsx:resumosCalculados)
-      const passesReciboVerde = motorista.recibo_verde ?? true;
-      const taxasRetencao = taxasRetencaoDaFicha(motorista);
-
-      // Fonte única: bolt_resumos_semanais.liquido_a_pagar — o mesmo campo que
-      // o ecrã de resumos e o painel do motorista mostram.
-      const boltTotal = boltResumosTotal;
-      const faturadoPlataformas = uberTotal + boltTotal;
-      const totalFaturadoReal = faturadoPlataformas + extraCredits;
-
-      // Corte só sobre a base: a gorjeta não é dividida (igual ao Resumo Financeiro).
-      const divisor = divisorCorte(
-        passesReciboVerde,
-        !!taxasRetencao,
-        corteSemReciboDaFicha(motorista)
-      );
-      const receitaLiquidaPlataformas =
-        (boltTotal - gorjetaBolt) / divisor +
-        gorjetaBolt +
-        (uberTotal - gorjetaUber) / divisor +
-        gorjetaUber;
-
-      const totalAluguer = fixedRent;
-      const totalOutrosCustos = finOutros + extraCostsTotal;
-      const receitaTotalFinal = receitaLiquidaPlataformas + extraCredits;
-      const custosTotal =
-        totalAluguer + fuelTotal + finReparacoes + finCaucao + finSeguros + totalOutrosCustos;
-      const totalLiquido = receitaTotalFinal - custosTotal;
-      const liquidoFinal = taxasRetencao
-        ? calcularRetencao(totalLiquido, taxasRetencao).totalAReceber
-        : totalLiquido;
-
-      setResumoSemanal({
-        faturadoBolt: boltTotal,
-        faturadoUber: uberTotal,
-        gorjetaBolt,
-        gorjetaUber,
-        outrasReceitas: extraCredits,
-        totalFaturado: totalFaturadoReal,
-        custosSemanal: custosTotal,
-        aluguer: totalAluguer,
-        combustivel: fuelTotal,
-        portagens: 0,
-        reparacoes: finReparacoes,
-        caucao: finCaucao,
-        seguros: finSeguros,
-        outrosCustos: totalOutrosCustos,
-        liquido: liquidoFinal,
-        loading: false,
-        isImportado: false,
-        falhou: false,
-      });
-    } catch (error) {
-      console.error('Erro ao carregar resumo semanal:', error);
-      setResumoSemanal((prev) => ({ ...prev, loading: false, falhou: true }));
-      toast.error('Não foi possível carregar os valores desta semana. Recarregue a página.');
     }
   };
 
@@ -713,84 +395,112 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
 
   return (
     <div className="space-y-6">
-      {/* Resumo Real-time */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-green-50 dark:bg-green-950/20 border-green-100 dark:border-green-900/30">
-          <CardContent className="p-4 pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider">
-                Faturação Total
-              </span>
-              <TrendingUp className="h-4 w-4 text-green-600" />
-            </div>
-            {resumoSemanal.loading ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <p className="text-2xl font-bold text-green-700 dark:text-green-400">
-                {formatCurrency(resumoSemanal.totalFaturado)}
-              </p>
-            )}
-            <div className="mt-2 text-[10px] text-green-600 flex flex-wrap gap-x-3 gap-y-1">
-              <span>Bolt: {formatCurrency(resumoSemanal.faturadoBolt)}</span>
-              <span>Uber: {formatCurrency(resumoSemanal.faturadoUber)}</span>
-              {resumoSemanal.outrasReceitas > 0 && (
-                <span className="font-bold underline">
-                  Outras: {formatCurrency(resumoSemanal.outrasReceitas)}
+      {/* Resumo da semana: os mesmos valores da lista de Contas/Resumo */}
+      {!podeVerFinanceiro ? (
+        <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
+          <Lock className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+          <p className="text-sm font-medium">Resumo da semana sem acesso</p>
+          <p className="mx-auto mt-1 max-w-lg text-xs text-muted-foreground">
+            Os valores da semana só aparecem a quem tem acesso ao Financeiro, como em Administrativo
+            → Resumos. Peça esse acesso a um administrador.
+          </p>
+        </div>
+      ) : resumoDaSemana.periodoFechado === false ? (
+        <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
+          <Lock className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+          <p className="text-sm font-medium">Período por fechar</p>
+          <p className="mx-auto mt-1 max-w-lg text-xs text-muted-foreground">
+            O resumo de {format(weekStart, 'dd/MM', { locale: pt })} a{' '}
+            {format(weekEnd, 'dd/MM/yyyy', { locale: pt })} só aparece depois de o período ser
+            fechado em Administrativo → Resumos.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card className="bg-green-50 dark:bg-green-950/20 border-green-100 dark:border-green-900/30">
+            <CardContent className="p-4 pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider">
+                  Faturação Total
                 </span>
+                <TrendingUp className="h-4 w-4 text-green-600" />
+              </div>
+              {resumoDaSemana.loading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <p className="text-2xl font-bold text-green-700 dark:text-green-400">
+                  {formatCurrency(totais.faturado)}
+                </p>
               )}
-            </div>
-          </CardContent>
-        </Card>
+              <div className="mt-2 text-[10px] text-green-600 flex flex-wrap gap-x-3 gap-y-1">
+                <span>Bolt: {formatCurrency(totais.bolt)}</span>
+                <span>Uber: {formatCurrency(totais.uber)}</span>
+                {totais.outras > 0 && (
+                  <span className="font-bold underline">
+                    Outras: {formatCurrency(totais.outras)}
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30">
-          <CardContent className="p-4 pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wider">
-                Custos & Débitos
-              </span>
-              <TrendingDown className="h-4 w-4 text-red-600" />
-            </div>
-            {resumoSemanal.loading ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <p className="text-2xl font-bold text-red-700 dark:text-red-400">
-                {formatCurrency(resumoSemanal.custosSemanal)}
+          <Card className="bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30">
+            <CardContent className="p-4 pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wider">
+                  Custos & Débitos
+                </span>
+                <TrendingDown className="h-4 w-4 text-red-600" />
+              </div>
+              {resumoDaSemana.loading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <p className="text-2xl font-bold text-red-700 dark:text-red-400">
+                  {formatCurrency(totais.custos)}
+                </p>
+              )}
+              <p className="mt-2 text-[10px] text-red-600">
+                Aluguer, Combustível, Portagens, Outros
               </p>
-            )}
-            <p className="mt-2 text-[10px] text-red-600">Aluguer, Combustível, Outros</p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-indigo-50 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/30">
-          <CardContent className="p-4 pt-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
-                Líquido Estimado
-              </span>
-              <Wallet className="h-4 w-4 text-indigo-600" />
-            </div>
-            {resumoSemanal.loading ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-400">
-                {formatCurrency(resumoSemanal.liquido)}
+          <Card className="bg-indigo-50 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/30">
+            <CardContent className="p-4 pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
+                  Líquido a Receber
+                </span>
+                <Wallet className="h-4 w-4 text-indigo-600" />
+              </div>
+              {resumoDaSemana.loading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-400">
+                  {formatCurrency(totais.liquido)}
+                </p>
+              )}
+              <p className="mt-2 text-[10px] text-indigo-600 italic">
+                {!resumoDaSemana.loading && !resumoDaSemana.resumo
+                  ? 'Sem valores nesta semana'
+                  : 'Igual a Administrativo → Resumos'}
               </p>
-            )}
-            <p className="mt-2 text-[10px] text-indigo-600 italic">Cálculo em tempo real</p>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card className="flex items-center justify-center border-dashed">
-          <Button
-            variant="outline"
-            className="gap-2 h-12 w-full mx-4 border-dashed"
-            onClick={() => setResumoDialogOpen(true)}
-          >
-            <Printer className="h-4 w-4" />
-            Ver Resumo
-          </Button>
-        </Card>
-      </div>
+          <Card className="flex items-center justify-center border-dashed">
+            <Button
+              variant="outline"
+              className="gap-2 h-12 w-full mx-4 border-dashed"
+              onClick={() => setResumoDialogOpen(true)}
+              disabled={resumoDaSemana.loading || !resumoDaSemana.resumo}
+            >
+              <Printer className="h-4 w-4" />
+              Ver Resumo
+            </Button>
+          </Card>
+        </div>
+      )}
 
       <Separator />
 
@@ -1140,34 +850,11 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Resumo Financeiro — mesmo layout do Financeiro > Contas */}
+      {/* A mesma linha que a lista de Contas/Resumo passa à janela: o mesmo documento. */}
       <MotoristaResumoDialog
         open={resumoDialogOpen}
         onOpenChange={setResumoDialogOpen}
-        motorista={{
-          driver_name: motorista.nome,
-          driver_uuid: '',
-          motorista_id: motoristaId,
-          total_faturado: resumoSemanal.totalFaturado,
-          faturado_bolt: resumoSemanal.faturadoBolt,
-          faturado_uber: resumoSemanal.faturadoUber,
-          gorjeta_bolt: resumoSemanal.gorjetaBolt,
-          gorjeta_uber: resumoSemanal.gorjetaUber,
-          total_viagens: 0,
-          viagens_bolt: 0,
-          viagens_uber: 0,
-          recibo_verde: motorista.recibo_verde ?? true,
-          corte_sem_recibo: corteSemReciboDaFicha(motorista),
-          retencao_taxas: taxasRetencaoDaFicha(motorista),
-          liquido: resumoSemanal.liquido,
-          combustivel: resumoSemanal.combustivel,
-          portagens: resumoSemanal.portagens,
-          reparacoes: resumoSemanal.reparacoes,
-          outros_custos: resumoSemanal.outrosCustos,
-          aluguer: resumoSemanal.aluguer,
-          tem_recibo_importado: resumoSemanal.isImportado,
-          dados_incompletos: resumoSemanal.falhou,
-        }}
+        motorista={resumoDaSemana.resumo}
         dateRange={{ from: weekStart, to: weekEnd }}
       />
     </div>

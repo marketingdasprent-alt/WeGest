@@ -208,6 +208,24 @@ export function ResumoSemanaDialog({ acertoId, onClose }: ResumoSemanaDialogProp
               />
             </Bloco>
 
+            {d.aluguerDetalhe && d.aluguerDetalhe.length > 0 && (
+              <section className="overflow-hidden rounded-lg border border-amber-200 dark:border-amber-900">
+                <div className="flex items-center gap-2 bg-amber-500 px-3 py-2 text-xs font-semibold uppercase text-white">
+                  Aluguer — detalhe
+                </div>
+                <div className="space-y-2 p-3">
+                  {d.aluguerDetalhe.map((l) => (
+                    <Linha
+                      key={`${l.matricula}-${l.dataInicioStr}`}
+                      rotulo={`${l.matricula} (${l.dataInicioStr}–${l.dataFimStr}): ${l.dias} ${l.dias === 1 ? 'dia' : 'dias'} × ${eur(l.taxaDiaria)}/dia`}
+                      valor={eur(l.custo)}
+                      className="text-amber-700"
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
             <Bloco
               titulo="Resumo final"
               cor="azul"
