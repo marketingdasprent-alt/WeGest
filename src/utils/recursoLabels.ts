@@ -25,6 +25,7 @@ export const getRecursoLabel = (nome: string): string => {
     motoristas_candidaturas: 'Gerir candidaturas',
     motoristas_gestao: 'Gestão completa de motoristas',
     motoristas_contactos: 'Gestão de contactos',
+    motoristas_acesso_app: 'Acesso dos motoristas à app',
 
     // Viaturas
     viaturas_ver: 'Ver lista de viaturas',
