@@ -65,10 +65,19 @@ describe('ganhos Bolt: uma tabela só', () => {
     // agora em liquido_a_pagar. Um que fique para trás volta a mostrar um
     // motorista com dois valores — exactamente o que o BOLT_GANHOS existe
     // para impedir.
-    const contas = ler('src/hooks/useContasResumoSemana.ts');
-    expect(contas).toMatch(/liquido_a_pagar, gorjetas, viagens_terminadas/);
+    // A lista lê em carregarDadosResumoSemana e conta em agruparReceitasPlataformas.
+    const leitura = ler('src/lib/resumoSemana/carregarDadosResumoSemana.ts');
+    expect(leitura).toMatch(/liquido_a_pagar, gorjetas, viagens_terminadas/);
+    expect(leitura).not.toMatch(/ganhos_liquidos/);
+    const contas = ler(
+      'src/components/administrativo/motorista-resumo/agruparReceitasPlataformas.ts'
+    );
     expect(contas).toMatch(/faturado_bolt \+= Number\(r\.liquido_a_pagar\)/);
     expect(contas).not.toMatch(/Number\(r\.ganhos_liquidos\)/);
+    // A ficha recebe as linhas pela função no servidor: o mesmo campo.
+    const funcaoFicha = ler('supabase/migrations/20261127120000_resumo_semana_motorista_ficha.sql');
+    expect(funcaoFicha).toMatch(/'liquido_a_pagar', b\.liquido_a_pagar/);
+    expect(funcaoFicha).not.toMatch(/ganhos_liquidos/);
 
     const recibos = ler('src/components/motoristas/tabs/MotoristaRecibosSection.tsx');
     // A aba Resumos da ficha não tem conta própria: usa a da lista de

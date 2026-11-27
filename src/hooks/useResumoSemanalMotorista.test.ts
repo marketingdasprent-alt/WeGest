@@ -38,15 +38,21 @@ describe('useResumoSemanalMotorista', () => {
     });
   });
 
-  it('usa a conta da lista de Contas/Resumo, só leitura, e devolve a linha do motorista', () => {
+  it('usa a conta da lista de Contas/Resumo, só deste motorista, e devolve a linha dele', () => {
     const { result } = renderHook(() => useResumoSemanalMotorista('m1', INI, FIM, true));
-    expect(useContasResumoSemana).toHaveBeenLastCalledWith(INI, FIM, true, { soLeitura: true });
+    expect(useContasResumoSemana).toHaveBeenLastCalledWith(INI, FIM, true, {
+      soLeitura: true,
+      motoristaId: 'm1',
+    });
     expect(result.current.resumo).toMatchObject({ motorista_id: 'm1', liquido: 150 });
   });
 
-  it('sem acesso ao Financeiro, a conta não corre', () => {
+  it('sem permissão para o resumo, a conta não corre', () => {
     renderHook(() => useResumoSemanalMotorista('m1', INI, FIM, false));
-    expect(useContasResumoSemana).toHaveBeenLastCalledWith(INI, FIM, false, { soLeitura: true });
+    expect(useContasResumoSemana).toHaveBeenLastCalledWith(INI, FIM, false, {
+      soLeitura: true,
+      motoristaId: 'm1',
+    });
   });
 
   it('a carregar enquanto não se sabe se a semana está fechada', () => {

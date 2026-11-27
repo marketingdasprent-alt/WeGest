@@ -138,8 +138,8 @@ describe('agregarMovimentos', () => {
 //
 // Este teste fixa o conjunto. Se falhar, é porque se acrescentou um destino:
 // antes de o actualizar, ver TODOS os sítios que chamam classificarMovimento
-// e garantir que cada um o trata (hoje: useContasResumoSemana.ts e
-// MotoristaRecibosSection.tsx).
+// e garantir que cada um o trata (hoje: calcularResumosSemana.ts, que serve a lista
+// de Contas/Resumo e a ficha do motorista).
 describe('o conjunto de destinos é fechado', () => {
   const DESTINOS_CONHECIDOS = [
     'receita_outras',

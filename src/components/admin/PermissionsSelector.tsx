@@ -98,6 +98,7 @@ const RECURSO_LABELS: Record<string, string> = {
   motoristas_candidaturas: 'Gerir candidaturas',
   motoristas_gestao: 'Gestão completa de motoristas',
   motoristas_contactos: 'Gestão de contactos',
+  motoristas_resumos: 'Ver o resumo da semana na ficha do motorista',
   motorista_painel: 'Painel exclusivo do motorista',
   // Viaturas
   viaturas_ver: 'Ver lista de viaturas',

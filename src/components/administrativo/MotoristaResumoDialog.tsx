@@ -34,14 +34,8 @@ const DECADA_OUSADA_ORG_ID = '11111111-1111-1111-1111-111111111111';
 
 /* ───────── Exported types ───────── */
 
-export interface SlotPeriodo {
-  matricula: string;
-  dias: number;
-  taxaDiaria: number;
-  custo: number;
-  dataInicioStr: string;
-  dataFimStr: string;
-}
+// Vive em slotPeriodos.ts (quem o constrói); reexporta-se para os imports antigos.
+export type { SlotPeriodo } from './motorista-resumo/slotPeriodos';
 
 export interface MotoristaResumoProps {
   driver_name: string;

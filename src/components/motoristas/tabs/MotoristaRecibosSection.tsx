@@ -145,12 +145,9 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
 
   // Os valores da semana vêm da mesma conta da lista de Contas/Resumo.
   const podeVerFinanceiro = isAdmin || hasAccessToResource(RECURSOS.FINANCEIRO_RECIBOS);
-  const resumoDaSemana = useResumoSemanalMotorista(
-    motoristaId,
-    weekStart,
-    weekEnd,
-    podeVerFinanceiro
-  );
+  // Só ver os totais; a janela "Ver Resumo" (enviar, imprimir) continua do Financeiro.
+  const podeVerResumo = podeVerFinanceiro || hasAccessToResource(RECURSOS.MOTORISTAS_RESUMOS);
+  const resumoDaSemana = useResumoSemanalMotorista(motoristaId, weekStart, weekEnd, podeVerResumo);
   const totais = totaisDoResumo(resumoDaSemana.resumo);
 
   useEffect(() => {
@@ -396,13 +393,13 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
   return (
     <div className="space-y-6">
       {/* Resumo da semana: os mesmos valores da lista de Contas/Resumo */}
-      {!podeVerFinanceiro ? (
+      {!podeVerResumo ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-6 text-center">
           <Lock className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
           <p className="text-sm font-medium">Resumo da semana sem acesso</p>
           <p className="mx-auto mt-1 max-w-lg text-xs text-muted-foreground">
-            Os valores da semana só aparecem a quem tem acesso ao Financeiro, como em Administrativo
-            → Resumos. Peça esse acesso a um administrador.
+            Peça a um administrador a permissão "Ver o resumo da semana na ficha do motorista", em
+            Motoristas.
           </p>
         </div>
       ) : resumoDaSemana.periodoFechado === false ? (
@@ -416,7 +413,9 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div
+          className={`grid grid-cols-1 gap-4 ${podeVerFinanceiro ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
+        >
           <Card className="bg-green-50 dark:bg-green-950/20 border-green-100 dark:border-green-900/30">
             <CardContent className="p-4 pt-4">
               <div className="flex items-center justify-between mb-2">
@@ -488,17 +487,19 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
             </CardContent>
           </Card>
 
-          <Card className="flex items-center justify-center border-dashed">
-            <Button
-              variant="outline"
-              className="gap-2 h-12 w-full mx-4 border-dashed"
-              onClick={() => setResumoDialogOpen(true)}
-              disabled={resumoDaSemana.loading || !resumoDaSemana.resumo}
-            >
-              <Printer className="h-4 w-4" />
-              Ver Resumo
-            </Button>
-          </Card>
+          {podeVerFinanceiro && (
+            <Card className="flex items-center justify-center border-dashed">
+              <Button
+                variant="outline"
+                className="gap-2 h-12 w-full mx-4 border-dashed"
+                onClick={() => setResumoDialogOpen(true)}
+                disabled={resumoDaSemana.loading || !resumoDaSemana.resumo}
+              >
+                <Printer className="h-4 w-4" />
+                Ver Resumo
+              </Button>
+            </Card>
+          )}
         </div>
       )}
 
@@ -851,12 +852,14 @@ export const MotoristaRecibosSection: React.FC<MotoristaRecibosSectionProps> = (
       </Dialog>
 
       {/* A mesma linha que a lista de Contas/Resumo passa à janela: o mesmo documento. */}
-      <MotoristaResumoDialog
-        open={resumoDialogOpen}
-        onOpenChange={setResumoDialogOpen}
-        motorista={resumoDaSemana.resumo}
-        dateRange={{ from: weekStart, to: weekEnd }}
-      />
+      {podeVerFinanceiro && (
+        <MotoristaResumoDialog
+          open={resumoDialogOpen}
+          onOpenChange={setResumoDialogOpen}
+          motorista={resumoDaSemana.resumo}
+          dateRange={{ from: weekStart, to: weekEnd }}
+        />
+      )}
     </div>
   );
 };
