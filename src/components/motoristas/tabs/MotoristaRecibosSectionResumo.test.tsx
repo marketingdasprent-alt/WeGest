@@ -115,6 +115,22 @@ describe('MotoristaRecibosSection — resumo igual à tela 1', () => {
     expect(screen.getByRole('button', { name: /Ver Resumo/ })).toBeDisabled();
   });
 
+  it('só com motoristas_resumos: vê os totais, sem a janela do Financeiro', () => {
+    permissoes.isAdmin = false;
+    permissoes.hasAccessToResource = (r: string) => r === 'motoristas_resumos';
+    renderizar();
+    expect(useResumoSemanalMotorista).toHaveBeenLastCalledWith(
+      'm1',
+      expect.any(Date),
+      expect.any(Date),
+      true
+    );
+    expect(screen.getByText(/-14,68/)).toBeInTheDocument();
+    expect(screen.queryByText('Resumo da semana sem acesso')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ver Resumo/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('resumo-dialog')).not.toBeInTheDocument();
+  });
+
   it('sem acesso ao Financeiro: não calcula valores incompletos', () => {
     permissoes.isAdmin = false;
     permissoes.hasAccessToResource = () => false;

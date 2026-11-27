@@ -1,5 +1,13 @@
 import { differenceInDays, parseISO, max, min, format, addDays } from 'date-fns';
-import type { SlotPeriodo } from '../MotoristaResumoDialog';
+
+export interface SlotPeriodo {
+  matricula: string;
+  dias: number;
+  taxaDiaria: number;
+  custo: number;
+  dataInicioStr: string;
+  dataFimStr: string;
+}
 
 export interface ViaturaPeriodoInput {
   viatura_id: string;

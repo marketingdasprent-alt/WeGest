@@ -510,6 +510,12 @@
     "src/components/motoristas/tabs/dados/estadoAcesso.test.ts",
     "src/components/motoristas/tabs/dados/AcessoAppSection.tsx",
     "src/components/motoristas/tabs/dados/AcessoAppDialogs.tsx",
-    "src/components/motoristas/tabs/dados/AcessoAppSection.test.tsx"
+    "src/components/motoristas/tabs/dados/AcessoAppSection.test.tsx",
+    "src/components/administrativo/motorista-resumo/dadosResumoSemana.ts",
+    "src/components/administrativo/motorista-resumo/agruparReceitasPlataformas.ts",
+    "src/components/administrativo/motorista-resumo/calcularResumosSemana.ts",
+    "src/components/administrativo/motorista-resumo/calcularResumosSemana.test.ts",
+    "src/lib/resumoSemana/carregarDadosResumoSemana.ts",
+    "src/hooks/useContasResumoSemana.ts"
   ]
 }

@@ -42,14 +42,16 @@ export function useResumoSemanalMotorista(
   motoristaId: string,
   weekStart: Date,
   weekEnd: Date,
-  /** Sem acesso ao Financeiro a base esconde a Bolt: não calcular valores incompletos. */
-  podeVerFinanceiro: boolean
+  /** financeiro_recibos ou motoristas_resumos: sem eles a função no servidor recusa. */
+  podeVerResumo: boolean
 ): ResumoSemanalMotorista {
   const [periodoFechado] = usePeriodoFechado(weekStart, weekEnd);
   // `false` faz a conta não correr (a lista trata-o como "período por fechar").
-  const fechadoParaConta = podeVerFinanceiro ? periodoFechado : false;
+  const fechadoParaConta = podeVerResumo ? periodoFechado : false;
+  // Só as linhas deste motorista: as tabelas fechadas vêm por resumo_semana_motorista_ficha.
   const { resumos, loading } = useContasResumoSemana(weekStart, weekEnd, fechadoParaConta, {
     soLeitura: true,
+    motoristaId,
   });
   const resumo = resumos.find((r) => r.motorista_id === motoristaId) ?? null;
   return { periodoFechado, loading: periodoFechado === null || loading, resumo };
